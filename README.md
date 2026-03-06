@@ -2,12 +2,21 @@
 
 ```
 
-              ;,'
-         _o_  ;:;'
-     ,-.'---`.__ ;
-    ((j`=====',-'
-     `-\     /
-       `-=-'
+        ) )  )
+       ( ( (          ╔════════════════════════════════════════════╗
+    ┌───────────┐     ║                                            ║
+    │  ~~~~~~~  │     ║   ████████╗███████╗ █████╗                 ║
+    │  ~ 茶 ~  │     ║   ╚══██╔══╝██╔════╝██╔══██╗                ║
+    │  ~~~~~~~  │╗    ║      ██║   █████╗  ███████║                ║
+    │           ││    ║      ██║   ██╔══╝  ██╔══██║                ║
+    └───────────┘│    ║      ██║   ███████╗██║  ██║                ║
+     └───────────┘    ║      ╚═╝   ╚══════╝╚═╝  ╚═╝               ║
+    ═══════════════   ║                                            ║
+                      ║   Templated · Event-driven · Agentic       ║
+                      ║   模板化     · 事件驱动     · 智能体        ║
+                      ║                                            ║
+                      ║   Game Engine  ·  游戏引擎                  ║
+                      ╚════════════════════════════════════════════╝
 
 ```
 
@@ -15,7 +24,7 @@
 
 ### **T**emplated · **E**vent-driven · **A**gentic
 
-A server-driven game engine and worldbuilding platform.
+A server-driven game engine and worldbuilding platform.<br/>服务端驱动的游戏引擎与世界构建平台。
 
 [![Bun](https://img.shields.io/badge/Bun-1.3-f9f1e1?logo=bun&logoColor=f9f1e1&labelColor=14151a)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?logo=typescript&logoColor=white&labelColor=14151a)](https://www.typescriptlang.org)
@@ -71,7 +80,7 @@ bun install
 # Configure environment
 cp .env.example .env
 
-# Generate Prisma client
+# Generate Prisma client (Prisma 7 reads DATABASE_URL from prisma.config.ts)
 bun run prisma:generate
 
 # Start development (launches all watchers)
@@ -300,6 +309,7 @@ tea/
 | `bun test` | Run test suite |
 | `bun run verify` | Full pipeline: build → lint → typecheck → test |
 | `bun run prisma:generate` | Regenerate Prisma client |
+| `bunx prisma db push` | Sync local schema changes using Prisma 7 datasource config |
 
 ---
 
