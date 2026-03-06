@@ -1,0 +1,53 @@
+@import "tailwindcss";
+@import "./lotfk-theme.css";
+
+@source "../**/*.ts";
+
+@plugin "daisyui" {
+  themes: silk --default, autumn --prefersdark, lotfk;
+}
+
+@layer base {
+  :root {
+    --app-heading-font: "Alegreya", "Noto Serif SC", Georgia, serif;
+    --app-body-font: "IBM Plex Sans", "Noto Sans SC", "Segoe UI", sans-serif;
+  }
+
+  html,
+  body {
+    min-height: 100%;
+  }
+
+  body {
+    font-family: var(--app-body-font);
+    background-image:
+      radial-gradient(circle at 10% 10%, color-mix(in oklab, var(--color-primary) 10%, transparent), transparent 30%),
+      radial-gradient(circle at 90% 20%, color-mix(in oklab, var(--color-secondary) 10%, transparent), transparent 28%),
+      radial-gradient(circle at 50% 100%, color-mix(in oklab, var(--color-accent) 10%, transparent), transparent 35%);
+    background-attachment: fixed;
+  }
+
+  h1,
+  h2,
+  h3,
+  .card-title,
+  .hero-title {
+    font-family: var(--app-heading-font);
+    letter-spacing: 0.01em;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-base-100;
+  }
+}
+
+@layer utilities {
+  .htmx-indicator {
+    display: none;
+  }
+
+  .htmx-request .htmx-indicator,
+  .htmx-request.htmx-indicator {
+    display: inline-flex;
+  }
+}

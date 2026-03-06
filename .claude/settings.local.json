@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude_ai_Context7__resolve-library-id",
+      "WebFetch(domain:pixijs.com)",
+      "WebFetch(domain:htmx.org)"
+    ]
+  }
+}

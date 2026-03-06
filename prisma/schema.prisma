@@ -1,0 +1,52 @@
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "binary"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model OracleInteraction {
+  id        String   @id @default(cuid())
+  prompt    String
+  sentiment String
+  fortune   String
+  createdAt DateTime @default(now())
+}
+
+model GameSession {
+  id          String   @id @default(cuid())
+  seed        Int
+  locale      String   @default("en-US")
+  sceneId     String   @default("teaHouse")
+  state       Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  expiresAt   DateTime
+  progress    PlayerProgress?
+}
+
+model PlayerProgress {
+  id            String      @id @default(cuid())
+  sessionId     String      @unique
+  session       GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  xp            Int         @default(0)
+  level         Int         @default(1)
+  visitedScenes Json
+  interactions  Json
+  updatedAt     DateTime    @updatedAt
+}
+
+model AiGenerationLog {
+  id         String   @id @default(cuid())
+  sessionId  String?
+  provider   String
+  model      String
+  capability String
+  prompt     String
+  response   String
+  durationMs Int
+  locale     String   @default("en-US")
+  createdAt  DateTime @default(now())
+}

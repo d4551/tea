@@ -1,0 +1,10 @@
+{
+  "name": "lotfk-seeded-prng",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {
+    "test": "bun test index.test.ts"
+  }
+}
