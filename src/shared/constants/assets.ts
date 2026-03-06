@@ -8,7 +8,6 @@ export const assetRelativePaths = {
   htmxPublicBundleFile: "vendor/htmx.min.js",
   htmxExtensionsOutputDirectory: "vendor/htmx-ext",
   htmxExtensionOracleIndicatorFile: "vendor/htmx-ext/oracle-indicator.js",
-  htmxExtensionGameHudFile: "vendor/htmx-ext/game-hud.js",
   htmxExtensionFocusPanelFile: "vendor/htmx-ext/focus-panel.js",
   onnxPublicDirectory: "onnx",
   htmxExtensionsSourceDirectory: "src/htmx-extensions",
@@ -19,11 +18,7 @@ export const assetRelativePaths = {
 /**
  * Canonical HTMX extension entrypoints bundled into the public asset tree.
  */
-export const htmxExtensionEntryFiles = [
-  "game-hud.ts",
-  "oracle-indicator.ts",
-  "focus-panel.ts",
-] as const;
+export const htmxExtensionEntryFiles = ["oracle-indicator.ts", "focus-panel.ts"] as const;
 
 /**
  * Minimal config shape required to derive static mount definitions.

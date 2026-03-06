@@ -94,51 +94,140 @@ export const renderSceneEditor = (
 };
 
 /**
- * Renders a single scene's detail panel for inline editing.
+ * Renders a scene detail form that persists via HTMX.
  *
  * @param messages Locale-resolved messages.
- * @param scene Scene to render.
- * @returns HTML string for the scene detail panel.
+ * @param scene Scene to edit.
+ * @param locale Active locale.
+ * @param projectId Active project id.
+ * @returns HTML string for the editable scene detail panel.
  */
-export const renderSceneDetail = (messages: Messages, scene: SceneDefinition): string => `
-  <div class="card bg-base-100 shadow-sm">
-    <div class="card-body">
-      <h2 class="card-title">${escapeHtml(messages.builder.editScene)}: ${escapeHtml(scene.id)}</h2>
+export const renderSceneDetail = (
+  messages: Messages,
+  scene: SceneDefinition,
+  locale: LocaleCode,
+  projectId: string,
+): string => {
+  const formAction = withQueryParameters(
+    `${appRoutes.builderApiScenes}/${encodeURIComponent(scene.id)}/form`,
+    {
+      locale,
+      projectId,
+    },
+  );
+  const npcBadges = scene.npcs
+    .map(
+      (npc) =>
+        `<span class="badge badge-outline">${escapeHtml(npc.characterKey)} (${npc.x}, ${npc.y})</span>`,
+    )
+    .join("");
+  const collisionBadges = scene.collisions
+    .map(
+      (collision) =>
+        `<span class="badge badge-ghost text-xs">${collision.x},${collision.y} ${collision.width}×${collision.height}</span>`,
+    )
+    .join("");
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+  return `
+    <div class="card bg-base-100 shadow-sm">
+      <form
+        class="card-body gap-4"
+        hx-post="${escapeHtml(formAction)}"
+        hx-target="#scene-detail"
+        hx-swap="innerHTML"
+      >
+        <h2 class="card-title">${escapeHtml(messages.builder.editScene)}: ${escapeHtml(scene.id)}</h2>
         <fieldset class="fieldset">
-          <legend class="fieldset-legend">${escapeHtml(messages.builder.geometry)}</legend>
-          <label class="label" for="scene-width">${escapeHtml(messages.builder.widthLabel)}</label>
-          <input id="scene-width" type="number" class="input input-bordered w-full" value="${scene.geometry.width}" readonly aria-describedby="scene-width-desc" />
-          <span id="scene-width-desc" class="sr-only">${escapeHtml(messages.builder.sceneWidthDesc)}</span>
-
-          <label class="label" for="scene-height">${escapeHtml(messages.builder.heightLabel)}</label>
-          <input id="scene-height" type="number" class="input input-bordered w-full" value="${scene.geometry.height}" readonly aria-describedby="scene-height-desc" />
-          <span id="scene-height-desc" class="sr-only">${escapeHtml(messages.builder.sceneHeightDesc)}</span>
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneTitle)}</legend>
+          <input
+            id="scene-title-key"
+            name="titleKey"
+            type="text"
+            class="input input-bordered w-full"
+            value="${escapeHtml(scene.titleKey)}"
+            required
+          />
         </fieldset>
 
         <fieldset class="fieldset">
-          <legend class="fieldset-legend">${escapeHtml(messages.builder.spawnPoint)}</legend>
-          <label class="label" for="spawn-x">${escapeHtml(messages.builder.xLabel)}</label>
-          <input id="spawn-x" type="number" class="input input-bordered w-full" value="${scene.spawn.x}" readonly />
-
-          <label class="label" for="spawn-y">${escapeHtml(messages.builder.yLabel)}</label>
-          <input id="spawn-y" type="number" class="input input-bordered w-full" value="${scene.spawn.y}" readonly />
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.assetPlaceholder)}</legend>
+          <input
+            id="scene-background"
+            name="background"
+            type="text"
+            class="input input-bordered w-full"
+            value="${escapeHtml(scene.background)}"
+            required
+          />
         </fieldset>
-      </div>
 
-      <div class="mt-4">
-        <h3 class="font-semibold mb-2">${escapeHtml(messages.builder.npcs)} (${scene.npcs.length})</h3>
-        <div class="flex flex-wrap gap-2">
-          ${scene.npcs.map((npc) => `<span class="badge badge-outline">${escapeHtml(npc.characterKey)} (${npc.x}, ${npc.y})</span>`).join("")}
-        </div>
-      </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">${escapeHtml(messages.builder.geometry)}</legend>
+            <label class="label" for="scene-width">${escapeHtml(messages.builder.widthLabel)}</label>
+            <input
+              id="scene-width"
+              name="geometryWidth"
+              type="number"
+              class="input input-bordered w-full"
+              value="${scene.geometry.width}"
+              min="1"
+              step="1"
+              required
+            />
+            <label class="label" for="scene-height">${escapeHtml(messages.builder.heightLabel)}</label>
+            <input
+              id="scene-height"
+              name="geometryHeight"
+              type="number"
+              class="input input-bordered w-full"
+              value="${scene.geometry.height}"
+              min="1"
+              step="1"
+              required
+            />
+          </fieldset>
 
-      <div class="mt-4">
-        <h3 class="font-semibold mb-2">${escapeHtml(messages.builder.collisions)} (${scene.collisions.length})</h3>
-        <div class="flex flex-wrap gap-2">
-          ${scene.collisions.map((c) => `<span class="badge badge-ghost text-xs">${c.x},${c.y} ${c.width}×${c.height}</span>`).join("")}
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">${escapeHtml(messages.builder.spawnPoint)}</legend>
+            <label class="label" for="spawn-x">${escapeHtml(messages.builder.xLabel)}</label>
+            <input
+              id="spawn-x"
+              name="spawnX"
+              type="number"
+              class="input input-bordered w-full"
+              value="${scene.spawn.x}"
+              step="1"
+              required
+            />
+            <label class="label" for="spawn-y">${escapeHtml(messages.builder.yLabel)}</label>
+            <input
+              id="spawn-y"
+              name="spawnY"
+              type="number"
+              class="input input-bordered w-full"
+              value="${scene.spawn.y}"
+              step="1"
+              required
+            />
+          </fieldset>
         </div>
+
+        <div class="flex items-center justify-end gap-2">
+          <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
+        </div>
+      </form>
+    </div>
+    <div class="card bg-base-100 shadow-sm mt-4">
+      <div class="card-body">
+        <h3 class="card-title text-base">${escapeHtml(messages.builder.npcs)} (${scene.npcs.length})</h3>
+        <div class="flex flex-wrap gap-2">${npcBadges}</div>
       </div>
     </div>
-  </div>`;
+    <div class="card bg-base-100 shadow-sm mt-4">
+      <div class="card-body">
+        <h3 class="card-title text-base">${escapeHtml(messages.builder.collisions)} (${scene.collisions.length})</h3>
+        <div class="flex flex-wrap gap-2">${collisionBadges}</div>
+      </div>
+    </div>`;
+};

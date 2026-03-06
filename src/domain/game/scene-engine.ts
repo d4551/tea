@@ -154,20 +154,22 @@ export class SceneEngine {
     playerPos: { x: number; y: number },
     playerBounds: CollisionMask,
     npcs: readonly NpcState[],
-    radius: number = 40,
+    radius?: number,
   ): NpcState | null {
     const px = playerPos.x + playerBounds.x + playerBounds.width / 2;
     const py = playerPos.y + playerBounds.y + playerBounds.height / 2;
 
     let closest: NpcState | null = null;
-    let minDistance = radius * radius; // Use squared distance
+    let minDistance = Number.POSITIVE_INFINITY;
 
     for (const npc of npcs) {
       const nx = npc.position.x + npc.bounds.x + npc.bounds.width / 2;
       const ny = npc.position.y + npc.bounds.y + npc.bounds.height / 2;
 
       const distSq = (px - nx) * (px - nx) + (py - ny) * (py - ny);
-      if (distSq < minDistance) {
+      const effectiveRadius = typeof radius === "number" ? radius : npc.interactRadius;
+
+      if (distSq <= effectiveRadius * effectiveRadius && distSq < minDistance) {
         minDistance = distSq;
         closest = npc;
       }

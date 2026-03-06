@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { appConfig, type LocaleCode } from "../../../config/environment.ts";
+import { appConfig } from "../../../config/environment.ts";
 import { createLogger } from "../../../lib/logger.ts";
 import { defaultGameConfig, resolveScene } from "../../../shared/config/game-config.ts";
 import { gameAssetUrls } from "../../../shared/constants/game-assets.ts";
@@ -20,12 +20,7 @@ const logger = createLogger("game.state-store");
  */
 export interface GameStateStore {
   /** Creates and persists a fresh session. */
-  createSession(
-    id: string,
-    sceneId: string,
-    locale: LocaleCode,
-    seed: number,
-  ): Promise<GameSession>;
+  createSession(seed: GameSessionSeed): Promise<GameSession>;
   /** Loads an active session by id. */
   getSession(sessionId: string): Promise<StoreResult<GameSession>>;
   /** Persists an updated session snapshot and extends TTL. */
@@ -36,6 +31,24 @@ export interface GameStateStore {
   toSnapshot(session: GameSession): GameSessionSnapshot;
   /** Removes all expired sessions and returns count removed. */
   purgeExpiredSessions(nowMs?: number): Promise<number>;
+}
+
+/**
+ * Input seed used to create a persisted game session.
+ */
+export interface GameSessionSeed {
+  /** Stable session identifier. */
+  readonly id: string;
+  /** Stable owner identity derived from auth-session cookie. */
+  readonly ownerSessionId: string;
+  /** Session RNG seed. */
+  readonly seed: number;
+  /** Active locale. */
+  readonly locale: GameLocale;
+  /** Pre-built scene state to persist. */
+  readonly scene: GameSceneState;
+  /** Optional project binding used to seed the scene. */
+  readonly projectId?: string;
 }
 
 /**
@@ -62,13 +75,22 @@ interface StoredSession {
 
 interface GameSessionRow {
   readonly id: string;
+  readonly ownerSessionId: string;
   readonly seed: number;
   readonly locale: string;
   readonly sceneId: string;
   readonly state: Prisma.JsonValue;
+  readonly stateVersion: number;
   readonly createdAt: Date;
   readonly updatedAt: Date;
   readonly expiresAt: Date;
+}
+
+interface PersistedSessionState {
+  /** Materialized runtime scene state. */
+  readonly scene: GameSceneState;
+  /** Optional builder project binding. */
+  readonly projectId?: string;
 }
 
 /**
@@ -110,19 +132,44 @@ const defaultSceneDefinition = (): SceneDefinition => {
 /**
  * Serializes and deserializes scene payloads safely.
  */
-const toScenePayload = (scene: GameSceneState): Prisma.InputJsonValue =>
-  JSON.parse(JSON.stringify(scene));
+const toScenePayload = (scene: GameSceneState, projectId?: string): Prisma.InputJsonValue =>
+  JSON.parse(
+    JSON.stringify({
+      scene,
+      projectId,
+    } satisfies PersistedSessionState),
+  );
 
 /**
  * Safely restores scene state from DB JSON with safe fallback.
  */
-const toSceneState = (value: Prisma.JsonValue): GameSceneState | null =>
-  value !== null && typeof value === "object" && !Array.isArray(value)
-    ? JSON.parse(JSON.stringify(value))
-    : null;
+const toSceneState = (value: Prisma.JsonValue): PersistedSessionState | null => {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (
+    "scene" in record &&
+    record.scene !== null &&
+    typeof record.scene === "object" &&
+    !Array.isArray(record.scene)
+  ) {
+    return {
+      scene: JSON.parse(JSON.stringify(record.scene)) as GameSceneState,
+      projectId: typeof record.projectId === "string" ? record.projectId : undefined,
+    };
+  }
+
+  return {
+    scene: JSON.parse(JSON.stringify(value)) as GameSceneState,
+    projectId: undefined,
+  };
+};
 
 interface SceneStateRestoreResult {
   readonly scene: GameSceneState;
+  readonly projectId?: string;
   readonly repaired: boolean;
 }
 
@@ -133,7 +180,8 @@ const restoreSceneState = (row: GameSessionRow): SceneStateRestoreResult => {
   const parsed = toSceneState(row.state);
   if (parsed !== null) {
     return {
-      scene: parsed,
+      scene: parsed.scene,
+      projectId: parsed.projectId,
       repaired: false,
     };
   }
@@ -141,6 +189,7 @@ const restoreSceneState = (row: GameSessionRow): SceneStateRestoreResult => {
   const sceneDefinition = resolveScene(row.sceneId) ?? defaultSceneDefinition();
   return {
     scene: buildSessionSceneState(sceneDefinition, row.locale as GameLocale, row.seed),
+    projectId: undefined,
     repaired: true,
   };
 };
@@ -177,9 +226,12 @@ const toGameSessionFromRow = (
   return {
     session: {
       id: row.id,
+      ownerSessionId: row.ownerSessionId,
       seed: row.seed,
       locale: row.locale as GameLocale,
       scene: restored.scene,
+      projectId: restored.projectId,
+      stateVersion: row.stateVersion,
       updatedAtMs: row.updatedAt.getTime(),
       createdAtMs: row.createdAt.getTime(),
     },
@@ -197,22 +249,19 @@ class InMemoryGameStateStore implements GameStateStore {
     this.sessions = new Map<string, StoredSession>();
   }
 
-  public async createSession(
-    id: string,
-    sceneId: string,
-    locale: GameLocale,
-    seed: number,
-  ): Promise<GameSession> {
-    const sceneDefinition = resolveScene(sceneId) ?? defaultSceneDefinition();
+  public async createSession(seed: GameSessionSeed): Promise<GameSession> {
     const createdAtMs = nowMs();
 
     const session: GameSession = {
-      id,
-      seed,
-      locale,
+      id: seed.id,
+      ownerSessionId: seed.ownerSessionId,
+      seed: seed.seed,
+      locale: seed.locale,
+      projectId: seed.projectId,
+      stateVersion: 1,
       createdAtMs,
       updatedAtMs: createdAtMs,
-      scene: buildSessionSceneState(sceneDefinition, locale, seed),
+      scene: structuredClone(seed.scene),
     };
 
     const stored = toStoredSession(session);
@@ -271,31 +320,30 @@ class InMemoryGameStateStore implements GameStateStore {
  * Prisma-backed authoritative store for game sessions.
  */
 class PrismaGameStateStore implements GameStateStore {
-  public async createSession(
-    id: string,
-    sceneId: string,
-    locale: LocaleCode,
-    seed: number,
-  ): Promise<GameSession> {
-    const resolvedId = id !== "" ? id : _newSessionId();
-    const sceneDefinition = resolveScene(sceneId) ?? defaultSceneDefinition();
+  public async createSession(seed: GameSessionSeed): Promise<GameSession> {
+    const resolvedId = seed.id !== "" ? seed.id : _newSessionId();
     const createdAt = new Date();
     const expiresAt = new Date(createdAt.getTime() + appConfig.game.sessionTtlMs);
 
     const persisted = await prisma.gameSession.create({
       data: {
         id: resolvedId,
-        seed,
-        locale: locale as string,
-        sceneId: sceneDefinition.id,
-        state: toScenePayload(buildSessionSceneState(sceneDefinition, locale as GameLocale, seed)),
+        ownerSessionId: seed.ownerSessionId,
+        seed: seed.seed,
+        locale: seed.locale as string,
+        sceneId: seed.scene.sceneId,
+        state: toScenePayload(seed.scene, seed.projectId),
+        stateVersion: 1,
         createdAt,
         updatedAt: createdAt,
         expiresAt,
       },
     });
 
-    return toGameSessionFromRow(persisted).session;
+    return {
+      ...toGameSessionFromRow(persisted).session,
+      projectId: seed.projectId,
+    };
   }
 
   public async getSession(sessionId: string): Promise<StoreResult<GameSession>> {
@@ -321,7 +369,7 @@ class PrismaGameStateStore implements GameStateStore {
       await prisma.gameSession.update({
         where: { id: sessionId },
         data: {
-          state: toScenePayload(restored.session.scene),
+          state: toScenePayload(restored.session.scene, restored.session.projectId),
           updatedAt: new Date(),
         },
       });
@@ -333,18 +381,43 @@ class PrismaGameStateStore implements GameStateStore {
   public async saveSession(session: GameSession): Promise<void> {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + appConfig.game.sessionTtlMs);
-
-    await prisma.gameSession.update({
-      where: { id: session.id },
+    const expectedPreviousVersion = Math.max(1, session.stateVersion - 1);
+    const updated = await prisma.gameSession.updateMany({
+      where: {
+        id: session.id,
+        stateVersion: expectedPreviousVersion,
+      },
       data: {
         seed: session.seed,
+        ownerSessionId: session.ownerSessionId,
         locale: session.locale,
         sceneId: session.scene.sceneId,
-        state: toScenePayload(session.scene),
+        state: toScenePayload(session.scene, session.projectId),
+        stateVersion: session.stateVersion,
         updatedAt: now,
         expiresAt,
       },
     });
+
+    if (updated.count > 0) {
+      return;
+    }
+
+    // Idempotent save path when the same stateVersion was already persisted.
+    const existing = await prisma.gameSession.findUnique({
+      where: { id: session.id },
+      select: { id: true, stateVersion: true },
+    });
+    if (!existing) {
+      return;
+    }
+    if (existing.stateVersion === session.stateVersion) {
+      return;
+    }
+
+    throw new Error(
+      `state-version-conflict:${session.id}:${existing.stateVersion}:${session.stateVersion}`,
+    );
   }
 
   public async deleteSession(sessionId: string): Promise<void> {

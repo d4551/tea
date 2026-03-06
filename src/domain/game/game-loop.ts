@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { appConfig } from "../../config/environment.ts";
+import { createLogger } from "../../lib/logger.ts";
 import { defaultGameConfig, resolveScene } from "../../shared/config/game-config.ts";
 import type {
   GameActionState,
@@ -7,12 +10,14 @@ import type {
   GameCommandState,
   GameLocale,
   GameSceneState,
+  GameSession,
   GameSessionSnapshot,
   GameSessionState,
 } from "../../shared/contracts/game.ts";
 import { validateGameCommandInput } from "../../shared/contracts/game.ts";
-import { createOracleService } from "../oracle/oracle-service.ts";
-import { resolveGameText } from "./data/game-text.ts";
+import { safeJsonParse } from "../../shared/utils/safe-json.ts";
+import { builderService } from "../builder/builder-service.ts";
+import { generateNpcDialogue } from "./ai/game-ai-service.ts";
 import { npcAiEngine } from "./npc-ai.ts";
 import {
   awardXp,
@@ -22,12 +27,18 @@ import {
 } from "./progression.ts";
 import { sceneEngine } from "./scene-engine.ts";
 import { gameStateStore } from "./services/GameStateStore.ts";
-import type { Mutable } from "./types.ts";
-
-const oracleService = createOracleService();
+import type { Mutable, MutableGameSceneState } from "./types.ts";
+import { buildSessionSceneState } from "./utils/session-state.ts";
 
 // Wrap worldTimeMs at ~1 day to prevent float precision loss in NPC PRNG
 const WORLD_TIME_WRAP_MS = 86_400_007;
+const logger = createLogger("game.loop");
+const resumeTokenSecretMaterial = [
+  appConfig.applicationName,
+  appConfig.auth.sessionCookieName,
+  Bun.env.DATABASE_URL ?? "",
+  defaultGameConfig.defaultSceneId,
+].join(":");
 
 type SnapshotCallback = (snapshot: GameSessionSnapshot) => void;
 
@@ -35,13 +46,6 @@ type QueuedCommand = Readonly<{
   /** Envelope accepted by command runtime. */
   readonly envelope: GameCommandEnvelope;
 }>;
-
-type ResumeSession = {
-  /** Session id paired with active resume token. */
-  readonly token: string;
-  /** Expiry when resume token should be rejected. */
-  readonly expiresAtMs: number;
-};
 
 const isExpired = (envelope: GameCommandEnvelope): boolean => {
   if (typeof envelope.ttlMs !== "number" || envelope.ttlMs <= 0) {
@@ -56,6 +60,66 @@ const isExpired = (envelope: GameCommandEnvelope): boolean => {
   return Date.now() - issued > envelope.ttlMs;
 };
 
+type ResumeTokenPayload = {
+  /** Stable session identifier. */
+  readonly sessionId: string;
+  /** Session-cookie identity allowed to restore this token. */
+  readonly ownerSessionId: string;
+  /** Expiry timestamp in ms since epoch. */
+  readonly expiresAtMs: number;
+  /** Monotonic token version per gameplay session. */
+  readonly tokenVersion: number;
+  /** Integrity signature over the payload. */
+  readonly signature: string;
+};
+
+const hashResumePayload = (
+  sessionId: string,
+  ownerSessionId: string,
+  expiresAtMs: number,
+  tokenVersion: number,
+): string =>
+  createHash("sha256")
+    .update(
+      `${sessionId}:${ownerSessionId}:${expiresAtMs}:${tokenVersion}:${resumeTokenSecretMaterial}`,
+    )
+    .digest("base64url");
+
+const encodeResumeToken = (
+  sessionId: string,
+  ownerSessionId: string,
+  expiresAtMs: number,
+  tokenVersion: number,
+): string =>
+  Buffer.from(
+    JSON.stringify({
+      sessionId,
+      ownerSessionId,
+      expiresAtMs,
+      tokenVersion,
+      signature: hashResumePayload(sessionId, ownerSessionId, expiresAtMs, tokenVersion),
+    } satisfies ResumeTokenPayload),
+    "utf8",
+  ).toString("base64url");
+
+const decodeResumeToken = (token: string): ResumeTokenPayload | null => {
+  const decoded = Buffer.from(token, "base64url").toString("utf8");
+  const payload = safeJsonParse<ResumeTokenPayload | null>(decoded, null);
+
+  if (
+    !payload ||
+    payload.sessionId.length === 0 ||
+    payload.ownerSessionId.length === 0 ||
+    !Number.isFinite(payload.expiresAtMs) ||
+    !Number.isFinite(payload.tokenVersion) ||
+    payload.signature.length === 0
+  ) {
+    return null;
+  }
+
+  return payload;
+};
+
 /**
  * Game Loop Service — server-authoritative tick engine.
  *
@@ -65,9 +129,14 @@ const isExpired = (envelope: GameCommandEnvelope): boolean => {
 export class GameLoopService {
   private commandQueue = new Map<string, QueuedCommand[]>();
   private commandSeq = new Map<string, number>();
-  private resumeTokens = new Map<string, ResumeSession>();
-  private tickIntervals = new Map<string, ReturnType<typeof setInterval>>();
+  private lastManualSaveAtMs = new Map<string, number>();
+  private tickTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+  private tickInFlight = new Set<string>();
   private tickCallbacks = new Map<string, Set<SnapshotCallback>>();
+  private liveSessions = new Map<string, Mutable<GameSession>>();
+  private lastPersistAtMs = new Map<string, number>();
+  private resumeTokenVersion = new Map<string, number>();
+  private chatWindow = new Map<string, number[]>();
 
   private mapCommandState = (state: GameCommandState): GameActionState | undefined => {
     if (state === "queued") {
@@ -94,85 +163,98 @@ export class GameLoopService {
   public async createSession(
     locale: GameLocale = "en-US",
     sceneId = defaultGameConfig.defaultSceneId,
+    projectId?: string,
+    ownerSessionId: string = "anonymous",
   ): Promise<GameSessionSnapshot> {
-    const sceneDef = resolveScene(sceneId);
-    if (!sceneDef) throw new Error("Invalid scene");
-
     const sessionId = crypto.randomUUID();
     const seed = Math.floor(Math.random() * 100_000);
+    const publishedProject =
+      typeof projectId === "string" && projectId.trim().length > 0
+        ? await builderService.getPublishedProject(projectId)
+        : null;
+    const dialogueCatalog = Object.fromEntries(
+      (
+        publishedProject?.dialogues.get(locale) ??
+        publishedProject?.dialogues.get(appConfig.defaultLocale) ??
+        new Map<string, string>()
+      ).entries(),
+    );
+    const resolvedScene =
+      publishedProject?.scenes.get(sceneId) ??
+      resolveScene(sceneId) ??
+      resolveScene(defaultGameConfig.defaultSceneId);
+    if (!resolvedScene) {
+      throw new Error("Invalid scene");
+    }
 
-    await gameStateStore.createSession(sessionId, sceneId, locale as GameLocale, seed);
+    const scene = buildSessionSceneState(
+      resolvedScene,
+      locale as GameLocale,
+      seed,
+      dialogueCatalog,
+    );
+
+    await gameStateStore.createSession({
+      id: sessionId,
+      ownerSessionId,
+      seed,
+      locale,
+      scene,
+      projectId: publishedProject ? projectId : undefined,
+    });
     await initializeProgress(sessionId);
-    await processInteractionProgress(sessionId, `scene-${sceneId}`);
+    await processInteractionProgress(sessionId, `scene-${resolvedScene.id}`);
 
     const saved = await gameStateStore.getSession(sessionId);
     if (!saved.ok) throw new Error(`Failed to create session: ${sessionId}`);
 
-    this.commandQueue.set(sessionId, []);
-    this.commandSeq.set(sessionId, 0);
-    this.resumeTokens.set(sessionId, {
-      token: crypto.randomUUID(),
-      expiresAtMs:
-        Date.now() +
-        Math.max(defaultGameConfig.sessionResumeWindowMs, defaultGameConfig.sessionTtlMs),
-    });
+    this.ensureSessionMaps(sessionId);
+    this.liveSessions.set(sessionId, saved.payload as Mutable<GameSession>);
+    this.lastPersistAtMs.set(sessionId, Date.now());
+    this.resumeTokenVersion.set(sessionId, 1);
+    this.chatWindow.set(sessionId, []);
+    if (typeof ownerSessionId === "string" && ownerSessionId.length > 0) {
+      this.getResumeTokenState(sessionId, ownerSessionId, false);
+    }
     return gameStateStore.toSnapshot(saved.payload);
   }
 
-  public async restoreSession(sessionId: string): Promise<GameSessionSnapshot | null> {
-    const sessionResult = await gameStateStore.getSession(sessionId);
-    if (!sessionResult.ok) {
-      return null;
-    }
-
-    if (!this.commandQueue.has(sessionId)) {
-      this.commandQueue.set(sessionId, []);
-      this.commandSeq.set(sessionId, 0);
-    }
-
-    if (!this.resumeTokens.has(sessionId)) {
-      this.resumeTokens.set(sessionId, {
-        token: crypto.randomUUID(),
-        expiresAtMs:
-          Date.now() +
-          Math.max(defaultGameConfig.sessionResumeWindowMs, defaultGameConfig.sessionTtlMs),
-      });
-    }
-
-    return gameStateStore.toSnapshot(sessionResult.payload);
-  }
-
-  public async joinSession(
+  public async restoreSession(
     sessionId: string,
     resumeToken: string,
+    ownerSessionId: string,
   ): Promise<GameSessionSnapshot | null> {
-    const sessionResult = await gameStateStore.getSession(sessionId);
+    if (!this.isResumeTokenValid(sessionId, resumeToken, ownerSessionId)) {
+      return null;
+    }
+
+    const sessionResult = await this.getRuntimeSession(sessionId);
     if (!sessionResult.ok) {
       return null;
     }
-
-    const tokenData = this.resumeTokens.get(sessionId);
-    if (!tokenData || tokenData.token !== resumeToken || tokenData.expiresAtMs < Date.now()) {
+    if (sessionResult.payload.ownerSessionId !== ownerSessionId) {
       return null;
     }
 
-    if (!this.commandQueue.has(sessionId)) {
-      this.commandQueue.set(sessionId, []);
-      this.commandSeq.set(sessionId, 0);
-    }
-
+    this.ensureSessionMaps(sessionId);
+    this.rotateResumeTokenVersion(sessionId);
     return gameStateStore.toSnapshot(sessionResult.payload);
   }
 
   public async closeSession(sessionId: string): Promise<boolean> {
-    const result = await gameStateStore.getSession(sessionId);
+    const result = await this.getRuntimeSession(sessionId);
     if (!result.ok) {
       return false;
     }
 
+    await this.persistSessionIfDue(result.payload, true);
     await gameStateStore.deleteSession(sessionId);
     this._clearTick(sessionId);
-    this.resumeTokens.delete(sessionId);
+    this.lastManualSaveAtMs.delete(sessionId);
+    this.liveSessions.delete(sessionId);
+    this.lastPersistAtMs.delete(sessionId);
+    this.resumeTokenVersion.delete(sessionId);
+    this.chatWindow.delete(sessionId);
     return true;
   }
 
@@ -180,37 +262,69 @@ export class GameLoopService {
     return this.commandQueue.get(sessionId)?.length ?? 0;
   }
 
-  public async getSessionState(sessionId: string): Promise<GameSessionState | null> {
-    const sessionResult = await gameStateStore.getSession(sessionId);
+  public async getSessionState(
+    sessionId: string,
+    ownerSessionId: string = "anonymous",
+  ): Promise<GameSessionState | null> {
+    const sessionResult = await this.getRuntimeSession(sessionId);
     if (!sessionResult.ok) {
+      return null;
+    }
+    if (sessionResult.payload.ownerSessionId !== ownerSessionId) {
       return null;
     }
 
     const snapshot = gameStateStore.toSnapshot(sessionResult.payload);
-    const resumeToken = this.getResumeToken(sessionId);
+    const resumeTokenState = this.getResumeTokenState(sessionId, ownerSessionId);
 
     return {
       ...snapshot,
       commandQueueDepth: this.getCommandQueueDepth(sessionId),
-      resumeToken: resumeToken ?? "",
+      resumeToken: resumeTokenState.token,
+      resumeTokenExpiresAtMs: resumeTokenState.expiresAtMs,
+      resumeTokenVersion: resumeTokenState.tokenVersion,
+      stateVersion: sessionResult.payload.stateVersion,
       version: 1,
     };
   }
 
-  public async getExistingOrThrow(sessionId: string): Promise<GameSessionState | null> {
-    return this.getSessionState(sessionId);
+  public async getExistingOrThrow(
+    sessionId: string,
+    ownerSessionId: string = "anonymous",
+  ): Promise<GameSessionState | null> {
+    return this.getSessionState(sessionId, ownerSessionId);
   }
 
-  public getResumeToken(sessionId: string): string | null {
-    const tokenData = this.resumeTokens.get(sessionId);
-    if (!tokenData) return null;
+  public getResumeToken(sessionId: string, ownerSessionId: string): string | null {
+    return this.getResumeTokenState(sessionId, ownerSessionId).token;
+  }
 
-    if (tokenData.expiresAtMs < Date.now()) {
-      this.resumeTokens.delete(sessionId);
-      return null;
+  public getResumeTokenExpiresAtMs(sessionId: string, ownerSessionId: string): number {
+    return this.getResumeTokenState(sessionId, ownerSessionId).expiresAtMs;
+  }
+
+  public getSaveCooldownRemainingMs(sessionId: string, nowMs: number = Date.now()): number {
+    const lastSavedAtMs = this.lastManualSaveAtMs.get(sessionId) ?? 0;
+    const cooldownEndsAtMs = lastSavedAtMs + defaultGameConfig.saveCooldownMs;
+
+    return Math.max(0, cooldownEndsAtMs - nowMs);
+  }
+
+  public markManualSave(sessionId: string, nowMs: number = Date.now()): void {
+    this.lastManualSaveAtMs.set(sessionId, nowMs);
+  }
+
+  /**
+   * Forces a persisted snapshot write regardless of throttle window.
+   */
+  public async saveSessionNow(sessionId: string): Promise<boolean> {
+    const sessionResult = await this.getRuntimeSession(sessionId);
+    if (!sessionResult.ok) {
+      return false;
     }
 
-    return tokenData.token;
+    await this.persistSessionIfDue(sessionResult.payload, true);
+    return true;
   }
 
   // ── Background tick management ──────────────────────────────────────────────
@@ -228,35 +342,282 @@ export class GameLoopService {
     }
     cbs.add(onSnapshot);
 
-    if (!this.tickIntervals.has(sessionId)) {
-      const interval = setInterval(async () => {
-        const snapshot = await this.tick(sessionId, defaultGameConfig.tickMs);
-        if (snapshot) {
-          for (const cb of this.tickCallbacks.get(sessionId) ?? []) {
-            cb(snapshot);
-          }
-        } else {
-          this._clearTick(sessionId);
-        }
-      }, defaultGameConfig.tickMs);
-      this.tickIntervals.set(sessionId, interval);
-    }
+    this.ensureTicking(sessionId);
 
     return () => {
       const callbacks = this.tickCallbacks.get(sessionId);
       callbacks?.delete(onSnapshot);
-      if ((callbacks?.size ?? 0) === 0) {
-        this._clearTick(sessionId);
+      if ((callbacks?.size ?? 0) === 0 && this.getCommandQueueDepth(sessionId) === 0) {
+        void this.flushSession(sessionId).catch(() => undefined);
       }
     };
   }
 
   private _clearTick(sessionId: string): void {
-    clearInterval(this.tickIntervals.get(sessionId));
-    this.tickIntervals.delete(sessionId);
+    clearTimeout(this.tickTimeouts.get(sessionId));
+    this.tickTimeouts.delete(sessionId);
+    this.tickInFlight.delete(sessionId);
     this.tickCallbacks.delete(sessionId);
     this.commandQueue.delete(sessionId);
     this.commandSeq.delete(sessionId);
+  }
+
+  private ensureSessionMaps(sessionId: string): void {
+    if (!this.commandQueue.has(sessionId)) {
+      this.commandQueue.set(sessionId, []);
+    }
+    if (!this.commandSeq.has(sessionId)) {
+      this.commandSeq.set(sessionId, 0);
+    }
+    if (!this.resumeTokenVersion.has(sessionId)) {
+      this.resumeTokenVersion.set(sessionId, 1);
+    }
+    if (!this.chatWindow.has(sessionId)) {
+      this.chatWindow.set(sessionId, []);
+    }
+  }
+
+  private getResumeTokenState(
+    sessionId: string,
+    ownerSessionId: string,
+    rotate: boolean = false,
+  ): {
+    readonly token: string;
+    readonly expiresAtMs: number;
+    readonly tokenVersion: number;
+  } {
+    const currentVersion = this.resumeTokenVersion.get(sessionId) ?? 1;
+    const tokenVersion = rotate ? currentVersion + 1 : currentVersion;
+    this.resumeTokenVersion.set(sessionId, tokenVersion);
+    const expiresAtMs =
+      Date.now() + Math.max(defaultGameConfig.sessionResumeWindowMs, defaultGameConfig.tickMs);
+
+    return {
+      token: encodeResumeToken(sessionId, ownerSessionId, expiresAtMs, tokenVersion),
+      expiresAtMs,
+      tokenVersion,
+    };
+  }
+
+  private isResumeTokenValid(
+    sessionId: string,
+    resumeToken: string,
+    ownerSessionId: string,
+  ): boolean {
+    const payload = decodeResumeToken(resumeToken);
+    if (!payload) {
+      return false;
+    }
+
+    if (
+      payload.sessionId !== sessionId ||
+      payload.ownerSessionId !== ownerSessionId ||
+      payload.expiresAtMs < Date.now()
+    ) {
+      return false;
+    }
+
+    const expectedVersion = this.resumeTokenVersion.get(sessionId) ?? 1;
+    if (payload.tokenVersion !== expectedVersion) {
+      return false;
+    }
+
+    return (
+      payload.signature ===
+      hashResumePayload(
+        payload.sessionId,
+        payload.ownerSessionId,
+        payload.expiresAtMs,
+        payload.tokenVersion,
+      )
+    );
+  }
+
+  private rotateResumeTokenVersion(sessionId: string): void {
+    this.resumeTokenVersion.set(sessionId, (this.resumeTokenVersion.get(sessionId) ?? 1) + 1);
+  }
+
+  private async getRuntimeSession(sessionId: string): Promise<
+    | {
+        readonly ok: true;
+        readonly payload: Mutable<GameSession>;
+      }
+    | {
+        readonly ok: false;
+        readonly error: "SESSION_NOT_FOUND" | "SESSION_EXPIRED";
+      }
+  > {
+    const liveSession = this.liveSessions.get(sessionId);
+    if (liveSession) {
+      return { ok: true, payload: liveSession };
+    }
+
+    const sessionResult = await gameStateStore.getSession(sessionId);
+    if (!sessionResult.ok) {
+      return sessionResult;
+    }
+
+    const mutableSession = sessionResult.payload as Mutable<GameSession>;
+    this.liveSessions.set(sessionId, mutableSession);
+    this.ensureSessionMaps(sessionId);
+    this.lastPersistAtMs.set(sessionId, Date.now());
+    return { ok: true, payload: mutableSession };
+  }
+
+  private consumeChatWindow(sessionId: string, nowMs: number = Date.now()): boolean {
+    const windowStart = nowMs - defaultGameConfig.chatRateLimitWindowMs;
+    const bucket = this.chatWindow.get(sessionId) ?? [];
+    const pruned = bucket.filter((ts) => ts >= windowStart);
+    if (pruned.length >= defaultGameConfig.maxChatCommandsPerWindow) {
+      this.chatWindow.set(sessionId, pruned);
+      return false;
+    }
+
+    pruned.push(nowMs);
+    this.chatWindow.set(sessionId, pruned);
+    return true;
+  }
+
+  private async persistSessionIfDue(session: Mutable<GameSession>, force: boolean): Promise<void> {
+    const now = Date.now();
+    const lastPersistAt = this.lastPersistAtMs.get(session.id) ?? 0;
+    if (!force && now - lastPersistAt < defaultGameConfig.sessionPersistIntervalMs) {
+      return;
+    }
+
+    const nextVersion = session.stateVersion + 1;
+    const stagedSession = {
+      ...session,
+      stateVersion: nextVersion,
+      updatedAtMs: now,
+    } satisfies GameSession;
+    await gameStateStore.saveSession(stagedSession);
+    session.stateVersion = nextVersion;
+    session.updatedAtMs = now;
+    this.lastPersistAtMs.set(session.id, now);
+  }
+
+  private async flushSession(sessionId: string): Promise<void> {
+    const session = this.liveSessions.get(sessionId);
+    if (!session) {
+      return;
+    }
+    await this.persistSessionIfDue(session, true);
+  }
+
+  private scheduleTick(sessionId: string, delayMs: number): void {
+    if (this.tickTimeouts.has(sessionId)) {
+      return;
+    }
+
+    const timeout = setTimeout(async () => {
+      this.tickTimeouts.delete(sessionId);
+      if (this.tickInFlight.has(sessionId)) {
+        this.scheduleTick(sessionId, defaultGameConfig.tickMs);
+        return;
+      }
+
+      this.tickInFlight.add(sessionId);
+      try {
+        const snapshot = await this.tick(sessionId, defaultGameConfig.tickMs);
+        if (!snapshot) {
+          this._clearTick(sessionId);
+          return;
+        }
+
+        for (const cb of this.tickCallbacks.get(sessionId) ?? []) {
+          cb(snapshot);
+        }
+
+        if (this.shouldKeepTicking(sessionId, snapshot.state)) {
+          this.scheduleTick(sessionId, defaultGameConfig.tickMs);
+          return;
+        }
+
+        await this.flushSession(sessionId);
+        this._clearTick(sessionId);
+      } catch (error) {
+        logger.error("tick.failed", {
+          sessionId,
+          error: String(error),
+        });
+        const restored = await gameStateStore.getSession(sessionId);
+        if (restored.ok) {
+          this.liveSessions.set(sessionId, restored.payload as Mutable<GameSession>);
+        }
+        if (
+          (this.tickCallbacks.get(sessionId)?.size ?? 0) > 0 ||
+          this.getCommandQueueDepth(sessionId) > 0
+        ) {
+          this.scheduleTick(sessionId, defaultGameConfig.tickMs);
+        }
+      } finally {
+        this.tickInFlight.delete(sessionId);
+      }
+    }, delayMs);
+
+    this.tickTimeouts.set(sessionId, timeout);
+  }
+
+  private ensureTicking(sessionId: string): void {
+    if (this.tickTimeouts.has(sessionId)) {
+      return;
+    }
+    this.scheduleTick(sessionId, defaultGameConfig.tickMs);
+  }
+
+  private shouldKeepTicking(sessionId: string, state: GameSceneState): boolean {
+    return (
+      (this.tickCallbacks.get(sessionId)?.size ?? 0) > 0 ||
+      this.getCommandQueueDepth(sessionId) > 0 ||
+      state.dialogue !== null
+    );
+  }
+
+  private isPlayerFacingNpc(
+    state: MutableGameSceneState,
+    npc: Mutable<(typeof state.npcs)[number]>,
+  ): boolean {
+    const playerCenterX =
+      state.player.position.x + state.player.bounds.x + state.player.bounds.width / 2;
+    const playerCenterY =
+      state.player.position.y + state.player.bounds.y + state.player.bounds.height / 2;
+    const npcCenterX = npc.position.x + npc.bounds.x + npc.bounds.width / 2;
+    const npcCenterY = npc.position.y + npc.bounds.y + npc.bounds.height / 2;
+    const dx = npcCenterX - playerCenterX;
+    const dy = npcCenterY - playerCenterY;
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      return dx >= 0 ? state.player.facing === "right" : state.player.facing === "left";
+    }
+
+    return dy >= 0 ? state.player.facing === "down" : state.player.facing === "up";
+  }
+
+  private resolveChatTarget(
+    state: MutableGameSceneState,
+    npcId: string,
+  ): Mutable<(typeof state.npcs)[number]> | null {
+    const target = state.npcs.find((candidate) => candidate.id === npcId) as
+      | Mutable<(typeof state.npcs)[number]>
+      | undefined;
+    if (!target) {
+      return null;
+    }
+
+    const interactable = sceneEngine.findInteractableNpc(
+      state.player.position,
+      state.player.bounds,
+      state.npcs,
+    );
+    if (!interactable || interactable.id !== npcId) {
+      return null;
+    }
+
+    if (!this.isPlayerFacingNpc(state, target)) {
+      return null;
+    }
+
+    return target;
   }
 
   // ── Command queue ────────────────────────────────────────────────────────────
@@ -266,6 +627,7 @@ export class GameLoopService {
     command: GameCommandInput | unknown,
     sessionLocale: GameLocale,
   ): GameCommandResult {
+    this.ensureSessionMaps(sessionId);
     const validation = validateGameCommandInput(command, sessionLocale);
     if (!validation.ok) {
       return {
@@ -316,8 +678,22 @@ export class GameLoopService {
       };
     }
 
+    if (envelope.command.type === "chat" && !this.consumeChatWindow(sessionId)) {
+      return {
+        sessionId,
+        commandId: envelope.commandId,
+        sequenceId: envelope.sequenceId,
+        state: "dropped",
+        errorCode: "CONFLICT",
+        errorReason: "chat-rate-limit",
+        commandType: envelope.command.type,
+        commandState: this.mapCommandState("dropped"),
+      };
+    }
+
     if (queue.length < defaultGameConfig.maxCommandsPerTick) {
       queue.push({ envelope });
+      this.ensureTicking(sessionId);
       return {
         sessionId,
         commandId: envelope.commandId,
@@ -343,11 +719,11 @@ export class GameLoopService {
   // ── Core tick ────────────────────────────────────────────────────────────────
 
   public async tick(sessionId: string, dtMs: number): Promise<GameSessionSnapshot | undefined> {
-    const sessionResult = await gameStateStore.getSession(sessionId);
+    const sessionResult = await this.getRuntimeSession(sessionId);
     if (!sessionResult.ok) return undefined;
     const session = sessionResult.payload;
 
-    const state = session.scene as Mutable<GameSceneState>;
+    const state = session.scene as unknown as MutableGameSceneState;
 
     // Wrap to prevent float precision loss after ~24 hours
     state.worldTimeMs = (state.worldTimeMs + dtMs) % WORLD_TIME_WRAP_MS;
@@ -398,7 +774,10 @@ export class GameLoopService {
         state.player.position.x = result.position.x;
         state.player.position.y = result.position.y;
         state.player.facing = result.facing;
+        state.player.velocity.x = vector.x * speed;
+        state.player.velocity.y = vector.y * speed;
         state.player.animation = `walk-${result.facing}`;
+        state.player.frame = result.moved ? state.player.frame + 1 : 0;
         playerMoved = result.moved || playerMoved;
         commandApplied = true;
         nextActionState = result.moved ? "moved" : "blockedByCollision";
@@ -412,6 +791,7 @@ export class GameLoopService {
 
         if (interactable) {
           interactable.state = "talking";
+          interactable.active = true;
 
           const dx = state.player.position.x - interactable.position.x;
           const dy = state.player.position.y - interactable.position.y;
@@ -419,16 +799,16 @@ export class GameLoopService {
             Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
           interactable.animation = `idle-${interactable.facing}`;
 
-          const lineKey =
-            interactable.dialogueLineKeys[
-              interactable.dialogueIndex % interactable.dialogueLineKeys.length
+          const line =
+            interactable.dialogueEntries[
+              interactable.dialogueIndex % interactable.dialogueEntries.length
             ];
-          if (lineKey) {
+          if (line) {
             state.dialogue = {
               npcId: interactable.id,
               npcLabel: interactable.label,
-              line: resolveGameText(session.locale, lineKey),
-              lineKey,
+              line: line.text,
+              lineKey: line.key,
             };
             interactable.dialogueIndex++;
             nextActionState = "dialogueOpen";
@@ -443,7 +823,9 @@ export class GameLoopService {
         commandApplied = true;
         state.dialogue = null;
         for (const npc of state.npcs) {
-          if (npc.state === "talking") npc.state = "idle";
+          if (npc.state === "talking") {
+            npc.state = "idle";
+          }
         }
         nextActionState = "success";
       } else if (commandType === "chat") {
@@ -451,26 +833,24 @@ export class GameLoopService {
         // Enforce chat message length limit before forwarding to AI
         const msg = (cmd.message ?? "").slice(0, defaultGameConfig.maxChatMessageLength);
         if (cmd.npcId && msg.length > 0) {
-          const interactable = state.npcs.find((n) => n.id === cmd.npcId) as
-            | Mutable<(typeof state.npcs)[0]>
-            | undefined;
+          const interactable = this.resolveChatTarget(state, cmd.npcId);
 
           if (interactable?.aiEnabled) {
             interactable.state = "talking";
 
-            const response = await oracleService.evaluate({
-              question: msg,
-              locale: session.locale,
-              hasSession: true,
-              mode: "auto",
-            });
-
-            const reply =
-              response.state === "success"
-                ? response.answer
-                : "message" in response
-                  ? response.message
-                  : "";
+            const response = await generateNpcDialogue(
+              {
+                npcId: interactable.characterKey,
+                sceneId: state.sceneId,
+                playerMessage: msg,
+                history:
+                  state.dialogue !== null
+                    ? [`${state.dialogue.npcLabel}: ${state.dialogue.line}`]
+                    : [],
+              },
+              session.locale,
+            );
+            const reply = response.ok ? response.text : response.error;
 
             state.dialogue = {
               npcId: interactable.id,
@@ -490,7 +870,17 @@ export class GameLoopService {
         }
       } else if (commandType === "confirmDialogue") {
         commandApplied = true;
-        nextActionState = state.dialogue ? "success" : "empty";
+        if (state.dialogue) {
+          state.dialogue = null;
+          for (const npc of state.npcs) {
+            if (npc.state === "talking") {
+              npc.state = "idle";
+            }
+          }
+          nextActionState = "success";
+        } else {
+          nextActionState = "empty";
+        }
       } else if (commandType === "retryAction") {
         commandApplied = true;
         nextActionState = "loading";
@@ -503,23 +893,23 @@ export class GameLoopService {
 
     if (!playerMoved && state.dialogue === null && nextActionState !== "dialogueOpen") {
       state.player.animation = `idle-${state.player.facing}`;
+      state.player.velocity.x = 0;
+      state.player.velocity.y = 0;
+      state.player.frame = 0;
     }
 
     state.actionState = nextActionState;
 
     // Camera: center on player, clamped to scene bounds
-    const sceneDef = resolveScene(state.sceneId);
-    if (sceneDef) {
-      const { width: scW, height: scH } = sceneDef.geometry;
-      const { viewportWidth: vpW, viewportHeight: vpH } = defaultGameConfig;
-      state.camera.x = Math.max(0, Math.min(state.player.position.x - vpW / 2, scW - vpW));
-      state.camera.y = Math.max(0, Math.min(state.player.position.y - vpH / 2, scH - vpH));
-    }
+    const { width: scW, height: scH } = state.geometry;
+    const { viewportWidth: vpW, viewportHeight: vpH } = defaultGameConfig;
+    state.camera.x = Math.max(0, Math.min(state.player.position.x - vpW / 2, scW - vpW));
+    state.camera.y = Math.max(0, Math.min(state.player.position.y - vpH / 2, scH - vpH));
 
     // Advance NPC AI
     npcAiEngine.updateNpcs(state, session.seed, dtMs);
 
-    await gameStateStore.saveSession(session);
+    await this.persistSessionIfDue(session, false);
     return gameStateStore.toSnapshot(session);
   }
 }

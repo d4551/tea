@@ -14,7 +14,7 @@ export const requestContextPlugin = new Elysia({ name: "request-context" })
       requestStartMs: performance.now(),
     };
   })
-  .onAfterResponse(({ request, set, correlationId, requestStartMs }) => {
+  .onAfterHandle(({ request, set, correlationId, requestStartMs }) => {
     const durationMs = Number((performance.now() - requestStartMs).toFixed(2));
     const url = new URL(request.url);
     const status = typeof set.status === "number" ? set.status : 200;

@@ -17,14 +17,43 @@ model OracleInteraction {
 
 model GameSession {
   id          String   @id @default(cuid())
+  ownerSessionId String @default("anonymous")
   seed        Int
   locale      String   @default("en-US")
   sceneId     String   @default("teaHouse")
   state       Json
+  stateVersion Int     @default(1)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   expiresAt   DateTime
   progress    PlayerProgress?
+}
+
+model BuilderProject {
+  id                     String                 @id
+  state                  Json
+  checksum               String
+  version                Int                    @default(1)
+  createdBy              String                 @default("system")
+  updatedBy              String                 @default("system")
+  source                 String                 @default("builder-service-seed")
+  latestReleaseVersion   Int                    @default(0)
+  publishedReleaseVersion Int?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  releases               BuilderProjectRelease[]
+}
+
+model BuilderProjectRelease {
+  id             String         @id @default(cuid())
+  projectId      String
+  project        BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  releaseVersion Int
+  checksum       String
+  state          Json
+  createdAt      DateTime       @default(now())
+
+  @@unique([projectId, releaseVersion])
 }
 
 model PlayerProgress {

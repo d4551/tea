@@ -14,6 +14,14 @@ const baseUrl = "http://localhost";
 const toUrl = (path: string): string => `${baseUrl}${path}`;
 const countOccurrences = (source: string, fragment: string): number =>
   source.split(fragment).length - 1;
+const readSessionCookieHeader = (response: Response): string | null => {
+  const setCookie = response.headers.get("set-cookie");
+  if (!setCookie) {
+    return null;
+  }
+
+  return setCookie.split(";")[0] ?? null;
+};
 
 beforeAll(async () => {
   app = await createApp();
@@ -366,6 +374,7 @@ describe("API contracts", () => {
         readonly sessionId: string;
       };
     };
+    const sessionCookie = readSessionCookieHeader(createResponse);
     const sessionId = createPayload.data?.sessionId ?? "";
 
     const commandResponse = await app.handle(
@@ -373,6 +382,7 @@ describe("API contracts", () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
+          ...(sessionCookie ? { cookie: sessionCookie } : {}),
         },
         body: JSON.stringify({
           type: "move",
@@ -414,6 +424,7 @@ describe("API contracts", () => {
         readonly sessionId: string;
       };
     };
+    const sessionCookie = readSessionCookieHeader(createResponse);
     const sessionId = createPayload.data?.sessionId ?? "";
 
     const commandResponse = await app.handle(
@@ -421,6 +432,7 @@ describe("API contracts", () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
+          ...(sessionCookie ? { cookie: sessionCookie } : {}),
         },
         body: JSON.stringify({
           type: "move",
@@ -458,11 +470,13 @@ describe("API contracts", () => {
       return;
     }
 
+    const ownerCookie = `${appConfig.auth.sessionCookieName}=anonymous`;
     const createResponse = await app.handle(
       new Request(toUrl(appRoutes.gameApiSession), {
         method: "POST",
         headers: {
           "content-type": "application/json",
+          cookie: ownerCookie,
         },
         body: JSON.stringify({
           locale: "en-US",
@@ -475,6 +489,7 @@ describe("API contracts", () => {
         readonly sessionId: string;
       };
     };
+    const sessionCookie = readSessionCookieHeader(createResponse) ?? ownerCookie;
     const sessionId = createPayload.data?.sessionId ?? "";
 
     await prisma.gameSession.update({
@@ -485,7 +500,11 @@ describe("API contracts", () => {
     });
 
     const stateResponse = await app.handle(
-      new Request(toUrl(appRoutes.gameApiSessionState.replace(":id", sessionId))),
+      new Request(toUrl(appRoutes.gameApiSessionState.replace(":id", sessionId)), {
+        headers: {
+          ...(sessionCookie ? { cookie: sessionCookie } : {}),
+        },
+      }),
     );
     const statePayload = (await stateResponse.json()) as {
       readonly ok: boolean;
@@ -516,7 +535,10 @@ describe("API contracts", () => {
     expect(
       typeof repairedRow?.state === "object" &&
         repairedRow.state !== null &&
-        "sceneId" in repairedRow.state,
+        "scene" in repairedRow.state &&
+        typeof repairedRow.state.scene === "object" &&
+        repairedRow.state.scene !== null &&
+        "sceneId" in repairedRow.state.scene,
     ).toBe(true);
   });
 
@@ -646,6 +668,7 @@ describe("API contracts", () => {
         readonly sessionId: string;
       };
     };
+    const sessionCookie = readSessionCookieHeader(createResponse);
     const sessionId = createPayload.data?.sessionId ?? "";
     const targetPath = appRoutes.gameApiSessionCommand.replace(":id", sessionId);
 
@@ -657,6 +680,7 @@ describe("API contracts", () => {
             method: "POST",
             headers: {
               "content-type": "application/json",
+              ...(sessionCookie ? { cookie: sessionCookie } : {}),
             },
             body: JSON.stringify({
               type: "interact",
@@ -939,10 +963,17 @@ describe("HTMX partial rendering", () => {
 
     expect(response.status).toBe(httpStatus.ok);
     expect(response.headers.get("content-type")?.includes(contentType.htmlUtf8)).toBe(true);
-    expect(html.includes("/public/vendor/htmx-ext/game-hud.js")).toBe(true);
+    expect(html.includes("/public/vendor/htmx-ext/game-hud.js")).toBe(false);
+    expect(html.includes('hx-ext="sse"')).toBe(true);
+    expect(html.includes('hx-ext="sse,game-hud"')).toBe(false);
     expect(html.includes("/public/vendor/htmx-ext/oracle-indicator.js")).toBe(false);
     expect(countOccurrences(html, 'data-hud-slot="hud-xp"')).toBe(1);
     expect(html.includes('data-connected-label="connected"')).toBe(true);
+    expect(html.includes('name="game-client-command-send-interval-ms"')).toBe(true);
+    expect(html.includes('name="game-client-command-ttl-ms"')).toBe(true);
+    expect(html.includes('name="game-client-socket-reconnect-delay-ms"')).toBe(true);
+    expect(html.includes('name="game-client-restore-request-timeout-ms"')).toBe(true);
+    expect(html.includes('name="game-client-restore-max-attempts"')).toBe(true);
   });
 
   test("builder dashboard preserves locale-aware navigation links", async () => {

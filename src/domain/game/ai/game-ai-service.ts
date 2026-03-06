@@ -15,6 +15,12 @@ import { gameTextByLocale, resolveGameText } from "../data/game-text.ts";
 
 const logger = createLogger("game.ai-service");
 
+const toNpcCatalogKey = (npcId: string, suffix: "label" | "greet"): string =>
+  npcId.startsWith("npc.") ? `${npcId}.${suffix}` : `npc.${npcId}.${suffix}`;
+
+const toSceneCatalogKey = (sceneId: string): string =>
+  sceneId.startsWith("scene.") ? sceneId : `scene.${sceneId}.title`;
+
 /**
  * NPC dialogue generation context.
  */
@@ -60,10 +66,10 @@ export interface AvailableAiFeatures {
  * @returns Formatted system prompt.
  */
 const buildNpcSystemPrompt = (npcId: string, locale: GameLocale, sceneId: string): string => {
-  const npcLabel = resolveGameText(locale, `${npcId}.label`);
+  const npcLabel = resolveGameText(locale, toNpcCatalogKey(npcId, "label"));
   const catalog = gameTextByLocale[locale] ?? gameTextByLocale["en-US"];
   const sceneTitle =
-    catalog.scenes["scene.teaHouse.title" as keyof typeof catalog.scenes] ?? sceneId;
+    catalog.scenes[toSceneCatalogKey(sceneId) as keyof typeof catalog.scenes] ?? sceneId;
 
   const languageInstruction =
     locale === "zh-CN"
@@ -136,6 +142,7 @@ export const generateNpcDialogue = async (
   const userContent = context.playerMessage ?? "Greet the player who has just approached you.";
 
   const result = await registry.chat({
+    model: "npcDialogue",
     systemPrompt,
     messages: [
       ...(context.history ?? []).map((line) => ({
@@ -154,7 +161,7 @@ export const generateNpcDialogue = async (
       error: result.error,
     });
 
-    const fallbackLine = resolveGameText(locale, `${context.npcId}.greet`);
+    const fallbackLine = resolveGameText(locale, toNpcCatalogKey(context.npcId, "greet"));
     return {
       ok: true,
       text: fallbackLine,
@@ -184,6 +191,7 @@ export async function* streamNpcDialogue(
   const userContent = context.playerMessage ?? "Greet the player who has just approached you.";
 
   yield* registry.chatStream({
+    model: "npcDialogue",
     systemPrompt,
     messages: [{ role: "user", content: userContent }],
     maxTokens: 120,

@@ -42,6 +42,114 @@ const oracleErrorEnvelopeSchema = t.Object({
   }),
 });
 
+const createHealthRoutes = () =>
+  new Elysia({ name: "api-health-routes" }).use(i18nContextPlugin).get(
+    appRoutes.healthApi,
+    ({ messages }) => {
+      const healthMessage = messages.api.healthOk;
+
+      return successEnvelope({
+        status: "ok",
+        message: healthMessage,
+        uptimeSeconds: Number(((Bun.nanoseconds() - serverStartNs) / 1e9).toFixed(2)),
+        timestamp: new Date().toISOString(),
+      });
+    },
+    {
+      detail: {
+        tags: ["system"],
+      },
+      response: t.Object({
+        ok: t.Literal(true),
+        data: t.Intersect([
+          healthResponseSchema,
+          t.Object({
+            message: t.String(),
+          }),
+        ]),
+      }),
+    },
+  );
+
+const createOracleRoutes = (oracleService: OracleService) =>
+  new Elysia({ name: "api-oracle-routes" }).use(i18nContextPlugin).guard(authSessionGuard, (app) =>
+    app.post(
+      appRoutes.oracleApi,
+      async ({ body, cookie, request, set, status }) => {
+        const correlationId = ensureCorrelationIdHeader(request, set.headers);
+        const { locale } = resolveRequestI18nWithOverride(request, body.lang);
+        const mode = parseOracleMode(body.mode);
+        const outcome = await oracleService.evaluate({
+          question: body.question,
+          locale,
+          mode,
+          hasSession: resolveAuthSession(cookie).hasSession,
+        });
+
+        if (outcome.state === "success") {
+          return status(
+            httpStatus.ok,
+            successEnvelope({
+              state: "success",
+              answer: outcome.answer,
+            }),
+          );
+        }
+
+        if (outcome.state === "empty") {
+          const appError = new ApplicationError(
+            "VALIDATION_ERROR",
+            outcome.message,
+            httpStatus.badRequest,
+            false,
+          );
+          return status(httpStatus.badRequest, errorEnvelope(appError, correlationId));
+        }
+
+        if (outcome.state === "unauthorized") {
+          const appError = new ApplicationError(
+            "UNAUTHORIZED",
+            outcome.message,
+            httpStatus.unauthorized,
+            false,
+          );
+          return status(httpStatus.unauthorized, errorEnvelope(appError, correlationId));
+        }
+
+        if (outcome.retryable) {
+          const appError = new ApplicationError(
+            "UPSTREAM_ERROR",
+            outcome.message,
+            httpStatus.serviceUnavailable,
+            true,
+          );
+          return status(httpStatus.serviceUnavailable, errorEnvelope(appError, correlationId));
+        }
+
+        const appError = new ApplicationError(
+          "VALIDATION_ERROR",
+          outcome.message,
+          httpStatus.unprocessableEntity,
+          false,
+        );
+        return status(httpStatus.unprocessableEntity, errorEnvelope(appError, correlationId));
+      },
+      {
+        body: oracleBodySchema,
+        response: {
+          [httpStatus.ok]: oracleSuccessEnvelopeSchema,
+          [httpStatus.badRequest]: oracleErrorEnvelopeSchema,
+          [httpStatus.unauthorized]: oracleErrorEnvelopeSchema,
+          [httpStatus.unprocessableEntity]: oracleErrorEnvelopeSchema,
+          [httpStatus.serviceUnavailable]: oracleErrorEnvelopeSchema,
+        },
+        detail: {
+          tags: ["oracle"],
+        },
+      },
+    ),
+  );
+
 /**
  * Creates JSON API routes with contract validation.
  *
@@ -50,108 +158,5 @@ const oracleErrorEnvelopeSchema = t.Object({
  */
 export const createApiRoutes = (oracleService: OracleService) =>
   new Elysia({ name: "api-routes" })
-    .use(i18nContextPlugin)
-    .get(
-      appRoutes.healthApi,
-      ({ messages }) => {
-        const healthMessage = messages.api.healthOk;
-
-        return successEnvelope({
-          status: "ok",
-          message: healthMessage,
-          uptimeSeconds: Number(((Bun.nanoseconds() - serverStartNs) / 1e9).toFixed(2)),
-          timestamp: new Date().toISOString(),
-        });
-      },
-      {
-        detail: {
-          tags: ["system"],
-        },
-        response: t.Object({
-          ok: t.Literal(true),
-          data: t.Intersect([
-            healthResponseSchema,
-            t.Object({
-              message: t.String(),
-            }),
-          ]),
-        }),
-      },
-    )
-    .guard(authSessionGuard, (app) =>
-      app.post(
-        appRoutes.oracleApi,
-        async ({ body, cookie, request, set, status }) => {
-          const correlationId = ensureCorrelationIdHeader(request, set.headers);
-          const { locale } = resolveRequestI18nWithOverride(request, body.lang);
-          const mode = parseOracleMode(body.mode);
-          const outcome = await oracleService.evaluate({
-            question: body.question,
-            locale,
-            mode,
-            hasSession: resolveAuthSession(cookie).hasSession,
-          });
-
-          if (outcome.state === "success") {
-            return status(
-              httpStatus.ok,
-              successEnvelope({
-                state: "success",
-                answer: outcome.answer,
-              }),
-            );
-          }
-
-          if (outcome.state === "empty") {
-            const appError = new ApplicationError(
-              "VALIDATION_ERROR",
-              outcome.message,
-              httpStatus.badRequest,
-              false,
-            );
-            return status(httpStatus.badRequest, errorEnvelope(appError, correlationId));
-          }
-
-          if (outcome.state === "unauthorized") {
-            const appError = new ApplicationError(
-              "UNAUTHORIZED",
-              outcome.message,
-              httpStatus.unauthorized,
-              false,
-            );
-            return status(httpStatus.unauthorized, errorEnvelope(appError, correlationId));
-          }
-
-          if (outcome.retryable) {
-            const appError = new ApplicationError(
-              "UPSTREAM_ERROR",
-              outcome.message,
-              httpStatus.serviceUnavailable,
-              true,
-            );
-            return status(httpStatus.serviceUnavailable, errorEnvelope(appError, correlationId));
-          }
-
-          const appError = new ApplicationError(
-            "VALIDATION_ERROR",
-            outcome.message,
-            httpStatus.unprocessableEntity,
-            false,
-          );
-          return status(httpStatus.unprocessableEntity, errorEnvelope(appError, correlationId));
-        },
-        {
-          body: oracleBodySchema,
-          response: {
-            [httpStatus.ok]: oracleSuccessEnvelopeSchema,
-            [httpStatus.badRequest]: oracleErrorEnvelopeSchema,
-            [httpStatus.unauthorized]: oracleErrorEnvelopeSchema,
-            [httpStatus.unprocessableEntity]: oracleErrorEnvelopeSchema,
-            [httpStatus.serviceUnavailable]: oracleErrorEnvelopeSchema,
-          },
-          detail: {
-            tags: ["oracle"],
-          },
-        },
-      ),
-    );
+    .use(createHealthRoutes())
+    .use(createOracleRoutes(oracleService));

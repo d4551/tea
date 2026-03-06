@@ -1,5 +1,4 @@
 import { appConfig, type LocaleCode } from "../config/environment.ts";
-import { assetRelativePaths, toPublicAssetUrl } from "../shared/constants/assets.ts";
 import { appRoutes, interpolateRoutePath, withLocaleQuery } from "../shared/constants/routes.ts";
 import type { Messages } from "../shared/i18n/messages.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
@@ -15,24 +14,31 @@ export function GamePage(props: {
   locale: LocaleCode;
   sessionId: string;
   resumeToken: string;
+  resumeTokenExpiresAtMs: number;
   commandQueueDepth: number;
   version: number;
-  resumeWindowMs: number;
+  clientRuntimeConfig: {
+    readonly commandSendIntervalMs: number;
+    readonly commandTtlMs: number;
+    readonly socketReconnectDelayMs: number;
+    readonly restoreRequestTimeoutMs: number;
+    readonly restoreMaxAttempts: number;
+  };
 }) {
   const messages: Messages = getMessages(props.locale);
-  const { sessionId, resumeToken, commandQueueDepth, version, locale, resumeWindowMs } = props;
-  const currentPathWithQuery = `${appRoutes.game}?sessionId=${encodeURIComponent(
+  const {
     sessionId,
-  )}&resumeToken=${encodeURIComponent(resumeToken)}`;
+    resumeToken,
+    resumeTokenExpiresAtMs,
+    commandQueueDepth,
+    version,
+    locale,
+    clientRuntimeConfig,
+  } = props;
+  const currentPathWithQuery = `${appRoutes.game}?sessionId=${encodeURIComponent(sessionId)}`;
   const gameHudStreamPath = interpolateRoutePath(appRoutes.gameApiSessionHud, { id: sessionId });
   const homePath = withLocaleQuery(appRoutes.home, locale);
   const pageScripts = [
-    {
-      src: toPublicAssetUrl(
-        appConfig.staticAssets.publicPrefix,
-        assetRelativePaths.htmxExtensionGameHudFile,
-      ),
-    },
     {
       src: appConfig.playableGame.clientScriptPath,
       type: "module" as const,
@@ -43,9 +49,14 @@ export function GamePage(props: {
     <meta name="game-session-id" data-session-id="${escapeHtml(sessionId)}" />
     <meta name="game-session-resume-token" data-session-resume-token="${escapeHtml(resumeToken)}" />
     <meta name="game-session-locale" data-game-session-locale="${escapeHtml(locale)}" />
-    <meta name="game-session-resume-window-ms" data-game-session-resume-window-ms="${escapeHtml(String(resumeWindowMs))}" />
+    <meta name="game-session-resume-expires-at-ms" data-game-session-resume-expires-at-ms="${escapeHtml(String(resumeTokenExpiresAtMs))}" />
     <meta name="game-session-command-queue-depth" data-game-session-command-queue-depth="${commandQueueDepth}" />
     <meta name="game-session-version" data-game-session-version="${version}" />
+    <meta name="game-client-command-send-interval-ms" data-game-client-command-send-interval-ms="${escapeHtml(String(clientRuntimeConfig.commandSendIntervalMs))}" />
+    <meta name="game-client-command-ttl-ms" data-game-client-command-ttl-ms="${escapeHtml(String(clientRuntimeConfig.commandTtlMs))}" />
+    <meta name="game-client-socket-reconnect-delay-ms" data-game-client-socket-reconnect-delay-ms="${escapeHtml(String(clientRuntimeConfig.socketReconnectDelayMs))}" />
+    <meta name="game-client-restore-request-timeout-ms" data-game-client-restore-request-timeout-ms="${escapeHtml(String(clientRuntimeConfig.restoreRequestTimeoutMs))}" />
+    <meta name="game-client-restore-max-attempts" data-game-client-restore-max-attempts="${escapeHtml(String(clientRuntimeConfig.restoreMaxAttempts))}" />
     <div class="w-full h-screen bg-base-300 flex flex-col font-serif">
       <nav class="navbar bg-base-100/90 backdrop-blur border-b border-base-200 z-50 absolute top-0 w-full shadow-sm" role="navigation" aria-label="${escapeHtml(messages.common.primaryNavigation)}">
         <div class="flex-1 px-4">
@@ -69,6 +80,9 @@ export function GamePage(props: {
             data-connecting-label="${escapeHtml(messages.game.connectionStatus)}"
             data-connected-label="${escapeHtml(messages.game.connectionConnected)}"
             data-disconnected-prefix="${escapeHtml(messages.game.connectionDisconnected)}"
+            data-reconnecting-label="${escapeHtml(messages.game.connectionReconnecting)}"
+            data-expired-label="${escapeHtml(messages.game.connectionExpired)}"
+            data-missing-label="${escapeHtml(messages.game.connectionMissing)}"
           >${escapeHtml(messages.game.connectionStatus)}</span>
           <span
             id="game-command-queue"
@@ -76,9 +90,27 @@ export function GamePage(props: {
             aria-label="${escapeHtml(messages.game.queueLabel)}"
             data-queue-label="${escapeHtml(messages.game.queueLabel)}"
           >${escapeHtml(messages.game.queueLabel)}: ${commandQueueDepth}</span>
+          <button
+            id="game-reconnect"
+            type="button"
+            class="btn btn-xs btn-warning hidden"
+            data-reconnect-label="${escapeHtml(messages.game.reconnectAction)}"
+          >${escapeHtml(messages.game.reconnectAction)}</button>
           <div
-            id="hud-xp-live"
+            id="game-connection-alert"
+            class="alert alert-warning alert-soft hidden max-w-xs py-1 px-2"
+            role="status"
+            aria-live="polite"
+          >
+            <span id="game-connection-alert-text" class="text-xs">${escapeHtml(
+              messages.game.connectionStatus,
+            )}</span>
+          </div>
+          <div
+            id="hud-xp"
             data-hud-slot="hud-xp"
+            sse-swap="xp"
+            hx-swap="outerHTML"
             data-xp-label="${escapeHtml(messages.game.xpLabel)}"
             data-level-label="${escapeHtml(messages.game.levelLabel)}"
             class="badge badge-primary badge-lg px-4 shadow-sm"
@@ -97,12 +129,12 @@ export function GamePage(props: {
 
           <div
             class="absolute inset-0 pointer-events-none p-6 flex flex-col justify-between"
-            hx-ext="sse,game-hud"
+            hx-ext="sse"
             sse-connect="${escapeHtml(gameHudStreamPath)}"
           >
 
             <div class="flex justify-between items-start pt-2">
-              <div id="hud-scene" sse-swap="scene-title" aria-live="polite" role="status" class="px-6 py-2 bg-base-100/80 backdrop-blur rounded-full shadow border border-base-content/10 font-bold text-lg pointer-events-auto">
+              <div id="hud-scene" sse-swap="scene-title" hx-swap="outerHTML" aria-live="polite" role="status" class="px-6 py-2 bg-base-100/80 backdrop-blur rounded-full shadow border border-base-content/10 font-bold text-lg pointer-events-auto">
                 ${escapeHtml(messages.game.connectingToRealm)}
               </div>
             </div>
@@ -112,6 +144,7 @@ export function GamePage(props: {
                 id="hud-dialogue"
                 data-hud-slot="hud-dialogue"
                 sse-swap="dialogue"
+                hx-swap="outerHTML"
                 aria-live="polite"
                 role="log"
                 class="hidden max-w-2xl w-full pointer-events-auto transition-all duration-300 transform scale-95 opacity-0"

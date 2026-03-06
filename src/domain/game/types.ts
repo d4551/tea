@@ -6,7 +6,9 @@ import type { GameSceneState } from "../../shared/contracts/game.ts";
  * in-place mutation of the game state before persistence.
  */
 export type Mutable<T> = T extends readonly (infer U)[]
-  ? Mutable<U>[]
+  ? T extends readonly [...infer _Tuple]
+    ? { -readonly [P in keyof T]: Mutable<T[P]> }
+    : Mutable<U>[]
   : T extends object
     ? { -readonly [P in keyof T]: Mutable<T[P]> }
     : T;

@@ -1,23 +1,24 @@
 import { Elysia, t } from "elysia";
 import { normalizeLocale } from "../config/environment.ts";
 import { gameTextByLocale } from "../domain/game/data/game-text.ts";
-import { gameScenes } from "../domain/game/data/sprite-data.ts";
 import { gameLoop } from "../domain/game/game-loop.ts";
 import { gameStateStore } from "../domain/game/services/GameStateStore.ts";
 import { ApplicationError } from "../lib/error-envelope.ts";
 import { createLogger } from "../lib/logger.ts";
+import { authSessionGuard, resolveAuthSession } from "../plugins/auth-session.ts";
 import { defaultGameConfig } from "../shared/config/game-config.ts";
 import { httpStatus } from "../shared/constants/http.ts";
 import { appRoutes } from "../shared/constants/routes.ts";
 import type {
   GameSession,
-  GameSessionLifecycleResult,
+  GameSessionState,
   GameSseCloseFrame,
   GameSseCloseReason,
 } from "../shared/contracts/game.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
 import { prisma } from "../shared/services/db.ts";
 import { safeJsonParse } from "../shared/utils/safe-json.ts";
+import { escapeHtml } from "../views/layout.ts";
 import { type SseUtils, ssePlugin } from "./sse-plugin.ts";
 
 const _logger = createLogger("game.plugin");
@@ -27,14 +28,11 @@ const route = {
   create: endpoint(appRoutes.gameApiSession),
   state: endpoint(appRoutes.gameApiSessionState),
   restore: endpoint(appRoutes.gameApiSessionRestore),
-  join: endpoint(appRoutes.gameApiSessionJoin),
   close: endpoint(appRoutes.gameApiSessionClose),
   command: endpoint(appRoutes.gameApiSessionCommand),
   dialogue: endpoint(appRoutes.gameApiSessionDialogue),
   save: endpoint(appRoutes.gameApiSessionSave),
   hud: endpoint(appRoutes.gameApiSessionHud),
-  hudPartial: endpoint(appRoutes.gameApiHudPartial),
-  dialoguePartial: endpoint(appRoutes.gameApiDialoguePartial),
 };
 
 const gameCommandPayloadSchema = t.Union([
@@ -99,7 +97,7 @@ const createSessionBodySchema = t.Object({
   sceneId: t.Optional(t.String()),
   projectId: t.Optional(t.String()),
 });
-const joinSessionBodySchema = t.Object({
+const restoreSessionBodySchema = t.Object({
   resumeToken: t.String(),
 });
 const errorResponse = t.Object({
@@ -124,6 +122,9 @@ const gameSessionStateSchema = t.Object({
   state: t.Optional(t.Object({}, { additionalProperties: true })),
   commandQueueDepth: t.Optional(t.Number()),
   resumeToken: t.Optional(t.String()),
+  resumeTokenExpiresAtMs: t.Optional(t.Number()),
+  resumeTokenVersion: t.Optional(t.Number()),
+  stateVersion: t.Optional(t.Number()),
   version: t.Optional(t.Number()),
 });
 
@@ -232,8 +233,10 @@ const buildCloseFrame = (
   sessionId,
 });
 
-const asLifecycleState = async (sessionId: string): Promise<GameSessionLifecycleResult | null> =>
-  gameLoop.getSessionState(sessionId);
+const asLifecycleState = async (
+  sessionId: string,
+  ownerSessionId: string,
+): Promise<GameSessionState | null> => gameLoop.getSessionState(sessionId, ownerSessionId);
 
 const requireGameSession = async (sessionId: string): Promise<GameSession> => {
   const sessionResult = await gameStateStore.getSession(sessionId);
@@ -254,6 +257,26 @@ const requireGameSession = async (sessionId: string): Promise<GameSession> => {
 };
 
 /**
+ * Validates that the requested session belongs to the current auth-session owner.
+ */
+const requireOwnedGameSession = async (
+  sessionId: string,
+  ownerSessionId: string,
+): Promise<GameSession> => {
+  const session = await requireGameSession(sessionId);
+  if (session.ownerSessionId !== ownerSessionId) {
+    throw new ApplicationError(
+      "UNAUTHORIZED",
+      "Session ownership mismatch.",
+      httpStatus.unauthorized,
+      false,
+    );
+  }
+
+  return session;
+};
+
+/**
  * Hardens HUD streaming with deterministic close reasons and bounded stop conditions.
  */
 const createHudStream = async function* ({
@@ -269,15 +292,11 @@ const createHudStream = async function* ({
   const messages = getMessages(session.locale as "en-US" | "zh-CN");
   const retryMs = defaultGameConfig.hudRetryDelayMs;
   let sequence = 0;
-
-  const titleKey = gameScenes[session.scene.sceneId]?.titleKey;
-  const sceneTitle = titleKey
-    ? (catalog.scenes[titleKey as keyof typeof catalog.scenes] ?? titleKey)
-    : session.scene.sceneId;
+  const sceneTitle = session.scene.sceneTitle;
 
   yield sse.event(
     "scene-title",
-    `<div id="hud-scene" class="text-xl font-bold">${sceneTitle}</div>`,
+    `<div id="hud-scene" class="text-xl font-bold">${escapeHtml(sceneTitle)}</div>`,
     { id: `${sessionId}-scene`, retry: retryMs },
   );
 
@@ -312,7 +331,7 @@ const createHudStream = async function* ({
         catalog.progression.levelNames[Math.max(0, level - 1)] ?? messages.game.unknownLevel;
       yield sse.event(
         "xp",
-        `<div id="hud-xp" class="badge badge-primary badge-lg shadow-sm">XP: ${xp} / Lv${level} ${levelName}</div>`,
+        `<div id="hud-xp" class="badge badge-primary badge-lg shadow-sm">XP: ${xp} / Lv${level} ${escapeHtml(levelName)}</div>`,
         { id: `${sessionId}-xp-${xp}`, retry: retryMs },
       );
       lastXp = xp;
@@ -324,8 +343,8 @@ const createHudStream = async function* ({
     if (dialogueKey !== lastDialogueKey) {
       const html = dialogue
         ? `<div id="hud-dialogue" class="card bg-base-200/95 shadow-xl p-4 text-sm backdrop-blur">
-             <p class="font-semibold text-primary mb-1">${dialogue.npcLabel}</p>
-             <p>${dialogue.line}</p>
+             <p class="font-semibold text-primary mb-1">${escapeHtml(dialogue.npcLabel)}</p>
+             <p>${escapeHtml(dialogue.line)}</p>
            </div>`
         : `<div id="hud-dialogue" class="hidden"></div>`;
 
@@ -346,11 +365,14 @@ const createHudStream = async function* ({
 const createHudStreamHandler = async function* ({
   params,
   sse,
+  cookie,
 }: {
   params: { id: string };
   sse: SseUtils;
+  cookie: Parameters<typeof resolveAuthSession>[0];
 }): AsyncGenerator<string> {
-  const session = await requireGameSession(params.id);
+  const ownerSessionId = resolveAuthSession(cookie).sessionId;
+  const session = await requireOwnedGameSession(params.id, ownerSessionId);
   yield* createHudStream({ session, sse });
 };
 
@@ -381,363 +403,392 @@ const readResumeTokenFromWsQuery = (query: unknown): string | undefined => {
   return normalizeResumeToken(bag.resumeToken);
 };
 
+const resolveWsOwnerSessionId = (ws: {
+  readonly data: { readonly cookie?: unknown };
+}): string | null => {
+  const rawCookie = ws.data.cookie;
+  if (!rawCookie || typeof rawCookie !== "object") {
+    return null;
+  }
+
+  const auth = resolveAuthSession(rawCookie as Parameters<typeof resolveAuthSession>[0]);
+  return auth.sessionId;
+};
+
 export const gamePlugin = new Elysia({ prefix: "/api/game" })
   .use(ssePlugin)
-  .post(
-    route.create,
-    async ({ body }) => {
-      const requestedLocale =
-        typeof body?.locale === "string" && body.locale.length > 0 ? body.locale : undefined;
-      const sceneId =
-        typeof body?.sceneId === "string" && body.sceneId.length > 0 ? body.sceneId : undefined;
+  .guard(authSessionGuard, (app) =>
+    app
+      .post(
+        route.create,
+        async ({ body, cookie }) => {
+          const ownerSessionId = resolveAuthSession(cookie).sessionId;
+          const requestedLocale =
+            typeof body?.locale === "string" && body.locale.length > 0 ? body.locale : undefined;
+          const sceneId =
+            typeof body?.sceneId === "string" && body.sceneId.length > 0 ? body.sceneId : undefined;
+          const projectId =
+            typeof body?.projectId === "string" && body.projectId.trim().length > 0
+              ? body.projectId.trim()
+              : undefined;
 
-      void body?.projectId;
-
-      const snapshot = await gameLoop.createSession(normalizeLocale(requestedLocale), sceneId);
-      const state = await asLifecycleState(snapshot.sessionId);
-      return {
-        ok: true,
-        data: state ?? snapshot,
-      };
-    },
-    {
-      body: createSessionBodySchema,
-      response: {
-        [httpStatus.ok]: t.Object({ ok: t.Literal(true), data: gameSessionStateSchema }),
-        [httpStatus.badRequest]: errorResponse,
-        [httpStatus.unprocessableEntity]: errorResponse,
-      },
-    },
-  )
-  .get(
-    route.state,
-    async ({ params }) => {
-      const session = await requireGameSession(params.id);
-      const state = await asLifecycleState(session.id);
-      return { ok: true, data: state ?? gameStateStore.toSnapshot(session) };
-    },
-    {
-      params: t.Object({ id: t.String() }),
-      response: {
-        [httpStatus.ok]: t.Object({ ok: t.Literal(true), data: gameSessionStateSchema }),
-        [httpStatus.notFound]: errorResponse,
-        [httpStatus.gone]: errorResponse,
-      },
-    },
-  )
-  .get(
-    route.restore,
-    async ({ params }) => {
-      const session = await requireGameSession(params.id);
-      const state = await asLifecycleState(session.id);
-      return { ok: true, data: state ?? gameStateStore.toSnapshot(session) };
-    },
-    {
-      params: t.Object({ id: t.String() }),
-      response: {
-        [httpStatus.ok]: t.Object({ ok: t.Literal(true), data: gameSessionStateSchema }),
-        [httpStatus.notFound]: errorResponse,
-        [httpStatus.gone]: errorResponse,
-      },
-    },
-  )
-  .post(
-    route.restore,
-    async ({ params }) => {
-      const session = await requireGameSession(params.id);
-      const state = await asLifecycleState(session.id);
-      return { ok: true, data: state ?? gameStateStore.toSnapshot(session) };
-    },
-    {
-      params: t.Object({ id: t.String() }),
-      response: {
-        [httpStatus.ok]: t.Object({ ok: t.Literal(true), data: gameSessionStateSchema }),
-        [httpStatus.notFound]: errorResponse,
-        [httpStatus.gone]: errorResponse,
-      },
-    },
-  )
-  .post(
-    route.join,
-    async ({ params, body, set }) => {
-      const sessionState = await gameLoop.joinSession(params.id, body.resumeToken);
-      if (!sessionState) {
-        set.status = httpStatus.unauthorized;
-        throw new ApplicationError(
-          "UNAUTHORIZED",
-          "Session not found or resume token invalid.",
-          httpStatus.unauthorized,
-          false,
-        );
-      }
-
-      return {
-        ok: true,
-        data: sessionState,
-      };
-    },
-    {
-      body: joinSessionBodySchema,
-      params: t.Object({ id: t.String() }),
-      response: {
-        [httpStatus.ok]: t.Object({ ok: t.Literal(true), data: gameSessionStateSchema }),
-        [httpStatus.unauthorized]: errorResponse,
-        [httpStatus.notFound]: errorResponse,
-      },
-    },
-  )
-  .post(
-    route.close,
-    async ({ params, set }) => {
-      const closed = await gameLoop.closeSession(params.id);
-      if (!closed) {
-        set.status = httpStatus.notFound;
-        throw new ApplicationError(
-          "SESSION_NOT_FOUND",
-          "Session not found.",
-          httpStatus.notFound,
-          false,
-        );
-      }
-
-      return {
-        ok: true,
-        data: {
-          sessionId: params.id,
-          status: "closed",
+          const snapshot = await gameLoop.createSession(
+            normalizeLocale(requestedLocale),
+            sceneId,
+            projectId,
+            ownerSessionId,
+          );
+          const state = await asLifecycleState(snapshot.sessionId, ownerSessionId);
+          return {
+            ok: true,
+            data: state ?? snapshot,
+          };
         },
-      };
-    },
-    {
-      params: t.Object({ id: t.String() }),
-      response: {
-        [httpStatus.ok]: closeSessionResponse,
-        [httpStatus.notFound]: errorResponse,
-      },
-    },
-  )
-  .post(
-    route.save,
-    async ({ params }) => {
-      const session = await requireGameSession(params.id);
-      await gameStateStore.saveSession(session);
-      return {
-        ok: true,
-        data: {
-          sessionId: session.id,
-          locale: session.locale,
-          status: "saved",
+        {
+          body: createSessionBodySchema,
+          response: {
+            [httpStatus.ok]: t.Object({ ok: t.Literal(true), data: gameSessionStateSchema }),
+            [httpStatus.badRequest]: errorResponse,
+            [httpStatus.unprocessableEntity]: errorResponse,
+          },
         },
-      };
-    },
-    {
-      params: t.Object({ id: t.String() }),
-      response: {
-        [httpStatus.ok]: saveSessionResponse,
-        [httpStatus.notFound]: errorResponse,
-        [httpStatus.gone]: errorResponse,
-      },
-    },
-  )
-  .delete(
-    "/session/:id",
-    async ({ params }) => {
-      const session = await requireGameSession(params.id);
-      await gameStateStore.deleteSession(session.id);
-      return {
-        ok: true,
-        data: {
-          sessionId: session.id,
-          locale: session.locale,
-          status: "deleted",
+      )
+      .get(
+        route.state,
+        async ({ params, cookie }) => {
+          const ownerSessionId = resolveAuthSession(cookie).sessionId;
+          const session = await requireOwnedGameSession(params.id, ownerSessionId);
+          const state = await asLifecycleState(session.id, ownerSessionId);
+          return { ok: true, data: state ?? gameStateStore.toSnapshot(session) };
         },
-      };
-    },
-    {
-      params: t.Object({ id: t.String() }),
-      response: {
-        [httpStatus.ok]: deleteSessionResponse,
-        [httpStatus.notFound]: errorResponse,
-        [httpStatus.gone]: errorResponse,
-      },
-    },
-  )
-  .post(
-    route.command,
-    async ({ body, params, set }) => {
-      const session = await requireGameSession(params.id);
-      const result = gameLoop.processCommand(session.id, body as unknown, session.locale);
-      if (result.state === "rejected") {
-        set.status = httpStatus.unprocessableEntity;
-        throw new ApplicationError(
-          result.errorCode ?? "INVALID_COMMAND",
-          result.errorCode === "INVALID_COMMAND" ? "Invalid command payload." : "Command rejected.",
-          httpStatus.unprocessableEntity,
-          false,
-        );
-      }
-
-      if (result.state === "dropped" && result.errorCode === "CONFLICT") {
-        set.status = httpStatus.conflict;
-        throw new ApplicationError(
-          result.errorCode,
-          result.errorReason ?? "Command queue is full.",
-          httpStatus.conflict,
-          true,
-        );
-      }
-
-      if (result.state === "dropped") {
-        set.status = httpStatus.serviceUnavailable;
-        throw new ApplicationError(
-          result.errorCode ?? "INVALID_COMMAND",
-          result.errorReason ?? "Command was dropped.",
-          httpStatus.serviceUnavailable,
-          true,
-        );
-      }
-
-      return {
-        ok: true,
-        data: {
-          sessionId: result.sessionId,
-          commandId: result.commandId,
-          sequenceId: result.sequenceId,
-          state: result.state,
-          commandType: result.commandType ?? "interact",
-          errorCode: result.errorCode,
-          errorReason: result.errorReason,
-          commandState: result.commandState,
-          queueDepth: gameLoop.getCommandQueueDepth(session.id),
-          accepted: result.state === "queued" || result.state === "accepted",
+        {
+          params: t.Object({ id: t.String() }),
+          response: {
+            [httpStatus.ok]: t.Object({ ok: t.Literal(true), data: gameSessionStateSchema }),
+            [httpStatus.unauthorized]: errorResponse,
+            [httpStatus.notFound]: errorResponse,
+            [httpStatus.gone]: errorResponse,
+          },
         },
-      };
-    },
-    {
-      body: commandBodySchema,
-      params: t.Object({ id: t.String() }),
-      response: {
-        [httpStatus.ok]: commandResponse,
-        [httpStatus.notFound]: errorResponse,
-        [httpStatus.gone]: errorResponse,
-        [httpStatus.unprocessableEntity]: errorResponse,
-        [httpStatus.conflict]: errorResponse,
-        [httpStatus.serviceUnavailable]: errorResponse,
-      },
-    },
-  )
-  .get(
-    route.dialogue,
-    async ({ params }) => {
-      const session = await requireGameSession(params.id);
-      return { ok: true, data: session.scene.dialogue };
-    },
-    {
-      params: t.Object({ id: t.String() }),
-      response: {
-        [httpStatus.ok]: dialogueResponse,
-        [httpStatus.notFound]: errorResponse,
-        [httpStatus.gone]: errorResponse,
-      },
-    },
-  )
-  .get(route.hud, createHudStreamHandler, {
-    params: t.Object({ id: t.String() }),
-    response: {
-      [httpStatus.ok]: t.String(),
-    },
-  })
-  .get(route.hudPartial, createHudStreamHandler, {
-    params: t.Object({ id: t.String() }),
-    response: {
-      [httpStatus.ok]: t.String(),
-    },
-  })
-  .get(
-    route.dialoguePartial,
-    async ({ params }) => {
-      const session = await requireGameSession(params.id);
-      const dialogue = session.scene.dialogue;
-      if (!dialogue) {
-        return `<div id="hud-dialogue" class="hidden"></div>`;
-      }
+      )
+      .post(
+        route.restore,
+        async ({ params, body, set, cookie }) => {
+          const ownerSessionId = resolveAuthSession(cookie).sessionId;
+          const sessionState = await gameLoop.restoreSession(
+            params.id,
+            body.resumeToken,
+            ownerSessionId,
+          );
+          if (!sessionState) {
+            set.status = httpStatus.unauthorized;
+            throw new ApplicationError(
+              "UNAUTHORIZED",
+              "Session not found or resume token invalid.",
+              httpStatus.unauthorized,
+              false,
+            );
+          }
 
-      return `<div id="hud-dialogue" class="card bg-base-200/95 shadow-xl p-4 text-sm backdrop-blur">
-      <p class="font-semibold text-primary mb-1">${dialogue.npcLabel}</p>
-      <p>${dialogue.line}</p>
-    </div>`;
-    },
-    {
-      params: t.Object({ id: t.String() }),
-      response: {
-        [httpStatus.ok]: t.String(),
-      },
-    },
-  )
-  .ws("/session/:id/ws", {
-    body: commandBodySchema,
+          return { ok: true, data: sessionState };
+        },
+        {
+          params: t.Object({ id: t.String() }),
+          body: restoreSessionBodySchema,
+          response: {
+            [httpStatus.ok]: t.Object({ ok: t.Literal(true), data: gameSessionStateSchema }),
+            [httpStatus.unauthorized]: errorResponse,
+            [httpStatus.notFound]: errorResponse,
+            [httpStatus.gone]: errorResponse,
+          },
+        },
+      )
+      .post(
+        route.close,
+        async ({ params, set, cookie }) => {
+          const ownerSessionId = resolveAuthSession(cookie).sessionId;
+          const session = await requireOwnedGameSession(params.id, ownerSessionId);
+          const closed = await gameLoop.closeSession(session.id);
+          if (!closed) {
+            set.status = httpStatus.notFound;
+            throw new ApplicationError(
+              "SESSION_NOT_FOUND",
+              "Session not found.",
+              httpStatus.notFound,
+              false,
+            );
+          }
 
-    async open(ws) {
-      const sessionId = ws.data.params.id;
-      ws.subscribe(`game:${sessionId}`);
+          return {
+            ok: true,
+            data: {
+              sessionId: params.id,
+              status: "closed",
+            },
+          };
+        },
+        {
+          params: t.Object({ id: t.String() }),
+          response: {
+            [httpStatus.ok]: closeSessionResponse,
+            [httpStatus.unauthorized]: errorResponse,
+            [httpStatus.notFound]: errorResponse,
+          },
+        },
+      )
+      .post(
+        route.save,
+        async ({ params, set, cookie }) => {
+          const ownerSessionId = resolveAuthSession(cookie).sessionId;
+          const session = await requireOwnedGameSession(params.id, ownerSessionId);
+          const saveCooldownRemainingMs = gameLoop.getSaveCooldownRemainingMs(params.id);
+          if (saveCooldownRemainingMs > 0) {
+            set.status = httpStatus.tooManyRequests;
+            throw new ApplicationError(
+              "CONFLICT",
+              `save-cooldown:${saveCooldownRemainingMs}`,
+              httpStatus.tooManyRequests,
+              true,
+            );
+          }
 
-      const resumeToken = readResumeTokenFromWsQuery((ws.data as { query?: unknown }).query);
-      const sessionResult = await gameStateStore.getSession(sessionId);
-      if (!sessionResult.ok) {
-        ws.close(
-          sessionResult.error === "SESSION_EXPIRED"
-            ? wsCloseCode.sessionExpired
-            : wsCloseCode.sessionNotFound,
-        );
-        return;
-      }
+          await gameLoop.saveSessionNow(session.id);
+          gameLoop.markManualSave(params.id);
+          return {
+            ok: true,
+            data: {
+              sessionId: session.id,
+              locale: session.locale,
+              status: "saved",
+            },
+          };
+        },
+        {
+          params: t.Object({ id: t.String() }),
+          response: {
+            [httpStatus.ok]: saveSessionResponse,
+            [httpStatus.unauthorized]: errorResponse,
+            [httpStatus.tooManyRequests]: errorResponse,
+            [httpStatus.notFound]: errorResponse,
+            [httpStatus.gone]: errorResponse,
+          },
+        },
+      )
+      .delete(
+        "/session/:id",
+        async ({ params, cookie }) => {
+          const ownerSessionId = resolveAuthSession(cookie).sessionId;
+          const session = await requireOwnedGameSession(params.id, ownerSessionId);
+          await gameStateStore.deleteSession(session.id);
+          return {
+            ok: true,
+            data: {
+              sessionId: session.id,
+              locale: session.locale,
+              status: "deleted",
+            },
+          };
+        },
+        {
+          params: t.Object({ id: t.String() }),
+          response: {
+            [httpStatus.ok]: deleteSessionResponse,
+            [httpStatus.unauthorized]: errorResponse,
+            [httpStatus.notFound]: errorResponse,
+            [httpStatus.gone]: errorResponse,
+          },
+        },
+      )
+      .post(
+        route.command,
+        async ({ body, params, set, cookie }) => {
+          const ownerSessionId = resolveAuthSession(cookie).sessionId;
+          const session = await requireOwnedGameSession(params.id, ownerSessionId);
+          const result = gameLoop.processCommand(session.id, body as unknown, session.locale);
+          if (result.state === "rejected") {
+            set.status = httpStatus.unprocessableEntity;
+            throw new ApplicationError(
+              result.errorCode ?? "INVALID_COMMAND",
+              result.errorCode === "INVALID_COMMAND"
+                ? "Invalid command payload."
+                : "Command rejected.",
+              httpStatus.unprocessableEntity,
+              false,
+            );
+          }
 
-      if (typeof resumeToken === "string") {
-        const joinedSession = await gameLoop.joinSession(sessionId, resumeToken);
-        if (!joinedSession) {
-          ws.close(wsCloseCode.sessionExpired);
-          return;
-        }
-      }
+          if (result.state === "dropped" && result.errorCode === "CONFLICT") {
+            set.status = httpStatus.conflict;
+            throw new ApplicationError(
+              result.errorCode,
+              result.errorReason ?? "Command queue is full.",
+              httpStatus.conflict,
+              true,
+            );
+          }
 
-      const connKey = `${sessionId}:${crypto.randomUUID()}`;
-      wsConnKeys.set(ws, connKey);
-      wsLocales.set(connKey, sessionResult.payload.locale as SupportedLocale);
+          if (result.state === "dropped") {
+            set.status = httpStatus.serviceUnavailable;
+            throw new ApplicationError(
+              result.errorCode ?? "INVALID_COMMAND",
+              result.errorReason ?? "Command was dropped.",
+              httpStatus.serviceUnavailable,
+              true,
+            );
+          }
 
-      const cleanup = gameLoop.startTick(sessionId, (snapshot) => {
-        ws.publish(`game:${sessionId}`, snapshot);
-      });
-      wsCleanups.set(connKey, cleanup);
-    },
+          if (!result.commandType) {
+            set.status = httpStatus.unprocessableEntity;
+            throw new ApplicationError(
+              "INVALID_COMMAND",
+              "Command type was not resolved for accepted command.",
+              httpStatus.unprocessableEntity,
+              false,
+            );
+          }
 
-    message(ws, command) {
-      const sessionId = ws.data.params.id;
-      const connKey = wsConnKeys.get(ws);
-      const locale = (connKey ? wsLocales.get(connKey) : undefined) ?? "en-US";
-      const normalizedCommand =
-        typeof command === "string" ? safeJsonParse<unknown>(command, command) : command;
-      const result = gameLoop.processCommand(sessionId, normalizedCommand, locale);
-      if (result.state !== "queued") {
-        _logger.info("game.command.rejected", {
-          sessionId,
-          state: result.state,
-          commandType: result.commandType,
-        });
-      }
-    },
+          return {
+            ok: true,
+            data: {
+              sessionId: result.sessionId,
+              commandId: result.commandId,
+              sequenceId: result.sequenceId,
+              state: result.state,
+              commandType: result.commandType,
+              errorCode: result.errorCode,
+              errorReason: result.errorReason,
+              commandState: result.commandState,
+              queueDepth: gameLoop.getCommandQueueDepth(session.id),
+              accepted: result.state === "queued" || result.state === "accepted",
+            },
+          };
+        },
+        {
+          body: commandBodySchema,
+          params: t.Object({ id: t.String() }),
+          response: {
+            [httpStatus.ok]: commandResponse,
+            [httpStatus.unauthorized]: errorResponse,
+            [httpStatus.notFound]: errorResponse,
+            [httpStatus.gone]: errorResponse,
+            [httpStatus.unprocessableEntity]: errorResponse,
+            [httpStatus.conflict]: errorResponse,
+            [httpStatus.serviceUnavailable]: errorResponse,
+          },
+        },
+      )
+      .get(
+        route.dialogue,
+        async ({ params, cookie }) => {
+          const ownerSessionId = resolveAuthSession(cookie).sessionId;
+          const session = await requireOwnedGameSession(params.id, ownerSessionId);
+          return { ok: true, data: session.scene.dialogue };
+        },
+        {
+          params: t.Object({ id: t.String() }),
+          response: {
+            [httpStatus.ok]: dialogueResponse,
+            [httpStatus.unauthorized]: errorResponse,
+            [httpStatus.notFound]: errorResponse,
+            [httpStatus.gone]: errorResponse,
+          },
+        },
+      )
+      .get(route.hud, createHudStreamHandler, {
+        params: t.Object({ id: t.String() }),
+        response: {
+          [httpStatus.ok]: t.String(),
+          [httpStatus.unauthorized]: errorResponse,
+        },
+      })
+      .ws("/session/:id/ws", {
+        body: commandBodySchema,
 
-    close(ws) {
-      const sessionId = ws.data.params.id;
-      ws.unsubscribe(`game:${sessionId}`);
+        async open(ws) {
+          const sessionId = ws.data.params.id;
+          ws.subscribe(`game:${sessionId}`);
 
-      const connKey = wsConnKeys.get(ws);
-      if (connKey) {
-        wsCleanups.get(connKey)?.();
-        wsCleanups.delete(connKey);
-        wsLocales.delete(connKey);
-        wsConnKeys.delete(ws);
-      }
-    },
-  });
+          const resumeToken = readResumeTokenFromWsQuery((ws.data as { query?: unknown }).query);
+          const ownerSessionId = resolveWsOwnerSessionId(ws as { data: { cookie?: unknown } });
+          const sessionResult = await gameStateStore.getSession(sessionId);
+          if (!sessionResult.ok) {
+            ws.close(
+              sessionResult.error === "SESSION_EXPIRED"
+                ? wsCloseCode.sessionExpired
+                : wsCloseCode.sessionNotFound,
+            );
+            return;
+          }
+
+          if (typeof resumeToken !== "string" || typeof ownerSessionId !== "string") {
+            ws.close(wsCloseCode.sessionExpired);
+            return;
+          }
+          if (sessionResult.payload.ownerSessionId !== ownerSessionId) {
+            ws.close(wsCloseCode.sessionExpired);
+            return;
+          }
+
+          const joinedSession = await gameLoop.restoreSession(
+            sessionId,
+            resumeToken,
+            ownerSessionId,
+          );
+          if (!joinedSession) {
+            ws.close(wsCloseCode.sessionExpired);
+            return;
+          }
+
+          const connKey = `${sessionId}:${crypto.randomUUID()}`;
+          wsConnKeys.set(ws, connKey);
+          wsLocales.set(connKey, sessionResult.payload.locale as SupportedLocale);
+
+          const cleanup = gameLoop.startTick(sessionId, () => {
+            void asLifecycleState(sessionId, ownerSessionId).then((state) => {
+              if (!state) {
+                return;
+              }
+
+              ws.publish(`game:${sessionId}`, {
+                state: state.state,
+                commandQueueDepth: state.commandQueueDepth,
+                resumeToken: state.resumeToken,
+                resumeTokenExpiresAtMs: state.resumeTokenExpiresAtMs,
+              });
+            });
+          });
+          wsCleanups.set(connKey, cleanup);
+        },
+
+        message(ws, command) {
+          const sessionId = ws.data.params.id;
+          const connKey = wsConnKeys.get(ws);
+          const locale = (connKey ? wsLocales.get(connKey) : undefined) ?? "en-US";
+          const normalizedCommand =
+            typeof command === "string" ? safeJsonParse<unknown>(command, command) : command;
+          const result = gameLoop.processCommand(sessionId, normalizedCommand, locale);
+          if (result.state !== "queued") {
+            _logger.info("game.command.rejected", {
+              sessionId,
+              state: result.state,
+              commandType: result.commandType,
+            });
+          }
+        },
+
+        close(ws) {
+          const sessionId = ws.data.params.id;
+          ws.unsubscribe(`game:${sessionId}`);
+
+          const connKey = wsConnKeys.get(ws);
+          if (connKey) {
+            wsCleanups.get(connKey)?.();
+            wsCleanups.delete(connKey);
+            wsLocales.delete(connKey);
+            wsConnKeys.delete(ws);
+          }
+        },
+      }),
+  );
 
 export type App = typeof gamePlugin;

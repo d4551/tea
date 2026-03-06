@@ -1,104 +1,182 @@
 # System Architecture Trace
 
-## Runtime topology
+## Runtime Topology
 
-1. `src/server.ts` boots app via `startServer`.
-   - Local AI warmup is disabled by default and only runs when `AI_WARMUP_ON_BOOT=true`.
-2. `src/app.ts` composes plugins/routes in this order:
-   - request context plugin
-   - app-level centralized error handler (`onError`)
-   - HTML content-type normalization (`onAfterHandle`)
-   - swagger docs plugin
-   - static assets plugin (mounts `/public`, `/assets`, `/rmmz-pack`, `${PLAYABLE_GAME_MOUNT_PATH}/assets` from one manifest)
-   - SSR page routes with shared `i18n-context`; only session-bearing oracle paths are guarded by `authSessionGuard`
-   - JSON API routes with shared `i18n-context`; only session-bearing endpoints are guarded by `authSessionGuard`
-   - AI routes
-   - game plugin routes
-   - builder page routes
-   - builder API routes
-   - session purge lifecycle plugin
+```mermaid
+graph TB
+  subgraph Browser["Browser"]
+    HOME["SSR/HTMX pages"]
+    GAME["Playable client (Pixi + Three)"]
+    SSE["HUD SSE stream"]
+    WS["Command WebSocket"]
+  end
 
-## Plugin ownership
+  subgraph App["Elysia app.ts"]
+    RC["request-context"]
+    EH["global onError"]
+    CT["onAfterHandle content-type"]
+    SW["swagger"]
+    SA["static-assets"]
+    PR["page-routes"]
+    GR["game-routes (SSR game bootstrap)"]
+    AR["api-routes"]
+    AIR["ai-routes"]
+    GP["game-plugin"]
+    BR["builder-routes"]
+    BA["builder-api-routes"]
+    SP["session-purge"]
+  end
 
-- `request-context` plugin owns:
-  - correlation ID generation
-  - `x-correlation-id` response header propagation
-  - request-level structured logging metadata via `onAfterResponse`
-- `auth-session` guard owns:
-  - anonymous session cookie initialization
-  - cookie-backed session continuity only on the SSR and API endpoints that actually require session state
-- `i18n-context` plugin owns:
-  - request-level locale and message-catalog derivation
-  - standardized locale/message access for page and API route handlers
-- `error-handler` module owns:
-  - framework error mapping
-  - `Accept-Language` aware localization for framework-level errors
-  - typed error envelope fallback
-  - error-level structured logs
-- shared static mount manifest owns:
-  - deterministic static mount registration for public, media, playable-game, and RMMZ pack assets
-  - one manifest consumed by runtime and tests for static path ownership
+  subgraph Domain["Domain Services"]
+    LOOP["GameLoopService"]
+    STORE["GameStateStore"]
+    SCENE["SceneEngine + NpcAiEngine"]
+    BUILDER["PrismaBuilderService"]
+    AI["ProviderRegistry + game-ai-service"]
+  end
 
-## Domain ownership
+  subgraph Data["Prisma Models"]
+    GS["gameSession"]
+    PP["playerProgress"]
+    BP["builderProject"]
+    BPR["builderProjectRelease"]
+  end
 
-- `domain/oracle` owns oracle state resolution logic only.
-- Routes do not implement domain branching rules directly.
+  HOME --> RC
+  GAME --> GP
+  GAME --> SSE
+  GAME --> WS
+  RC --> EH --> CT --> SW --> SA --> PR --> GR --> AR --> AIR --> GP --> BR --> BA --> SP
+  GP --> LOOP --> STORE --> GS
+  LOOP --> SCENE
+  LOOP --> AI
+  STORE --> PP
+  BA --> BUILDER --> BP
+  BUILDER --> BPR
+```
 
-## API contracts
+## Ownership Boundaries
 
-- `GET /api/health`: success envelope with no session-cookie side effects
-- `POST /api/oracle`: typed request schema + typed response envelopes by status via Elysia `status(...)`
-- API validation failures are mapped to deterministic `422` typed error envelopes
-- Route-level API error wrappers are removed; all framework error envelopes are owned by the shared error plugin
+- `request-context` owns correlation-id creation and per-request completion logs.
+- `auth-session` owns anonymous cookie identity, and that cookie identity is now the ownership boundary for game sessions.
+- `game-plugin` owns game transport contracts:
+  - REST lifecycle routes (`create`, `state`, `restore`, `save`, `close`, `delete`)
+  - command enqueue route
+  - canonical HUD SSE stream
+  - command/state websocket endpoint
+- `game-loop` owns authoritative simulation, token verification, tick scheduling, throttled persistence, and chat rate limiting.
+- `builder-service` owns project draft state, release snapshots, publish/unpublish semantics, and AI patch preview/apply flows.
 
-## UI contracts
+## Session Security Contract
 
-- All page rendering is SSR through `views/` modules.
-- HTMX partial updates are constrained to `#oracle-panel` and mapped to the oracle state machine.
-- HTML response content type is applied once at the page-route boundary via `onAfterHandle`.
-- Navigation exposes `aria-current="page"` and a skip-to-content link for keyboard users.
-- `withLocaleQuery(...)` in `src/shared/constants/routes.ts` is the single locale URL helper used by navigation, footer CTA, and home-page cards.
-- Locale switch links reuse `withLocaleQuery(...)` with the current request path+query so route context is preserved while `lang` is replaced.
-- Locale matching is centralized through `matchLocale(...)` in `src/config/environment.ts`; query and `Accept-Language` resolution both consume the same matcher.
-- `i18n-context` plugin derives locale+catalog once per request for SSR pages and API handlers.
-- `resolveRequestI18n(request)` in `src/shared/i18n/translator.ts` is the single resolver consumed by the i18n plugin and error localization.
-- `resolveRequestI18nWithOverride(request, localeOverride)` is used by oracle API POST routes to explicitly support payload-locale override while keeping request-locale fallback deterministic.
-- `Accept-Language` candidates are parsed with quality (`q`) weights before matching, preventing header-order ambiguity.
-- Oracle form includes a hidden `lang` field and `hx-params="*"` to preserve locale in both HTMX and non-JS GET submissions.
-- Oracle form fallback action now targets the full SSR home route; HTMX upgrades only the panel via `/partials/oracle`, so both enhanced and non-enhanced paths share the same state model.
+```mermaid
+sequenceDiagram
+  participant Client as Client
+  participant Cookie as auth-session cookie
+  participant Plugin as game-plugin
+  participant Loop as game-loop
+  participant Store as game-state-store
+  participant DB as Prisma
 
-## Build and asset pipeline
+  Client->>Plugin: POST /api/game/session
+  Plugin->>Cookie: resolveAuthSession()
+  Plugin->>Loop: createSession(..., ownerSessionId)
+  Loop->>Store: createSession(ownerSessionId)
+  Store->>DB: INSERT gameSession
+  DB-->>Store: session row
+  Loop-->>Plugin: snapshot + resume token
+  Plugin-->>Client: 200 + token + expiresAt
 
-- `scripts/asset-pipeline.ts` owns:
-  - the canonical asset graph shared by one-off builds and long-running watchers
-  - Tailwind CLI command generation
-  - HTMX extension entrypoint ownership and bundle topology
-  - playable game client bundle topology
-  - ONNX/HTMX source and destination path resolution
-- `scripts/build-assets.ts` owns:
-  - Tailwind/DaisyUI CSS compilation
-  - HTMX bundle copy into `/public/vendor`
-  - custom HTMX extension bundling into `/public/vendor/htmx-ext`
-  - playable game client bundling into `PLAYABLE_GAME_SOURCE_DIRECTORY`
-  - ONNX WASM asset copy into `/public/onnx`
-- `scripts/dev.ts` owns:
-  - setup + watcher orchestration only
-  - CSS watcher
-  - HTMX extension watcher
-  - playable game client watcher
-  - server watcher
-  - fail-fast child-process lifecycle management across all long-running watchers
-- Game image/audio assets are served from the shared `IMAGES_ASSET_PREFIX` mount; the playable-game runtime assets under `${PLAYABLE_GAME_MOUNT_PATH}/assets` are reserved for the client bundle and runtime-only assets.
+  Client->>Plugin: WS /api/game/session/:id/ws?resumeToken=...
+  Plugin->>Cookie: resolve owner session id
+  Plugin->>Loop: restoreSession(sessionId, resumeToken, ownerSessionId)
+  Loop-->>Plugin: accept/reject
+  Plugin-->>Client: state stream or close(4408/4404)
+```
 
-## Configuration sources of truth
+Enforced rules:
 
-- Runtime config: `src/config/environment.ts`
-- Static asset directories/prefixes: `appConfig.staticAssets.*`
-- Playable game runtime source + mount config: `appConfig.playableGame.*`
-- Asset URL/path normalization helpers, HTMX entry manifests, and static mount manifests: `src/shared/constants/assets.ts`
-- Game media URLs: `src/shared/constants/game-assets.ts`
-- Oracle mode constants: `src/shared/constants/oracle.ts`
-- Routes: `src/shared/constants/routes.ts`
-- Localized content: `src/shared/i18n/messages.ts`
-- Prisma schema: `prisma/schema.prisma`
-- Prisma 7 datasource config: `prisma.config.ts`
+- Resume token payload includes `sessionId`, `ownerSessionId`, `expiresAtMs`, `tokenVersion`, and a signature.
+- Restore is POST-only with JSON body: `{ "resumeToken": "..." }`.
+- Token possession is insufficient; owner cookie must match persisted `ownerSessionId`.
+- Token version rotates on successful restore, invalidating stale tokens.
+
+## Game Transport Contract
+
+| Surface | Endpoint | Contract |
+|---|---|---|
+| SSR bootstrap | `GET /game` | Emits session meta + resume token meta + client runtime config meta tags |
+| Create | `POST /api/game/session` | Creates authoritative session and returns lifecycle state |
+| State | `GET /api/game/session/:id/state` | Owner-scoped state read |
+| Restore | `POST /api/game/session/:id` | Body token verification + owner check |
+| Command | `POST /api/game/session/:id/command` | Schema validated command enqueue |
+| HUD | `GET /api/game/session/:id/hud` | Canonical SSE HTML stream (`scene-title`, `xp`, `dialogue`, `close`) |
+| WS | `/api/game/session/:id/ws` | Token-gated command/state realtime lane |
+
+Removed legacy transport:
+
+- `/api/game/session/:id/partials/dialogue` is removed.
+- HUD rendering now has one source of truth: the SSE stream.
+
+## Tick and Persistence Model
+
+- Tick ownership is not coupled to websocket presence.
+- `startTick()` registers optional callbacks; ticks continue when queue/dialogue state requires it.
+- Async overlap is prevented with `tickInFlight` and per-session timeout scheduling.
+- Persistence is throttled by `sessionPersistIntervalMs`.
+- Manual save uses `saveSessionNow()` plus cooldown gate from `saveCooldownMs`.
+- Optimistic versioning is maintained with `stateVersion` and guarded writes in persistence stores.
+
+## Builder Publishing and Runtime Seeding
+
+```mermaid
+flowchart TD
+  DRAFT["Draft mutations (scene/npc/dialogue)"] --> PROJECT["builderProject.state + version + checksum"]
+  PROJECT --> PUBLISH["publishProject(true)"]
+  PUBLISH --> SNAPSHOT["Create immutable builderProjectRelease"]
+  SNAPSHOT --> POINTER["Update publishedReleaseVersion"]
+  POINTER --> RUNTIME["gameLoop.createSession(projectId)"]
+  RUNTIME --> RELEASE["load published release state"]
+  RELEASE --> SESSION["seed runtime scene/dialogue from immutable release"]
+```
+
+Current behavior:
+
+- Draft edits mutate `builderProject.state`.
+- Publish creates a new immutable release snapshot.
+- Runtime session seeding consumes the published snapshot, not mutable draft state.
+- Unpublish clears `publishedReleaseVersion` without deleting historical releases.
+
+## Client Runtime Config Contract
+
+The SSR game page emits these required runtime meta tags consumed by `game-client.ts`:
+
+- `game-client-command-send-interval-ms`
+- `game-client-command-ttl-ms`
+- `game-client-socket-reconnect-delay-ms`
+- `game-client-restore-request-timeout-ms`
+- `game-client-restore-max-attempts`
+
+If these are missing/invalid, the playable client aborts initialization instead of silently using hidden hardcoded values.
+
+## Configuration Sources of Truth
+
+| Concern | Source |
+|---|---|
+| Environment parsing and defaults | `src/config/environment.ts` |
+| Runtime game contract | `src/shared/config/game-config.ts` |
+| Public route constants | `src/shared/constants/routes.ts` |
+| Game type contracts | `src/shared/contracts/game.ts` |
+| Session persistence + repair | `src/domain/game/services/GameStateStore.ts` |
+| Authoritative simulation loop | `src/domain/game/game-loop.ts` |
+| Builder draft/release persistence | `src/domain/builder/builder-service.ts` |
+
+## Verification Gates
+
+- `bun run typecheck`
+- `bun run lint`
+- `bun test`
+
+Note:
+
+- Tests are currently passing, but Bun `1.3.10` may panic after completion. This is a Bun runtime issue observed post-run, not a test assertion failure.

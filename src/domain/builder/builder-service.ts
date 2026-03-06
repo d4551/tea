@@ -1,5 +1,7 @@
+import type { Prisma } from "@prisma/client";
 import type { LocaleCode } from "../../config/environment.ts";
 import type {
+  BuilderArtifactPatch,
   BuilderDialoguePayload,
   BuilderMutationResult,
   BuilderNpcPayload,
@@ -7,6 +9,7 @@ import type {
   SceneDefinition,
   SceneNpcDefinition,
 } from "../../shared/contracts/game.ts";
+import { prisma } from "../../shared/services/db.ts";
 import { safeJsonParse } from "../../shared/utils/safe-json.ts";
 import { gameTextByLocale } from "../game/data/game-text.ts";
 import { gameScenes } from "../game/data/sprite-data.ts";
@@ -35,6 +38,10 @@ interface BuilderProjectSnapshot {
   readonly version: number;
   /** Optional resume timestamp marker (ms since epoch). */
   readonly lastUpdatedAtMs: number;
+  /** Latest immutable release version published from this project. */
+  readonly latestReleaseVersion: number;
+  /** Currently published release version, if any. */
+  readonly publishedReleaseVersion: number | null;
 }
 
 /**
@@ -50,13 +57,63 @@ export interface BuilderMutation<T> {
 }
 
 /**
+ * Per-operation preview for AI patch planning.
+ */
+export interface BuilderPatchPreviewOperation {
+  /** Proposed patch operation. */
+  readonly operation: BuilderArtifactPatch;
+  /** Whether this operation can be applied safely. */
+  readonly valid: boolean;
+  /** Human-readable validation or preview hint. */
+  readonly message: string;
+  /** Existing value at the target location. */
+  readonly before?: string;
+  /** Value after applying this operation. */
+  readonly after?: string;
+}
+
+/**
+ * Structured preview for an AI patch plan.
+ */
+export interface BuilderPatchPreview {
+  /** Target project identifier. */
+  readonly projectId: string;
+  /** Current project version. */
+  readonly version: number;
+  /** Current project checksum. */
+  readonly checksum: string;
+  /** Ordered operation preview list. */
+  readonly operations: readonly BuilderPatchPreviewOperation[];
+}
+
+/**
+ * Result envelope for transactional AI patch apply.
+ */
+export interface BuilderPatchApplyResult {
+  /** Target project identifier. */
+  readonly projectId: string;
+  /** Updated project version after apply. */
+  readonly version: number;
+  /** Updated project checksum after apply. */
+  readonly checksum: string;
+  /** Number of operations applied. */
+  readonly applied: number;
+  /** Operation execution report. */
+  readonly operations: readonly BuilderPatchPreviewOperation[];
+}
+
+/**
  * Service contract for builder persistence operations.
  */
 export interface BuilderService {
-  /** Creates a fresh in-memory project from game baseline data. */
+  /** Creates a fresh project from game baseline data. */
   createProject(projectId: string): Promise<BuilderProjectSnapshot | null>;
   /** Returns one builder project snapshot by id. */
   getProject(projectId: string): Promise<BuilderProjectSnapshot | null>;
+  /** Returns one existing project snapshot without implicitly creating it. */
+  peekProject(projectId: string): Promise<BuilderProjectSnapshot | null>;
+  /** Returns one published release snapshot without implicitly creating it. */
+  getPublishedProject(projectId: string): Promise<BuilderProjectSnapshot | null>;
   /** Persists any scene changes for a specific project. */
   saveScene(
     projectId: string,
@@ -96,44 +153,39 @@ export interface BuilderService {
   listScenes(projectId: string): Promise<readonly SceneDefinition[]>;
   /** Returns locale dictionary for one catalog. */
   getDialogues(projectId: string, locale: LocaleCode): Promise<Record<string, string>>;
+  /** Builds a deterministic preview for proposed AI patch operations. */
+  previewArtifactPatch(
+    projectId: string,
+    operations: readonly BuilderArtifactPatch[],
+  ): Promise<BuilderPatchPreview | null>;
+  /** Applies AI patch operations transactionally with optional version precondition. */
+  applyArtifactPatch(
+    projectId: string,
+    operations: readonly BuilderArtifactPatch[],
+    expectedVersion?: number,
+  ): Promise<BuilderPatchApplyResult | null>;
 }
 
-interface PersistedProjectRecord {
-  readonly id: string;
+interface BuilderProjectState {
   readonly scenes: Record<string, SceneDefinition>;
-  readonly dialogues: Partial<Record<string, Record<string, string>>>;
-  readonly published: boolean;
+  readonly dialogues: Record<LocaleCode, Record<string, string>>;
+}
+
+type BuilderProjectRow = {
+  readonly id: string;
+  readonly state: Prisma.JsonValue;
+  readonly checksum: string;
+  readonly version: number;
   readonly createdBy: string;
   readonly updatedBy: string;
   readonly source: string;
-  readonly version: number;
-  readonly checksum: string;
-  readonly lastUpdatedAtMs: number;
-}
+  readonly latestReleaseVersion: number;
+  readonly publishedReleaseVersion: number | null;
+  readonly updatedAt: Date;
+};
 
-interface PersistedBuilderStore {
-  readonly schemaVersion: number;
-  readonly createdAtMs: number;
-  readonly updatedAtMs: number;
-  readonly projects: readonly PersistedProjectRecord[];
-}
-
-interface BuilderProjectStore {
-  id: string;
-  scenes: Map<string, SceneDefinition>;
-  dialogues: Map<LocaleCode, Map<string, string>>;
-  published: boolean;
-  createdBy: string;
-  updatedBy: string;
-  source: string;
-  version: number;
-  checksum: string;
-  lastUpdatedAtMs: number;
-}
-
-const schemaVersion = 1;
-const defaultStatePath = ".lotfk-builder-projects.json";
-const persistencePath = Bun.env.BUILDER_PROJECT_STATE_PATH ?? defaultStatePath;
+const DEFAULT_PROJECT_ID = "default";
+const SUPPORTED_LOCALES = ["en-US", "zh-CN"] as const satisfies readonly LocaleCode[];
 
 /**
  * Returns a deterministic checksum for JSON payloads.
@@ -141,153 +193,115 @@ const persistencePath = Bun.env.BUILDER_PROJECT_STATE_PATH ?? defaultStatePath;
 const checksumOf = (value: unknown): string => {
   const payload = JSON.stringify(value);
   let hash = 0x811c9dc5;
-  for (let i = 0; i < payload.length; i += 1) {
-    hash ^= payload.charCodeAt(i);
+  for (let index = 0; index < payload.length; index += 1) {
+    hash ^= payload.charCodeAt(index);
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
   return `checksum-${hash.toString(16).padStart(8, "0")}`;
 };
 
 /**
- * Resolves stable snapshot rows from mutable maps.
+ * Type-safe record narrowing helper.
  */
-const toSnapshot = (mutable: {
-  readonly id: string;
-  readonly scenes: Map<string, SceneDefinition>;
-  readonly dialogues: Map<LocaleCode, Map<string, string>>;
-  readonly published: boolean;
-  readonly createdBy: string;
-  readonly updatedBy: string;
-  readonly source: string;
-  readonly version: number;
-  readonly lastUpdatedAtMs: number;
-  readonly checksum: string;
-}): BuilderProjectSnapshot => ({
-  id: mutable.id,
-  scenes: new Map(mutable.scenes),
-  dialogues: new Map(mutable.dialogues),
-  published: mutable.published,
-  createdBy: mutable.createdBy,
-  updatedBy: mutable.updatedBy,
-  source: mutable.source,
-  version: mutable.version,
-  lastUpdatedAtMs: mutable.lastUpdatedAtMs,
-  checksum: mutable.checksum,
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+/**
+ * Creates baseline builder state from the canonical game assets.
+ */
+const createBaselineState = (): BuilderProjectState => {
+  const scenes = Object.fromEntries(
+    Object.entries(gameScenes).map(([sceneId, scene]) => [sceneId, structuredClone(scene)]),
+  ) as Record<string, SceneDefinition>;
+  const dialogues: BuilderProjectState["dialogues"] = {
+    "en-US": Object.fromEntries(Object.entries(gameTextByLocale["en-US"].npcs)),
+    "zh-CN": Object.fromEntries(Object.entries(gameTextByLocale["zh-CN"].npcs)),
+  };
+
+  return { scenes, dialogues };
+};
+
+/**
+ * Converts BuilderProjectState to Prisma JSON payload.
+ */
+const toInputState = (state: BuilderProjectState): Prisma.InputJsonValue =>
+  JSON.parse(JSON.stringify(state)) as Prisma.InputJsonValue;
+
+/**
+ * Parses persisted JSON into normalized BuilderProjectState.
+ */
+const parseProjectState = (state: Prisma.JsonValue): BuilderProjectState => {
+  const parsed = safeJsonParse<unknown>(JSON.stringify(state), {});
+  const record = asRecord(parsed);
+  const scenesRecord = asRecord(record.scenes);
+  const dialoguesRecord = asRecord(record.dialogues);
+
+  const scenes = Object.fromEntries(
+    Object.entries(scenesRecord)
+      .filter((entry): entry is [string, SceneDefinition] => entry[0].length > 0)
+      .map(([sceneId, scene]) => [sceneId, structuredClone(scene as SceneDefinition)]),
+  ) as Record<string, SceneDefinition>;
+
+  const dialogues: BuilderProjectState["dialogues"] = {
+    "en-US": {},
+    "zh-CN": {},
+  };
+  for (const locale of SUPPORTED_LOCALES) {
+    const localeCatalog = asRecord(dialoguesRecord[locale]);
+    dialogues[locale] = Object.fromEntries(
+      Object.entries(localeCatalog).filter(
+        (entry): entry is [string, string] => entry[0].length > 0 && typeof entry[1] === "string",
+      ),
+    );
+  }
+
+  if (Object.keys(scenes).length === 0) {
+    const baseline = createBaselineState();
+    return baseline;
+  }
+
+  return { scenes, dialogues };
+};
+
+/**
+ * Converts normalized state to map-based snapshot payload.
+ */
+const toProjectSnapshot = (
+  row: BuilderProjectRow,
+  state: BuilderProjectState,
+  published: boolean,
+): BuilderProjectSnapshot => ({
+  id: row.id,
+  scenes: new Map(
+    Object.entries(state.scenes).map(([sceneId, scene]) => [sceneId, structuredClone(scene)]),
+  ),
+  dialogues: new Map(
+    SUPPORTED_LOCALES.map((locale) => [locale, new Map(Object.entries(state.dialogues[locale]))]),
+  ),
+  published,
+  createdBy: row.createdBy,
+  updatedBy: row.updatedBy,
+  source: row.source,
+  checksum: row.checksum,
+  version: row.version,
+  lastUpdatedAtMs: row.updatedAt.getTime(),
+  latestReleaseVersion: row.latestReleaseVersion,
+  publishedReleaseVersion: row.publishedReleaseVersion,
 });
 
 /**
  * Converts optional locale strings to canonical supported locales.
  */
-const normalizeLocale = (value: string | undefined): LocaleCode => {
-  if (value === "zh-CN" || value === "en-US") return value;
-  return "en-US";
-};
-
-/**
- * Parses persisted locale dictionaries while allowing loose shape.
- */
-const toLocaleDictionary = (input: unknown): Map<LocaleCode, Map<string, string>> => {
-  const output = new Map<LocaleCode, Map<string, string>>();
-
-  if (input && typeof input === "object") {
-    for (const [localeKey, catalogValue] of Object.entries(input as Record<string, unknown>)) {
-      if (localeKey !== "en-US" && localeKey !== "zh-CN") {
-        continue;
-      }
-      if (catalogValue && typeof catalogValue === "object") {
-        const catalog = catalogValue as Record<string, unknown>;
-        const entries: [string, string][] = [];
-        for (const [lineKey, lineValue] of Object.entries(catalog)) {
-          if (typeof lineValue === "string" && lineKey.length > 0) {
-            entries.push([lineKey, lineValue]);
-          }
-        }
-        output.set(localeKey, new Map(entries));
-      }
-    }
-  }
-
-  if (output.size === 0) {
-    output.set("en-US", new Map(Object.entries(gameTextByLocale["en-US"].npcs)));
-    output.set("zh-CN", new Map(Object.entries(gameTextByLocale["zh-CN"].npcs)));
-  }
-
-  return output;
-};
-
-/**
- * Parses persisted scenes while preserving order as map keys.
- */
-const toScenesMap = (input: unknown): Map<string, SceneDefinition> => {
-  if (input && typeof input === "object") {
-    const entries = Object.entries(input as Record<string, SceneDefinition>);
-    return new Map(
-      entries.filter((entry): entry is [string, SceneDefinition] => entry[0].length > 0),
-    );
-  }
-
-  return new Map<string, SceneDefinition>();
-};
-
-/**
- * Creates a new project snapshot prefilled from baseline game definitions.
- */
-const createProjectFromBaseline = (projectId: string): BuilderProjectSnapshot => {
-  const scenes = new Map<string, SceneDefinition>(
-    Object.entries(gameScenes).map(([id, scene]) => [id, structuredClone(scene)]),
-  );
-  const dialogues = new Map<LocaleCode, Map<string, string>>();
-  for (const [locale, catalog] of Object.entries(gameTextByLocale) as Array<
-    [LocaleCode, (typeof gameTextByLocale)[LocaleCode]]
-  >) {
-    dialogues.set(locale, new Map<string, string>(Object.entries(catalog.npcs)));
-  }
-
-  const nowMs = Date.now();
-  const snapshotShape = {
-    id: projectId,
-    scenes,
-    dialogues,
-    published: false,
-    createdBy: "system",
-    updatedBy: "system",
-    source: "builder-service-seed",
-    version: 1,
-    lastUpdatedAtMs: nowMs,
-  } satisfies {
-    id: string;
-    scenes: Map<string, SceneDefinition>;
-    dialogues: Map<LocaleCode, Map<string, string>>;
-    published: boolean;
-    createdBy: string;
-    updatedBy: string;
-    source: string;
-    version: number;
-    lastUpdatedAtMs: number;
-  };
-
-  return {
-    ...snapshotShape,
-    checksum: checksumOf(Array.from(scenes)),
-  };
-};
+const normalizeLocale = (value: string | undefined): LocaleCode =>
+  value === "zh-CN" || value === "en-US" ? value : "en-US";
 
 /**
  * Clones scene definitions while preserving compile-time shape.
  */
 const cloneScene = (scene: SceneDefinition): SceneDefinition =>
   structuredClone(scene) as SceneDefinition;
-
-/**
- * Clones mutable scene and npc list.
- */
-const withNpcList = (
-  scene: SceneDefinition,
-  npcs: readonly SceneNpcDefinition[],
-): SceneDefinition => ({
-  ...cloneScene(scene),
-  npcs: structuredClone(npcs),
-});
 
 /**
  * Converts a scene mutation into a stable mutation result payload.
@@ -332,208 +346,223 @@ const dialogueMutationResult = (
 });
 
 /**
- * Serializes a mutable project to JSON-friendly storage shape.
+ * Parses JSON-like AI patch payload values into runtime values.
  */
-const projectToPersisted = (project: BuilderProjectStore): PersistedProjectRecord => ({
-  id: project.id,
-  scenes: Object.fromEntries(
-    Array.from(project.scenes.entries()).map(([key, value]) => [key, value]),
-  ),
-  dialogues: Object.fromEntries(
-    Array.from(project.dialogues.entries()).map(([locale, catalog]) => [
-      locale,
-      Object.fromEntries(Array.from(catalog.entries())),
-    ]),
-  ),
-  published: project.published,
-  createdBy: project.createdBy,
-  updatedBy: project.updatedBy,
-  source: project.source,
-  version: project.version,
-  checksum: project.checksum,
-  lastUpdatedAtMs: project.lastUpdatedAtMs,
-});
+const parsePatchValue = (value: string): unknown => safeJsonParse<unknown>(value, value);
+
+type PatchTarget =
+  | {
+      readonly kind: "dialogue";
+      readonly locale: LocaleCode;
+      readonly key: string;
+    }
+  | {
+      readonly kind: "scene";
+      readonly sceneId: string;
+    };
 
 /**
- * Rehydrates a project from persisted storage.
+ * Resolves a limited patch target from a JSON-pointer-like path.
  */
-const persistedToProject = (project: PersistedProjectRecord): BuilderProjectStore => {
-  const scenes = toScenesMap(project.scenes);
-  const dialogues = toLocaleDictionary(project.dialogues);
-  const nowMs = Date.now();
+const parsePatchTarget = (path: string): PatchTarget | null => {
+  const parts = path
+    .split("/")
+    .filter((part) => part.length > 0)
+    .map((part) => decodeURIComponent(part));
 
-  return {
-    id: project.id,
-    scenes,
-    dialogues,
-    published: Boolean(project.published),
-    createdBy: project.createdBy || "system",
-    updatedBy: project.updatedBy || "system",
-    source: project.source || "builder-service-seed",
-    version: Number.isFinite(project.version) ? project.version : 1,
-    checksum: project.checksum || checksumOf(Array.from(scenes.values())),
-    lastUpdatedAtMs: Number.isFinite(project.lastUpdatedAtMs) ? project.lastUpdatedAtMs : nowMs,
-  };
+  if (parts[0] === "dialogues" && parts.length >= 3) {
+    const locale = normalizeLocale(parts[1]);
+    const key = parts.slice(2).join("/");
+    if (key.length === 0) {
+      return null;
+    }
+
+    return { kind: "dialogue", locale, key };
+  }
+
+  if (parts[0] === "scenes" && parts.length === 2 && parts[1]) {
+    return { kind: "scene", sceneId: parts[1] };
+  }
+
+  return null;
 };
 
 /**
- * In-memory singleton builder store with deterministic write semantics.
+ * Prisma-backed builder store with immutable release snapshots.
  */
-class PersistentBuilderService implements BuilderService {
-  private readonly projects = new Map<string, BuilderProjectStore>();
-  private readonly init = this.load();
+class PrismaBuilderService implements BuilderService {
+  private readonly initPromise = this.ensureDefaultProject();
 
-  private async normalizeProjectRecord(project: BuilderProjectStore): Promise<void> {
-    if (project.scenes.size > 0 && project.dialogues.size > 0) {
-      return;
-    }
-
-    const baseline = createProjectFromBaseline(project.id);
-
-    if (project.scenes.size === 0) {
-      project.scenes.clear();
-      for (const [sceneId, scene] of baseline.scenes.entries()) {
-        project.scenes.set(sceneId, cloneScene(scene));
-      }
-    }
-
-    if (project.dialogues.size === 0) {
-      project.dialogues.clear();
-      for (const [locale, catalog] of baseline.dialogues.entries()) {
-        project.dialogues.set(locale, new Map(catalog));
-      }
-    }
-  }
-
-  private async load(): Promise<void> {
-    const file = Bun.file(persistencePath);
-    if (!(await file.exists())) return;
-
-    const raw = await file.text().catch(() => null);
-    if (raw === null) return;
-
-    const parsed = safeJsonParse<Partial<PersistedBuilderStore>>(raw, {});
-    const nowMs = Date.now();
-
-    if (!Array.isArray(parsed.projects)) {
-      return;
-    }
-
-    const loadedProjects = parsed.projects
-      .filter((record): record is PersistedProjectRecord => typeof record?.id === "string")
-      .map((record) => persistedToProject(record));
-
-    for (const project of loadedProjects) {
-      project.createdBy = project.createdBy || "system";
-      project.updatedBy = project.updatedBy || "system";
-      project.source = project.source || "builder-service-seed";
-      project.lastUpdatedAtMs = Number.isFinite(project.lastUpdatedAtMs)
-        ? project.lastUpdatedAtMs
-        : nowMs;
-      project.version = Number.isFinite(project.version) ? project.version : 1;
-      project.checksum = project.checksum || checksumOf(Array.from(project.scenes.values()));
-
-      this.projects.set(project.id, project);
-    }
-  }
-
-  private async persist(): Promise<void> {
-    await this.init;
-    const snapshot: PersistedBuilderStore = {
-      schemaVersion,
-      createdAtMs: Date.now(),
-      updatedAtMs: Date.now(),
-      projects: Array.from(this.projects.values()).map((project) => projectToPersisted(project)),
-    };
-
-    await Bun.write(persistencePath, JSON.stringify(snapshot));
-  }
-
-  private async resolveProject(projectId: string): Promise<BuilderProjectStore> {
-    await this.init;
-    if (!projectId || projectId.trim().length === 0) {
-      throw new Error("project id is required");
-    }
-
-    const existing = this.projects.get(projectId);
+  private async ensureDefaultProject(): Promise<void> {
+    const existing = await prisma.builderProject.findUnique({
+      where: { id: DEFAULT_PROJECT_ID },
+      select: { id: true },
+    });
     if (existing) {
-      await this.normalizeProjectRecord(existing);
-      return existing;
+      return;
     }
 
-    const created = createProjectFromBaseline(projectId);
-    const mutable = {
-      id: created.id,
-      scenes: new Map(
-        Array.from(created.scenes.entries()).map(([id, scene]) => [id, cloneScene(scene)]),
-      ),
-      dialogues: new Map(
-        Array.from(created.dialogues.entries()).map(([locale, values]) => [
-          locale,
-          new Map(values),
-        ]),
-      ),
-      published: created.published,
-      createdBy: created.createdBy,
-      updatedBy: created.updatedBy,
-      source: created.source,
-      version: created.version,
-      checksum: created.checksum,
-      lastUpdatedAtMs: created.lastUpdatedAtMs,
-    };
-
-    this.projects.set(projectId, mutable);
-    await this.persist();
-    return mutable;
+    const baseline = createBaselineState();
+    await prisma.builderProject.create({
+      data: {
+        id: DEFAULT_PROJECT_ID,
+        state: toInputState(baseline),
+        checksum: checksumOf(baseline),
+      },
+    });
   }
 
-  private async touchProject(project: BuilderProjectStore): Promise<void> {
-    project.version += 1;
-    project.lastUpdatedAtMs = Date.now();
-    project.updatedBy = "builder-editor";
-    project.checksum = checksumOf(Array.from(project.scenes.values()).map((value) => value));
-    await this.persist();
+  private async readProjectRow(projectId: string): Promise<BuilderProjectRow | null> {
+    await this.initPromise;
+    if (projectId.trim().length === 0) {
+      return null;
+    }
+
+    return prisma.builderProject.findUnique({
+      where: { id: projectId },
+      select: {
+        id: true,
+        state: true,
+        checksum: true,
+        version: true,
+        createdBy: true,
+        updatedBy: true,
+        source: true,
+        latestReleaseVersion: true,
+        publishedReleaseVersion: true,
+        updatedAt: true,
+      },
+    });
   }
 
-  private updateSceneChecksum(project: BuilderProjectStore): void {
-    project.checksum = checksumOf(Array.from(project.scenes.values()).map((value) => value));
-  }
+  private async writeProjectState(
+    row: BuilderProjectRow,
+    state: BuilderProjectState,
+    updatedBy: string,
+  ): Promise<BuilderProjectRow | null> {
+    const checksum = checksumOf(state);
+    const updated = await prisma.builderProject.updateMany({
+      where: { id: row.id, version: row.version },
+      data: {
+        state: toInputState(state),
+        checksum,
+        updatedBy,
+        version: {
+          increment: 1,
+        },
+      },
+    });
+    if (updated.count === 0) {
+      return null;
+    }
 
-  private updateDialogueChecksum(project: BuilderProjectStore): void {
-    project.checksum = checksumOf(
-      Array.from(project.dialogues.entries()).map(([locale, dialog]) => [
-        locale,
-        Array.from(dialog.entries()),
-      ]),
-    );
+    return this.readProjectRow(row.id);
   }
 
   public async createProject(projectId: string): Promise<BuilderProjectSnapshot | null> {
-    const project = await this.resolveProject(projectId);
-    return toSnapshot(project);
+    await this.initPromise;
+    const sanitized = projectId.trim();
+    if (sanitized.length === 0) {
+      return null;
+    }
+
+    const existing = await this.readProjectRow(sanitized);
+    if (existing) {
+      return toProjectSnapshot(
+        existing,
+        parseProjectState(existing.state),
+        existing.publishedReleaseVersion !== null,
+      );
+    }
+
+    const baseline = createBaselineState();
+    const created = await prisma.builderProject.create({
+      data: {
+        id: sanitized,
+        state: toInputState(baseline),
+        checksum: checksumOf(baseline),
+      },
+      select: {
+        id: true,
+        state: true,
+        checksum: true,
+        version: true,
+        createdBy: true,
+        updatedBy: true,
+        source: true,
+        latestReleaseVersion: true,
+        publishedReleaseVersion: true,
+        updatedAt: true,
+      },
+    });
+
+    return toProjectSnapshot(created, baseline, false);
   }
 
   public async getProject(projectId: string): Promise<BuilderProjectSnapshot | null> {
-    return toSnapshot(await this.resolveProject(projectId));
+    const row = await this.readProjectRow(projectId);
+    if (!row) {
+      return null;
+    }
+
+    return toProjectSnapshot(
+      row,
+      parseProjectState(row.state),
+      row.publishedReleaseVersion !== null,
+    );
+  }
+
+  public async peekProject(projectId: string): Promise<BuilderProjectSnapshot | null> {
+    return this.getProject(projectId);
+  }
+
+  public async getPublishedProject(projectId: string): Promise<BuilderProjectSnapshot | null> {
+    const row = await this.readProjectRow(projectId);
+    if (!row || row.publishedReleaseVersion === null) {
+      return null;
+    }
+
+    const release = await prisma.builderProjectRelease.findUnique({
+      where: {
+        projectId_releaseVersion: {
+          projectId: row.id,
+          releaseVersion: row.publishedReleaseVersion,
+        },
+      },
+      select: {
+        state: true,
+      },
+    });
+    if (!release) {
+      return null;
+    }
+
+    const publishedState = parseProjectState(release.state);
+    return toProjectSnapshot(row, publishedState, true);
   }
 
   public async saveScene(
     projectId: string,
     payload: BuilderScenePayload,
   ): Promise<BuilderMutation<SceneDefinition> | null> {
-    const project = await this.resolveProject(projectId);
+    const row = await this.readProjectRow(projectId);
+    if (!row) {
+      return null;
+    }
 
-    const existing = project.scenes.get(payload.id);
-    const action: BuilderMutationResult["action"] = existing ? "updated" : "created";
-    const scene = cloneScene(payload.scene);
-    project.scenes.set(payload.id, scene);
-    this.updateSceneChecksum(project);
-    await this.touchProject(project);
+    const state = parseProjectState(row.state);
+    const exists = Object.hasOwn(state.scenes, payload.id);
+    state.scenes[payload.id] = cloneScene(payload.scene);
+
+    const saved = await this.writeProjectState(row, state, "builder-editor");
+    if (!saved) {
+      return null;
+    }
 
     return {
-      result: sceneMutationResult(projectId, payload.id, action),
-      payload: cloneScene(scene),
-      checksum: project.checksum,
+      result: sceneMutationResult(projectId, payload.id, exists ? "updated" : "created"),
+      payload: cloneScene(state.scenes[payload.id] as SceneDefinition),
+      checksum: saved.checksum,
     };
   }
 
@@ -541,19 +570,26 @@ class PersistentBuilderService implements BuilderService {
     projectId: string,
     sceneId: string,
   ): Promise<BuilderMutation<null> | null> {
-    const project = await this.resolveProject(projectId);
-    if (!project.scenes.has(sceneId)) {
+    const row = await this.readProjectRow(projectId);
+    if (!row) {
       return null;
     }
 
-    project.scenes.delete(sceneId);
-    this.updateSceneChecksum(project);
-    await this.touchProject(project);
+    const state = parseProjectState(row.state);
+    if (!Object.hasOwn(state.scenes, sceneId)) {
+      return null;
+    }
+    delete state.scenes[sceneId];
+
+    const saved = await this.writeProjectState(row, state, "builder-editor");
+    if (!saved) {
+      return null;
+    }
 
     return {
       result: sceneMutationResult(projectId, sceneId, "deleted"),
       payload: null,
-      checksum: project.checksum,
+      checksum: saved.checksum,
     };
   }
 
@@ -561,33 +597,46 @@ class PersistentBuilderService implements BuilderService {
     projectId: string,
     payload: BuilderNpcPayload,
   ): Promise<BuilderMutation<SceneNpcDefinition | null> | null> {
-    const project = await this.resolveProject(projectId);
-    const scene = project.scenes.get(payload.sceneId);
-    if (!scene) return null;
-
-    const existingIndex = scene.npcs.findIndex(
-      (npc) => npc.characterKey === payload.npc.characterKey,
-    );
-    let action: BuilderMutationResult["action"] = "updated";
-    const upsertNpc = structuredClone(payload.npc) as SceneNpcDefinition;
-
-    if (existingIndex === -1) {
-      const npcs = [...scene.npcs, upsertNpc];
-      project.scenes.set(payload.sceneId, withNpcList(scene, npcs));
-      action = "created";
-    } else {
-      const npcs = [...scene.npcs];
-      npcs[existingIndex] = upsertNpc;
-      project.scenes.set(payload.sceneId, withNpcList(scene, npcs));
+    const row = await this.readProjectRow(projectId);
+    if (!row) {
+      return null;
     }
 
-    this.updateSceneChecksum(project);
-    await this.touchProject(project);
+    const state = parseProjectState(row.state);
+    const scene = state.scenes[payload.sceneId];
+    if (!scene) {
+      return null;
+    }
+
+    const existingIndex = scene.npcs.findIndex(
+      (candidate) => candidate.characterKey === payload.npc.characterKey,
+    );
+    const nextNpc = structuredClone(payload.npc) as SceneNpcDefinition;
+    const nextNpcs = [...scene.npcs];
+    if (existingIndex === -1) {
+      nextNpcs.push(nextNpc);
+    } else {
+      nextNpcs[existingIndex] = nextNpc;
+    }
+
+    state.scenes[payload.sceneId] = {
+      ...scene,
+      npcs: nextNpcs,
+    };
+
+    const saved = await this.writeProjectState(row, state, "builder-editor");
+    if (!saved) {
+      return null;
+    }
 
     return {
-      result: npcMutationResult(projectId, payload.npc.characterKey, action),
-      payload: upsertNpc,
-      checksum: project.checksum,
+      result: npcMutationResult(
+        projectId,
+        payload.npc.characterKey,
+        existingIndex === -1 ? "created" : "updated",
+      ),
+      payload: nextNpc,
+      checksum: saved.checksum,
     };
   }
 
@@ -596,28 +645,36 @@ class PersistentBuilderService implements BuilderService {
     sceneId: string,
     npcId: string,
   ): Promise<BuilderMutation<SceneNpcDefinition[]> | null> {
-    const project = await this.resolveProject(projectId);
-    const scene = project.scenes.get(sceneId);
-    if (!scene) return null;
+    const row = await this.readProjectRow(projectId);
+    if (!row) {
+      return null;
+    }
 
-    const existingNpc = scene.npcs.find((candidate) => candidate.characterKey === npcId);
-    if (!existingNpc) return null;
+    const state = parseProjectState(row.state);
+    const scene = state.scenes[sceneId];
+    if (!scene) {
+      return null;
+    }
 
-    project.scenes.set(
-      sceneId,
-      withNpcList(
-        scene,
-        scene.npcs.filter((candidate) => candidate.characterKey !== npcId),
-      ),
-    );
+    const nextNpcs = scene.npcs.filter((candidate) => candidate.characterKey !== npcId);
+    if (nextNpcs.length === scene.npcs.length) {
+      return null;
+    }
 
-    this.updateSceneChecksum(project);
-    await this.touchProject(project);
+    state.scenes[sceneId] = {
+      ...scene,
+      npcs: nextNpcs,
+    };
+
+    const saved = await this.writeProjectState(row, state, "builder-editor");
+    if (!saved) {
+      return null;
+    }
 
     return {
       result: npcMutationResult(projectId, npcId, "deleted"),
-      payload: [...structuredClone(project.scenes.get(sceneId)?.npcs ?? [])],
-      checksum: project.checksum,
+      payload: structuredClone(nextNpcs) as SceneNpcDefinition[],
+      checksum: saved.checksum,
     };
   }
 
@@ -625,20 +682,28 @@ class PersistentBuilderService implements BuilderService {
     projectId: string,
     payload: BuilderDialoguePayload,
   ): Promise<BuilderMutation<string> | null> {
-    const project = await this.resolveProject(projectId);
+    const row = await this.readProjectRow(projectId);
+    if (!row) {
+      return null;
+    }
 
+    const state = parseProjectState(row.state);
     const locale = normalizeLocale(payload.locale);
-    const catalog = project.dialogues.get(locale) ?? new Map<string, string>();
-    const exists = catalog.has(payload.key);
-    catalog.set(payload.key, payload.text);
-    project.dialogues.set(locale, catalog);
-    this.updateDialogueChecksum(project);
-    await this.touchProject(project);
+    const catalog = state.dialogues[locale];
+    const action: BuilderMutationResult["action"] = Object.hasOwn(catalog, payload.key)
+      ? "updated"
+      : "created";
+    catalog[payload.key] = payload.text;
+
+    const saved = await this.writeProjectState(row, state, "builder-editor");
+    if (!saved) {
+      return null;
+    }
 
     return {
-      result: dialogueMutationResult(projectId, payload.key, exists ? "updated" : "created"),
+      result: dialogueMutationResult(projectId, payload.key, action),
       payload: payload.text,
-      checksum: project.checksum,
+      checksum: saved.checksum,
     };
   }
 
@@ -647,20 +712,27 @@ class PersistentBuilderService implements BuilderService {
     locale: LocaleCode,
     key: string,
   ): Promise<BuilderMutation<string | null> | null> {
-    const project = await this.resolveProject(projectId);
-    const localeMap = project.dialogues.get(locale);
-    if (!localeMap?.has(key)) {
+    const row = await this.readProjectRow(projectId);
+    if (!row) {
       return null;
     }
 
-    localeMap.delete(key);
-    this.updateDialogueChecksum(project);
-    await this.touchProject(project);
+    const state = parseProjectState(row.state);
+    const catalog = state.dialogues[locale];
+    if (!Object.hasOwn(catalog, key)) {
+      return null;
+    }
+
+    delete catalog[key];
+    const saved = await this.writeProjectState(row, state, "builder-editor");
+    if (!saved) {
+      return null;
+    }
 
     return {
       result: dialogueMutationResult(projectId, key, "deleted"),
       payload: null,
-      checksum: project.checksum,
+      checksum: saved.checksum,
     };
   }
 
@@ -668,21 +740,96 @@ class PersistentBuilderService implements BuilderService {
     projectId: string,
     published: boolean,
   ): Promise<BuilderProjectSnapshot | null> {
-    const project = await this.resolveProject(projectId);
-    project.published = published;
-    await this.touchProject(project);
-    return toSnapshot(project);
+    await this.initPromise;
+    const sanitized = projectId.trim();
+    if (sanitized.length === 0) {
+      return null;
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const row = await tx.builderProject.findUnique({
+        where: { id: sanitized },
+      });
+      if (!row) {
+        return null;
+      }
+
+      if (published) {
+        const nextReleaseVersion = row.latestReleaseVersion + 1;
+        await tx.builderProjectRelease.create({
+          data: {
+            projectId: row.id,
+            releaseVersion: nextReleaseVersion,
+            checksum: row.checksum,
+            state: JSON.parse(JSON.stringify(row.state ?? {})) as Prisma.InputJsonValue,
+          },
+        });
+
+        await tx.builderProject.update({
+          where: { id: row.id },
+          data: {
+            latestReleaseVersion: nextReleaseVersion,
+            publishedReleaseVersion: nextReleaseVersion,
+            updatedBy: "builder-publish",
+            version: {
+              increment: 1,
+            },
+          },
+        });
+      } else {
+        await tx.builderProject.update({
+          where: { id: row.id },
+          data: {
+            publishedReleaseVersion: null,
+            updatedBy: "builder-publish",
+            version: {
+              increment: 1,
+            },
+          },
+        });
+      }
+
+      return tx.builderProject.findUnique({
+        where: { id: row.id },
+        select: {
+          id: true,
+          state: true,
+          checksum: true,
+          version: true,
+          createdBy: true,
+          updatedBy: true,
+          source: true,
+          latestReleaseVersion: true,
+          publishedReleaseVersion: true,
+          updatedAt: true,
+        },
+      });
+    });
+    if (!updated) {
+      return null;
+    }
+
+    return toProjectSnapshot(updated, parseProjectState(updated.state), published);
   }
 
   public async getScene(projectId: string, sceneId: string): Promise<SceneDefinition | null> {
-    const project = await this.resolveProject(projectId);
-    const scene = project.scenes.get(sceneId);
+    const row = await this.readProjectRow(projectId);
+    if (!row) {
+      return null;
+    }
+
+    const scene = parseProjectState(row.state).scenes[sceneId];
     return scene ? cloneScene(scene) : null;
   }
 
   public async findNpc(projectId: string, npcId: string): Promise<SceneNpcDefinition | null> {
-    const project = await this.resolveProject(projectId);
-    for (const scene of project.scenes.values()) {
+    const row = await this.readProjectRow(projectId);
+    if (!row) {
+      return null;
+    }
+
+    const state = parseProjectState(row.state);
+    for (const scene of Object.values(state.scenes)) {
       const npc = scene.npcs.find((candidate) => candidate.characterKey === npcId);
       if (npc) {
         return structuredClone(npc) as SceneNpcDefinition;
@@ -693,31 +840,209 @@ class PersistentBuilderService implements BuilderService {
   }
 
   public async listScenes(projectId: string): Promise<readonly SceneDefinition[]> {
-    const project = await this.resolveProject(projectId);
-    return [...project.scenes.values()].map((scene) => cloneScene(scene));
+    const row = await this.readProjectRow(projectId);
+    if (!row) {
+      return [];
+    }
+
+    return Object.values(parseProjectState(row.state).scenes).map((scene) => cloneScene(scene));
   }
 
   public async getDialogues(
     projectId: string,
     locale: LocaleCode,
   ): Promise<Record<string, string>> {
-    const project = await this.resolveProject(projectId);
-    const dialogCatalog =
-      project.dialogues.get(locale) ?? project.dialogues.get("en-US") ?? new Map<string, string>();
-    return Object.fromEntries(dialogCatalog.entries());
+    const row = await this.readProjectRow(projectId);
+    if (!row) {
+      return {};
+    }
+
+    const state = parseProjectState(row.state);
+    return { ...(state.dialogues[locale] ?? state.dialogues["en-US"]) };
+  }
+
+  public async previewArtifactPatch(
+    projectId: string,
+    operations: readonly BuilderArtifactPatch[],
+  ): Promise<BuilderPatchPreview | null> {
+    const row = await this.readProjectRow(projectId);
+    if (!row) {
+      return null;
+    }
+
+    const state = parseProjectState(row.state);
+    const previewState = structuredClone(state) as BuilderProjectState;
+    const reports: BuilderPatchPreviewOperation[] = [];
+
+    for (const operation of operations) {
+      const target = parsePatchTarget(operation.path);
+      if (!target) {
+        reports.push({
+          operation,
+          valid: false,
+          message: "unsupported-path",
+        });
+        continue;
+      }
+
+      if (target.kind === "dialogue") {
+        const catalog = previewState.dialogues[target.locale];
+        const before = catalog[target.key];
+        if (operation.op === "remove") {
+          delete catalog[target.key];
+          reports.push({
+            operation,
+            valid: true,
+            message: "ok",
+            before,
+          });
+          continue;
+        }
+
+        const nextValue = parsePatchValue(operation.value);
+        const text = typeof nextValue === "string" ? nextValue : JSON.stringify(nextValue);
+        catalog[target.key] = text;
+        reports.push({
+          operation,
+          valid: true,
+          message: "ok",
+          before,
+          after: text,
+        });
+        continue;
+      }
+
+      const beforeScene = previewState.scenes[target.sceneId];
+      if (operation.op === "remove") {
+        delete previewState.scenes[target.sceneId];
+        reports.push({
+          operation,
+          valid: true,
+          message: "ok",
+          before: beforeScene ? JSON.stringify(beforeScene) : undefined,
+        });
+        continue;
+      }
+
+      const parsed = parsePatchValue(operation.value);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        reports.push({
+          operation,
+          valid: false,
+          message: "invalid-scene-payload",
+          before: beforeScene ? JSON.stringify(beforeScene) : undefined,
+        });
+        continue;
+      }
+
+      const nextScene = {
+        ...(parsed as SceneDefinition),
+        id: target.sceneId,
+      } as SceneDefinition;
+      previewState.scenes[target.sceneId] = structuredClone(nextScene);
+      reports.push({
+        operation,
+        valid: true,
+        message: "ok",
+        before: beforeScene ? JSON.stringify(beforeScene) : undefined,
+        after: JSON.stringify(nextScene),
+      });
+    }
+
+    return {
+      projectId: row.id,
+      version: row.version,
+      checksum: row.checksum,
+      operations: reports,
+    };
+  }
+
+  public async applyArtifactPatch(
+    projectId: string,
+    operations: readonly BuilderArtifactPatch[],
+    expectedVersion?: number,
+  ): Promise<BuilderPatchApplyResult | null> {
+    const row = await this.readProjectRow(projectId);
+    if (!row) {
+      return null;
+    }
+    if (typeof expectedVersion === "number" && expectedVersion !== row.version) {
+      return null;
+    }
+
+    const preview = await this.previewArtifactPatch(projectId, operations);
+    if (!preview) {
+      return null;
+    }
+
+    if (preview.operations.some((operation) => !operation.valid)) {
+      return {
+        projectId: row.id,
+        version: row.version,
+        checksum: row.checksum,
+        applied: 0,
+        operations: preview.operations,
+      };
+    }
+
+    const nextState = parseProjectState(row.state);
+    for (const operation of operations) {
+      const target = parsePatchTarget(operation.path);
+      if (!target) {
+        continue;
+      }
+
+      if (target.kind === "dialogue") {
+        if (operation.op === "remove") {
+          delete nextState.dialogues[target.locale][target.key];
+          continue;
+        }
+
+        const parsed = parsePatchValue(operation.value);
+        nextState.dialogues[target.locale][target.key] =
+          typeof parsed === "string" ? parsed : JSON.stringify(parsed);
+        continue;
+      }
+
+      if (operation.op === "remove") {
+        delete nextState.scenes[target.sceneId];
+        continue;
+      }
+
+      const parsed = parsePatchValue(operation.value);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        continue;
+      }
+
+      nextState.scenes[target.sceneId] = {
+        ...(parsed as SceneDefinition),
+        id: target.sceneId,
+      };
+    }
+
+    const saved = await this.writeProjectState(row, nextState, "builder-ai");
+    if (!saved) {
+      return null;
+    }
+
+    return {
+      projectId: saved.id,
+      version: saved.version,
+      checksum: saved.checksum,
+      applied: operations.length,
+      operations: preview.operations,
+    };
   }
 }
 
-const DEFAULT_PROJECT_ID = "default";
-
-const projects = new PersistentBuilderService();
+const projects = new PrismaBuilderService();
 
 /**
  * Shared builder service facade used by builder views and API routes.
  */
 export const createBuilderService = (): BuilderService => projects;
 
-/** Shared singleton for in-memory builder operations. */
+/** Shared singleton for builder operations. */
 export const builderService = createBuilderService();
 
 /** Shared default project identifier for dashboard and API defaults. */

@@ -28,17 +28,10 @@ const resolveCurrentPathWithQuery = (request: Request): string => {
   return `${requestUrl.pathname}${requestUrl.search}`;
 };
 
-/**
- * Creates server-rendered page routes.
- *
- * @param oracleService Oracle domain service.
- * @returns Elysia route group.
- */
-export const createPageRoutes = (oracleService: OracleService) =>
-  new Elysia({ name: "page-routes" })
-    .use(i18nContextPlugin)
-    .guard(authSessionGuard, (app) =>
-      app.get(
+const createOraclePageRoutes = (oracleService: OracleService) =>
+  new Elysia({ name: "page-oracle-routes" }).use(i18nContextPlugin).guard(authSessionGuard, (app) =>
+    app
+      .get(
         appRoutes.home,
         async ({ query, cookie, request, locale, messages }) => {
           const currentPathWithQuery = resolveCurrentPathWithQuery(request);
@@ -72,8 +65,37 @@ export const createPageRoutes = (oracleService: OracleService) =>
         {
           query: oracleQuerySchema,
         },
+      )
+      .get(
+        appRoutes.oraclePartial,
+        async ({ query, cookie, locale, messages }) => {
+          const mode = parseOracleMode(query.mode);
+          const question = query.question ?? "";
+
+          const outcome = await oracleService.evaluate({
+            locale,
+            mode,
+            question,
+            hasSession: resolveAuthSession(cookie).hasSession,
+          });
+
+          const panelState: OraclePanelState = {
+            ...outcome,
+            mode,
+            question,
+          };
+
+          return renderOraclePanel(messages, panelState);
+        },
+        {
+          query: oracleQuerySchema,
+        },
       ),
-    )
+  );
+
+const createStaticPageRoutes = () =>
+  new Elysia({ name: "page-static-routes" })
+    .use(i18nContextPlugin)
     .get(
       appRoutes.pitchDeck,
       ({ request, locale, messages }) => {
@@ -106,31 +128,15 @@ export const createPageRoutes = (oracleService: OracleService) =>
       {
         query: localeQuerySchema,
       },
-    )
-    .guard(authSessionGuard, (app) =>
-      app.get(
-        appRoutes.oraclePartial,
-        async ({ query, cookie, locale, messages }) => {
-          const mode = parseOracleMode(query.mode);
-          const question = query.question ?? "";
-
-          const outcome = await oracleService.evaluate({
-            locale,
-            mode,
-            question,
-            hasSession: resolveAuthSession(cookie).hasSession,
-          });
-
-          const panelState: OraclePanelState = {
-            ...outcome,
-            mode,
-            question,
-          };
-
-          return renderOraclePanel(messages, panelState);
-        },
-        {
-          query: oracleQuerySchema,
-        },
-      ),
     );
+
+/**
+ * Creates server-rendered page routes.
+ *
+ * @param oracleService Oracle domain service.
+ * @returns Elysia route group.
+ */
+export const createPageRoutes = (oracleService: OracleService) =>
+  new Elysia({ name: "page-routes" })
+    .use(createOraclePageRoutes(oracleService))
+    .use(createStaticPageRoutes());

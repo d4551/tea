@@ -1,10 +1,21 @@
-import { Container, WebGLRenderer as PixiWebGLRenderer, Sprite, Ticker } from "pixi.js";
+import {
+  Assets,
+  Container,
+  WebGLRenderer as PixiWebGLRenderer,
+  Rectangle,
+  Sprite,
+  Texture,
+  Ticker,
+} from "pixi.js";
+import { gameSpriteManifests } from "../domain/game/data/sprite-data.ts";
 import { appRoutes, interpolateRoutePath } from "../shared/constants/routes.ts";
 import type {
   EntityState,
   GameCommand,
   GameSceneState,
   NpcState,
+  SpriteAnimationConfig,
+  SpriteManifest,
 } from "../shared/contracts/game.ts";
 import { readLocalStorage, writeLocalStorage } from "../shared/utils/browser-storage.ts";
 import { safeJsonParse } from "../shared/utils/safe-json.ts";
@@ -23,16 +34,94 @@ type WsGameFrame = {
   readonly state?: GameSceneState;
   readonly player?: EntityState;
   readonly npcs?: readonly NpcState[];
+  readonly commandQueueDepth?: number;
+  readonly resumeToken?: string;
+  readonly resumeTokenExpiresAtMs?: number;
+};
+
+type LoadedSceneAssets = {
+  readonly backgroundTexture: Texture;
+};
+
+type RestoreSessionResponse = {
+  readonly ok: true;
+  readonly data: {
+    readonly sessionId: string;
+    readonly locale: string;
+    readonly timestamp: string;
+    readonly state: GameSceneState;
+    readonly commandQueueDepth?: number;
+    readonly resumeToken?: string;
+    readonly resumeTokenExpiresAtMs?: number;
+    readonly version?: number;
+  };
+};
+
+type GameClientRuntimeConfig = {
+  readonly commandSendIntervalMs: number;
+  readonly commandTtlMs: number;
+  readonly socketReconnectDelayMs: number;
+  readonly restoreRequestTimeoutMs: number;
+  readonly restoreMaxAttempts: number;
 };
 
 const SESSION_META_KEY = "lotfk:game:session-meta";
-const COMMAND_SEND_INTERVAL_MS = 50;
-const COMMAND_TTL_FALLBACK_MS = 60_000;
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 const readMeta = (selector: string): HTMLMetaElement | null =>
   document.querySelector<HTMLMetaElement>(selector);
 
-const readSessionMeta = (): PersistedSessionMeta | null => {
+const resolveSpriteManifest = (characterKey: string): SpriteManifest | null =>
+  gameSpriteManifests[characterKey] ?? null;
+
+const parsePositiveInteger = (rawValue: string | undefined): number | null => {
+  const value = Number.parseInt(rawValue ?? "", 10);
+  if (!Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  return value;
+};
+
+const readClientRuntimeConfig = (): GameClientRuntimeConfig | null => {
+  const commandSendIntervalMs = parsePositiveInteger(
+    readMeta('meta[name="game-client-command-send-interval-ms"]')?.dataset
+      .gameClientCommandSendIntervalMs,
+  );
+  const commandTtlMs = parsePositiveInteger(
+    readMeta('meta[name="game-client-command-ttl-ms"]')?.dataset.gameClientCommandTtlMs,
+  );
+  const socketReconnectDelayMs = parsePositiveInteger(
+    readMeta('meta[name="game-client-socket-reconnect-delay-ms"]')?.dataset
+      .gameClientSocketReconnectDelayMs,
+  );
+  const restoreRequestTimeoutMs = parsePositiveInteger(
+    readMeta('meta[name="game-client-restore-request-timeout-ms"]')?.dataset
+      .gameClientRestoreRequestTimeoutMs,
+  );
+  const restoreMaxAttempts = parsePositiveInteger(
+    readMeta('meta[name="game-client-restore-max-attempts"]')?.dataset.gameClientRestoreMaxAttempts,
+  );
+  if (
+    !commandSendIntervalMs ||
+    !commandTtlMs ||
+    !socketReconnectDelayMs ||
+    !restoreRequestTimeoutMs ||
+    !restoreMaxAttempts
+  ) {
+    return null;
+  }
+
+  return {
+    commandSendIntervalMs,
+    commandTtlMs,
+    socketReconnectDelayMs,
+    restoreRequestTimeoutMs: Math.min(restoreRequestTimeoutMs, commandTtlMs),
+    restoreMaxAttempts,
+  };
+};
+
+const readSessionMeta = (runtimeConfig: GameClientRuntimeConfig): PersistedSessionMeta | null => {
   const sessionMeta = readMeta('meta[name="game-session-id"]');
   if (!sessionMeta) {
     return null;
@@ -57,12 +146,12 @@ const readSessionMeta = (): PersistedSessionMeta | null => {
       readMeta('meta[name="game-session-version"]')?.dataset.gameSessionVersion ?? "1",
       10,
     ) || 1;
-  const resumeWindowMs =
+  const expiresAtMs =
     Number.parseInt(
-      readMeta('meta[name="game-session-resume-window-ms"]')?.dataset.gameSessionResumeWindowMs ??
-        "",
+      readMeta('meta[name="game-session-resume-expires-at-ms"]')?.dataset
+        .gameSessionResumeExpiresAtMs ?? "",
       10,
-    ) || COMMAND_TTL_FALLBACK_MS;
+    ) || Date.now() + runtimeConfig.commandTtlMs;
 
   const runtimeMeta: PersistedSessionMeta = {
     sessionId,
@@ -70,7 +159,7 @@ const readSessionMeta = (): PersistedSessionMeta | null => {
     locale,
     commandQueueDepth,
     version,
-    expiresAtMs: Date.now() + Math.max(resumeWindowMs, COMMAND_TTL_FALLBACK_MS),
+    expiresAtMs,
   };
 
   const storedRaw = readLocalStorage(SESSION_META_KEY);
@@ -99,12 +188,15 @@ const readSessionMeta = (): PersistedSessionMeta | null => {
   return runtimeMeta;
 };
 
-const persistSessionMeta = (meta: PersistedSessionMeta): void => {
+const persistSessionMeta = (
+  meta: PersistedSessionMeta,
+  runtimeConfig: GameClientRuntimeConfig,
+): void => {
   writeLocalStorage(
     SESSION_META_KEY,
     JSON.stringify({
       ...meta,
-      expiresAtMs: Math.max(meta.expiresAtMs, Date.now() + COMMAND_TTL_FALLBACK_MS),
+      expiresAtMs: Math.max(meta.expiresAtMs, Date.now() + runtimeConfig.commandTtlMs),
     }),
   );
 };
@@ -120,7 +212,13 @@ const buildSessionSocketUrl = (sessionId: string, resumeToken: string): string =
   return target.toString();
 };
 
-const parseGameStateFromMessage = (incoming: unknown): GameSceneState | null => {
+const buildSessionRestoreUrl = (sessionId: string): string => {
+  const path = interpolateRoutePath(appRoutes.gameApiSessionRestore, { id: sessionId });
+  const target = new URL(path, window.location.origin);
+  return target.toString();
+};
+
+const parseGameFrameFromMessage = (incoming: unknown): WsGameFrame | null => {
   if (typeof incoming !== "string" && typeof incoming !== "object") {
     return null;
   }
@@ -135,13 +233,16 @@ const parseGameStateFromMessage = (incoming: unknown): GameSceneState | null => 
     return null;
   }
 
-  const candidate = payload as Partial<WsGameFrame>;
-  if (candidate.player && candidate.npcs) {
-    return candidate as GameSceneState;
+  return payload as WsGameFrame;
+};
+
+const resolveFrameState = (frame: WsGameFrame): GameSceneState | null => {
+  if (frame.state && typeof frame.state === "object") {
+    return frame.state as GameSceneState;
   }
 
-  if (candidate.state && typeof candidate.state === "object") {
-    return candidate.state as GameSceneState;
+  if (frame.player && frame.npcs) {
+    return frame as GameSceneState;
   }
 
   return null;
@@ -162,7 +263,7 @@ const setQueueDepth = (queueBadge: HTMLElement | null, depth: number): void => {
 
 const setConnectionStatus = (
   statusBadge: HTMLElement | null,
-  state: "connecting" | "connected" | "disconnected",
+  state: "connecting" | "connected" | "disconnected" | "reconnecting" | "expired" | "missing",
   closeCode?: number,
 ): void => {
   if (!statusBadge) {
@@ -179,8 +280,51 @@ const setConnectionStatus = (
     return;
   }
 
+  if (state === "reconnecting") {
+    statusBadge.textContent = statusBadge.dataset.reconnectingLabel ?? "reconnecting";
+    return;
+  }
+
+  if (state === "expired") {
+    statusBadge.textContent = statusBadge.dataset.expiredLabel ?? "session expired";
+    return;
+  }
+
+  if (state === "missing") {
+    statusBadge.textContent = statusBadge.dataset.missingLabel ?? "session missing";
+    return;
+  }
+
   const prefix = statusBadge.dataset.disconnectedPrefix ?? statusBadge.textContent ?? "";
   statusBadge.textContent = typeof closeCode === "number" ? `${prefix} (${closeCode})` : prefix;
+};
+
+const resolveAnimation = (
+  manifest: SpriteManifest,
+  animationKey: string,
+  facing: EntityState["facing"],
+): SpriteAnimationConfig => {
+  const animation =
+    manifest.animations[animationKey] ??
+    manifest.animations[`idle-${facing}`] ??
+    Object.values(manifest.animations)[0];
+  if (animation) {
+    return animation;
+  }
+
+  throw new Error(`Sprite manifest is missing animations for ${animationKey}`);
+};
+
+const resolveAnimationFrameIndex = (
+  state: GameSceneState,
+  animation: SpriteAnimationConfig,
+): number => {
+  if (animation.frames <= 1) {
+    return 0;
+  }
+
+  const framesElapsed = Math.floor((state.worldTimeMs / 1000) * animation.speed);
+  return framesElapsed % animation.frames;
 };
 
 const initGameClient = async (): Promise<void> => {
@@ -189,11 +333,17 @@ const initGameClient = async (): Promise<void> => {
     return;
   }
 
-  const sessionMeta = readSessionMeta();
+  const runtimeConfig = readClientRuntimeConfig();
+  if (!runtimeConfig) {
+    return;
+  }
+
+  const sessionMeta = readSessionMeta(runtimeConfig);
   if (!sessionMeta) {
     return;
   }
 
+  let runtimeSessionMeta = sessionMeta;
   const threeLayer = new ThreeLayer(wrapper.clientWidth, wrapper.clientHeight);
   threeLayer.addTeaHouseEffects();
   wrapper.appendChild(threeLayer.renderer.domElement);
@@ -208,52 +358,377 @@ const initGameClient = async (): Promise<void> => {
   });
 
   const stage = new Container();
+  stage.sortableChildren = true;
+
+  const world = new Container();
+  world.sortableChildren = true;
+  stage.addChild(world);
+
   const sprites = new Map<string, Sprite>();
   const queueBadge = document.getElementById("game-command-queue");
   const statusBadge = document.getElementById("game-connection-status");
+  const reconnectButton = document.getElementById("game-reconnect") as HTMLButtonElement | null;
+  const connectionAlert = document.getElementById("game-connection-alert");
+  const connectionAlertText = document.getElementById("game-connection-alert-text");
+  const loadedTextures = new Map<string, Texture>();
+  const frameTextures = new Map<string, Texture>();
+  let backgroundSprite: Sprite | null = null;
   let commandSequence = 0;
-  let commandQueueDepth = sessionMeta.commandQueueDepth;
+  let commandQueueDepth = runtimeSessionMeta.commandQueueDepth;
   let lastState: GameSceneState | null = null;
   let targetState: GameSceneState | null = null;
+  let activeSocket: WebSocket | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let restoreAbortController: AbortController | null = null;
+  let isDisposed = false;
+  let connectionMode: "connected" | "reconnecting" | "expired" | "missing" | "disconnected" =
+    "disconnected";
 
-  setQueueDepth(queueBadge, commandQueueDepth);
-  setConnectionStatus(statusBadge, "connecting");
-
-  const socket = new WebSocket(
-    buildSessionSocketUrl(sessionMeta.sessionId, sessionMeta.resumeToken),
-  );
-  socket.addEventListener("open", () => {
-    setConnectionStatus(statusBadge, "connected");
-  });
-  socket.addEventListener("message", (message) => {
-    const state = parseGameStateFromMessage(message.data);
-    if (!state) {
+  const setReconnectVisible = (visible: boolean): void => {
+    if (!reconnectButton) {
+      return;
+    }
+    reconnectButton.textContent =
+      reconnectButton.dataset.reconnectLabel ?? reconnectButton.textContent;
+    reconnectButton.classList.toggle("hidden", !visible);
+  };
+  const setConnectionAlert = (
+    message: string | null,
+    tone: "info" | "warning" | "error" = "warning",
+  ): void => {
+    if (!connectionAlert || !connectionAlertText) {
       return;
     }
 
-    lastState = targetState;
-    targetState = state;
-    commandQueueDepth = Math.max(commandQueueDepth - 1, 0);
-    setQueueDepth(queueBadge, commandQueueDepth);
-  });
-  socket.addEventListener("close", (event) => {
-    setConnectionStatus(statusBadge, "disconnected", event.code);
-  });
+    connectionAlert.classList.toggle("hidden", !message);
+    connectionAlert.classList.remove("alert-info", "alert-warning", "alert-error");
+    connectionAlert.classList.add(
+      tone === "error" ? "alert-error" : tone === "info" ? "alert-info" : "alert-warning",
+    );
+    connectionAlertText.textContent = message ?? "";
+  };
+  const clearReconnectTimer = (): void => {
+    if (!reconnectTimer) {
+      return;
+    }
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  };
+  const cancelRestoreRequest = (): void => {
+    if (!restoreAbortController) {
+      return;
+    }
+    restoreAbortController.abort();
+    restoreAbortController = null;
+  };
+  const scheduleReconnect = (): void => {
+    clearReconnectTimer();
+    reconnectTimer = setTimeout(() => {
+      if (isDisposed) {
+        return;
+      }
+      connectSocket();
+    }, runtimeConfig.socketReconnectDelayMs);
+  };
+
+  setQueueDepth(queueBadge, commandQueueDepth);
+  setConnectionStatus(statusBadge, "connecting");
+  setConnectionAlert(null);
+
+  const ensureTextureLoaded = async (assetUrl: string): Promise<Texture> => {
+    const cached = loadedTextures.get(assetUrl);
+    if (cached) {
+      return cached;
+    }
+
+    const texture = (await Assets.load(assetUrl)) as Texture;
+    loadedTextures.set(assetUrl, texture);
+    return texture;
+  };
+
+  const ensureSceneAssetsLoaded = async (state: GameSceneState): Promise<LoadedSceneAssets> => {
+    const uniqueSheetUrls = new Set<string>([state.background]);
+    const entities: readonly (EntityState | NpcState)[] = [state.player, ...state.npcs];
+
+    for (const entity of entities) {
+      const manifest = resolveSpriteManifest(entity.characterKey);
+      if (manifest) {
+        uniqueSheetUrls.add(manifest.sheet);
+      }
+    }
+
+    await Promise.all(
+      Array.from(uniqueSheetUrls.values(), (assetUrl) => ensureTextureLoaded(assetUrl)),
+    );
+    const backgroundTexture = loadedTextures.get(state.background) ?? Texture.EMPTY;
+
+    if (!backgroundSprite) {
+      backgroundSprite = new Sprite(backgroundTexture);
+      backgroundSprite.zIndex = -10_000;
+      world.addChildAt(backgroundSprite, 0);
+    } else {
+      backgroundSprite.texture = backgroundTexture;
+    }
+
+    backgroundSprite.x = 0;
+    backgroundSprite.y = 0;
+    backgroundSprite.width = state.geometry.width;
+    backgroundSprite.height = state.geometry.height;
+
+    return { backgroundTexture };
+  };
+
+  const resolveEntityTexture = (state: GameSceneState, entity: EntityState | NpcState): Texture => {
+    const manifest = resolveSpriteManifest(entity.characterKey);
+    if (!manifest) {
+      return Texture.EMPTY;
+    }
+
+    const sheetTexture = loadedTextures.get(manifest.sheet);
+    if (!sheetTexture) {
+      return Texture.EMPTY;
+    }
+
+    const animation = resolveAnimation(manifest, entity.animation, entity.facing);
+    const frameIndex = resolveAnimationFrameIndex(state, animation);
+    const column = animation.startCol + frameIndex;
+    const cacheKey = `${manifest.sheet}:${animation.row}:${column}`;
+    const cached = frameTextures.get(cacheKey);
+
+    if (cached) {
+      return cached;
+    }
+
+    const texture = new Texture({
+      source: sheetTexture.source,
+      frame: new Rectangle(
+        column * manifest.frameWidth,
+        animation.row * manifest.frameHeight,
+        manifest.frameWidth,
+        manifest.frameHeight,
+      ),
+    });
+
+    frameTextures.set(cacheKey, texture);
+    return texture;
+  };
+
+  const syncRuntimeMeta = (frame: WsGameFrame): void => {
+    const nextResumeToken =
+      typeof frame.resumeToken === "string" && frame.resumeToken.length > 0
+        ? frame.resumeToken
+        : runtimeSessionMeta.resumeToken;
+    const nextExpiry =
+      typeof frame.resumeTokenExpiresAtMs === "number" &&
+      Number.isFinite(frame.resumeTokenExpiresAtMs)
+        ? frame.resumeTokenExpiresAtMs
+        : runtimeSessionMeta.expiresAtMs;
+
+    runtimeSessionMeta = {
+      ...runtimeSessionMeta,
+      resumeToken: nextResumeToken,
+      expiresAtMs: nextExpiry,
+      commandQueueDepth:
+        typeof frame.commandQueueDepth === "number" ? frame.commandQueueDepth : commandQueueDepth,
+    };
+    persistSessionMeta(runtimeSessionMeta, runtimeConfig);
+  };
+
+  const attemptRestoreSession = async (): Promise<boolean> => {
+    if (runtimeSessionMeta.resumeToken.length === 0) {
+      return false;
+    }
+
+    for (let attempt = 0; attempt < runtimeConfig.restoreMaxAttempts; attempt += 1) {
+      cancelRestoreRequest();
+      const controller = new AbortController();
+      restoreAbortController = controller;
+      const timeoutHandle = setTimeout(
+        () => controller.abort(),
+        runtimeConfig.restoreRequestTimeoutMs,
+      );
+
+      try {
+        const response = await fetch(buildSessionRestoreUrl(runtimeSessionMeta.sessionId), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          credentials: "same-origin",
+          signal: controller.signal,
+          body: JSON.stringify({
+            resumeToken: runtimeSessionMeta.resumeToken,
+          }),
+        });
+        if (!response.ok) {
+          if (response.status >= 500 && attempt + 1 < runtimeConfig.restoreMaxAttempts) {
+            await delay(runtimeConfig.socketReconnectDelayMs);
+            continue;
+          }
+          return false;
+        }
+
+        const payload = (await response.json()) as RestoreSessionResponse;
+        if (!payload.ok) {
+          return false;
+        }
+
+        runtimeSessionMeta = {
+          ...runtimeSessionMeta,
+          resumeToken: payload.data.resumeToken ?? runtimeSessionMeta.resumeToken,
+          expiresAtMs: payload.data.resumeTokenExpiresAtMs ?? runtimeSessionMeta.expiresAtMs,
+          commandQueueDepth: payload.data.commandQueueDepth ?? runtimeSessionMeta.commandQueueDepth,
+          locale: payload.data.locale,
+          version: payload.data.version ?? runtimeSessionMeta.version,
+        };
+        persistSessionMeta(runtimeSessionMeta, runtimeConfig);
+        commandQueueDepth = runtimeSessionMeta.commandQueueDepth;
+        setQueueDepth(queueBadge, commandQueueDepth);
+        return true;
+      } catch (error) {
+        if (controller.signal.aborted && attempt + 1 < runtimeConfig.restoreMaxAttempts) {
+          await delay(runtimeConfig.socketReconnectDelayMs);
+          continue;
+        }
+        if (
+          error instanceof Error &&
+          error.name === "AbortError" &&
+          attempt + 1 < runtimeConfig.restoreMaxAttempts
+        ) {
+          await delay(runtimeConfig.socketReconnectDelayMs);
+          continue;
+        }
+        return false;
+      } finally {
+        clearTimeout(timeoutHandle);
+        if (restoreAbortController === controller) {
+          restoreAbortController = null;
+        }
+      }
+    }
+    return false;
+  };
+
+  const connectSocket = (): void => {
+    if (isDisposed) {
+      return;
+    }
+    if (
+      activeSocket?.readyState === WebSocket.OPEN ||
+      activeSocket?.readyState === WebSocket.CONNECTING
+    ) {
+      return;
+    }
+
+    connectionMode =
+      connectionMode === "expired" || connectionMode === "missing"
+        ? connectionMode
+        : "reconnecting";
+    clearReconnectTimer();
+    setConnectionStatus(statusBadge, "connecting");
+    setReconnectVisible(false);
+    setConnectionAlert(null);
+    const socket = new WebSocket(
+      buildSessionSocketUrl(runtimeSessionMeta.sessionId, runtimeSessionMeta.resumeToken),
+    );
+    activeSocket = socket;
+
+    socket.addEventListener("open", () => {
+      if (activeSocket !== socket || isDisposed) {
+        return;
+      }
+      connectionMode = "connected";
+      setConnectionStatus(statusBadge, "connected");
+      setReconnectVisible(false);
+      setConnectionAlert(null);
+      persistSessionMeta(runtimeSessionMeta, runtimeConfig);
+    });
+
+    socket.addEventListener("message", (message) => {
+      if (activeSocket !== socket || isDisposed) {
+        return;
+      }
+      const frame = parseGameFrameFromMessage(message.data);
+      if (!frame) {
+        return;
+      }
+
+      const state = resolveFrameState(frame);
+      if (!state) {
+        return;
+      }
+
+      void ensureSceneAssetsLoaded(state);
+      syncRuntimeMeta(frame);
+      lastState = targetState;
+      targetState = state;
+      commandQueueDepth =
+        typeof frame.commandQueueDepth === "number" ? frame.commandQueueDepth : commandQueueDepth;
+      setQueueDepth(queueBadge, commandQueueDepth);
+    });
+
+    socket.addEventListener("close", (event) => {
+      if (activeSocket !== socket) {
+        return;
+      }
+      activeSocket = null;
+      if (isDisposed) {
+        return;
+      }
+
+      if (event.code === 4404) {
+        connectionMode = "missing";
+        setConnectionStatus(statusBadge, "missing", event.code);
+        setReconnectVisible(true);
+        setConnectionAlert(statusBadge?.dataset.missingLabel ?? "session missing", "warning");
+        return;
+      }
+
+      const tokenExpired = event.code === 4408 || runtimeSessionMeta.expiresAtMs <= Date.now();
+      if (tokenExpired) {
+        connectionMode = "reconnecting";
+        setConnectionStatus(statusBadge, "reconnecting", event.code);
+        setReconnectVisible(false);
+        setConnectionAlert(statusBadge?.dataset.reconnectingLabel ?? "reconnecting", "info");
+        void attemptRestoreSession()
+          .then((restored) => {
+            if (restored) {
+              connectSocket();
+              return;
+            }
+            connectionMode = "expired";
+            setConnectionStatus(statusBadge, "expired", event.code);
+            setReconnectVisible(true);
+            setConnectionAlert(statusBadge?.dataset.expiredLabel ?? "session expired", "error");
+          })
+          .catch(() => {
+            connectionMode = "expired";
+            setConnectionStatus(statusBadge, "expired", event.code);
+            setReconnectVisible(true);
+            setConnectionAlert(statusBadge?.dataset.expiredLabel ?? "session expired", "error");
+          });
+        return;
+      }
+
+      connectionMode = "reconnecting";
+      setConnectionStatus(statusBadge, "reconnecting", event.code);
+      setConnectionAlert(statusBadge?.dataset.reconnectingLabel ?? "reconnecting", "info");
+      scheduleReconnect();
+    });
+  };
 
   const sendEnvelope = (command: GameCommand): void => {
-    if (socket.readyState !== WebSocket.OPEN) {
+    if (activeSocket?.readyState !== WebSocket.OPEN) {
       return;
     }
 
     commandSequence += 1;
-    socket.send(
+    activeSocket.send(
       JSON.stringify({
         commandId: crypto.randomUUID(),
         source: "ws",
-        locale: sessionMeta.locale,
+        locale: runtimeSessionMeta.locale,
         sequenceId: commandSequence,
         timestamp: new Date().toISOString(),
-        ttlMs: COMMAND_TTL_FALLBACK_MS,
+        ttlMs: runtimeConfig.commandTtlMs,
         command,
       } satisfies {
         readonly commandId: string;
@@ -265,10 +740,41 @@ const initGameClient = async (): Promise<void> => {
         readonly command: GameCommand;
       }),
     );
-
-    commandQueueDepth += 1;
-    setQueueDepth(queueBadge, commandQueueDepth);
   };
+
+  reconnectButton?.addEventListener("click", () => {
+    if (isDisposed) {
+      return;
+    }
+    setReconnectVisible(false);
+    setConnectionAlert(null);
+    if (connectionMode === "missing") {
+      window.location.reload();
+      return;
+    }
+
+    connectionMode = "reconnecting";
+    setConnectionStatus(statusBadge, "reconnecting");
+    void attemptRestoreSession()
+      .then((restored) => {
+        if (restored) {
+          connectSocket();
+          return;
+        }
+        connectionMode = "expired";
+        setConnectionStatus(statusBadge, "expired");
+        setReconnectVisible(true);
+        setConnectionAlert(statusBadge?.dataset.expiredLabel ?? "session expired", "error");
+      })
+      .catch(() => {
+        connectionMode = "expired";
+        setConnectionStatus(statusBadge, "expired");
+        setReconnectVisible(true);
+        setConnectionAlert(statusBadge?.dataset.expiredLabel ?? "session expired", "error");
+      });
+  });
+
+  connectSocket();
 
   window.addEventListener("resize", () => {
     threeLayer.resize(wrapper.clientWidth, wrapper.clientHeight);
@@ -290,7 +796,7 @@ const initGameClient = async (): Promise<void> => {
     }
 
     if (event.key === "Escape") {
-      sendEnvelope({ type: "closeDialogue" });
+      sendEnvelope({ type: "confirmDialogue" });
       event.preventDefault();
     }
   });
@@ -302,15 +808,31 @@ const initGameClient = async (): Promise<void> => {
   const ticker = new Ticker();
   ticker.add((time) => {
     const now = performance.now();
-    if (now - lastMoveSentAt > COMMAND_SEND_INTERVAL_MS) {
+    if (now - lastMoveSentAt > runtimeConfig.commandSendIntervalMs) {
       if (keysHeld.has("w") || keysHeld.has("ArrowUp")) {
-        sendEnvelope({ type: "move", direction: "up", durationMs: COMMAND_SEND_INTERVAL_MS });
+        sendEnvelope({
+          type: "move",
+          direction: "up",
+          durationMs: runtimeConfig.commandSendIntervalMs,
+        });
       } else if (keysHeld.has("s") || keysHeld.has("ArrowDown")) {
-        sendEnvelope({ type: "move", direction: "down", durationMs: COMMAND_SEND_INTERVAL_MS });
+        sendEnvelope({
+          type: "move",
+          direction: "down",
+          durationMs: runtimeConfig.commandSendIntervalMs,
+        });
       } else if (keysHeld.has("a") || keysHeld.has("ArrowLeft")) {
-        sendEnvelope({ type: "move", direction: "left", durationMs: COMMAND_SEND_INTERVAL_MS });
+        sendEnvelope({
+          type: "move",
+          direction: "left",
+          durationMs: runtimeConfig.commandSendIntervalMs,
+        });
       } else if (keysHeld.has("d") || keysHeld.has("ArrowRight")) {
-        sendEnvelope({ type: "move", direction: "right", durationMs: COMMAND_SEND_INTERVAL_MS });
+        sendEnvelope({
+          type: "move",
+          direction: "right",
+          durationMs: runtimeConfig.commandSendIntervalMs,
+        });
       }
       lastMoveSentAt = now;
     }
@@ -319,9 +841,10 @@ const initGameClient = async (): Promise<void> => {
       renderState(
         targetState,
         lastState,
-        Math.min((now - lastMoveSentAt) / COMMAND_SEND_INTERVAL_MS, 1),
+        Math.min((now - lastMoveSentAt) / runtimeConfig.commandSendIntervalMs, 1),
         sprites,
-        stage,
+        world,
+        resolveEntityTexture,
       );
     }
 
@@ -331,14 +854,16 @@ const initGameClient = async (): Promise<void> => {
   });
   ticker.start();
 
-  persistSessionMeta({
-    sessionId: sessionMeta.sessionId,
-    resumeToken: sessionMeta.resumeToken,
-    locale: sessionMeta.locale,
-    commandQueueDepth,
-    version: sessionMeta.version,
-    expiresAtMs: sessionMeta.expiresAtMs,
+  window.addEventListener("beforeunload", () => {
+    isDisposed = true;
+    clearReconnectTimer();
+    cancelRestoreRequest();
+    activeSocket?.close();
+    activeSocket = null;
+    ticker.stop();
   });
+
+  persistSessionMeta(runtimeSessionMeta, runtimeConfig);
 };
 
 const renderState = (
@@ -346,17 +871,19 @@ const renderState = (
   previous: GameSceneState | null,
   alpha: number,
   sprites: Map<string, Sprite>,
-  stage: Container,
+  world: Container,
+  resolveEntityTexture: (state: GameSceneState, entity: EntityState | NpcState) => Texture,
 ): void => {
   const entities: readonly (EntityState | NpcState)[] = [current.player, ...current.npcs];
 
   for (const entity of entities) {
+    const manifest = resolveSpriteManifest(entity.characterKey);
     const sprite =
       sprites.get(entity.id) ??
       (() => {
         const created = new Sprite();
-        created.anchor.set(0.5, 1);
-        stage.addChild(created);
+        created.anchor.set(0, 0);
+        world.addChild(created);
         sprites.set(entity.id, created);
         return created;
       })();
@@ -367,11 +894,13 @@ const renderState = (
         : previous?.npcs.find((npc) => npc.id === entity.id);
     const previousX = previousEntity?.position.x ?? entity.position.x;
     const previousY = previousEntity?.position.y ?? entity.position.y;
-    sprite.x = previousX + (entity.position.x - previousX) * alpha - (current.camera.x ?? 0);
-    sprite.y = previousY + (entity.position.y - previousY) * alpha - (current.camera.y ?? 0);
-  }
 
-  stage.children.sort((left, right) => left.y - right.y);
+    sprite.texture = resolveEntityTexture(current, entity);
+    sprite.scale.set(manifest?.scale ?? 1);
+    sprite.x = previousX + (entity.position.x - previousX) * alpha - current.camera.x;
+    sprite.y = previousY + (entity.position.y - previousY) * alpha - current.camera.y;
+    sprite.zIndex = sprite.y;
+  }
 };
 
 void initGameClient().catch(() => {

@@ -1,6 +1,7 @@
 import { resolveSpriteManifest } from "../../../shared/config/game-config.ts";
 import type {
   Direction,
+  GameDialogueEntry,
   GameLocale,
   GameSceneState,
   NpcStateMachine,
@@ -9,6 +10,51 @@ import type {
 import { resolveGameText } from "../data/game-text.ts";
 import { gameSpriteManifests } from "../data/sprite-data.ts";
 
+const COLLISION_SIZE_RATIO = 0.4;
+
+const createLocalBounds = (
+  frameWidth: number,
+  frameHeight: number,
+): {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+} => {
+  const width = Math.max(16, Math.floor(frameWidth * COLLISION_SIZE_RATIO));
+  const height = Math.max(24, Math.floor(frameHeight * COLLISION_SIZE_RATIO));
+
+  return {
+    x: Math.max(0, Math.floor((frameWidth - width) / 2)),
+    y: Math.max(0, frameHeight - height),
+    width,
+    height,
+  };
+};
+
+const resolveDialogueEntryText = (
+  locale: GameLocale,
+  key: string,
+  dialogues: Readonly<Record<string, string>>,
+): string => dialogues[key] ?? resolveGameText(locale, key);
+
+const buildDialogueEntries = (
+  locale: GameLocale,
+  _sceneDefinition: SceneDefinition,
+  npcDefinition: SceneDefinition["npcs"][number],
+  dialogues: Readonly<Record<string, string>>,
+): readonly GameDialogueEntry[] => {
+  const keys = [
+    ...(npcDefinition.ai.greetOnApproach ? [npcDefinition.ai.greetLineKey] : []),
+    ...npcDefinition.dialogueKeys,
+  ].filter((key, index, values) => values.indexOf(key) === index);
+
+  return keys.map((key) => ({
+    key,
+    text: resolveDialogueEntryText(locale, key, dialogues),
+  }));
+};
+
 /**
  * Build the initial scene state from canonical scene definitions.
  */
@@ -16,16 +62,12 @@ export const buildSessionSceneState = (
   sceneDefinition: SceneDefinition,
   locale: GameLocale,
   seed: number,
+  dialogues: Readonly<Record<string, string>> = {},
 ): GameSceneState => {
   const playerManifest = resolveSpriteManifest("chaJiang");
   const playerBounds = playerManifest
-    ? {
-        x: sceneDefinition.spawn.x,
-        y: sceneDefinition.spawn.y,
-        width: Math.floor(playerManifest.frameWidth * 0.4),
-        height: Math.floor(playerManifest.frameHeight * 0.4),
-      }
-    : { x: sceneDefinition.spawn.x, y: sceneDefinition.spawn.y, width: 40, height: 80 };
+    ? createLocalBounds(playerManifest.frameWidth, playerManifest.frameHeight)
+    : { x: 8, y: 48, width: 40, height: 80 };
 
   const playerState = {
     id: "player",
@@ -47,13 +89,9 @@ export const buildSessionSceneState = (
     const npcManifest = manifest ?? gameSpriteManifests[npcDefinition.characterKey];
 
     const bounds = npcManifest
-      ? {
-          x: npcDefinition.x,
-          y: npcDefinition.y,
-          width: Math.floor(npcManifest.frameWidth * 0.4),
-          height: Math.floor(npcManifest.frameHeight * 0.4),
-        }
-      : { x: npcDefinition.x, y: npcDefinition.y, width: 40, height: 80 };
+      ? createLocalBounds(npcManifest.frameWidth, npcManifest.frameHeight)
+      : { x: 8, y: 48, width: 40, height: 80 };
+    const dialogueEntries = buildDialogueEntries(locale, sceneDefinition, npcDefinition, dialogues);
 
     return {
       id: `npc-${npcDefinition.characterKey}-${index}`,
@@ -67,7 +105,13 @@ export const buildSessionSceneState = (
       bounds,
       aiEnabled: true,
       dialogueIndex: 0,
-      dialogueLineKeys: [...npcDefinition.dialogueKeys],
+      dialogueLineKeys: dialogueEntries.map((entry) => entry.key),
+      dialogueEntries,
+      interactRadius: npcDefinition.interactRadius,
+      homePosition: { x: npcDefinition.x, y: npcDefinition.y },
+      aiProfile: {
+        ...npcDefinition.ai,
+      },
       active: false,
       state: "idle" as NpcStateMachine,
     };
@@ -75,6 +119,9 @@ export const buildSessionSceneState = (
 
   return {
     sceneId: sceneDefinition.id,
+    sceneTitle: resolveGameText(locale, sceneDefinition.titleKey),
+    background: sceneDefinition.background,
+    geometry: sceneDefinition.geometry,
     player: playerState,
     npcs,
     collisions: sceneDefinition.collisions,

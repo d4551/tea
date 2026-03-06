@@ -54,6 +54,7 @@ export const renderNpcEditor = (
         {
           locale,
           projectId,
+          sceneId,
         },
       );
       return `
@@ -110,33 +111,91 @@ export const renderNpcEditor = (
     </div>`;
 };
 /**
- * Renders the NPC detail card for a single NPC.
+ * Renders an editable NPC detail form for HTMX updates.
  *
  * @param messages Locale-resolved messages.
- * @param npc NPC definition to render.
- * @returns HTML string for NPC detail card.
+ * @param npc NPC to edit.
+ * @param locale Active locale.
+ * @param projectId Active project id.
+ * @param sceneId Owning scene id.
+ * @returns HTML string for the editable NPC card.
  */
-export const renderNpcDetail = (messages: Messages, npc: SceneNpcDefinition): string => `
-  <div class="card bg-base-100 shadow-sm">
-    <div class="card-body">
-      <h2 class="card-title">${escapeHtml(messages.builder.editNpc)}: ${escapeHtml(npc.characterKey)}</h2>
-      <dl class="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div>
-          <dt class="text-sm font-semibold text-base-content/70">${escapeHtml(messages.builder.npcPosition)}</dt>
-          <dd>${npc.x}, ${npc.y}</dd>
+export const renderNpcDetail = (
+  messages: Messages,
+  npc: SceneNpcDefinition,
+  locale: LocaleCode,
+  projectId: string,
+  sceneId: string,
+): string => {
+  const formAction = withQueryParameters(
+    `${appRoutes.builderApiNpcs}/${encodeURIComponent(npc.characterKey)}/form`,
+    {
+      locale,
+      projectId,
+      sceneId,
+    },
+  );
+  const dialogueKeys = npc.dialogueKeys.join(", ");
+
+  return `
+    <div class="card bg-base-100 shadow-sm">
+      <form
+        class="card-body gap-4"
+        hx-post="${escapeHtml(formAction)}"
+        hx-target="#npc-detail"
+        hx-swap="innerHTML"
+      >
+        <h2 class="card-title">${escapeHtml(messages.builder.editNpc)}: ${escapeHtml(npc.characterKey)}</h2>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.npcName)}</legend>
+          <input name="labelKey" type="text" class="input input-bordered w-full" value="${escapeHtml(npc.labelKey)}" required />
+        </fieldset>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">${escapeHtml(messages.builder.npcPosition)}</legend>
+            <label class="label" for="npc-x">${escapeHtml(messages.builder.xLabel)}</label>
+            <input id="npc-x" name="x" type="number" class="input input-bordered w-full" value="${npc.x}" required />
+            <label class="label" for="npc-y">${escapeHtml(messages.builder.yLabel)}</label>
+            <input id="npc-y" name="y" type="number" class="input input-bordered w-full" value="${npc.y}" required />
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">${escapeHtml(messages.builder.geometry)}</legend>
+            <label class="label" for="npc-interact-radius">${escapeHtml(messages.builder.wanderRadius)}</label>
+            <input id="npc-interact-radius" name="interactRadius" type="number" class="input input-bordered w-full" value="${npc.interactRadius}" min="1" required />
+            <label class="label" for="npc-wander-radius">${escapeHtml(messages.builder.wanderRadius)}</label>
+            <input id="npc-wander-radius" name="wanderRadius" type="number" class="input input-bordered w-full" value="${npc.ai.wanderRadius}" min="0" required />
+          </fieldset>
         </div>
-        <div>
-          <dt class="text-sm font-semibold text-base-content/70">${escapeHtml(messages.builder.wanderRadius)}</dt>
-          <dd>${npc.ai.wanderRadius} px</dd>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">${escapeHtml(messages.builder.wanderSpeed)}</legend>
+            <input name="wanderSpeed" type="number" class="input input-bordered w-full" value="${npc.ai.wanderSpeed}" min="0" step="0.1" required />
+            <label class="label" for="npc-idle-min">Idle pause min (ms)</label>
+            <input id="npc-idle-min" name="idlePauseMinMs" type="number" class="input input-bordered w-full" value="${npc.ai.idlePauseMs[0]}" min="0" step="1" required />
+            <label class="label" for="npc-idle-max">Idle pause max (ms)</label>
+            <input id="npc-idle-max" name="idlePauseMaxMs" type="number" class="input input-bordered w-full" value="${npc.ai.idlePauseMs[1]}" min="0" step="1" required />
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogue)}</legend>
+            <label class="label" for="npc-dialogue-keys">${escapeHtml(messages.builder.dialogueKey)}</label>
+            <textarea id="npc-dialogue-keys" name="dialogueKeys" class="textarea textarea-bordered w-full" rows="3">${escapeHtml(dialogueKeys)}</textarea>
+            <label class="label" for="npc-greet-line-key">Greeting line key</label>
+            <input id="npc-greet-line-key" name="greetLineKey" type="text" class="input input-bordered w-full" value="${escapeHtml(npc.ai.greetLineKey)}" />
+            <label class="label" for="npc-greet-enabled">Greet on approach</label>
+            <select id="npc-greet-enabled" name="greetOnApproach" class="select select-bordered w-full">
+              <option value="true"${npc.ai.greetOnApproach ? " selected" : ""}>true</option>
+              <option value="false"${npc.ai.greetOnApproach ? "" : " selected"}>false</option>
+            </select>
+          </fieldset>
         </div>
-        <div>
-          <dt class="text-sm font-semibold text-base-content/70">${escapeHtml(messages.builder.wanderSpeed)}</dt>
-          <dd>${npc.ai.wanderSpeed.toFixed(2)}</dd>
+
+        <div class="flex items-center justify-end">
+          <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
         </div>
-        <div>
-          <dt class="text-sm font-semibold text-base-content/70">${escapeHtml(messages.builder.dialogue)}</dt>
-          <dd>${npc.dialogueKeys.map((key) => escapeHtml(key)).join(", ")}</dd>
-        </div>
-      </dl>
-    </div>
-  </div>`;
+      </form>
+    </div>`;
+};

@@ -1,23 +1,16 @@
 import { createPrng } from "lotfk-seeded-prng";
-import { resolveScene } from "../../shared/config/game-config.ts";
 import { sceneEngine } from "./scene-engine.ts";
 import type { MutableGameSceneState } from "./types.ts";
 
 export class NpcAiEngine {
   /**
-   * Updates all active NFTs using a deterministic, stateless PRNG.
+   * Updates all active NPCs using a deterministic, stateless PRNG.
    * State transitions are computed functionally based on worldTimeMs and seed.
    */
   public updateNpcs(state: MutableGameSceneState, seed: number, dtMs: number): void {
-    const sceneDef = resolveScene(state.sceneId);
-    if (!sceneDef) return;
-
     for (let i = 0; i < state.npcs.length; i++) {
       const npc = state.npcs[i];
       if (!npc || !npc.aiEnabled) continue;
-
-      const npcDef = sceneDef.npcs.find((n) => n.characterKey === npc.characterKey);
-      if (!npcDef) continue;
 
       // Deterministic PRNG: per-NPC index baked into the seed so each NPC is independent
       const rng = createPrng(seed + i * 1000);
@@ -37,17 +30,18 @@ export class NpcAiEngine {
       }
 
       // Evaluate greet proximity (simulate greetOnApproach)
-      if (npcDef.ai.greetOnApproach) {
+      if (npc.aiProfile.greetOnApproach) {
         const px = state.player.position.x + state.player.bounds.x + state.player.bounds.width / 2;
         const py = state.player.position.y + state.player.bounds.y + state.player.bounds.height / 2;
         const nx = npc.position.x + npc.bounds.x + npc.bounds.width / 2;
         const ny = npc.position.y + npc.bounds.y + npc.bounds.height / 2;
 
         const distSq = (px - nx) * (px - nx) + (py - ny) * (py - ny);
-        const greetRadiusSq = 90 * 90; // Greeting distance
+        const greetRadiusSq = npc.interactRadius * npc.interactRadius;
         if (distSq < greetRadiusSq && !npc.active) {
           // Face player if close enough
           npc.state = "face_player";
+          npc.active = true;
           const dx = px - nx;
           const dy = py - ny;
           if (Math.abs(dx) > Math.abs(dy)) {
@@ -59,10 +53,17 @@ export class NpcAiEngine {
           npc.animation = `idle-${npc.facing}`;
           continue;
         }
+
+        if (distSq >= greetRadiusSq) {
+          npc.active = false;
+        }
       }
 
-      // Functional Wander/Idle toggle based on worldTimeMs blocks (e.g., 3s cycles)
-      const cycleMs = 3000;
+      // Functional Wander/Idle toggle based on worldTimeMs blocks.
+      const cycleMs = Math.max(
+        1_000,
+        Math.floor((npc.aiProfile.idlePauseMs[0] + npc.aiProfile.idlePauseMs[1]) / 2),
+      );
       const cycleCount = Math.floor(state.worldTimeMs / cycleMs);
       const rand = rng.next(state.worldTimeMs, cycleCount);
 
@@ -91,7 +92,7 @@ export class NpcAiEngine {
           npc.facing = "right";
         }
 
-        const speed = npcDef.ai.wanderSpeed * (dtMs / 16); // Normalize to 60fps tick
+        const speed = npc.aiProfile.wanderSpeed * (dtMs / 16); // Normalize to 60fps tick
         npc.velocity = { x: moveX * speed, y: moveY * speed };
         npc.animation = `walk-${npc.facing}`;
 
@@ -109,8 +110,9 @@ export class NpcAiEngine {
 
         // Prevent wandering way outside the spawn radius
         const distFromSpawn =
-          Math.abs(moveResult.position.x - npcDef.x) + Math.abs(moveResult.position.y - npcDef.y);
-        if (distFromSpawn > npcDef.ai.wanderRadius) {
+          Math.abs(moveResult.position.x - npc.homePosition.x) +
+          Math.abs(moveResult.position.y - npc.homePosition.y);
+        if (distFromSpawn > npc.aiProfile.wanderRadius) {
           npc.velocity = { x: 0, y: 0 }; // Cancel out of bounds movement
         } else {
           npc.position.x = moveResult.position.x;

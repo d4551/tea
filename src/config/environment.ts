@@ -57,7 +57,10 @@ export interface AppConfig {
     readonly defaultSceneId: string;
     readonly sessionTtlMs: number;
     readonly tickMs: number;
+    readonly sessionPersistIntervalMs: number;
     readonly maxInteractionsPerTick: number;
+    readonly maxChatCommandsPerWindow: number;
+    readonly chatRateLimitWindowMs: number;
     readonly saveCooldownMs: number;
     readonly maxMovePerTick: number;
     readonly maxCommandsPerTick: number;
@@ -68,6 +71,11 @@ export interface AppConfig {
     readonly hudRetryDelayMs: number;
     readonly sessionPurgeIntervalMs: number;
     readonly sessionResumeWindowMs: number;
+    readonly commandSendIntervalMs: number;
+    readonly commandTtlMs: number;
+    readonly socketReconnectDelayMs: number;
+    readonly restoreRequestTimeoutMs: number;
+    readonly restoreMaxAttempts: number;
   };
   readonly ai: {
     readonly warmupOnBoot: boolean;
@@ -113,16 +121,24 @@ const DEFAULT_MAX_QUESTION_LENGTH = 240;
 const DEFAULT_GAME_SESSION_STORE = "prisma";
 const DEFAULT_GAME_SESSION_TTL_MS = 1000 * 60 * 60;
 const DEFAULT_GAME_TICK_MS = 16;
+const DEFAULT_GAME_PERSIST_INTERVAL_MS = 250;
 const DEFAULT_GAME_SAVE_COOLDOWN_MS = 2500;
 const DEFAULT_GAME_MAX_MOVE_PER_TICK = 12;
 const DEFAULT_GAME_MAX_COMMANDS_PER_TICK = 6;
 const DEFAULT_GAME_MAX_INTERACTIONS_PER_TICK = 3;
+const DEFAULT_GAME_MAX_CHAT_COMMANDS_PER_WINDOW = 8;
+const DEFAULT_GAME_CHAT_RATE_LIMIT_WINDOW_MS = 4_000;
 const DEFAULT_GAME_MAX_CHAT_MESSAGE_LENGTH = 500;
 const DEFAULT_GAME_VIEWPORT_WIDTH = 640;
 const DEFAULT_GAME_VIEWPORT_HEIGHT = 360;
 const DEFAULT_GAME_HUD_POLL_MS = 500;
 const DEFAULT_GAME_HUD_RETRY_MS = 2000;
 const DEFAULT_GAME_SESSION_RESUME_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const DEFAULT_GAME_COMMAND_SEND_INTERVAL_MS = 50;
+const DEFAULT_GAME_COMMAND_TTL_MS = 60_000;
+const DEFAULT_GAME_SOCKET_RECONNECT_DELAY_MS = 1000;
+const DEFAULT_GAME_RESTORE_REQUEST_TIMEOUT_MS = 5_000;
+const DEFAULT_GAME_RESTORE_MAX_ATTEMPTS = 2;
 const DEFAULT_GAME_DEFAULT_SCENE_ID = "teaHouse";
 const DEFAULT_AI_WARMUP_ON_BOOT = false;
 const DEFAULT_AI_MODEL_WARMUP_TIMEOUT_MS = 5000;
@@ -360,6 +376,11 @@ export const appConfig: AppConfig = {
     defaultSceneId: Bun.env.GAME_DEFAULT_SCENE_ID ?? DEFAULT_GAME_DEFAULT_SCENE_ID,
     sessionTtlMs: parseInteger(Bun.env.GAME_SESSION_TTL_MS, DEFAULT_GAME_SESSION_TTL_MS, 1000),
     tickMs: parseInteger(Bun.env.GAME_TICK_MS, DEFAULT_GAME_TICK_MS, 1),
+    sessionPersistIntervalMs: parseInteger(
+      Bun.env.GAME_SESSION_PERSIST_INTERVAL_MS,
+      DEFAULT_GAME_PERSIST_INTERVAL_MS,
+      1,
+    ),
     saveCooldownMs: parseInteger(Bun.env.GAME_SAVE_COOLDOWN_MS, DEFAULT_GAME_SAVE_COOLDOWN_MS, 0),
     maxMovePerTick: parseInteger(Bun.env.GAME_MAX_MOVE_PER_TICK, DEFAULT_GAME_MAX_MOVE_PER_TICK, 1),
     maxCommandsPerTick: parseInteger(
@@ -371,6 +392,16 @@ export const appConfig: AppConfig = {
       Bun.env.GAME_MAX_INTERACTIONS_PER_TICK,
       DEFAULT_GAME_MAX_INTERACTIONS_PER_TICK,
       1,
+    ),
+    maxChatCommandsPerWindow: parseInteger(
+      Bun.env.GAME_MAX_CHAT_COMMANDS_PER_WINDOW,
+      DEFAULT_GAME_MAX_CHAT_COMMANDS_PER_WINDOW,
+      1,
+    ),
+    chatRateLimitWindowMs: parseInteger(
+      Bun.env.GAME_CHAT_RATE_LIMIT_WINDOW_MS,
+      DEFAULT_GAME_CHAT_RATE_LIMIT_WINDOW_MS,
+      250,
     ),
     maxChatMessageLength: parseInteger(
       Bun.env.GAME_MAX_CHAT_MESSAGE_LENGTH,
@@ -390,6 +421,27 @@ export const appConfig: AppConfig = {
       Bun.env.GAME_SESSION_RESUME_WINDOW_MS,
       DEFAULT_GAME_SESSION_RESUME_WINDOW_MS,
       1000,
+    ),
+    commandSendIntervalMs: parseInteger(
+      Bun.env.GAME_COMMAND_SEND_INTERVAL_MS,
+      DEFAULT_GAME_COMMAND_SEND_INTERVAL_MS,
+      10,
+    ),
+    commandTtlMs: parseInteger(Bun.env.GAME_COMMAND_TTL_MS, DEFAULT_GAME_COMMAND_TTL_MS, 500),
+    socketReconnectDelayMs: parseInteger(
+      Bun.env.GAME_SOCKET_RECONNECT_DELAY_MS,
+      DEFAULT_GAME_SOCKET_RECONNECT_DELAY_MS,
+      100,
+    ),
+    restoreRequestTimeoutMs: parseInteger(
+      Bun.env.GAME_RESTORE_REQUEST_TIMEOUT_MS,
+      DEFAULT_GAME_RESTORE_REQUEST_TIMEOUT_MS,
+      250,
+    ),
+    restoreMaxAttempts: parseInteger(
+      Bun.env.GAME_RESTORE_MAX_ATTEMPTS,
+      DEFAULT_GAME_RESTORE_MAX_ATTEMPTS,
+      1,
     ),
   },
   ai: {

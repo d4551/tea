@@ -125,19 +125,47 @@ export const renderDialogueEditor = (
     </div>`;
 };
 /**
- * Renders the dialogue detail card for a single dialogue key.
+ * Renders an editable dialogue detail form for HTMX updates.
  *
  * @param messages Locale-resolved messages.
  * @param key Dialogue key.
- * @param text Dialogue text content.
- * @returns HTML string for dialogue detail card.
+ * @param text Dialogue content.
+ * @param locale Active locale.
+ * @param projectId Active project id.
+ * @returns HTML string for editable dialogue detail.
  */
-export const renderDialogueDetail = (messages: Messages, key: string, text: string): string => `
-  <div class="card bg-base-100 shadow-sm">
-    <div class="card-body">
-      <h3 class="card-title text-sm">${escapeHtml(messages.builder.dialogueKey)}: <code>${escapeHtml(key)}</code></h3>
-      <div class="bg-base-200 rounded-lg p-4 mt-2">
-        <p class="italic">"${escapeHtml(text)}"</p>
-      </div>
-    </div>
-  </div>`;
+export const renderDialogueDetail = (
+  messages: Messages,
+  key: string,
+  text: string,
+  locale: LocaleCode,
+  projectId: string,
+): string => {
+  const formAction = withQueryParameters(
+    `${appRoutes.builderApiDialogue}/${encodeURIComponent(key)}/form`,
+    {
+      locale,
+      projectId,
+    },
+  );
+
+  return `
+    <div class="card bg-base-100 shadow-sm">
+      <form
+        class="card-body gap-4"
+        hx-post="${escapeHtml(formAction)}"
+        hx-target="#dialogue-detail"
+        hx-swap="innerHTML"
+      >
+        <h3 class="card-title text-sm">${escapeHtml(messages.builder.dialogueKey)}: <code>${escapeHtml(key)}</code></h3>
+        <textarea
+          name="text"
+          class="textarea textarea-bordered w-full min-h-28"
+          required
+        >${escapeHtml(text)}</textarea>
+        <div class="flex items-center justify-end">
+          <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
+        </div>
+      </form>
+    </div>`;
+};

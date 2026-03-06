@@ -133,6 +133,10 @@ export interface Messages {
     readonly connectionStatus: string;
     readonly connectionConnected: string;
     readonly connectionDisconnected: string;
+    readonly connectionReconnecting: string;
+    readonly connectionExpired: string;
+    readonly connectionMissing: string;
+    readonly reconnectAction: string;
     readonly queueLabel: string;
     readonly invalidCommand: string;
     readonly invalidDirection: string;
@@ -396,6 +400,10 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       connectionStatus: "connecting",
       connectionConnected: "connected",
       connectionDisconnected: "disconnected",
+      connectionReconnecting: "reconnecting",
+      connectionExpired: "session expired",
+      connectionMissing: "session missing",
+      reconnectAction: "Reconnect",
       queueLabel: "queue",
       invalidCommand: "Invalid command payload",
       invalidDirection: "Invalid move direction",
@@ -466,7 +474,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       yLabel: "Y",
       sceneWidthDesc: "Scene width in pixels",
       sceneHeightDesc: "Scene height in pixels",
-      assetPlaceholder: "Asset browser coming soon.",
+      assetPlaceholder: "Runtime-mounted asset inventory for scenes and sprites.",
       testNpcPlaceholder: "teaMonk",
       testMessagePlaceholder: "Tell me about the five elements...",
       assistPromptPlaceholder: "How should I balance the tea trader NPC dialogue...",
@@ -660,6 +668,10 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       connectionStatus: "连接中",
       connectionConnected: "已连接",
       connectionDisconnected: "已断开",
+      connectionReconnecting: "重连中",
+      connectionExpired: "会话已过期",
+      connectionMissing: "会话不存在",
+      reconnectAction: "重新连接",
       queueLabel: "队列",
       invalidCommand: "无效命令",
       invalidDirection: "无效移动方向",
@@ -730,7 +742,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       yLabel: "Y",
       sceneWidthDesc: "场景宽度（像素）",
       sceneHeightDesc: "场景高度（像素）",
-      assetPlaceholder: "资源浏览器即将上线。",
+      assetPlaceholder: "场景与精灵的运行时资源清单。",
       testNpcPlaceholder: "teaMonk",
       testMessagePlaceholder: "请告诉我关于五行的事情...",
       assistPromptPlaceholder: "如何平衡茶商 NPC 的对话...",

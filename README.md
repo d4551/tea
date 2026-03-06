@@ -53,6 +53,8 @@ A server-driven game engine and worldbuilding platform.<br/>
   - [Request Lifecycle](#request-lifecycle)
   - [Plugin Pipeline](#plugin-pipeline)
   - [Domain Model](#domain-model)
+  - [Session Transport Contract](#session-transport-contract)
+  - [Builder Publish Contract](#builder-publish-contract)
 - [Project Structure](#project-structure)
 - [Commands](#commands)
 - [Environment](#environment)
@@ -123,75 +125,79 @@ bun run dev
 
 ```mermaid
 graph TB
-  subgraph Browser["Browser"]
-    HTMX["HTMX"]
-    PIXI["PixiJS 8 Canvas"]
-    THREE["Three.js Layer"]
-    EXT["HTMX Extensions"]
+  subgraph Browser["Browser Runtime"]
+    SSR["SSR + HTMX Pages"]
+    CLIENT["Playable Client (Pixi + Three)"]
+    SSEHUD["HUD Stream (SSE)"]
+    WS["Command Stream (WebSocket)"]
   end
 
   subgraph Elysia["Elysia Server"]
     APP["app.ts"]
 
-    subgraph Plugins
-      RC["Request Context"]
-      I18N["i18n Context"]
-      SSE["SSE"]
-      ERR["Error Handler"]
-      GP["Game Plugin"]
-      SP["Session Purge"]
+    subgraph PluginOrder["Plugin + Route Order"]
+      RC["request-context"]
+      EH["global onError"]
+      CT["onAfterHandle content-type"]
+      SW["swagger"]
+      SA["static-assets"]
+      PR["page-routes"]
+      GR["game-routes (SSR game page)"]
+      AR["api-routes"]
+      AIR["ai-routes"]
+      GP["game-plugin (REST + WS + SSE)"]
+      BR["builder-routes"]
+      BA["builder-api-routes"]
+      SP["session-purge"]
     end
 
-    subgraph Routes
-      PAGE["SSR Pages"]
-      API["JSON API"]
-      AIR["AI Routes"]
-      BLD["Builder API"]
-      GMR["Game Routes"]
-    end
-
-    subgraph Domain
-      ORC["Oracle"]
-      GML["Game Logic"]
-      BDS["Builder"]
-      AIS["AI Service"]
+    subgraph Domain["Domain Services"]
+      LOOP["GameLoopService"]
+      STORE["GameStateStore"]
+      SCENE["SceneEngine + NpcAiEngine"]
+      BUILDER["PrismaBuilderService"]
+      AI["ProviderRegistry + AI Services"]
     end
   end
 
-  subgraph Storage["Data"]
+  subgraph Storage["Persistence"]
     PRI["Prisma ORM"]
-    SQL["libSQL / Turso"]
+    DB["GameSession + PlayerProgress + BuilderProject + BuilderProjectRelease"]
   end
 
-  Browser -->|"HTTP / HTMX Swaps"| Elysia
-  APP --> Plugins --> Routes --> Domain --> Storage
-  PIXI -.->|"SSE / WebSocket"| SSE
+  SSR -->|"HTTP / HTMX"| APP
+  CLIENT -->|"REST create/state/restore/save/command"| GP
+  CLIENT -->|"WebSocket /api/game/session/:id/ws"| GP
+  CLIENT -->|"SSE /api/game/session/:id/hud"| GP
+  APP --> RC --> EH --> CT --> SW --> SA --> PR --> GR --> AR --> AIR --> GP --> BR --> BA --> SP
+  GP --> LOOP --> STORE --> PRI --> DB
+  LOOP --> SCENE
+  LOOP --> AI
+  BA --> BUILDER --> PRI
 ```
 
 ### Request Lifecycle
 
-Every inbound request flows through the plugin chain before reaching a route handler:
+Example flow for server-authoritative game session creation:
 
 ```mermaid
 sequenceDiagram
   participant B as Browser
-  participant E as Elysia
-  participant RC as Request Context
-  participant I as i18n Plugin
-  participant R as Route Handler
-  participant D as Domain
+  participant APP as Elysia App
+  participant AUTH as auth-session
+  participant LOOP as GameLoop
+  participant STORE as GameStateStore
   participant DB as Prisma
 
-  B->>E: HTTP Request
-  E->>RC: Generate correlation ID
-  RC->>I: Resolve locale (query + Accept-Language)
-  I->>R: Inject message catalog
-  R->>D: Domain logic
-  D->>DB: Query / Mutation
-  DB-->>D: Result
-  D-->>R: Response
-  R-->>E: SSR HTML or JSON
-  E-->>B: Response + x-correlation-id
+  B->>APP: POST /api/game/session
+  APP->>AUTH: Resolve/issue cookie session id
+  APP->>LOOP: createSession(locale, sceneId, projectId, ownerSessionId)
+  LOOP->>STORE: createSession + initialize stateVersion
+  STORE->>DB: INSERT gameSession
+  DB-->>STORE: persisted row
+  STORE-->>LOOP: GameSessionSnapshot
+  LOOP-->>APP: lifecycle snapshot + resume token
+  APP-->>B: 200 { sessionId, resumeToken, resumeTokenExpiresAtMs }
 ```
 
 ### Plugin Pipeline
@@ -200,28 +206,105 @@ Plugins are composed in strict order. Each plugin decorates the request context 
 
 ```mermaid
 flowchart LR
-  A["Request\nContext"] --> B["Error\nHandler"]
-  B --> C["Swagger"]
-  C --> D["Static\nMounts"]
-  D --> E["Routes"]
-  E --> F["Scoped i18n\nand auth guards"]
+  A["request-context"] --> B["global onError"]
+  B --> C["onAfterHandle content-type"]
+  C --> D["swagger"]
+  D --> E["static-assets"]
+  E --> F["page-routes"]
+  F --> G["game-routes"]
+  G --> H["api-routes"]
+  H --> I["ai-routes"]
+  I --> J["game-plugin"]
+  J --> K["builder-routes"]
+  K --> L["builder-api-routes"]
+  L --> M["session-purge"]
 
   style A fill:#4ade80,color:#000
   style B fill:#f87171,color:#000
-  style C fill:#fbbf24,color:#000
-  style D fill:#94a3b8,color:#000
-  style E fill:#2dd4bf,color:#000
-  style F fill:#60a5fa,color:#000
+  style C fill:#60a5fa,color:#000
+  style D fill:#fbbf24,color:#000
+  style E fill:#94a3b8,color:#000
+  style F fill:#2dd4bf,color:#000
+  style G fill:#2dd4bf,color:#000
+  style H fill:#2dd4bf,color:#000
+  style I fill:#2dd4bf,color:#000
+  style J fill:#fb923c,color:#000
+  style K fill:#c084fc,color:#000
+  style L fill:#c084fc,color:#000
+  style M fill:#a3e635,color:#000
 ```
 
 ### Domain Model
 
 ```mermaid
 erDiagram
-    GAME ||--o{ SESSION : hosts
-    SESSION ||--|{ ACTOR : contains
-    ACTOR ||--o{ MESSAGE : speaks
-    SESSION ||--o{ MESSAGE : records
+    GAME_SESSION {
+      string id PK
+      string ownerSessionId
+      int stateVersion
+      datetime expiresAt
+      json scene
+      string projectId
+    }
+    PLAYER_PROGRESS {
+      string sessionId PK
+      int xp
+      int level
+    }
+    BUILDER_PROJECT {
+      string id PK
+      int version
+      string checksum
+      int latestReleaseVersion
+      int publishedReleaseVersion
+      json state
+    }
+    BUILDER_PROJECT_RELEASE {
+      string projectId FK
+      int releaseVersion
+      string checksum
+      json state
+    }
+
+    GAME_SESSION ||--|| PLAYER_PROGRESS : has
+    BUILDER_PROJECT ||--o{ BUILDER_PROJECT_RELEASE : publishes
+    BUILDER_PROJECT ||..o{ GAME_SESSION : seeds
+```
+
+### Session Transport Contract
+
+```mermaid
+sequenceDiagram
+  participant Client as Playable Client
+  participant REST as /api/game/session
+  participant WS as /api/game/session/:id/ws
+  participant HUD as /api/game/session/:id/hud
+  participant Loop as GameLoop
+
+  Client->>REST: POST create
+  REST-->>Client: sessionId + resumeToken + resumeTokenExpiresAtMs
+  Client->>WS: connect with resumeToken query
+  WS->>Loop: restoreSession(sessionId, resumeToken, ownerSessionId)
+  Loop-->>WS: accepted
+  Client->>REST: POST command
+  REST->>Loop: queue validated command
+  Loop-->>WS: publish state + rotated resume token
+  Client->>HUD: SSE subscribe
+  HUD-->>Client: scene-title/xp/dialogue events
+  Note over Client,REST: On token expiry, client calls POST /api/game/session/:id with body { resumeToken }
+```
+
+### Builder Publish Contract
+
+```mermaid
+flowchart TD
+  A["Draft mutations\n(saveScene/saveNpc/saveDialogue)"] --> B["builderProject.state\n(version + checksum)"]
+  B --> C["publishProject(true)"]
+  C --> D["Create immutable builderProjectRelease\n(projectId, releaseVersion, checksum, state)"]
+  D --> E["Set publishedReleaseVersion on project"]
+  E --> F["gameLoop.createSession(projectId)"]
+  F --> G["Load published release snapshot only"]
+  G --> H["Session seeded with immutable release data"]
 ```
 
 ---
@@ -265,27 +348,69 @@ tea/
 
 ## Environment
 
-Required `.env` variables:
+Core `.env` variables (see `.env.example` for full defaults):
 
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | libSQL connection string (e.g., `file:./prisma/dev.db`) |
 | `NODE_ENV` | `development` or `production` |
 | `PORT` | Server port (default: 3000) |
+| `SESSION_COOKIE_NAME` | Cookie name for anonymous auth-session identity |
 | `SESSION_MAX_AGE_SECONDS` | Anonymous session cookie lifetime in seconds |
 | `AI_WARMUP_ON_BOOT` | Optional boolean to enable eager local model warmup at boot (default: `false`) |
+
+Game runtime controls:
+
+| Variable | Purpose |
+|---|---|
+| `GAME_SESSION_TTL_MS` | Session expiration TTL |
+| `GAME_TICK_MS` | Server-authoritative tick cadence |
+| `GAME_SESSION_PERSIST_INTERVAL_MS` | Minimum interval between automatic DB persists |
+| `GAME_SAVE_COOLDOWN_MS` | Manual save cooldown for `/save` endpoint |
+| `GAME_MAX_COMMANDS_PER_TICK` | Command queue upper bound per processing window |
+| `GAME_MAX_INTERACTIONS_PER_TICK` | Per-tick interaction cap |
+| `GAME_MAX_CHAT_COMMANDS_PER_WINDOW` | Chat anti-spam max actions per window |
+| `GAME_CHAT_RATE_LIMIT_WINDOW_MS` | Chat anti-spam window length |
+| `GAME_SESSION_RESUME_WINDOW_MS` | Max resume token validity horizon |
+| `GAME_COMMAND_SEND_INTERVAL_MS` | Client movement command send cadence |
+| `GAME_COMMAND_TTL_MS` | Client command TTL used in WS envelopes |
+| `GAME_SOCKET_RECONNECT_DELAY_MS` | Client reconnect backoff delay |
+| `GAME_RESTORE_REQUEST_TIMEOUT_MS` | Restore POST timeout budget |
+| `GAME_RESTORE_MAX_ATTEMPTS` | Max restore retries before expired UX state |
 
 ---
 
 ## API Reference
 
+Core game/session endpoints:
+
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/` | GET | SSR Application Entry |
-| `/api/health` | GET | System metrics |
-| `/api/game/:id` | GET | Game state |
+| `/game` | GET | SSR game page bootstrap (`sessionId`, owner-bound `resumeToken`) |
+| `/api/game/session` | POST | Create a new server-authoritative session |
+| `/api/game/session/:id/state` | GET | Read owner-scoped session state + queue metadata |
+| `/api/game/session/:id` | POST | Restore session using resume token in JSON body |
+| `/api/game/session/:id/command` | POST | Validate and enqueue command |
+| `/api/game/session/:id/dialogue` | GET | Fetch current active dialogue |
+| `/api/game/session/:id/save` | POST | Force persist subject to save cooldown |
+| `/api/game/session/:id/close` | POST | Close + delete session |
+| `/api/game/session/:id` | DELETE | Delete session directly |
+| `/api/game/session/:id/hud` | GET (SSE) | Canonical HUD stream (`scene-title`, `xp`, `dialogue`, `close`) |
+| `/api/game/session/:id/ws` | WS | Command/state realtime channel (requires valid resume token) |
+
+Other primary endpoints:
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/` | GET | SSR home page |
+| `/api/health` | GET | System health envelope |
 | `/api/oracle` | POST | Oracle interaction |
-| `/api/game/session/:id/ws` | WS | Realtime game command stream |
+| `/builder/*` | GET | Builder SSR views |
+| `/api/builder/*` | REST | Builder data + AI compose/test/assist |
+
+Deprecated/removed surface:
+
+- `/api/game/session/:id/partials/dialogue` was removed. HUD rendering is now single-path via SSE.
 
 ---
 
@@ -331,6 +456,8 @@ Required `.env` variables:
   - [请求生命周期](#请求生命周期-1)
   - [插件流水线](#插件流水线-1)
   - [领域模型](#领域模型-1)
+  - [会话传输契约](#会话传输契约)
+  - [构建器发布契约](#构建器发布契约)
 - [项目结构](#项目结构-1)
 - [命令](#命令-1)
 - [环境变量](#环境变量)
@@ -392,50 +519,55 @@ bun run dev
 
 ```mermaid
 graph TB
-  subgraph Browser["浏览器"]
-    HTMX["HTMX"]
-    PIXI["PixiJS 8 画布"]
-    THREE["Three.js 层"]
-    EXT["HTMX 扩展"]
+  subgraph Browser["浏览器运行时"]
+    SSR["SSR + HTMX 页面"]
+    CLIENT["可玩客户端 (Pixi + Three)"]
+    SSEHUD["HUD 推送流 (SSE)"]
+    WS["命令流 (WebSocket)"]
   end
 
   subgraph Elysia["Elysia 服务器"]
     APP["app.ts"]
 
-    subgraph Plugins["插件层"]
-      RC["请求上下文"]
-      I18N["国际化"]
-      AIC["AI 上下文"]
-      SSE["服务器发送事件"]
-      ERR["错误处理"]
-      GP["游戏插件"]
-      SP["会话清理"]
+    subgraph PluginOrder["插件与路由顺序"]
+      RC["request-context"]
+      EH["全局 onError"]
+      CT["onAfterHandle content-type"]
+      SW["swagger"]
+      SA["static-assets"]
+      PR["page-routes"]
+      GR["game-routes (SSR 游戏页)"]
+      AR["api-routes"]
+      AIR["ai-routes"]
+      GP["game-plugin (REST + WS + SSE)"]
+      BR["builder-routes"]
+      BA["builder-api-routes"]
+      SP["session-purge"]
     end
 
-    subgraph Routes["路由层"]
-      PAGE["SSR 页面"]
-      API["JSON API"]
-      AIR["AI 路由"]
-      BLD["构建器 API"]
-      GMR["游戏路由"]
-    end
-
-    subgraph Domain["领域层"]
-      ORC["神谕系统"]
-      GML["游戏逻辑"]
-      BDS["构建器"]
-      AIS["AI 服务"]
+    subgraph Domain["领域服务"]
+      LOOP["GameLoopService"]
+      STORE["GameStateStore"]
+      SCENE["SceneEngine + NpcAiEngine"]
+      BUILDER["PrismaBuilderService"]
+      AI["ProviderRegistry + AI 服务"]
     end
   end
 
-  subgraph Storage["数据层"]
+  subgraph Storage["持久化"]
     PRI["Prisma ORM"]
-    SQL["libSQL / Turso"]
+    DB["GameSession + PlayerProgress + BuilderProject + BuilderProjectRelease"]
   end
 
-  Browser -->|"HTTP / HTMX 交换"| Elysia
-  APP --> Plugins --> Routes --> Domain --> Storage
-  PIXI -.->|"SSE / WebSocket"| SSE
+  SSR -->|"HTTP / HTMX"| APP
+  CLIENT -->|"REST create/state/restore/save/command"| GP
+  CLIENT -->|"WebSocket /api/game/session/:id/ws"| GP
+  CLIENT -->|"SSE /api/game/session/:id/hud"| GP
+  APP --> RC --> EH --> CT --> SW --> SA --> PR --> GR --> AR --> AIR --> GP --> BR --> BA --> SP
+  GP --> LOOP --> STORE --> PRI --> DB
+  LOOP --> SCENE
+  LOOP --> AI
+  BA --> BUILDER --> PRI
 ```
 
 #### 请求生命周期
@@ -443,66 +575,135 @@ graph TB
 ```mermaid
 sequenceDiagram
   participant B as 浏览器
-  participant E as Elysia
-  participant RC as 请求上下文
-  participant I as i18n 插件
-  participant R as 路由处理
-  participant D as 领域逻辑
+  participant APP as Elysia App
+  participant AUTH as auth-session
+  participant LOOP as GameLoop
+  participant STORE as GameStateStore
   participant DB as Prisma
 
-  B->>E: HTTP 请求
-  E->>RC: 生成关联 ID
-  RC->>I: 解析区域设置
-  I->>R: 注入消息目录
-  R->>D: 领域逻辑
-  D->>DB: 查询 / 变更
-  DB-->>D: 结果
-  D-->>R: 响应
-  R-->>E: SSR HTML 或 JSON
-  E-->>B: 响应 + x-correlation-id
+  B->>APP: POST /api/game/session
+  APP->>AUTH: 解析/签发 cookie 会话标识
+  APP->>LOOP: createSession(locale, sceneId, projectId, ownerSessionId)
+  LOOP->>STORE: createSession + 初始化 stateVersion
+  STORE->>DB: INSERT gameSession
+  DB-->>STORE: 持久化行
+  STORE-->>LOOP: GameSessionSnapshot
+  LOOP-->>APP: 生命周期快照 + 恢复令牌
+  APP-->>B: 200 { sessionId, resumeToken, resumeTokenExpiresAtMs }
 ```
 
 #### 插件流水线
 
 ```mermaid
 flowchart LR
-  A["请求\n上下文"] --> B["国际化\n上下文"]
-  B --> C["AI\n上下文"]
-  C --> D["SSE"]
-  D --> E["错误\n处理"]
-  E --> F["静态\n挂载"]
-  F --> G["Swagger"]
-  G --> H["路由"]
+  A["request-context"] --> B["全局 onError"]
+  B --> C["onAfterHandle content-type"]
+  C --> D["swagger"]
+  D --> E["static-assets"]
+  E --> F["page-routes"]
+  F --> G["game-routes"]
+  G --> H["api-routes"]
+  H --> I["ai-routes"]
+  I --> J["game-plugin"]
+  J --> K["builder-routes"]
+  K --> L["builder-api-routes"]
+  L --> M["session-purge"]
 
   style A fill:#4ade80,color:#000
-  style B fill:#60a5fa,color:#000
-  style C fill:#c084fc,color:#000
-  style D fill:#fb923c,color:#000
-  style E fill:#f87171,color:#000
-  style F fill:#94a3b8,color:#000
-  style G fill:#fbbf24,color:#000
+  style B fill:#f87171,color:#000
+  style C fill:#60a5fa,color:#000
+  style D fill:#fbbf24,color:#000
+  style E fill:#94a3b8,color:#000
+  style F fill:#2dd4bf,color:#000
+  style G fill:#2dd4bf,color:#000
   style H fill:#2dd4bf,color:#000
+  style I fill:#2dd4bf,color:#000
+  style J fill:#fb923c,color:#000
+  style K fill:#c084fc,color:#000
+  style L fill:#c084fc,color:#000
+  style M fill:#a3e635,color:#000
 ```
 
 #### 领域模型
 
 ```mermaid
 erDiagram
-    GAME ||--o{ SESSION : 拥有
-    SESSION ||--|{ ACTOR : 包含
-    ACTOR ||--o{ MESSAGE : 发送
-    SESSION ||--o{ MESSAGE : 记录
+    GAME_SESSION {
+      string id PK
+      string ownerSessionId
+      int stateVersion
+      datetime expiresAt
+      json scene
+      string projectId
+    }
+    PLAYER_PROGRESS {
+      string sessionId PK
+      int xp
+      int level
+    }
+    BUILDER_PROJECT {
+      string id PK
+      int version
+      string checksum
+      int latestReleaseVersion
+      int publishedReleaseVersion
+      json state
+    }
+    BUILDER_PROJECT_RELEASE {
+      string projectId FK
+      int releaseVersion
+      string checksum
+      json state
+    }
+
+    GAME_SESSION ||--|| PLAYER_PROGRESS : 关联
+    BUILDER_PROJECT ||--o{ BUILDER_PROJECT_RELEASE : 发布
+    BUILDER_PROJECT ||..o{ GAME_SESSION : 生成
+```
+
+#### 会话传输契约
+
+```mermaid
+sequenceDiagram
+  participant Client as 可玩客户端
+  participant REST as /api/game/session
+  participant WS as /api/game/session/:id/ws
+  participant HUD as /api/game/session/:id/hud
+  participant Loop as GameLoop
+
+  Client->>REST: POST create
+  REST-->>Client: sessionId + resumeToken + resumeTokenExpiresAtMs
+  Client->>WS: 带 resumeToken query 建立连接
+  WS->>Loop: restoreSession(sessionId, resumeToken, ownerSessionId)
+  Loop-->>WS: 通过/拒绝
+  Client->>REST: POST command
+  REST->>Loop: 命令入队并处理
+  Loop-->>WS: 推送 state + 新 token
+  Client->>HUD: 订阅 SSE
+  HUD-->>Client: scene-title/xp/dialogue/close
+```
+
+#### 构建器发布契约
+
+```mermaid
+flowchart TD
+  A["草稿变更\n(saveScene/saveNpc/saveDialogue)"] --> B["builderProject.state\n(version + checksum)"]
+  B --> C["publishProject(true)"]
+  C --> D["创建不可变 builderProjectRelease"]
+  D --> E["更新 publishedReleaseVersion"]
+  E --> F["gameLoop.createSession(projectId)"]
+  F --> G["仅加载已发布快照"]
+  G --> H["会话由不可变发布数据初始化"]
 ```
 
 ### 项目结构
 
 ```text
 tea/
-├── apps/                 # 未来多应用支持
-├── libs/                 # 共享库
 ├── packages/             # Bun 工作区
 ├── prisma/               # 数据库模式与迁移
 │   └── schema.prisma     # 唯一事实来源
+├── assets/               # 运行时挂载的媒体资产
 ├── public/               # 静态 Web 资产
 ├── scripts/              # Bun 原生构建 / 开发编排
 │   └── asset-pipeline.ts # build 与 watch 共用的规范资产图
@@ -530,23 +731,54 @@ tea/
 
 ### 环境变量
 
-必须的 `.env` 变量：
+核心 `.env` 变量（完整默认值见 `.env.example`）：
 
 | 变量 | 用途 |
 |---|---|
 | `DATABASE_URL` | libSQL 连接字符串 (例如: `file:./prisma/dev.db`) |
 | `NODE_ENV` | `development` (开发) 或 `production` (生产) |
 | `PORT` | 服务器端口 (默认: 3000) |
+| `SESSION_COOKIE_NAME` | 匿名 auth-session 的 Cookie 名称 |
+| `SESSION_MAX_AGE_SECONDS` | 匿名会话 Cookie 生命周期（秒） |
+
+游戏运行时关键参数：
+
+| 变量 | 用途 |
+|---|---|
+| `GAME_SESSION_TTL_MS` | 会话过期 TTL |
+| `GAME_TICK_MS` | 服务端权威 tick 周期 |
+| `GAME_SESSION_PERSIST_INTERVAL_MS` | 自动持久化最小间隔 |
+| `GAME_SAVE_COOLDOWN_MS` | `/save` 接口手动保存冷却 |
+| `GAME_MAX_COMMANDS_PER_TICK` | 每处理窗口命令队列上限 |
+| `GAME_MAX_INTERACTIONS_PER_TICK` | 单 tick 交互上限 |
+| `GAME_MAX_CHAT_COMMANDS_PER_WINDOW` | 聊天防刷窗口内最大命令数 |
+| `GAME_CHAT_RATE_LIMIT_WINDOW_MS` | 聊天防刷窗口长度 |
+| `GAME_SESSION_RESUME_WINDOW_MS` | 恢复令牌有效时间上限 |
+| `GAME_COMMAND_SEND_INTERVAL_MS` | 客户端移动命令发送频率 |
+| `GAME_COMMAND_TTL_MS` | 客户端命令 TTL |
+| `GAME_SOCKET_RECONNECT_DELAY_MS` | 客户端重连退避延迟 |
+| `GAME_RESTORE_REQUEST_TIMEOUT_MS` | 恢复请求超时预算 |
+| `GAME_RESTORE_MAX_ATTEMPTS` | 恢复失败前最大重试次数 |
 
 ### API 参考
 
 | 端点 | 方法 | 用途 |
 |---|---|---|
-| `/` | GET | SSR 应用程序入口 |
-| `/api/health` | GET | 系统指标查询 |
-| `/api/game/:id` | GET | 获取游戏状态 |
-| `/api/oracle` | POST | 神谕交互 |
-| `/api/game/session/:id/ws` | WS | 实时游戏命令流 |
+| `/game` | GET | SSR 游戏页引导（`sessionId` + owner 绑定 `resumeToken`） |
+| `/api/game/session` | POST | 创建新的服务端权威会话 |
+| `/api/game/session/:id/state` | GET | 查询 owner 范围内会话状态与队列元数据 |
+| `/api/game/session/:id` | POST | 使用 JSON body 中的恢复令牌恢复会话 |
+| `/api/game/session/:id/command` | POST | 校验并入队命令 |
+| `/api/game/session/:id/dialogue` | GET | 获取当前活动对话 |
+| `/api/game/session/:id/save` | POST | 在冷却约束下强制持久化 |
+| `/api/game/session/:id/close` | POST | 关闭并删除会话 |
+| `/api/game/session/:id` | DELETE | 直接删除会话 |
+| `/api/game/session/:id/hud` | GET (SSE) | 规范 HUD 推送流（`scene-title` / `xp` / `dialogue` / `close`） |
+| `/api/game/session/:id/ws` | WS | 实时命令/状态通道（需要有效恢复令牌） |
+
+已移除的旧接口：
+
+- `/api/game/session/:id/partials/dialogue` 已删除。HUD 渲染统一经由 SSE 单路径输出。
 
 ### 无障碍
 

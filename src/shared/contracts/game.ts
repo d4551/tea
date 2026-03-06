@@ -20,9 +20,9 @@ export type Facing = Direction;
  * Axis-aligned rectangle for collision checks.
  */
 export interface CollisionMask {
-  /** X coordinate in world space. */
+  /** X coordinate in the owning coordinate space. */
   readonly x: number;
-  /** Y coordinate in world space. */
+  /** Y coordinate in the owning coordinate space. */
   readonly y: number;
   /** Rectangle width in world pixels. */
   readonly width: number;
@@ -162,6 +162,16 @@ export interface GameConfig {
   readonly defaultSceneId: string;
   /** Canonical map key for non-locale user-facing text. */
   readonly fallbackLocale: GameLocale;
+  /** Client movement command cadence in ms. */
+  readonly commandSendIntervalMs: number;
+  /** Client command TTL window in ms. */
+  readonly commandTtlMs: number;
+  /** WebSocket reconnect delay in ms. */
+  readonly socketReconnectDelayMs: number;
+  /** Session-restore request timeout in ms. */
+  readonly restoreRequestTimeoutMs: number;
+  /** Maximum restore attempts before showing expired state. */
+  readonly restoreMaxAttempts: number;
 }
 
 /**
@@ -212,8 +222,18 @@ export interface EntityState {
   readonly frame: number;
   /** Velocity vector at current tick. */
   readonly velocity: MovementVector;
-  /** World-space collision bounds. */
+  /** Local collision bounds relative to {@link position}. */
   readonly bounds: CollisionMask;
+}
+
+/**
+ * Resolved dialogue entry persisted inside a session snapshot.
+ */
+export interface GameDialogueEntry {
+  /** Stable dialogue key used for diagnostics and replay. */
+  readonly key: string;
+  /** Localized resolved text used by the runtime. */
+  readonly text: string;
 }
 
 /**
@@ -226,6 +246,14 @@ export interface NpcState extends EntityState {
   readonly dialogueIndex: number;
   /** Localized dialogue option keys for this NPC. */
   readonly dialogueLineKeys: readonly string[];
+  /** Localized dialogue lines resolved at session creation time. */
+  readonly dialogueEntries: readonly GameDialogueEntry[];
+  /** Interaction radius in px for this NPC. */
+  readonly interactRadius: number;
+  /** Home position used by deterministic wander logic. */
+  readonly homePosition: Readonly<{ readonly x: number; readonly y: number }>;
+  /** Persisted AI tuning used by runtime tick logic. */
+  readonly aiProfile: NpcAiBlueprint;
   /** Whether this NPC currently has focus for greeting/interaction cues. */
   readonly active: boolean;
   /** Optional interaction state machine marker. */
@@ -243,6 +271,12 @@ export type NpcStateMachine = "idle" | "wander" | "face_player" | "talking";
 export interface GameSceneState {
   /** Active scene identifier. */
   readonly sceneId: string;
+  /** Human-readable scene title resolved for the active locale. */
+  readonly sceneTitle: string;
+  /** Background image path used by the playable renderer. */
+  readonly background: string;
+  /** Scene geometry used by camera clamping and background rendering. */
+  readonly geometry: SceneGeometry;
   /** Player snapshot. */
   readonly player: EntityState;
   /** NPC snapshots. */
@@ -267,12 +301,18 @@ export interface GameSceneState {
 export interface GameSession {
   /** Session identifier. */
   readonly id: string;
+  /** Stable owner identity derived from auth-session cookie. */
+  readonly ownerSessionId: string;
   /** Seed used for deterministic NPC movement decisions. */
   readonly seed: number;
   /** Active locale. */
   readonly locale: GameLocale;
   /** Last known scene state. */
   readonly scene: GameSceneState;
+  /** Last project binding used to seed this session, if any. */
+  readonly projectId?: string;
+  /** Monotonic scene-state version used for optimistic persistence. */
+  readonly stateVersion: number;
   /** Last persisted tick marker. */
   readonly updatedAtMs: number;
   /** Session creation time. */
@@ -791,7 +831,7 @@ export interface GameCommandResult {
  * Supported game session lifecycle outcomes.
  */
 export interface GameSessionLifecycleResult {
-  /** Session object used by create/join/restore calls. */
+  /** Session object used by create/restore calls. */
   readonly sessionId: string;
   /** Current scene locale. */
   readonly locale: LocaleCode;
@@ -803,10 +843,16 @@ export interface GameSessionLifecycleResult {
   readonly version: number;
   /** Resume token used by UI reconnection flows. */
   readonly resumeToken: string;
+  /** Absolute resume token expiry timestamp in ms since epoch. */
+  readonly resumeTokenExpiresAtMs: number;
+  /** Monotonic resume-token generation version for deterministic rotation. */
+  readonly resumeTokenVersion: number;
+  /** Monotonic scene-state version at the time of the snapshot. */
+  readonly stateVersion: number;
 }
 
 /**
- * Session creation contract shared by `/api/game/session` and restore/join flows.
+ * Session creation contract shared by `/api/game/session` and restore flows.
  */
 export interface GameSessionCreate {
   /** Optional locale from builder/editor or user locale. */
@@ -823,8 +869,8 @@ export interface GameSessionCreate {
 export interface GameSessionResume {
   /** Existing session identifier. */
   readonly sessionId: string;
-  /** Optional resume token for trusted hand-off. */
-  readonly resumeToken?: string;
+  /** Resume token for trusted hand-off. */
+  readonly resumeToken: string;
   /** Caller locale. */
   readonly locale?: LocaleCode;
 }

@@ -135,8 +135,16 @@ export class TransformersProvider implements AiProvider {
     }
 
     const pipelineKey: ModelKey = params.model === "npcDialogue" ? "npcDialogue" : "oracle";
-
-    const result = await manager.generateOracle(lastUserMessage.content);
+    const prompt =
+      pipelineKey === "npcDialogue"
+        ? [params.systemPrompt ?? "", lastUserMessage.content]
+            .filter((part) => part.length > 0)
+            .join("\n\n")
+        : lastUserMessage.content;
+    const result =
+      pipelineKey === "npcDialogue"
+        ? await manager.generateText("npcDialogue", prompt)
+        : await manager.generateOracle(prompt);
 
     if (result === null) {
       return {

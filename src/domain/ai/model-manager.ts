@@ -207,15 +207,32 @@ export class ModelManager {
    * Generates an oracle fortune string from user prompt.
    */
   async generateOracle(question: string): Promise<string | null> {
-    const pipe = await this.getPipeline("oracle").catch((error: unknown) => {
-      logger.error("model.oracle.failed", { err: String(error) });
+    const prompt = `The Tea Oracle speaks of "${question}": `;
+    return this.generateText("oracle", prompt, prompt);
+  }
+
+  /**
+   * Generates text from a configured local text-generation pipeline.
+   *
+   * @param modelKey Target model registry key.
+   * @param prompt Prompt passed to the local pipeline.
+   * @param stripPrefix Optional prefix to strip from generated text.
+   * @returns Generated text or null when model execution fails.
+   */
+  async generateText(
+    modelKey: Extract<ModelKey, "oracle" | "npcDialogue">,
+    prompt: string,
+    stripPrefix?: string,
+  ): Promise<string | null> {
+    const pipe = await this.getPipeline(modelKey).catch((error: unknown) => {
+      logger.error(`model.${modelKey}.failed`, { err: String(error) });
       return null;
     });
-    if (!pipe) return null;
+    if (!pipe) {
+      return null;
+    }
 
-    const entry = MODEL_REGISTRY.oracle;
-    const prompt = `The Tea Oracle speaks of "${question}": `;
-
+    const entry = MODEL_REGISTRY[modelKey];
     const result = await withTimeout(
       (
         pipe as (
@@ -224,16 +241,26 @@ export class ModelManager {
         ) => Promise<Array<{ generated_text: string }>>
       )(prompt, entry.generationConfig ?? {}),
       appConfig.ai.pipelineTimeoutMs,
-      "oracle:generate",
+      `${modelKey}:generate`,
     ).catch((error: unknown) => {
-      logger.error("model.oracle.failed", { err: String(error) });
+      logger.error(`model.${modelKey}.failed`, { err: String(error) });
       return null;
     });
 
-    if (!result) return null;
+    if (!result) {
+      return null;
+    }
 
     const generated = result[0]?.generated_text ?? "";
-    return generated.startsWith(prompt) ? generated.slice(prompt.length).trim() : generated.trim();
+    if (
+      typeof stripPrefix === "string" &&
+      stripPrefix.length > 0 &&
+      generated.startsWith(stripPrefix)
+    ) {
+      return generated.slice(stripPrefix.length).trim();
+    }
+
+    return generated.trim();
   }
 
   /**

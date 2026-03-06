@@ -8,6 +8,7 @@ export const httpStatus = {
   notFound: 404,
   conflict: 409,
   gone: 410,
+  tooManyRequests: 429,
   unprocessableEntity: 422,
   serviceUnavailable: 503,
   internalServerError: 500,

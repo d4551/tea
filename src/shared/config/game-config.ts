@@ -20,6 +20,8 @@ export interface RuntimeGameConfig {
   readonly sessionTtlMs: number;
   /** Tick interval target in milliseconds. */
   readonly tickMs: number;
+  /** Minimum cadence for persisting active session state. */
+  readonly sessionPersistIntervalMs: number;
   /** Debounce window for save persistence requests. */
   readonly saveCooldownMs: number;
   /** Maximum player movement steps in px per command application. */
@@ -28,6 +30,10 @@ export interface RuntimeGameConfig {
   readonly maxCommandsPerTick: number;
   /** Maximum interactions accepted per tick. */
   readonly maxInteractionsPerTick: number;
+  /** Maximum chat commands accepted in one rate-limit window. */
+  readonly maxChatCommandsPerWindow: number;
+  /** Sliding rate-limit window for chat commands in milliseconds. */
+  readonly chatRateLimitWindowMs: number;
   /** Maximum characters accepted in a chat message sent to an NPC. */
   readonly maxChatMessageLength: number;
   /** HUD polling interval in milliseconds. */
@@ -46,6 +52,16 @@ export interface RuntimeGameConfig {
   readonly defaultSceneId: string;
   /** Duration in milliseconds within which a session resume token stays valid. */
   readonly sessionResumeWindowMs: number;
+  /** Client keyboard movement command send interval in milliseconds. */
+  readonly commandSendIntervalMs: number;
+  /** Client command TTL fallback in milliseconds. */
+  readonly commandTtlMs: number;
+  /** Client websocket reconnect delay in milliseconds. */
+  readonly socketReconnectDelayMs: number;
+  /** Client restore request timeout in milliseconds. */
+  readonly restoreRequestTimeoutMs: number;
+  /** Maximum restore attempts before marking the session expired. */
+  readonly restoreMaxAttempts: number;
 }
 
 /**
@@ -62,10 +78,13 @@ export interface GameContractValues {
 export const defaultGameConfig: RuntimeGameConfig = {
   sessionTtlMs: appConfig.game.sessionTtlMs,
   tickMs: appConfig.game.tickMs,
+  sessionPersistIntervalMs: appConfig.game.sessionPersistIntervalMs,
   saveCooldownMs: appConfig.game.saveCooldownMs,
   maxMovePerTick: appConfig.game.maxMovePerTick,
   maxCommandsPerTick: appConfig.game.maxCommandsPerTick,
   maxInteractionsPerTick: appConfig.game.maxInteractionsPerTick,
+  maxChatCommandsPerWindow: appConfig.game.maxChatCommandsPerWindow,
+  chatRateLimitWindowMs: appConfig.game.chatRateLimitWindowMs,
   maxChatMessageLength: appConfig.game.maxChatMessageLength,
   viewportWidth: appConfig.game.viewportWidth,
   viewportHeight: appConfig.game.viewportHeight,
@@ -75,6 +94,11 @@ export const defaultGameConfig: RuntimeGameConfig = {
   hudPollIntervalMs: appConfig.game.hudPollIntervalMs,
   hudRetryDelayMs: appConfig.game.hudRetryDelayMs,
   sessionResumeWindowMs: appConfig.game.sessionResumeWindowMs,
+  commandSendIntervalMs: appConfig.game.commandSendIntervalMs,
+  commandTtlMs: appConfig.game.commandTtlMs,
+  socketReconnectDelayMs: appConfig.game.socketReconnectDelayMs,
+  restoreRequestTimeoutMs: appConfig.game.restoreRequestTimeoutMs,
+  restoreMaxAttempts: appConfig.game.restoreMaxAttempts,
 };
 
 /**
