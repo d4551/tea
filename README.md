@@ -1,24 +1,33 @@
 <div align="center">
 
-```text
-             )  (   )  (
-            (   ) )   ( )
-             ) ( (   ) (
-          .--------------.
-          |  ~   ~   ~   |          _____  _____     _
-          |              |___      |_   _|| ____|   / \
-          |              |__ \       | |  |  _|    / _ \
-          |              |__| |      | |  | |___  / ___ \
-          \              /____/      |_|  |_____|/_/   \_\
-           \____________/
-         .================.        Templated · Event-driven · Agentic
-        '------------------'           模板化 · 事件驱动 · 智能体
+```
+        (  )   (   )  )
+         ) (   )  (  (
+         ( )  (    ) )
+         _____________
+        <_____________> ___
+        |             |/ _ \
+        |               | | |
+        |               |_| |
+   _____|             |\___/
+  /    \___________/    \
+  \_____________________/
 
-                                       Game Engine · 游戏引擎
+   _____  _____     _
+  |_   _|| ____|   / \
+    | |  |  _|    / _ \
+    | |  | |___  / ___ \
+    |_|  |_____|/_/   \_\
+
+  Templated  Event-driven  Agentic
 ```
 
-**服务端驱动的游戏引擎与世界构建平台**<br/>
-A server-driven game engine and worldbuilding platform.
+# 🍵 TEA Game Engine
+
+**T**emplated · **E**vent-driven · **A**gentic
+
+A server-driven game engine and worldbuilding platform.<br/>
+服务端驱动的游戏引擎与世界构建平台。
 
 [![Bun](https://img.shields.io/badge/Bun-1.3-f9f1e1?logo=bun&logoColor=f9f1e1&labelColor=14151a)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?logo=typescript&logoColor=white&labelColor=14151a)](https://www.typescriptlang.org)
@@ -269,6 +278,8 @@ Required `.env` variables:
 | `DATABASE_URL` | libSQL connection string (e.g., `file:./prisma/dev.db`) |
 | `NODE_ENV` | `development` or `production` |
 | `PORT` | Server port (default: 3000) |
+| `SESSION_COOKIE_SECRETS` | Comma-separated signing secrets for the anonymous Elysia session cookie |
+| `SESSION_MAX_AGE_SECONDS` | Anonymous session cookie lifetime in seconds |
 
 ---
 
