@@ -1,15 +1,13 @@
-import { staticPlugin } from "@elysiajs/static";
 import { Elysia } from "elysia";
-import { appConfig } from "./config/environment.ts";
 // Domain services
 import { createOracleService } from "./domain/oracle/oracle-service.ts";
 // Shared middleware & plugins
-import { aiContextPlugin } from "./plugins/ai-context.ts";
 import { createErrorResponse } from "./plugins/error-handler.ts";
 // Game
 import { gamePlugin } from "./plugins/game-plugin.ts";
 import { requestContextPlugin } from "./plugins/request-context.ts";
 import { sessionPurgePlugin } from "./plugins/session-purge-plugin.ts";
+import { staticAssetsPlugin } from "./plugins/static-assets.ts";
 import { swaggerDocsPlugin } from "./plugins/swagger-docs.ts";
 import { aiRoutes } from "./routes/ai-routes.ts";
 import { createApiRoutes } from "./routes/api-routes.ts";
@@ -20,6 +18,11 @@ import { gameRoutes } from "./routes/game-routes.ts";
 import { createPageRoutes } from "./routes/page-routes.ts";
 import { contentType } from "./shared/constants/http.ts";
 
+/**
+ * Creates the fully wired Elysia application instance.
+ *
+ * @returns Bootstrapped application with plugins, routes, and shared middleware.
+ */
 export const createApp = async () => {
   const oracleService = createOracleService();
 
@@ -28,16 +31,13 @@ export const createApp = async () => {
       // Global context (correlation ID, timing)
       .use(requestContextPlugin)
 
-      // AI model manager — injected as `ai` on every request context
-      .use(aiContextPlugin)
-
       // Global error handler
       .onError(({ code, error, request, set }) => {
         const errorResponse = createErrorResponse(
           code,
-          error as Error,
+          error instanceof Error ? error : new Error(String(error)),
           request,
-          set.headers as Record<string, string>,
+          set.headers,
         );
         set.status = errorResponse.status;
         return errorResponse.payload;
@@ -52,30 +52,7 @@ export const createApp = async () => {
       .use(swaggerDocsPlugin)
 
       // Static file serving (public bundle output, mounted media assets, plugin pack)
-      .use(
-        staticPlugin({
-          assets: appConfig.staticAssets.publicDirectory,
-          prefix: appConfig.staticAssets.publicPrefix,
-        }),
-      )
-      .use(
-        staticPlugin({
-          assets: appConfig.staticAssets.assetsDirectory,
-          prefix: appConfig.staticAssets.assetsPrefix,
-        }),
-      )
-      .use(
-        staticPlugin({
-          assets: appConfig.playableGame.sourceDirectory,
-          prefix: appConfig.playableGame.assetPrefix,
-        }),
-      )
-      .use(
-        staticPlugin({
-          assets: appConfig.staticAssets.rmmzPackDirectory,
-          prefix: appConfig.staticAssets.rmmzPackPrefix,
-        }),
-      )
+      .use(staticAssetsPlugin)
 
       // Presentation / View Routes
       .use(createPageRoutes(oracleService))

@@ -1,9 +1,4 @@
-import {
-  assetRelativePaths,
-  joinLocalPath,
-  joinUrlPath,
-  toPublicAssetUrl,
-} from "../shared/constants/assets.ts";
+import { assetRelativePaths, joinUrlPath, toPublicAssetUrl } from "../shared/constants/assets.ts";
 
 /**
  * Supported locale codes for server rendering and API responses.
@@ -49,7 +44,7 @@ export interface AppConfig {
   };
   readonly auth: {
     readonly sessionCookieName: string;
-    readonly sessionCookieValue: string;
+    readonly sessionMaxAgeSeconds: number;
   };
   readonly oracle: {
     readonly requireSession: boolean;
@@ -75,11 +70,16 @@ export interface AppConfig {
     readonly sessionResumeWindowMs: number;
   };
   readonly ai: {
+    readonly warmupOnBoot: boolean;
     readonly modelWarmupTimeoutMs: number;
     readonly pipelineTimeoutMs: number;
     readonly transformersCacheDirectory: string;
+    readonly transformersLocalModelPath: string;
+    readonly transformersAllowRemoteModels: boolean;
+    readonly transformersAllowLocalModels: boolean;
     readonly onnxWasmPath: string;
     readonly onnxThreadCount: number;
+    readonly onnxProxyEnabled: boolean;
     readonly ollamaBaseUrl: string;
     readonly ollamaEnabled: boolean;
     readonly ollamaChatModel: string;
@@ -92,29 +92,24 @@ export interface AppConfig {
     readonly requestTimeoutMs: number;
     readonly commandRetryBudgetMs: number;
     readonly retryBackoffBaseMs: number;
-  };
-  readonly spriteProcessing: {
-    readonly sourceDirectory: string;
-    readonly outputDirectory: string;
-    readonly floodFillTolerance: number;
-    readonly interiorGraySpreadThreshold: number;
-    readonly interiorGrayLuminanceMin: number;
-    readonly interiorGrayLuminanceMax: number;
-    readonly aiModel: string;
-    readonly chaJiangSourceFile: string;
-    readonly chaJiangOutputFile: string;
-    readonly npcSheetSourceFile: string;
-    readonly npcSheetOutputFile: string;
+    readonly localSentimentModel: string;
+    readonly localTextGenerationModel: string;
+    readonly localNpcDialogueModel: string;
+    readonly localEmbeddingModel: string;
+    readonly localSpeechToTextModel: string;
+    readonly localTextToSpeechModel: string;
+    readonly localSpeechToTextEnabled: boolean;
+    readonly localTextToSpeechEnabled: boolean;
+    readonly localEmbeddingsEnabled: boolean;
+    readonly audioInputSampleRateHz: number;
+    readonly audioUploadMaxBytes: number;
+    readonly textToSpeechSpeakerEmbeddings: string;
   };
 }
 
 const DEFAULT_PORT = 3000;
 const DEFAULT_RESPONSE_DELAY_MS = 180;
 const DEFAULT_MAX_QUESTION_LENGTH = 240;
-const DEFAULT_FLOOD_FILL_TOLERANCE = 40;
-const DEFAULT_INTERIOR_GRAY_SPREAD_THRESHOLD = 8;
-const DEFAULT_INTERIOR_GRAY_LUMINANCE_MIN = 120;
-const DEFAULT_INTERIOR_GRAY_LUMINANCE_MAX = 230;
 const DEFAULT_GAME_SESSION_STORE = "prisma";
 const DEFAULT_GAME_SESSION_TTL_MS = 1000 * 60 * 60;
 const DEFAULT_GAME_TICK_MS = 16;
@@ -129,10 +124,14 @@ const DEFAULT_GAME_HUD_POLL_MS = 500;
 const DEFAULT_GAME_HUD_RETRY_MS = 2000;
 const DEFAULT_GAME_SESSION_RESUME_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_GAME_DEFAULT_SCENE_ID = "teaHouse";
+const DEFAULT_AI_WARMUP_ON_BOOT = false;
 const DEFAULT_AI_MODEL_WARMUP_TIMEOUT_MS = 5000;
 const DEFAULT_AI_PIPELINE_TIMEOUT_MS = 2500;
 const DEFAULT_AI_TRANSFORMERS_CACHE_DIRECTORY = "./.cache/hf-models";
+const DEFAULT_AI_TRANSFORMERS_LOCAL_MODEL_PATH = "./.cache/hf-models";
 const DEFAULT_AI_ONNX_THREAD_COUNT = 2;
+const DEFAULT_AI_AUDIO_INPUT_SAMPLE_RATE_HZ = 16_000;
+const DEFAULT_AI_AUDIO_UPLOAD_MAX_BYTES = 6 * 1024 * 1024;
 const DEFAULT_AI_REQUEST_TIMEOUT_MS = 8_000;
 const DEFAULT_AI_COMMAND_RETRY_BUDGET_MS = 30_000;
 const DEFAULT_AI_RETRY_BACKOFF_BASE_MS = 350;
@@ -143,11 +142,14 @@ const DEFAULT_OLLAMA_TIMEOUT_MS = 30_000;
 const DEFAULT_OLLAMA_KEEP_ALIVE_MS = 300_000;
 const DEFAULT_AI_PREFERRED_PROVIDER = "auto";
 const DEFAULT_AI_CAPABILITY_REFRESH_INTERVAL_MS = 60_000;
-const DEFAULT_SPRITE_AI_MODEL = "Xenova/modnet";
-const DEFAULT_CHA_JIANG_SOURCE_FILE = "cha-jiang-source.png";
-const DEFAULT_CHA_JIANG_OUTPUT_FILE = "cha-jiang-sprite.png";
-const DEFAULT_NPC_SHEET_SOURCE_FILE = "npc-sprites-source.png";
-const DEFAULT_NPC_SHEET_OUTPUT_FILE = "npc-sprites.png";
+const DEFAULT_AI_LOCAL_SENTIMENT_MODEL = "Xenova/distilbert-base-uncased-finetuned-sst-2-english";
+const DEFAULT_AI_LOCAL_TEXT_GENERATION_MODEL = "Xenova/gpt2";
+const DEFAULT_AI_LOCAL_NPC_DIALOGUE_MODEL = "Xenova/gpt2";
+const DEFAULT_AI_LOCAL_EMBEDDING_MODEL = "Xenova/all-MiniLM-L6-v2";
+const DEFAULT_AI_LOCAL_SPEECH_TO_TEXT_MODEL = "onnx-community/whisper-tiny.en";
+const DEFAULT_AI_LOCAL_TEXT_TO_SPEECH_MODEL = "Xenova/speecht5_tts";
+const DEFAULT_AI_LOCAL_TTS_SPEAKER_EMBEDDINGS =
+  "https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/speaker_embeddings.bin";
 const DEFAULT_PUBLIC_PREFIX = "/public";
 const DEFAULT_ASSETS_PREFIX = "/assets";
 const DEFAULT_RMMZ_PACK_PREFIX = "/rmmz-pack";
@@ -160,7 +162,7 @@ const DEFAULT_PLAYABLE_GAME_SOURCE_DIRECTORY = "public/game";
 const DEFAULT_THEME = "silk";
 const DEFAULT_MAX_CONTENT_WIDTH_CLASS = "max-w-6xl";
 const DEFAULT_SESSION_COOKIE_NAME = "lotfk_session";
-const DEFAULT_SESSION_COOKIE_VALUE = "active";
+const DEFAULT_SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 const DEFAULT_ANSWER_HASH_MULTIPLIER = 7;
 const DEFAULT_LOCALE: LocaleCode = "en-US";
 const resolvedPublicPrefix = Bun.env.PUBLIC_ASSET_PREFIX ?? DEFAULT_PUBLIC_PREFIX;
@@ -186,7 +188,6 @@ const resolvedPlayableGameClientScriptPath =
 const resolvedOnnxWasmPath =
   Bun.env.AI_ONNX_WASM_PATH ??
   `${toPublicAssetUrl(resolvedPublicPrefix, assetRelativePaths.onnxPublicDirectory)}/`;
-
 interface LocaleMatcher {
   readonly locale: LocaleCode;
   readonly normalizedLocale: string;
@@ -300,9 +301,12 @@ export const matchLocale = (value: string | undefined | null): LocaleCode | null
 /**
  * Fully resolved application configuration from environment variables.
  */
+const resolvedApplicationName = Bun.env.APP_NAME ?? "Leaves of the Fallen Kingdom";
+const resolvedApplicationVersion = Bun.env.APP_VERSION ?? "1.0.0";
+
 export const appConfig: AppConfig = {
-  applicationName: Bun.env.APP_NAME ?? "Leaves of the Fallen Kingdom",
-  applicationVersion: Bun.env.APP_VERSION ?? "1.0.0",
+  applicationName: resolvedApplicationName,
+  applicationVersion: resolvedApplicationVersion,
   host: Bun.env.HOST ?? "0.0.0.0",
   port: parseInteger(Bun.env.PORT, DEFAULT_PORT, 1),
   defaultLocale: normalizeLocale(Bun.env.DEFAULT_LOCALE),
@@ -331,7 +335,11 @@ export const appConfig: AppConfig = {
   },
   auth: {
     sessionCookieName: Bun.env.SESSION_COOKIE_NAME ?? DEFAULT_SESSION_COOKIE_NAME,
-    sessionCookieValue: Bun.env.SESSION_COOKIE_VALUE ?? DEFAULT_SESSION_COOKIE_VALUE,
+    sessionMaxAgeSeconds: parseInteger(
+      Bun.env.SESSION_MAX_AGE_SECONDS,
+      DEFAULT_SESSION_MAX_AGE_SECONDS,
+      1,
+    ),
   },
   oracle: {
     requireSession: parseBoolean(Bun.env.ORACLE_REQUIRE_SESSION, false),
@@ -385,6 +393,7 @@ export const appConfig: AppConfig = {
     ),
   },
   ai: {
+    warmupOnBoot: parseBoolean(Bun.env.AI_WARMUP_ON_BOOT, DEFAULT_AI_WARMUP_ON_BOOT),
     modelWarmupTimeoutMs: parseInteger(
       Bun.env.AI_MODEL_WARMUP_TIMEOUT_MS,
       DEFAULT_AI_MODEL_WARMUP_TIMEOUT_MS,
@@ -397,8 +406,13 @@ export const appConfig: AppConfig = {
     ),
     transformersCacheDirectory:
       Bun.env.AI_TRANSFORMERS_CACHE_DIR ?? DEFAULT_AI_TRANSFORMERS_CACHE_DIRECTORY,
+    transformersLocalModelPath:
+      Bun.env.AI_TRANSFORMERS_LOCAL_MODEL_PATH ?? DEFAULT_AI_TRANSFORMERS_LOCAL_MODEL_PATH,
+    transformersAllowRemoteModels: parseBoolean(Bun.env.AI_ALLOW_REMOTE_MODELS, true),
+    transformersAllowLocalModels: parseBoolean(Bun.env.AI_ALLOW_LOCAL_MODELS, true),
     onnxWasmPath: resolvedOnnxWasmPath,
     onnxThreadCount: parseInteger(Bun.env.AI_ONNX_THREAD_COUNT, DEFAULT_AI_ONNX_THREAD_COUNT, 1),
+    onnxProxyEnabled: parseBoolean(Bun.env.AI_ONNX_PROXY_ENABLED, false),
     ollamaBaseUrl: Bun.env.OLLAMA_BASE_URL ?? DEFAULT_OLLAMA_BASE_URL,
     ollamaEnabled: parseBoolean(Bun.env.OLLAMA_ENABLED, true),
     ollamaChatModel: Bun.env.OLLAMA_CHAT_MODEL ?? DEFAULT_OLLAMA_CHAT_MODEL,
@@ -427,35 +441,30 @@ export const appConfig: AppConfig = {
       DEFAULT_AI_RETRY_BACKOFF_BASE_MS,
       50,
     ),
-  },
-  spriteProcessing: {
-    sourceDirectory: Bun.env.SPRITE_SOURCE_DIR ?? "assets/source",
-    outputDirectory:
-      Bun.env.SPRITE_OUTPUT_DIR ?? joinLocalPath(resolvedAssetsDirectory, "images/sprites"),
-    floodFillTolerance: parseInteger(
-      Bun.env.SPRITE_FLOOD_FILL_TOLERANCE,
-      DEFAULT_FLOOD_FILL_TOLERANCE,
-      0,
+    localSentimentModel: Bun.env.AI_LOCAL_SENTIMENT_MODEL ?? DEFAULT_AI_LOCAL_SENTIMENT_MODEL,
+    localTextGenerationModel:
+      Bun.env.AI_LOCAL_TEXT_GENERATION_MODEL ?? DEFAULT_AI_LOCAL_TEXT_GENERATION_MODEL,
+    localNpcDialogueModel:
+      Bun.env.AI_LOCAL_NPC_DIALOGUE_MODEL ?? DEFAULT_AI_LOCAL_NPC_DIALOGUE_MODEL,
+    localEmbeddingModel: Bun.env.AI_LOCAL_EMBEDDING_MODEL ?? DEFAULT_AI_LOCAL_EMBEDDING_MODEL,
+    localSpeechToTextModel:
+      Bun.env.AI_LOCAL_SPEECH_TO_TEXT_MODEL ?? DEFAULT_AI_LOCAL_SPEECH_TO_TEXT_MODEL,
+    localTextToSpeechModel:
+      Bun.env.AI_LOCAL_TEXT_TO_SPEECH_MODEL ?? DEFAULT_AI_LOCAL_TEXT_TO_SPEECH_MODEL,
+    localSpeechToTextEnabled: parseBoolean(Bun.env.AI_LOCAL_STT_ENABLED, true),
+    localTextToSpeechEnabled: parseBoolean(Bun.env.AI_LOCAL_TTS_ENABLED, true),
+    localEmbeddingsEnabled: parseBoolean(Bun.env.AI_LOCAL_EMBEDDINGS_ENABLED, true),
+    audioInputSampleRateHz: parseInteger(
+      Bun.env.AI_AUDIO_INPUT_SAMPLE_RATE_HZ,
+      DEFAULT_AI_AUDIO_INPUT_SAMPLE_RATE_HZ,
+      8_000,
     ),
-    interiorGraySpreadThreshold: parseInteger(
-      Bun.env.SPRITE_INTERIOR_GRAY_SPREAD_THRESHOLD,
-      DEFAULT_INTERIOR_GRAY_SPREAD_THRESHOLD,
-      0,
+    audioUploadMaxBytes: parseInteger(
+      Bun.env.AI_AUDIO_UPLOAD_MAX_BYTES,
+      DEFAULT_AI_AUDIO_UPLOAD_MAX_BYTES,
+      1_024,
     ),
-    interiorGrayLuminanceMin: parseInteger(
-      Bun.env.SPRITE_INTERIOR_GRAY_LUMINANCE_MIN,
-      DEFAULT_INTERIOR_GRAY_LUMINANCE_MIN,
-      0,
-    ),
-    interiorGrayLuminanceMax: parseInteger(
-      Bun.env.SPRITE_INTERIOR_GRAY_LUMINANCE_MAX,
-      DEFAULT_INTERIOR_GRAY_LUMINANCE_MAX,
-      0,
-    ),
-    aiModel: Bun.env.SPRITE_AI_MODEL ?? DEFAULT_SPRITE_AI_MODEL,
-    chaJiangSourceFile: Bun.env.SPRITE_SOURCE_CHA_JIANG ?? DEFAULT_CHA_JIANG_SOURCE_FILE,
-    chaJiangOutputFile: Bun.env.SPRITE_OUTPUT_CHA_JIANG ?? DEFAULT_CHA_JIANG_OUTPUT_FILE,
-    npcSheetSourceFile: Bun.env.SPRITE_SOURCE_NPC_SHEET ?? DEFAULT_NPC_SHEET_SOURCE_FILE,
-    npcSheetOutputFile: Bun.env.SPRITE_OUTPUT_NPC_SHEET ?? DEFAULT_NPC_SHEET_OUTPUT_FILE,
+    textToSpeechSpeakerEmbeddings:
+      Bun.env.AI_LOCAL_TTS_SPEAKER_EMBEDDINGS ?? DEFAULT_AI_LOCAL_TTS_SPEAKER_EMBEDDINGS,
   },
 };

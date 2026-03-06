@@ -6,7 +6,12 @@ import {
   parseBoolean,
   parseInteger,
 } from "../src/config/environment.ts";
-import { joinLocalPath, joinUrlPath } from "../src/shared/constants/assets.ts";
+import {
+  assetRelativePaths,
+  joinLocalPath,
+  joinUrlPath,
+  resolveStaticAssetMounts,
+} from "../src/shared/constants/assets.ts";
 import { appRoutes, withLocaleQuery, withQueryParameters } from "../src/shared/constants/routes.ts";
 
 describe("environment parsing", () => {
@@ -34,16 +39,9 @@ describe("environment parsing", () => {
     expect(matchLocale("fr-FR")).toBeNull();
   });
 
-  test("sprite file mappings are configured through typed environment config", () => {
-    expect(appConfig.spriteProcessing.chaJiangSourceFile.length).toBeGreaterThan(0);
-    expect(appConfig.spriteProcessing.chaJiangOutputFile.length).toBeGreaterThan(0);
-    expect(appConfig.spriteProcessing.npcSheetSourceFile.length).toBeGreaterThan(0);
-    expect(appConfig.spriteProcessing.npcSheetOutputFile.length).toBeGreaterThan(0);
-  });
-
   test("auth and oracle numeric controls are config-driven", () => {
     expect(appConfig.auth.sessionCookieName.length).toBeGreaterThan(0);
-    expect(appConfig.auth.sessionCookieValue.length).toBeGreaterThan(0);
+    expect(appConfig.auth.sessionMaxAgeSeconds).toBeGreaterThan(0);
     expect(appConfig.oracle.answerHashMultiplier).toBeGreaterThan(0);
   });
 
@@ -59,14 +57,49 @@ describe("environment parsing", () => {
     expect(appConfig.playableGame.clientScriptPath).toBe(
       `${appConfig.playableGame.assetPrefix}/game-client.js`,
     );
-    expect(appConfig.spriteProcessing.outputDirectory.endsWith("images/sprites")).toBe(true);
+    expect(assetRelativePaths.htmxExtensionsOutputDirectory).toBe("vendor/htmx-ext");
     expect(appConfig.game.defaultSceneId.length).toBeGreaterThan(0);
     expect(appRoutes.gameAssets).toBe(appConfig.playableGame.assetPrefix);
+  });
+
+  test("local AI runtime settings are config-driven", () => {
+    expect(typeof appConfig.ai.warmupOnBoot).toBe("boolean");
+    expect(appConfig.ai.transformersCacheDirectory.length).toBeGreaterThan(0);
+    expect(appConfig.ai.transformersLocalModelPath.length).toBeGreaterThan(0);
+    expect(appConfig.ai.onnxWasmPath.length).toBeGreaterThan(0);
+    expect(appConfig.ai.localSpeechToTextModel.length).toBeGreaterThan(0);
+    expect(appConfig.ai.localTextToSpeechModel.length).toBeGreaterThan(0);
+    expect(appConfig.ai.audioInputSampleRateHz).toBeGreaterThanOrEqual(8000);
+    expect(appConfig.ai.audioUploadMaxBytes).toBeGreaterThan(0);
+    expect(appRoutes.aiCatalog).toBe("/api/ai/catalog");
+    expect(appRoutes.aiTranscribe).toBe("/api/ai/audio/transcribe");
+    expect(appRoutes.aiSynthesize).toBe("/api/ai/audio/synthesize");
   });
 
   test("asset path helpers normalize url and local paths", () => {
     expect(joinUrlPath("/public/", "/vendor/htmx.min.js")).toBe("/public/vendor/htmx.min.js");
     expect(joinLocalPath("/public/", "/vendor/htmx.min.js")).toBe("public/vendor/htmx.min.js");
+  });
+
+  test("static asset mounts are derived from a single manifest", () => {
+    expect(resolveStaticAssetMounts(appConfig)).toEqual([
+      {
+        assets: appConfig.staticAssets.publicDirectory,
+        prefix: appConfig.staticAssets.publicPrefix,
+      },
+      {
+        assets: appConfig.staticAssets.assetsDirectory,
+        prefix: appConfig.staticAssets.assetsPrefix,
+      },
+      {
+        assets: appConfig.playableGame.sourceDirectory,
+        prefix: appConfig.playableGame.assetPrefix,
+      },
+      {
+        assets: appConfig.staticAssets.rmmzPackDirectory,
+        prefix: appConfig.staticAssets.rmmzPackPrefix,
+      },
+    ]);
   });
 
   test("locale query helper preserves hash and existing params", () => {

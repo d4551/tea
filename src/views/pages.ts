@@ -1,5 +1,6 @@
 import type { LocaleCode } from "../config/environment.ts";
 import { appConfig } from "../config/environment.ts";
+import { getAiRuntimeProfile } from "../domain/ai/local-runtime-profile.ts";
 import { assetRelativePaths, toPublicAssetUrl } from "../shared/constants/assets.ts";
 import { appRoutes, withLocaleQuery } from "../shared/constants/routes.ts";
 import type { Messages } from "../shared/i18n/messages.ts";
@@ -42,15 +43,54 @@ export const renderHomePage = (
   oraclePanelState: OraclePanelState,
 ): string => {
   const { locale, messages, currentPathWithQuery } = input;
+  const runtimeProfile = getAiRuntimeProfile();
+  const catalogItems = runtimeProfile.catalog
+    .filter((entry) => entry.enabled)
+    .map(
+      (entry) => `<li class="list-row">
+        <span class="font-medium">${escapeHtml(entry.label)}</span>
+        <code>${escapeHtml(entry.model)}</code>
+      </li>`,
+    )
+    .join("");
+  const flowItems = messages.pages.home.userFlowSteps
+    .map(
+      (step, index) =>
+        `<li class="step ${index < 2 ? "step-primary" : index < 4 ? "step-secondary" : "step-accent"}">${escapeHtml(step)}</li>`,
+    )
+    .join("");
+  const apiItems = [
+    appRoutes.aiStatus,
+    appRoutes.aiCatalog,
+    appRoutes.aiTranscribe,
+    appRoutes.aiSynthesize,
+    appRoutes.builderApiScenes,
+    appConfig.api.docsPath,
+  ]
+    .map((route) => `<li class="list-row"><code>${escapeHtml(route)}</code></li>`)
+    .join("");
 
-  const body = `<section class="hero rounded-box border border-base-300 bg-gradient-to-br from-base-200 to-base-100 p-6 lg:p-10">
+  const body = `<section class="hero overflow-hidden rounded-[2rem] border border-base-300 bg-gradient-to-br from-base-200 via-base-100 to-base-200 p-6 shadow-xl lg:p-10">
     <div class="hero-content px-0">
-      <div class="max-w-3xl space-y-4">
+      <div class="grid items-end gap-6 lg:grid-cols-[1.4fr_0.6fr]">
+        <div class="max-w-3xl space-y-4">
         <p class="badge badge-primary badge-soft">${escapeHtml(messages.pages.home.title)}</p>
         <h1 class="text-3xl font-semibold leading-tight lg:text-4xl">${escapeHtml(
           messages.pages.home.heroTitle,
         )}</h1>
         <p class="text-base opacity-90">${escapeHtml(messages.pages.home.heroDescription)}</p>
+          <div class="flex flex-wrap gap-3">
+            <a href="${withLocaleQuery(appRoutes.builder, locale)}" class="btn btn-primary">${escapeHtml(messages.navigation.builder)}</a>
+            <a href="${escapeHtml(appConfig.api.docsPath)}" class="btn btn-outline">${escapeHtml(messages.pages.home.docsCta)}</a>
+          </div>
+        </div>
+        <div class="card border border-base-300 bg-base-100/90 shadow-sm">
+          <div class="card-body gap-3">
+            <h2 class="card-title">${escapeHtml(messages.pages.home.builderOptionsTitle)}</h2>
+            <p class="text-sm text-base-content/70">${escapeHtml(messages.pages.home.builderOptionsDescription)}</p>
+            <ul class="list rounded-box bg-base-200/60">${catalogItems}</ul>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -77,6 +117,40 @@ export const renderHomePage = (
   </section>
 
   ${renderOracleSection(messages, oraclePanelState, locale)}
+
+  <section class="card border border-base-300 bg-base-100 shadow-sm">
+    <div class="card-body gap-5">
+      <div>
+        <h2 class="card-title text-2xl">${escapeHtml(messages.pages.home.userFlowTitle)}</h2>
+        <p class="text-base-content/70">${escapeHtml(messages.pages.home.builderOptionsDescription)}</p>
+      </div>
+      <div class="overflow-x-auto">
+        <ul class="steps min-w-3xl lg:steps-horizontal">${flowItems}</ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="grid gap-4 lg:grid-cols-[1fr_1fr_1.1fr]">
+    <article class="card border border-base-300 bg-base-100 shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title">${escapeHtml(messages.pages.home.builderOptionsTitle)}</h2>
+        <p>${escapeHtml(messages.builder.runtimeLaneDescription)}</p>
+      </div>
+    </article>
+    <article class="card border border-base-300 bg-base-100 shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title">${escapeHtml(messages.builder.aiLaneTitle)}</h2>
+        <p>${escapeHtml(messages.builder.aiLaneDescription)}</p>
+      </div>
+    </article>
+    <article class="card border border-base-300 bg-base-100 shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title">${escapeHtml(messages.pages.home.apiSurfaceTitle)}</h2>
+        <p>${escapeHtml(messages.pages.home.apiSurfaceDescription)}</p>
+        <ul class="list rounded-box bg-base-200/60">${apiItems}</ul>
+      </div>
+    </article>
+  </section>
 
   <section class="grid gap-4 sm:grid-cols-3">
     <a href="${withLocaleQuery(appRoutes.pitchDeck, locale)}" class="card border border-base-300 bg-base-100 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" aria-label="${escapeHtml(messages.navigation.pitchDeck)}">

@@ -11,6 +11,6 @@ export const i18nContextPlugin = new Elysia({ name: "i18n-context" }).derive(
     return {
       locale: i18n.locale,
       messages: i18n.messages,
-    } satisfies Record<string, unknown>;
+    };
   },
 );

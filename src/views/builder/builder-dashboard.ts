@@ -1,127 +1,177 @@
-/**
- * Builder Dashboard View
- *
- * Stats overview with scene count, NPC count, active sessions, and AI status.
- */
-import type { LocaleCode } from "../../config/environment.ts";
-import { appRoutes, withLocaleQuery } from "../../shared/constants/routes.ts";
+import { appConfig, type LocaleCode } from "../../config/environment.ts";
+import { appRoutes, withLocaleQuery, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 
 /**
- * Dashboard stats used for rendering.
+ * Summary metrics for the builder landing page.
  */
 export interface DashboardStats {
-  /** Number of active game sessions. */
+  /** Number of active gameplay sessions observed by the builder. */
   readonly activeSessions: number;
-  /** Number of total scenes in the project workspace. */
+  /** Total scenes in the current builder project. */
   readonly totalScenes: number;
-  /** Number of NPCs across all scenes. */
+  /** Total NPCs in the current builder project. */
   readonly totalNpcs: number;
   /** Whether any AI provider is currently available. */
   readonly aiAvailable: boolean;
-  /** Names of available providers. */
+  /** Available provider names for the current runtime. */
   readonly providers: readonly string[];
 }
 
 /**
- * Renders the builder dashboard overview.
+ * Renders the builder dashboard landing view.
  *
- * @param messages Locale-resolved messages.
- * @param locale Active locale code.
- * @param stats Dashboard statistics.
- * @returns HTML string for the dashboard panel.
+ * @param messages Locale-resolved message catalog.
+ * @param locale Active locale.
+ * @param stats Current builder summary metrics.
+ * @returns HTML string for the dashboard surface.
  */
 export const renderBuilderDashboard = (
   messages: Messages,
   locale: LocaleCode,
   stats: DashboardStats,
 ): string => {
-  const aiStatusClass = stats.aiAvailable ? "badge-success" : "badge-error";
-  const aiStatusText = stats.aiAvailable
+  const docsHref = withLocaleQuery(appConfig.api.docsPath, locale);
+  const scenesHref = withLocaleQuery(appRoutes.builderScenes, locale);
+  const npcsHref = withLocaleQuery(appRoutes.builderNpcs, locale);
+  const aiHref = withLocaleQuery(appRoutes.builderAi, locale);
+  const gameHref = withLocaleQuery(appRoutes.game, locale);
+  const builderStatusHref = withQueryParameters(appRoutes.aiBuilderCapabilities, {
+    locale,
+  });
+  const aiStatusLabel = stats.aiAvailable
     ? messages.ai.statusAvailable
     : messages.ai.statusUnavailable;
-  const sceneSummary = stats.totalScenes > 0 ? stats.totalScenes.toString() : "0";
-  const npcSummary = stats.totalNpcs > 0 ? `${stats.totalNpcs}` : messages.builder.noNpcs;
-  const sceneSummaryText =
-    stats.totalScenes > 0
-      ? `${stats.totalScenes} ${messages.builder.scenes}`
-      : messages.builder.noScenes;
-  const sceneHref = withLocaleQuery(appRoutes.builderScenes, locale);
-  const npcHref = withLocaleQuery(appRoutes.builderNpcs, locale);
-  const aiHref = withLocaleQuery(appRoutes.builderAi, locale);
-  const providerSummary = stats.providers.join(", ") || messages.ai.noProviderAvailable;
+  const providersLabel =
+    stats.providers.length > 0 ? stats.providers.join(", ") : messages.ai.noProviderAvailable;
+  const flowSteps = messages.builder.flowSteps
+    .map(
+      (step, index) =>
+        `<li class="list-row"><span class="badge badge-outline">${index + 1}</span> ${escapeHtml(step)}</li>`,
+    )
+    .join("");
 
   return `
     <div class="space-y-6">
-      <h1 class="text-2xl font-bold">${escapeHtml(messages.builder.dashboard)}</h1>
-
-      <!-- Stats row -->
-      <div class="stats stats-vertical lg:stats-horizontal shadow bg-base-100 w-full">
-        <div class="stat">
-          <div class="stat-title">${escapeHtml(messages.builder.activeSessions)}</div>
-          <div class="stat-value">${stats.activeSessions}</div>
-        </div>
-        <div class="stat">
-          <div class="stat-title">${escapeHtml(messages.builder.totalScenes)}</div>
-          <div class="stat-value">${escapeHtml(sceneSummary)}</div>
-        </div>
-        <div class="stat">
-          <div class="stat-title">${escapeHtml(messages.builder.totalNpcs)}</div>
-          <div class="stat-value">${escapeHtml(stats.totalNpcs.toString())}</div>
-        </div>
-        <div class="stat">
-          <div class="stat-title">${escapeHtml(messages.builder.aiStatus)}</div>
-          <div class="stat-value text-lg">
-            <span class="badge ${aiStatusClass} gap-1">${escapeHtml(aiStatusText)}</span>
-          </div>
-          <div class="stat-desc">${escapeHtml(providerSummary)}</div>
-        </div>
-      </div>
-
-      <!-- Quick links -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="card bg-base-100 shadow-sm">
-          <div class="card-body">
-            <h2 class="card-title">
-              <span aria-hidden="true">🏯</span> ${escapeHtml(messages.builder.scenes)}
-            </h2>
-            <p>${escapeHtml(sceneSummaryText)}</p>
-            <div class="card-actions justify-end">
-              <a href="${escapeHtml(sceneHref)}" class="btn btn-primary btn-sm" hx-get="${escapeHtml(sceneHref)}" hx-target="#builder-content" hx-push-url="true" aria-label="${escapeHtml(messages.builder.scenes)}">
-                ${escapeHtml(messages.builder.scenes)} →
+      <section class="card card-border bg-base-100 shadow-sm">
+        <div class="card-body gap-4">
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div class="space-y-2">
+              <h1 class="card-title text-3xl">${escapeHtml(messages.builder.dashboard)}</h1>
+              <p class="max-w-3xl text-base-content/80">${escapeHtml(messages.builder.flowDescription)}</p>
+            </div>
+            <div class="card-actions flex-wrap">
+              <a class="btn btn-primary btn-sm" href="${escapeHtml(gameHref)}" aria-label="${escapeHtml(messages.navigation.game)}">
+                ${escapeHtml(messages.navigation.game)}
+              </a>
+              <a class="btn btn-outline btn-sm" href="${escapeHtml(docsHref)}" aria-label="${escapeHtml(messages.builder.docsLabel)}">
+                ${escapeHtml(messages.builder.docsLabel)}
               </a>
             </div>
           </div>
-        </div>
 
-        <div class="card bg-base-100 shadow-sm">
-          <div class="card-body">
-            <h2 class="card-title">
-              <span aria-hidden="true">👤</span> ${escapeHtml(messages.builder.npcs)}
-            </h2>
-            <p>${escapeHtml(npcSummary)}</p>
-            <div class="card-actions justify-end">
-              <a href="${escapeHtml(npcHref)}" class="btn btn-primary btn-sm" hx-get="${escapeHtml(npcHref)}" hx-target="#builder-content" hx-push-url="true" aria-label="${escapeHtml(messages.builder.npcs)}">
-                ${escapeHtml(messages.builder.npcs)} →
-              </a>
+          <div class="stats stats-vertical border border-base-300 bg-base-100 lg:stats-horizontal">
+            <div class="stat">
+              <div class="stat-title">${escapeHtml(messages.builder.activeSessions)}</div>
+              <div class="stat-value text-primary">${stats.activeSessions}</div>
+            </div>
+            <div class="stat">
+              <div class="stat-title">${escapeHtml(messages.builder.totalScenes)}</div>
+              <div class="stat-value">${stats.totalScenes}</div>
+            </div>
+            <div class="stat">
+              <div class="stat-title">${escapeHtml(messages.builder.totalNpcs)}</div>
+              <div class="stat-value">${stats.totalNpcs}</div>
+            </div>
+            <div class="stat">
+              <div class="stat-title">${escapeHtml(messages.builder.aiStatus)}</div>
+              <div class="stat-value text-lg">${escapeHtml(aiStatusLabel)}</div>
+              <div class="stat-desc">${escapeHtml(providersLabel)}</div>
             </div>
           </div>
         </div>
+      </section>
 
-        <div class="card bg-base-100 shadow-sm">
-          <div class="card-body">
-            <h2 class="card-title">
-              <span aria-hidden="true">🤖</span> ${escapeHtml(messages.builder.ai)}
-            </h2>
-            <p>${escapeHtml(aiStatusText)}</p>
-            <div class="card-actions justify-end">
-              <a href="${escapeHtml(aiHref)}" class="btn btn-primary btn-sm" hx-get="${escapeHtml(aiHref)}" hx-target="#builder-content" hx-push-url="true" aria-label="${escapeHtml(messages.builder.ai)}">
-                ${escapeHtml(messages.builder.ai)} →
+      <section class="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <article class="card card-border bg-base-100 shadow-sm">
+          <div class="card-body gap-4">
+            <h2 class="card-title">${escapeHtml(messages.builder.flowTitle)}</h2>
+            <p class="text-base-content/80">${escapeHtml(messages.builder.engineOptionsDescription)}</p>
+            <ul class="list rounded-box bg-base-200 p-3">
+              ${flowSteps}
+            </ul>
+          </div>
+        </article>
+
+        <article class="card card-border bg-base-100 shadow-sm">
+          <div class="card-body gap-4">
+            <div role="alert" class="alert ${stats.aiAvailable ? "alert-success" : "alert-warning"}">
+              <span>${escapeHtml(aiStatusLabel)}</span>
+            </div>
+            <div class="space-y-2">
+              <h2 class="card-title">${escapeHtml(messages.builder.localRuntimeTitle)}</h2>
+              <p class="text-base-content/80">${escapeHtml(messages.builder.localRuntimeDescription)}</p>
+            </div>
+            <div class="grid gap-2 text-sm">
+              <div class="flex items-center justify-between rounded-box bg-base-200 px-3 py-2">
+                <span>${escapeHtml(messages.builder.runtimeLabel)}</span>
+                <span class="badge badge-outline">Bun + Elysia + HTMX</span>
+              </div>
+              <div class="flex items-center justify-between rounded-box bg-base-200 px-3 py-2">
+                <span>${escapeHtml(messages.builder.modelLabel)}</span>
+                <span class="badge badge-outline">${escapeHtml(providersLabel)}</span>
+              </div>
+              <div class="flex items-center justify-between rounded-box bg-base-200 px-3 py-2">
+                <span>${escapeHtml(messages.builder.configKeyLabel)}</span>
+                <span class="font-mono text-xs">AI_LOCAL_* / OLLAMA_*</span>
+              </div>
+            </div>
+            <div class="card-actions">
+              <a class="btn btn-outline btn-sm" href="${escapeHtml(builderStatusHref)}" aria-label="${escapeHtml(messages.builder.apiSurfaceTitle)}">
+                ${escapeHtml(messages.builder.apiSurfaceTitle)}
               </a>
             </div>
           </div>
-        </div>
-      </div>
+        </article>
+      </section>
+
+      <section class="grid gap-4 lg:grid-cols-3">
+        <article class="card card-border bg-base-100 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title">${escapeHtml(messages.builder.runtimeLaneTitle)}</h2>
+            <p class="text-base-content/80">${escapeHtml(messages.builder.runtimeLaneDescription)}</p>
+            <div class="card-actions justify-end">
+              <a class="btn btn-primary btn-sm" href="${escapeHtml(scenesHref)}" aria-label="${escapeHtml(messages.builder.scenes)}">
+                ${escapeHtml(messages.builder.scenes)}
+              </a>
+            </div>
+          </div>
+        </article>
+
+        <article class="card card-border bg-base-100 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title">${escapeHtml(messages.builder.pluginLaneTitle)}</h2>
+            <p class="text-base-content/80">${escapeHtml(messages.builder.pluginLaneDescription)}</p>
+            <div class="card-actions justify-end">
+              <a class="btn btn-outline btn-sm" href="${escapeHtml(npcsHref)}" aria-label="${escapeHtml(messages.builder.npcs)}">
+                ${escapeHtml(messages.builder.npcs)}
+              </a>
+            </div>
+          </div>
+        </article>
+
+        <article class="card card-border bg-base-100 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title">${escapeHtml(messages.builder.aiLaneTitle)}</h2>
+            <p class="text-base-content/80">${escapeHtml(messages.builder.aiLaneDescription)}</p>
+            <div class="card-actions justify-end">
+              <a class="btn btn-secondary btn-sm" href="${escapeHtml(aiHref)}" aria-label="${escapeHtml(messages.builder.ai)}">
+                ${escapeHtml(messages.builder.ai)}
+              </a>
+            </div>
+          </div>
+        </article>
+      </section>
     </div>`;
 };

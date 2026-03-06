@@ -7,6 +7,7 @@
  */
 import { Elysia } from "elysia";
 import { appConfig } from "../config/environment.ts";
+import { getAiRuntimeProfile } from "../domain/ai/local-runtime-profile.ts";
 import { builderService, defaultBuilderProjectId } from "../domain/builder/builder-service.ts";
 import { detectAvailableFeatures } from "../domain/game/ai/game-ai-service.ts";
 import { gameSpriteManifests } from "../domain/game/data/sprite-data.ts";
@@ -148,6 +149,6 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
     const messages = getMessages(locale);
     const projectId = resolveProjectId(request);
     const features = await detectAvailableFeatures();
-    const body = renderAiPanel(messages, features, locale, projectId);
+    const body = renderAiPanel(messages, features, getAiRuntimeProfile(), locale, projectId);
     return wrapOrPartial(request, locale, messages, "ai", body);
   });

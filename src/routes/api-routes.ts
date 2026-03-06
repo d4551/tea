@@ -2,12 +2,13 @@ import { Elysia, t } from "elysia";
 import type { OracleService } from "../domain/oracle/oracle-service.ts";
 import { ensureCorrelationIdHeader } from "../lib/correlation-id.ts";
 import { ApplicationError, errorEnvelope, successEnvelope } from "../lib/error-envelope.ts";
+import { authSessionGuard, resolveAuthSession } from "../plugins/auth-session.ts";
 import { i18nContextPlugin } from "../plugins/i18n-context.ts";
 import { httpStatus } from "../shared/constants/http.ts";
 import { oracleModes } from "../shared/constants/oracle.ts";
 import { appRoutes } from "../shared/constants/routes.ts";
 import { resolveRequestI18nWithOverride } from "../shared/i18n/translator.ts";
-import { hasSessionCookie, parseOracleMode } from "./oracle-input.ts";
+import { parseOracleMode } from "./oracle-input.ts";
 
 const serverStartNs = Bun.nanoseconds();
 
@@ -77,78 +78,80 @@ export const createApiRoutes = (oracleService: OracleService) =>
         }),
       },
     )
-    .post(
-      appRoutes.oracleApi,
-      async ({ body, request, set, status }) => {
-        const correlationId = ensureCorrelationIdHeader(request, set.headers);
-        const { locale } = resolveRequestI18nWithOverride(request, body.lang);
-        const mode = parseOracleMode(body.mode);
-        const outcome = await oracleService.evaluate({
-          question: body.question,
-          locale,
-          mode,
-          hasSession: hasSessionCookie(request.headers.get("cookie")),
-        });
+    .guard(authSessionGuard, (app) =>
+      app.post(
+        appRoutes.oracleApi,
+        async ({ body, cookie, request, set, status }) => {
+          const correlationId = ensureCorrelationIdHeader(request, set.headers);
+          const { locale } = resolveRequestI18nWithOverride(request, body.lang);
+          const mode = parseOracleMode(body.mode);
+          const outcome = await oracleService.evaluate({
+            question: body.question,
+            locale,
+            mode,
+            hasSession: resolveAuthSession(cookie).hasSession,
+          });
 
-        if (outcome.state === "success") {
-          return status(
-            httpStatus.ok,
-            successEnvelope({
-              state: "success",
-              answer: outcome.answer,
-            }),
-          );
-        }
+          if (outcome.state === "success") {
+            return status(
+              httpStatus.ok,
+              successEnvelope({
+                state: "success",
+                answer: outcome.answer,
+              }),
+            );
+          }
 
-        if (outcome.state === "empty") {
+          if (outcome.state === "empty") {
+            const appError = new ApplicationError(
+              "VALIDATION_ERROR",
+              outcome.message,
+              httpStatus.badRequest,
+              false,
+            );
+            return status(httpStatus.badRequest, errorEnvelope(appError, correlationId));
+          }
+
+          if (outcome.state === "unauthorized") {
+            const appError = new ApplicationError(
+              "UNAUTHORIZED",
+              outcome.message,
+              httpStatus.unauthorized,
+              false,
+            );
+            return status(httpStatus.unauthorized, errorEnvelope(appError, correlationId));
+          }
+
+          if (outcome.retryable) {
+            const appError = new ApplicationError(
+              "UPSTREAM_ERROR",
+              outcome.message,
+              httpStatus.serviceUnavailable,
+              true,
+            );
+            return status(httpStatus.serviceUnavailable, errorEnvelope(appError, correlationId));
+          }
+
           const appError = new ApplicationError(
             "VALIDATION_ERROR",
             outcome.message,
-            httpStatus.badRequest,
+            httpStatus.unprocessableEntity,
             false,
           );
-          return status(httpStatus.badRequest, errorEnvelope(appError, correlationId));
-        }
-
-        if (outcome.state === "unauthorized") {
-          const appError = new ApplicationError(
-            "UNAUTHORIZED",
-            outcome.message,
-            httpStatus.unauthorized,
-            false,
-          );
-          return status(httpStatus.unauthorized, errorEnvelope(appError, correlationId));
-        }
-
-        if (outcome.retryable) {
-          const appError = new ApplicationError(
-            "UPSTREAM_ERROR",
-            outcome.message,
-            httpStatus.serviceUnavailable,
-            true,
-          );
-          return status(httpStatus.serviceUnavailable, errorEnvelope(appError, correlationId));
-        }
-
-        const appError = new ApplicationError(
-          "VALIDATION_ERROR",
-          outcome.message,
-          httpStatus.unprocessableEntity,
-          false,
-        );
-        return status(httpStatus.unprocessableEntity, errorEnvelope(appError, correlationId));
-      },
-      {
-        body: oracleBodySchema,
-        response: {
-          [httpStatus.ok]: oracleSuccessEnvelopeSchema,
-          [httpStatus.badRequest]: oracleErrorEnvelopeSchema,
-          [httpStatus.unauthorized]: oracleErrorEnvelopeSchema,
-          [httpStatus.unprocessableEntity]: oracleErrorEnvelopeSchema,
-          [httpStatus.serviceUnavailable]: oracleErrorEnvelopeSchema,
+          return status(httpStatus.unprocessableEntity, errorEnvelope(appError, correlationId));
         },
-        detail: {
-          tags: ["oracle"],
+        {
+          body: oracleBodySchema,
+          response: {
+            [httpStatus.ok]: oracleSuccessEnvelopeSchema,
+            [httpStatus.badRequest]: oracleErrorEnvelopeSchema,
+            [httpStatus.unauthorized]: oracleErrorEnvelopeSchema,
+            [httpStatus.unprocessableEntity]: oracleErrorEnvelopeSchema,
+            [httpStatus.serviceUnavailable]: oracleErrorEnvelopeSchema,
+          },
+          detail: {
+            tags: ["oracle"],
+          },
         },
-      },
+      ),
     );

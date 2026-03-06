@@ -1,24 +1,12 @@
-import { resolve } from "node:path";
-import { appConfig } from "../src/config/environment.ts";
 import { createLogger } from "../src/lib/logger.ts";
-import { assetRelativePaths, joinLocalPath } from "../src/shared/constants/assets.ts";
+import {
+  assetPipelinePaths,
+  createGameClientBuildCommand,
+  createHtmxExtensionBuildCommand,
+  createTailwindCommand,
+} from "./asset-pipeline.ts";
 
 const logger = createLogger("dev-runner");
-const projectRoot = resolve(import.meta.dir, "..");
-const outputStylesheetPath = joinLocalPath(
-  appConfig.staticAssets.publicDirectory,
-  assetRelativePaths.stylesheetOutputFile,
-);
-const gameClientOutputDirectory = appConfig.playableGame.sourceDirectory;
-const htmxExtensionsOutputDirectory = joinLocalPath(
-  appConfig.staticAssets.publicDirectory,
-  "vendor/htmx-ext",
-);
-const htmxExtensionEntryFiles = ["game-hud.ts", "oracle-indicator.ts", "focus-panel.ts"] as const;
-const htmxExtensionEntryPaths = htmxExtensionEntryFiles.map((fileName) =>
-  joinLocalPath(assetRelativePaths.htmxExtensionsSourceDirectory, fileName),
-);
-const gameClientEntryNaming = assetRelativePaths.gameClientBundleFile.replace(/\.js$/u, ".[ext]");
 
 const run = async (command: readonly string[], label: string): Promise<number> => {
   logger.info("process.spawn", {
@@ -28,7 +16,7 @@ const run = async (command: readonly string[], label: string): Promise<number> =
 
   const process = Bun.spawn({
     cmd: [...command],
-    cwd: projectRoot,
+    cwd: assetPipelinePaths.projectRoot,
     stdout: "inherit",
     stderr: "inherit",
   });
@@ -57,60 +45,30 @@ type ShutdownReason =
 
 const runWatchers = async (): Promise<void> => {
   const cssWatcher = Bun.spawn({
-    cmd: [
-      "bunx",
-      "tailwindcss",
-      "-i",
-      assetRelativePaths.sourceStylesheet,
-      "-o",
-      outputStylesheetPath,
-      "--watch=always",
-    ],
-    cwd: projectRoot,
+    cmd: [...createTailwindCommand(true)],
+    cwd: assetPipelinePaths.projectRoot,
     stdout: "inherit",
     stderr: "inherit",
     stdin: "inherit",
   });
 
   const htmxExtensionWatcher = Bun.spawn({
-    cmd: [
-      "bun",
-      "build",
-      ...htmxExtensionEntryPaths,
-      "--outdir",
-      htmxExtensionsOutputDirectory,
-      "--target",
-      "browser",
-      "--watch",
-      "--minify",
-    ],
-    cwd: projectRoot,
+    cmd: [...createHtmxExtensionBuildCommand(true)],
+    cwd: assetPipelinePaths.projectRoot,
     stdout: "inherit",
     stderr: "inherit",
   });
 
   const gameClientWatcher = Bun.spawn({
-    cmd: [
-      "bun",
-      "build",
-      assetRelativePaths.playableGameClientEntryFile,
-      "--outdir",
-      gameClientOutputDirectory,
-      "--entry-naming",
-      gameClientEntryNaming,
-      "--target",
-      "browser",
-      "--watch",
-      "--minify",
-    ],
-    cwd: projectRoot,
+    cmd: [...createGameClientBuildCommand(true)],
+    cwd: assetPipelinePaths.projectRoot,
     stdout: "inherit",
     stderr: "inherit",
   });
 
   const serverWatcher = Bun.spawn({
     cmd: ["bun", "--watch", "run", "src/server.ts"],
-    cwd: projectRoot,
+    cwd: assetPipelinePaths.projectRoot,
     stdout: "inherit",
     stderr: "inherit",
   });
@@ -159,8 +117,19 @@ const runWatchers = async (): Promise<void> => {
   const observeWatcherExit = async (
     watcherName: keyof typeof watcherProcesses,
   ): Promise<number> => {
-    try {
-      const exitCode = await watcherProcesses[watcherName].exited;
+    const exitResult = await watcherProcesses[watcherName].exited.then(
+      (exitCode) => ({
+        ok: true as const,
+        exitCode,
+      }),
+      (error: unknown) => ({
+        ok: false as const,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+
+    if (exitResult.ok) {
+      const { exitCode } = exitResult;
       if (exitCode !== 0) {
         logger.error("watcher.terminated", { watcherName, exitCode });
       }
@@ -168,16 +137,16 @@ const runWatchers = async (): Promise<void> => {
         stopWatchers({ type: "server-exit", exitCode });
       }
       return exitCode;
-    } catch (error: unknown) {
-      logger.error("watcher.terminated.error", {
-        watcherName,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      if (!shutdownReasonType) {
-        stopWatchers({ type: "server-exit", exitCode: 1 });
-      }
-      return 1;
     }
+
+    logger.error("watcher.terminated.error", {
+      watcherName,
+      error: exitResult.error,
+    });
+    if (!shutdownReasonType) {
+      stopWatchers({ type: "server-exit", exitCode: 1 });
+    }
+    return 1;
   };
 
   const cssWatcherExited = observeWatcherExit("cssWatcher");

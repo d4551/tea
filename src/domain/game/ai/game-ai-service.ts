@@ -8,6 +8,7 @@
 
 import { createLogger } from "../../../lib/logger.ts";
 import type { GameLocale } from "../../../shared/contracts/game.ts";
+import { getLocalModelCatalog } from "../../ai/model-registry.ts";
 import { ProviderRegistry } from "../../ai/providers/provider-registry.ts";
 import type { AiCapability, AiGenerationResult } from "../../ai/providers/provider-types.ts";
 import { gameTextByLocale, resolveGameText } from "../data/game-text.ts";
@@ -40,6 +41,12 @@ export interface AvailableAiFeatures {
   readonly sentimentAnalysis: boolean;
   /** Whether embeddings generation is available. */
   readonly embeddings: boolean;
+  /** Whether local speech recognition is configured. */
+  readonly speechToText: boolean;
+  /** Whether local speech synthesis is configured. */
+  readonly speechSynthesis: boolean;
+  /** Whether at least one local ONNX model is active. */
+  readonly localInference: boolean;
   /** Names of available providers. */
   readonly providers: readonly string[];
 }
@@ -272,6 +279,9 @@ export const detectAvailableFeatures = async (): Promise<AvailableAiFeatures> =>
     visionAnalysis: hasCapability("vision"),
     sentimentAnalysis: hasCapability("text-classification"),
     embeddings: hasCapability("embeddings"),
+    speechToText: hasCapability("speech-to-text"),
+    speechSynthesis: hasCapability("text-to-speech"),
+    localInference: getLocalModelCatalog().some((entry) => entry.enabled),
     providers: status.providers.filter((p) => p.available).map((p) => p.name),
   };
 };

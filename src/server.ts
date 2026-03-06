@@ -7,17 +7,10 @@ const bootstrapLogger = createLogger("bootstrap");
 
 /**
  * Boots and starts the HTTP server.
- * Warms the AI ModelManager before accepting requests so the first
- * Oracle call doesn't pay the model-load penalty.
+ * Local AI warmup is opt-in because eager pipeline loading can stall
+ * live request handling on Bun's main server process.
  */
 export const startServer = async (): Promise<void> => {
-  // Warm the sentiment model in the background — non-blocking
-  // The server starts immediately; the model will be ready within seconds.
-  ModelManager.getInstance()
-    .then((manager) => manager.ensureWarmup())
-    .then(() => bootstrapLogger.info("ai.models.ready"))
-    .catch((err) => bootstrapLogger.error("ai.models.warmup.failed", { err: String(err) }));
-
   const app = await createApp();
   app.listen({
     hostname: appConfig.host,
@@ -28,6 +21,15 @@ export const startServer = async (): Promise<void> => {
     host: appConfig.host,
     port: appConfig.port,
   });
+
+  if (!appConfig.ai.warmupOnBoot) {
+    return;
+  }
+
+  ModelManager.getInstance()
+    .then((manager) => manager.ensureWarmup())
+    .then(() => bootstrapLogger.info("ai.models.ready"))
+    .catch((err) => bootstrapLogger.error("ai.models.warmup.failed", { err: String(err) }));
 };
 
 if (import.meta.main) {

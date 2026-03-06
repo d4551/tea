@@ -72,7 +72,7 @@ TEA Game Engine is an SSR-first game development platform that unifies server-re
 - **Server-Side Rendering** — all pages render on the server via Elysia; HTMX provides progressive enhancement
 - **AI Narrative Engine** — on-device inference via 🤗 Transformers with ONNX/WebGPU acceleration
 - **Playable Game Client** — PixiJS 8 canvas with Three.js 3D layer, bundled and hot-reloaded during development
-- **Type-Safe Stack** — end-to-end types from Prisma schema through Elysia routes to Eden Treaty client
+- **Type-Safe Stack** — end-to-end types from Prisma schema through Elysia route contracts and SSR views
 - **Internationalization** — `Accept-Language` q-weight parsing with deterministic locale persistence
 - **Structured Observability** — correlation ID propagation, levelled JSON logging, typed error envelopes
 
@@ -85,7 +85,6 @@ TEA Game Engine is an SSR-first game development platform that unifies server-re
 | Runtime | Bun | 1.3 |
 | Language | TypeScript (strict) | 5.9 |
 | Server Framework | Elysia | 1.4 |
-| Type-safe Client | Eden Treaty | 1.4 |
 | SSR Enhancement | HTMX | 2.0 |
 | CSS Framework | Tailwind CSS | 4.x |
 | UI Components | DaisyUI | 5.x |
@@ -137,7 +136,6 @@ graph TB
     subgraph Plugins
       RC["Request Context"]
       I18N["i18n Context"]
-      AIC["AI Context"]
       SSE["SSE"]
       ERR["Error Handler"]
       GP["Game Plugin"]
@@ -202,22 +200,18 @@ Plugins are composed in strict order. Each plugin decorates the request context 
 
 ```mermaid
 flowchart LR
-  A["Request\nContext"] --> B["i18n\nContext"]
-  B --> C["AI\nContext"]
-  C --> D["SSE"]
-  D --> E["Error\nHandler"]
-  E --> F["Static\nMounts"]
-  F --> G["Swagger"]
-  G --> H["Routes"]
+  A["Request\nContext"] --> B["Error\nHandler"]
+  B --> C["Swagger"]
+  C --> D["Static\nMounts"]
+  D --> E["Routes"]
+  E --> F["Scoped i18n\nand auth guards"]
 
   style A fill:#4ade80,color:#000
-  style B fill:#60a5fa,color:#000
-  style C fill:#c084fc,color:#000
-  style D fill:#fb923c,color:#000
-  style E fill:#f87171,color:#000
-  style F fill:#94a3b8,color:#000
-  style G fill:#fbbf24,color:#000
-  style H fill:#2dd4bf,color:#000
+  style B fill:#f87171,color:#000
+  style C fill:#fbbf24,color:#000
+  style D fill:#94a3b8,color:#000
+  style E fill:#2dd4bf,color:#000
+  style F fill:#60a5fa,color:#000
 ```
 
 ### Domain Model
@@ -236,21 +230,21 @@ erDiagram
 
 ```text
 tea/
-├── apps/                 # Future multi-app support
-├── libs/                 # Shared libraries
 ├── packages/             # Bun workspaces
 ├── prisma/               # Schema and migrations
 │   └── schema.prisma     # Single source of truth
+├── assets/               # Canonical media assets mounted at runtime
 ├── public/               # Static web assets
+├── scripts/              # Bun-native build/dev orchestration
+│   └── asset-pipeline.ts # Canonical asset graph used by build + watch flows
 ├── src/                  # Server / Backend
-│   ├── build/            # Asset pipeline (esbuild/bun)
 │   ├── config/           # Envs and constants
-│   ├── db/               # Prisma client instantiation
+│   ├── shared/services/  # Prisma client and shared infrastructure
 │   ├── domain/           # Core game logic (Game, AI, Oracle)
 │   ├── plugins/          # Elysia plugins (i18n, HTMX, Error)
 │   └── app.ts            # Elysia entry point
 ├── tests/                # bun:test suites
-└── index.html            # Core HTMX template
+└── README.md             # Developer-facing architecture and workflow guide
 ```
 
 ---
@@ -278,8 +272,8 @@ Required `.env` variables:
 | `DATABASE_URL` | libSQL connection string (e.g., `file:./prisma/dev.db`) |
 | `NODE_ENV` | `development` or `production` |
 | `PORT` | Server port (default: 3000) |
-| `SESSION_COOKIE_SECRETS` | Comma-separated signing secrets for the anonymous Elysia session cookie |
 | `SESSION_MAX_AGE_SECONDS` | Anonymous session cookie lifetime in seconds |
+| `AI_WARMUP_ON_BOOT` | Optional boolean to enable eager local model warmup at boot (default: `false`) |
 
 ---
 
@@ -290,8 +284,8 @@ Required `.env` variables:
 | `/` | GET | SSR Application Entry |
 | `/api/health` | GET | System metrics |
 | `/api/game/:id` | GET | Game state |
-| `/api/ai/chat` | POST | Oracle interaction |
-| `/ws/events` | WS | Realtime game events |
+| `/api/oracle` | POST | Oracle interaction |
+| `/api/game/session/:id/ws` | WS | Realtime game command stream |
 
 ---
 
@@ -353,7 +347,7 @@ TEA 游戏引擎是一个以服务端渲染 (SSR) 为核心的游戏开发平台
 - **服务端渲染** — 所有页面由 Elysia 在服务端渲染，HTMX 提供渐进增强
 - **AI 叙事引擎** — 通过 🤗 Transformers 进行设备端推理，支持 ONNX/WebGPU 加速
 - **可玩游戏客户端** — PixiJS 8 画布 + Three.js 3D 层，开发期间支持热重载
-- **全链路类型安全** — 从 Prisma 模式到 Elysia 路由到 Eden Treaty 客户端的端到端类型
+- **全链路类型安全** — 从 Prisma 模式到 Elysia 路由契约与 SSR 视图的端到端类型
 - **国际化** — `Accept-Language` q 权重解析与确定性区域设置持久化
 - **结构化可观察性** — 关联 ID 传播、分级 JSON 日志、类型化错误信封
 
@@ -364,7 +358,6 @@ TEA 游戏引擎是一个以服务端渲染 (SSR) 为核心的游戏开发平台
 | 运行时 | Bun | 1.3 |
 | 语言 | TypeScript (strict) | 5.9 |
 | 服务端框架 | Elysia | 1.4 |
-| 类型安全客户端 | Eden Treaty | 1.4 |
 | SSR 增强 | HTMX | 2.0 |
 | CSS 框架 | Tailwind CSS | 4.x |
 | UI 组件库 | DaisyUI | 5.x |
@@ -511,15 +504,16 @@ tea/
 ├── prisma/               # 数据库模式与迁移
 │   └── schema.prisma     # 唯一事实来源
 ├── public/               # 静态 Web 资产
+├── scripts/              # Bun 原生构建 / 开发编排
+│   └── asset-pipeline.ts # build 与 watch 共用的规范资产图
 ├── src/                  # 服务器 / 后端
-│   ├── build/            # 资产构建流水线 (esbuild/bun)
 │   ├── config/           # 环境变量与常量
-│   ├── db/               # Prisma 客户端实例化
+│   ├── shared/services/  # Prisma 客户端与共享基础设施
 │   ├── domain/           # 核心游戏逻辑 (游戏, AI, 神谕)
 │   ├── plugins/          # Elysia 插件 (国际化, HTMX, 错误处理)
 │   └── app.ts            # Elysia 入口点
 ├── tests/                # bun:test 测试套件
-└── index.html            # 核心 HTMX 模板
+└── README.md             # 面向开发者的架构与工作流文档
 ```
 
 ### 命令
@@ -551,8 +545,8 @@ tea/
 | `/` | GET | SSR 应用程序入口 |
 | `/api/health` | GET | 系统指标查询 |
 | `/api/game/:id` | GET | 获取游戏状态 |
-| `/api/ai/chat` | POST | 神谕 AI 交互 |
-| `/ws/events` | WS | 实时游戏事件流 |
+| `/api/oracle` | POST | 神谕交互 |
+| `/api/game/session/:id/ws` | WS | 实时游戏命令流 |
 
 ### 无障碍
 

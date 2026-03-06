@@ -15,6 +15,10 @@ import type {
   AiGenerationResult,
   AiModelCapabilities,
   AiProvider,
+  AiSpeechSynthesisParams,
+  AiSpeechSynthesisResult,
+  AiTranscriptionParams,
+  AiTranscriptionResult,
 } from "./provider-types.ts";
 
 const logger = createLogger("ai.provider.ollama");
@@ -255,6 +259,10 @@ export class OllamaProvider implements AiProvider {
         capabilities: caps,
         maxContextLength: contextLength,
         supportsStreaming: true,
+        runtime: "ollama-http",
+        integration: "ollama",
+        local: true,
+        configurable: true,
       });
     }
 
@@ -409,6 +417,34 @@ export class OllamaProvider implements AiProvider {
    */
   async classify(_text: string, _model?: string): Promise<AiClassificationResult | null> {
     return null;
+  }
+
+  /**
+   * Speech transcription is not routed through Ollama in this app.
+   *
+   * @param _params Audio transcription parameters.
+   * @returns Failure result.
+   */
+  async transcribeAudio(_params: AiTranscriptionParams): Promise<AiTranscriptionResult> {
+    return {
+      ok: false,
+      error: "Speech recognition is handled by the local Transformers.js provider.",
+      retryable: false,
+    };
+  }
+
+  /**
+   * Speech synthesis is not routed through Ollama in this app.
+   *
+   * @param _params Speech synthesis parameters.
+   * @returns Failure result.
+   */
+  async synthesizeSpeech(_params: AiSpeechSynthesisParams): Promise<AiSpeechSynthesisResult> {
+    return {
+      ok: false,
+      error: "Speech synthesis is handled by the local Transformers.js provider.",
+      retryable: false,
+    };
   }
 
   /**

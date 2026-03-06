@@ -6,6 +6,7 @@ export const assetRelativePaths = {
   stylesheetOutputFile: "app.css",
   htmxNodeModuleBundle: "node_modules/htmx.org/dist/htmx.min.js",
   htmxPublicBundleFile: "vendor/htmx.min.js",
+  htmxExtensionsOutputDirectory: "vendor/htmx-ext",
   htmxExtensionOracleIndicatorFile: "vendor/htmx-ext/oracle-indicator.js",
   htmxExtensionGameHudFile: "vendor/htmx-ext/game-hud.js",
   htmxExtensionFocusPanelFile: "vendor/htmx-ext/focus-panel.js",
@@ -14,6 +15,41 @@ export const assetRelativePaths = {
   playableGameClientEntryFile: "src/playable-game/game-client.ts",
   gameClientBundleFile: "game-client.js",
 } as const;
+
+/**
+ * Canonical HTMX extension entrypoints bundled into the public asset tree.
+ */
+export const htmxExtensionEntryFiles = [
+  "game-hud.ts",
+  "oracle-indicator.ts",
+  "focus-panel.ts",
+] as const;
+
+/**
+ * Minimal config shape required to derive static mount definitions.
+ */
+export interface StaticAssetMountConfig {
+  readonly staticAssets: {
+    readonly publicPrefix: string;
+    readonly assetsPrefix: string;
+    readonly rmmzPackPrefix: string;
+    readonly publicDirectory: string;
+    readonly assetsDirectory: string;
+    readonly rmmzPackDirectory: string;
+  };
+  readonly playableGame: {
+    readonly assetPrefix: string;
+    readonly sourceDirectory: string;
+  };
+}
+
+/**
+ * Static file mount descriptor consumed by the Elysia static plugin.
+ */
+export interface StaticAssetMount {
+  readonly assets: string;
+  readonly prefix: string;
+}
 
 /**
  * Canonical relative asset paths used by the browser game runtime.
@@ -73,3 +109,40 @@ export const joinLocalPath = (directory: string, relativePath: string): string =
  */
 export const toPublicAssetUrl = (publicPrefix: string, relativePath: string): string =>
   joinUrlPath(publicPrefix, relativePath);
+
+/**
+ * Resolves HTMX extension entrypoint paths relative to the repo root.
+ *
+ * @returns Canonical extension entrypoint paths.
+ */
+export const getHtmxExtensionEntryPaths = (): readonly string[] =>
+  htmxExtensionEntryFiles.map((fileName) =>
+    joinLocalPath(assetRelativePaths.htmxExtensionsSourceDirectory, fileName),
+  );
+
+/**
+ * Resolves all static file mounts from the application config.
+ *
+ * @param config Runtime config subset owning static paths and prefixes.
+ * @returns Static mount definitions in deterministic order.
+ */
+export const resolveStaticAssetMounts = (
+  config: StaticAssetMountConfig,
+): readonly StaticAssetMount[] => [
+  {
+    assets: config.staticAssets.publicDirectory,
+    prefix: config.staticAssets.publicPrefix,
+  },
+  {
+    assets: config.staticAssets.assetsDirectory,
+    prefix: config.staticAssets.assetsPrefix,
+  },
+  {
+    assets: config.playableGame.sourceDirectory,
+    prefix: config.playableGame.assetPrefix,
+  },
+  {
+    assets: config.staticAssets.rmmzPackDirectory,
+    prefix: config.staticAssets.rmmzPackPrefix,
+  },
+];

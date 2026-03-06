@@ -1,3 +1,4 @@
+import { safeJsonParse } from "../shared/utils/safe-json.ts";
 import { escapeHtml, getHtmx } from "./shared.ts";
 
 const htmx = getHtmx();
@@ -5,13 +6,7 @@ const htmx = getHtmx();
 if (htmx) {
   htmx.defineExtension("game-hud", {
     transformResponse(text, _xhr, element) {
-      const payload = (() => {
-        try {
-          return JSON.parse(text) as Record<string, unknown>;
-        } catch {
-          return null;
-        }
-      })();
+      const payload = safeJsonParse<Record<string, unknown> | null>(text, null);
 
       if (!payload) {
         return text;

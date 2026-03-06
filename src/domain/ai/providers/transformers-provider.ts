@@ -17,6 +17,10 @@ import type {
   AiGenerationResult,
   AiModelCapabilities,
   AiProvider,
+  AiSpeechSynthesisParams,
+  AiSpeechSynthesisResult,
+  AiTranscriptionParams,
+  AiTranscriptionResult,
 } from "./provider-types.ts";
 
 const logger = createLogger("ai.provider.transformers");
@@ -33,6 +37,12 @@ const taskToCapabilities = (task: string): ReadonlySet<AiCapability> => {
       return new Set<AiCapability>(["text-classification"]);
     case "text-generation":
       return new Set<AiCapability>(["text-generation", "chat"]);
+    case "feature-extraction":
+      return new Set<AiCapability>(["embeddings"]);
+    case "automatic-speech-recognition":
+      return new Set<AiCapability>(["speech-to-text"]);
+    case "text-to-speech":
+      return new Set<AiCapability>(["text-to-speech"]);
     default:
       return new Set<AiCapability>(["text-generation"]);
   }
@@ -83,13 +93,21 @@ export class TransformersProvider implements AiProvider {
     const capabilities: AiModelCapabilities[] = [];
 
     for (const [key, entry] of Object.entries(MODEL_REGISTRY)) {
+      if (!entry.enabled) {
+        continue;
+      }
+
       capabilities.push({
+        key,
         provider: this.name,
-        model: `${key}:${entry.model}`,
+        model: entry.model,
         capabilities: taskToCapabilities(entry.task),
-        maxContextLength:
-          "generationConfig" in entry ? (entry.generationConfig?.max_new_tokens ?? 512) : 512,
+        maxContextLength: entry.maxContextLength,
         supportsStreaming: false,
+        runtime: "onnx-wasm",
+        integration: "huggingface",
+        local: true,
+        configurable: true,
       });
     }
 
@@ -173,6 +191,77 @@ export class TransformersProvider implements AiProvider {
   }
 
   /**
+   * Transcribes mono PCM audio with the configured local speech model.
+   *
+   * @param params Audio transcription parameters.
+   * @returns Local transcription result.
+   */
+  async transcribeAudio(params: AiTranscriptionParams): Promise<AiTranscriptionResult> {
+    if (!appConfig.ai.localSpeechToTextEnabled) {
+      return {
+        ok: false,
+        error: "Local speech recognition is disabled.",
+        retryable: false,
+      };
+    }
+
+    const startMs = Date.now();
+    const manager = await ModelManager.getInstance();
+    const result = await manager.transcribeAudio(params.audio);
+
+    if (result === null) {
+      return {
+        ok: false,
+        error: "Transformers.js speech recognition returned no text.",
+        retryable: true,
+      };
+    }
+
+    return {
+      ok: true,
+      text: result,
+      model: params.model ?? MODEL_REGISTRY.speechToText.model,
+      durationMs: Date.now() - startMs,
+    };
+  }
+
+  /**
+   * Synthesizes speech audio using the configured local TTS model.
+   *
+   * @param params Speech synthesis parameters.
+   * @returns Local speech synthesis result.
+   */
+  async synthesizeSpeech(params: AiSpeechSynthesisParams): Promise<AiSpeechSynthesisResult> {
+    if (!appConfig.ai.localTextToSpeechEnabled) {
+      return {
+        ok: false,
+        error: "Local speech synthesis is disabled.",
+        retryable: false,
+      };
+    }
+
+    const startMs = Date.now();
+    const manager = await ModelManager.getInstance();
+    const result = await manager.synthesizeSpeech(params.text);
+
+    if (result === null) {
+      return {
+        ok: false,
+        error: "Transformers.js speech synthesis returned no audio.",
+        retryable: true,
+      };
+    }
+
+    return {
+      ok: true,
+      audio: result.audio,
+      sampleRate: result.sampleRate,
+      model: params.model ?? MODEL_REGISTRY.textToSpeech.model,
+      durationMs: Date.now() - startMs,
+    };
+  }
+
+  /**
    * Vision is not supported by the current ONNX pipeline configuration.
    *
    * @param _image Image bytes (unused).
@@ -193,8 +282,13 @@ export class TransformersProvider implements AiProvider {
    * @param _text Input text (unused).
    * @returns Always null.
    */
-  async generateEmbedding(_text: string): Promise<Float32Array | null> {
-    return null;
+  async generateEmbedding(text: string): Promise<Float32Array | null> {
+    if (!appConfig.ai.localEmbeddingsEnabled) {
+      return null;
+    }
+
+    const manager = await ModelManager.getInstance();
+    return manager.generateEmbedding(text);
   }
 
   /**

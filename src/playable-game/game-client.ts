@@ -6,6 +6,8 @@ import type {
   GameSceneState,
   NpcState,
 } from "../shared/contracts/game.ts";
+import { readLocalStorage, writeLocalStorage } from "../shared/utils/browser-storage.ts";
+import { safeJsonParse } from "../shared/utils/safe-json.ts";
 import { ThreeLayer } from "./three-layer.ts";
 
 type PersistedSessionMeta = {
@@ -71,54 +73,40 @@ const readSessionMeta = (): PersistedSessionMeta | null => {
     expiresAtMs: Date.now() + Math.max(resumeWindowMs, COMMAND_TTL_FALLBACK_MS),
   };
 
-  let storedRaw: string | null = null;
-  try {
-    storedRaw = localStorage.getItem(SESSION_META_KEY);
-  } catch {
-    storedRaw = null;
-  }
-
+  const storedRaw = readLocalStorage(SESSION_META_KEY);
   if (!storedRaw) {
     return runtimeMeta;
   }
 
-  try {
-    const stored = JSON.parse(storedRaw) as PersistedSessionMeta;
-    if (
-      stored.sessionId === sessionId &&
-      stored.locale.length > 0 &&
-      stored.resumeToken.length > 0 &&
-      Number.isFinite(stored.expiresAtMs) &&
-      stored.expiresAtMs > Date.now()
-    ) {
-      return {
-        ...runtimeMeta,
-        resumeToken: stored.resumeToken,
-        commandQueueDepth: stored.commandQueueDepth,
-        version: stored.version,
-        locale: stored.locale,
-        expiresAtMs: stored.expiresAtMs,
-      };
-    }
-  } catch {
-    return runtimeMeta;
+  const stored = safeJsonParse<PersistedSessionMeta | null>(storedRaw, null);
+  if (
+    stored?.sessionId === sessionId &&
+    stored.locale.length > 0 &&
+    stored.resumeToken.length > 0 &&
+    Number.isFinite(stored.expiresAtMs) &&
+    stored.expiresAtMs > Date.now()
+  ) {
+    return {
+      ...runtimeMeta,
+      resumeToken: stored.resumeToken,
+      commandQueueDepth: stored.commandQueueDepth,
+      version: stored.version,
+      locale: stored.locale,
+      expiresAtMs: stored.expiresAtMs,
+    };
   }
 
   return runtimeMeta;
 };
 
 const persistSessionMeta = (meta: PersistedSessionMeta): void => {
-  try {
-    localStorage.setItem(
-      SESSION_META_KEY,
-      JSON.stringify({
-        ...meta,
-        expiresAtMs: Math.max(meta.expiresAtMs, Date.now() + COMMAND_TTL_FALLBACK_MS),
-      }),
-    );
-  } catch {
-    return;
-  }
+  writeLocalStorage(
+    SESSION_META_KEY,
+    JSON.stringify({
+      ...meta,
+      expiresAtMs: Math.max(meta.expiresAtMs, Date.now() + COMMAND_TTL_FALLBACK_MS),
+    }),
+  );
 };
 
 const buildSessionSocketUrl = (sessionId: string, resumeToken: string): string => {
@@ -137,21 +125,11 @@ const parseGameStateFromMessage = (incoming: unknown): GameSceneState | null => 
     return null;
   }
 
-  const payload = (() => {
-    if (typeof incoming === "string") {
-      try {
-        return JSON.parse(incoming) as unknown;
-      } catch {
-        return null;
-      }
-    }
+  if (incoming instanceof ArrayBuffer || incoming instanceof Blob) {
+    return null;
+  }
 
-    if (incoming instanceof ArrayBuffer || incoming instanceof Blob) {
-      return null;
-    }
-
-    return incoming;
-  })();
+  const payload = typeof incoming === "string" ? safeJsonParse<unknown>(incoming, null) : incoming;
 
   if (!payload || typeof payload !== "object") {
     return null;

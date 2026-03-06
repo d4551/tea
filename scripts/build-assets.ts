@@ -1,30 +1,13 @@
-import { join, resolve } from "node:path";
-import { appConfig } from "../src/config/environment.ts";
 import { createLogger } from "../src/lib/logger.ts";
-import { assetRelativePaths, joinLocalPath } from "../src/shared/constants/assets.ts";
+import {
+  assetPipelinePaths,
+  createGameClientBuildOptions,
+  createHtmxExtensionBuildOptions,
+  createTailwindCommand,
+  resolveOnnxWasmCopyPaths,
+} from "./asset-pipeline.ts";
 
 const logger = createLogger("build-assets");
-const projectRoot = resolve(import.meta.dir, "..");
-const outputStylesheetPath = joinLocalPath(
-  appConfig.staticAssets.publicDirectory,
-  assetRelativePaths.stylesheetOutputFile,
-);
-const gameClientEntryPath = resolve(projectRoot, assetRelativePaths.playableGameClientEntryFile);
-const gameClientOutdir = resolve(projectRoot, appConfig.playableGame.sourceDirectory);
-const htmxExtensionsOutdir = resolve(
-  projectRoot,
-  joinLocalPath(appConfig.staticAssets.publicDirectory, "vendor/htmx-ext"),
-);
-const htmxSourcePath = resolve(projectRoot, assetRelativePaths.htmxNodeModuleBundle);
-const htmxDestinationPath = resolve(
-  projectRoot,
-  joinLocalPath(appConfig.staticAssets.publicDirectory, assetRelativePaths.htmxPublicBundleFile),
-);
-const htmxExtensionEntryFiles = ["game-hud.ts", "oracle-indicator.ts", "focus-panel.ts"] as const;
-const htmxExtensionEntryPaths = htmxExtensionEntryFiles.map((fileName) =>
-  resolve(projectRoot, assetRelativePaths.htmxExtensionsSourceDirectory, fileName),
-);
-const gameClientEntryNaming = assetRelativePaths.gameClientBundleFile.replace(/\.js$/u, ".[ext]");
 type BuildLogs = Awaited<ReturnType<typeof Bun.build>>["logs"];
 
 const serializeBuildLogs = (logs: BuildLogs): readonly string[] =>
@@ -33,7 +16,7 @@ const serializeBuildLogs = (logs: BuildLogs): readonly string[] =>
 const run = async (command: readonly string[]): Promise<number> => {
   const process = Bun.spawn({
     cmd: [...command],
-    cwd: projectRoot,
+    cwd: assetPipelinePaths.projectRoot,
     stdout: "inherit",
     stderr: "inherit",
   });
@@ -44,43 +27,32 @@ const run = async (command: readonly string[]): Promise<number> => {
 const buildTailwindCss = async (): Promise<void> => {
   logger.info("css.build.started");
 
-  const exitCode = await run([
-    "bunx",
-    "tailwindcss",
-    "-i",
-    assetRelativePaths.sourceStylesheet,
-    "-o",
-    outputStylesheetPath,
-    "--minify",
-  ]);
+  const exitCode = await run([...createTailwindCommand(false)]);
 
   if (exitCode !== 0) {
     throw new Error(`Tailwind build failed with exit code ${exitCode}.`);
   }
 
   logger.info("css.build.completed", {
-    output: outputStylesheetPath,
+    output: assetPipelinePaths.outputStylesheetPath,
   });
 };
 
 const copyHtmxBundle = async (): Promise<void> => {
-  await Bun.write(htmxDestinationPath, Bun.file(htmxSourcePath));
+  await Bun.write(
+    assetPipelinePaths.htmxDestinationPath,
+    Bun.file(assetPipelinePaths.htmxSourcePath),
+  );
 
   logger.info("htmx.bundle.copied", {
-    source: htmxSourcePath,
-    destination: htmxDestinationPath,
+    source: assetPipelinePaths.htmxSourcePath,
+    destination: assetPipelinePaths.htmxDestinationPath,
   });
 };
 
 const buildGameClient = async (): Promise<void> => {
   logger.info("game-client.build.started");
-  const result = await Bun.build({
-    entrypoints: [gameClientEntryPath],
-    outdir: gameClientOutdir,
-    naming: gameClientEntryNaming,
-    minify: true,
-    target: "browser",
-  });
+  const result = await Bun.build(createGameClientBuildOptions());
 
   if (!result.success) {
     logger.error("game-client.build.failed", {
@@ -97,12 +69,7 @@ const buildGameClient = async (): Promise<void> => {
 
 const buildHtmxExtensions = async (): Promise<void> => {
   logger.info("htmx.extensions.build.started");
-  const result = await Bun.build({
-    entrypoints: [...htmxExtensionEntryPaths],
-    outdir: htmxExtensionsOutdir,
-    minify: true,
-    target: "browser",
-  });
+  const result = await Bun.build(createHtmxExtensionBuildOptions());
 
   if (!result.success) {
     logger.error("htmx.extensions.build.failed", {
@@ -118,23 +85,22 @@ const buildHtmxExtensions = async (): Promise<void> => {
 };
 
 const copyOnnxWasm = async (): Promise<void> => {
-  const wasmSrc = resolve(projectRoot, "node_modules/@huggingface/transformers/dist");
-  const wasmDest = resolve(
-    projectRoot,
-    joinLocalPath(appConfig.staticAssets.publicDirectory, assetRelativePaths.onnxPublicDirectory),
-  );
-
   const glob = new Bun.Glob("*.wasm");
   const wasmFiles: string[] = [];
 
-  for await (const entry of glob.scan({ cwd: wasmSrc, absolute: false })) {
-    const srcPath = join(wasmSrc, entry);
-    const destPath = join(wasmDest, entry);
-    await Bun.write(destPath, Bun.file(srcPath));
+  for await (const entry of glob.scan({
+    cwd: assetPipelinePaths.onnxWasmSourceDirectory,
+    absolute: false,
+  })) {
+    const { sourcePath, destinationPath } = resolveOnnxWasmCopyPaths(entry);
+    await Bun.write(destinationPath, Bun.file(sourcePath));
     wasmFiles.push(entry);
   }
 
-  logger.info("onnx.wasm.copied", { count: wasmFiles.length, dest: wasmDest });
+  logger.info("onnx.wasm.copied", {
+    count: wasmFiles.length,
+    dest: assetPipelinePaths.onnxWasmDestinationDirectory,
+  });
 };
 
 await buildTailwindCss();

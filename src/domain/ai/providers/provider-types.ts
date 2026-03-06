@@ -16,12 +16,16 @@ export type AiCapability =
   | "chat"
   | "vision"
   | "embeddings"
-  | "tool-calling";
+  | "tool-calling"
+  | "speech-to-text"
+  | "text-to-speech";
 
 /**
  * Describes the capabilities of a specific model on a specific provider.
  */
 export interface AiModelCapabilities {
+  /** Stable model key when backed by a known local registry entry. */
+  readonly key?: string;
   /** Provider name (e.g. "ollama", "transformers"). */
   readonly provider: string;
   /** Model identifier. */
@@ -32,6 +36,14 @@ export interface AiModelCapabilities {
   readonly maxContextLength: number;
   /** Whether the model supports streaming responses. */
   readonly supportsStreaming: boolean;
+  /** Runtime backend used to execute the model. */
+  readonly runtime: "onnx-wasm" | "ollama-http";
+  /** Model integration source. */
+  readonly integration: "huggingface" | "ollama";
+  /** Whether the model is executed locally on this machine. */
+  readonly local: boolean;
+  /** Whether the target can be replaced through configuration. */
+  readonly configurable: boolean;
 }
 
 /**
@@ -92,6 +104,94 @@ export interface AiGenerationFailure {
  * Discriminated union for generation results.
  */
 export type AiGenerationResult = AiGenerationSuccess | AiGenerationFailure;
+
+/**
+ * Parameters for speech recognition requests.
+ */
+export interface AiTranscriptionParams {
+  /** Mono PCM samples normalized to -1..1. */
+  readonly audio: Float32Array;
+  /** PCM sample rate in Hz. */
+  readonly sampleRate: number;
+  /** Optional language hint for the recognizer. */
+  readonly language?: string;
+  /** Optional prompt/context hint. */
+  readonly prompt?: string;
+  /** Optional model override. */
+  readonly model?: string;
+}
+
+/**
+ * Successful speech transcription result.
+ */
+export interface AiTranscriptionSuccess {
+  readonly ok: true;
+  /** Recognized text output. */
+  readonly text: string;
+  /** Model that produced the output. */
+  readonly model: string;
+  /** Total recognition duration in milliseconds. */
+  readonly durationMs: number;
+}
+
+/**
+ * Failed speech transcription result.
+ */
+export interface AiTranscriptionFailure {
+  readonly ok: false;
+  /** Error description. */
+  readonly error: string;
+  /** Whether the caller should retry. */
+  readonly retryable: boolean;
+}
+
+/**
+ * Discriminated union for speech transcription requests.
+ */
+export type AiTranscriptionResult = AiTranscriptionSuccess | AiTranscriptionFailure;
+
+/**
+ * Parameters for local text-to-speech synthesis.
+ */
+export interface AiSpeechSynthesisParams {
+  /** Input text to synthesize. */
+  readonly text: string;
+  /** Optional model override. */
+  readonly model?: string;
+  /** Optional voice or speaker hint. */
+  readonly voice?: string;
+}
+
+/**
+ * Successful speech synthesis result.
+ */
+export interface AiSpeechSynthesisSuccess {
+  readonly ok: true;
+  /** Generated mono PCM samples. */
+  readonly audio: Float32Array;
+  /** Audio sample rate in Hz. */
+  readonly sampleRate: number;
+  /** Model that produced the output. */
+  readonly model: string;
+  /** Synthesis duration in milliseconds. */
+  readonly durationMs: number;
+}
+
+/**
+ * Failed speech synthesis result.
+ */
+export interface AiSpeechSynthesisFailure {
+  readonly ok: false;
+  /** Error description. */
+  readonly error: string;
+  /** Whether the caller should retry. */
+  readonly retryable: boolean;
+}
+
+/**
+ * Discriminated union for speech synthesis requests.
+ */
+export type AiSpeechSynthesisResult = AiSpeechSynthesisSuccess | AiSpeechSynthesisFailure;
 
 /**
  * Sentiment classification result.
@@ -158,6 +258,22 @@ export interface AiProvider {
    * @returns Classification result or null on failure.
    */
   classify(text: string, model?: string): Promise<AiClassificationResult | null>;
+
+  /**
+   * Transcribes speech audio into text.
+   *
+   * @param params Audio transcription parameters.
+   * @returns Transcription result.
+   */
+  transcribeAudio(params: AiTranscriptionParams): Promise<AiTranscriptionResult>;
+
+  /**
+   * Synthesizes speech audio from text.
+   *
+   * @param params Speech synthesis parameters.
+   * @returns Speech synthesis result.
+   */
+  synthesizeSpeech(params: AiSpeechSynthesisParams): Promise<AiSpeechSynthesisResult>;
 
   /**
    * Describes or analyses an image using a vision model.

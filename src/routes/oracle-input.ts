@@ -1,4 +1,3 @@
-import { appConfig } from "../config/environment.ts";
 import type { OracleMode } from "../domain/oracle/oracle-types.ts";
 import { defaultOracleMode, oracleModes } from "../shared/constants/oracle.ts";
 
@@ -21,19 +20,4 @@ export const parseOracleMode = (
 
   const matched = oracleModes.find((mode) => mode === modeValue);
   return matched ?? defaultOracleMode;
-};
-
-/**
- * Converts optional cookie header into a lightweight authenticated flag.
- *
- * @param cookieHeader Raw Cookie header.
- * @returns Session flag.
- */
-export const hasSessionCookie = (cookieHeader: string | null): boolean => {
-  if (!cookieHeader) {
-    return false;
-  }
-
-  const sessionCookiePair = `${appConfig.auth.sessionCookieName}=${appConfig.auth.sessionCookieValue}`;
-  return cookieHeader.split(";").some((cookiePart) => cookiePart.trim() === sessionCookiePair);
 };

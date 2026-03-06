@@ -22,6 +22,19 @@ export const swaggerDocsPlugin = swagger({
         name: "oracle",
         description: "Oracle interaction endpoints and state machine responses",
       },
+      {
+        name: "ai",
+        description:
+          "AI provider health, local model runtime, generation, and speech I/O endpoints",
+      },
+      {
+        name: "builder",
+        description: "Game builder project, scene, NPC, dialogue, and orchestration endpoints",
+      },
+      {
+        name: "game",
+        description: "Server-authoritative game session lifecycle, state, and command endpoints",
+      },
     ],
   },
 });

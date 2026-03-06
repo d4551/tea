@@ -1015,8 +1015,12 @@ export const parsePlayerProgressV2 = (
       : [],
     interactions:
       typeof parsedInteractions === "object" && parsedInteractions !== null
-        ? parsedInteractions
-        : ({} as Record<string, boolean>),
+        ? Object.fromEntries(
+            Object.entries(parsedInteractions).filter(
+              (entry): entry is [string, boolean] => typeof entry[1] === "boolean",
+            ),
+          )
+        : {},
     updatedAt:
       typeof updatedAt === "string" && updatedAt.length > 0 ? updatedAt : new Date().toISOString(),
   };

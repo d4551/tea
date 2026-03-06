@@ -17,6 +17,10 @@ import type {
   AiGenerationResult,
   AiModelCapabilities,
   AiProvider,
+  AiSpeechSynthesisParams,
+  AiSpeechSynthesisResult,
+  AiTranscriptionParams,
+  AiTranscriptionResult,
 } from "./provider-types.ts";
 import { TransformersProvider } from "./transformers-provider.ts";
 
@@ -50,6 +54,7 @@ export class ProviderRegistry {
 
   private readonly _providers: readonly AiProvider[];
   private _allCapabilities: readonly AiModelCapabilities[] = [];
+  private _initialRefreshPromise: Promise<void> | null = null;
   private _providerAvailability = new Map<string, boolean>();
   private _providerReadiness = new Map<string, ProviderReadiness>();
   private _providerReasons = new Map<string, string>();
@@ -73,10 +78,13 @@ export class ProviderRegistry {
     const providers: AiProvider[] = [new TransformersProvider(), new OllamaProvider()];
 
     const registry = new ProviderRegistry(providers);
-    await registry.refreshCapabilities();
-    registry._startPeriodicRefresh();
-
     ProviderRegistry._instance = registry;
+    registry
+      ._ensureCapabilitiesReady()
+      .then(() => registry._startPeriodicRefresh())
+      .catch((error: unknown) => {
+        logger.warn("registry.initial-refresh.failed", { error: String(error) });
+      });
     return registry;
   }
 
@@ -86,6 +94,7 @@ export class ProviderRegistry {
    * @returns System status with provider availability and capabilities.
    */
   async getStatus(): Promise<AiSystemStatus> {
+    await this._ensureCapabilitiesReady();
     const providers: ProviderStatus[] = [];
 
     for (const provider of this._providers) {
@@ -183,6 +192,7 @@ export class ProviderRegistry {
    * @returns Generation result from the best available provider.
    */
   async chat(params: AiChatParams): Promise<AiGenerationResult> {
+    await this._ensureCapabilitiesReady();
     const provider = this.selectProvider("chat");
     if (!provider) {
       return {
@@ -203,6 +213,7 @@ export class ProviderRegistry {
    * @returns Async generator yielding token strings.
    */
   async *chatStream(params: AiChatParams): AsyncGenerator<string> {
+    await this._ensureCapabilitiesReady();
     const provider = this.selectProvider("chat");
     if (!provider) {
       return;
@@ -219,6 +230,7 @@ export class ProviderRegistry {
    * @returns Classification result or null.
    */
   async classify(text: string): Promise<AiClassificationResult | null> {
+    await this._ensureCapabilitiesReady();
     const provider = this.selectProvider("text-classification");
     if (!provider) {
       return null;
@@ -235,6 +247,7 @@ export class ProviderRegistry {
    * @returns Generation result.
    */
   async describeImage(image: Uint8Array, prompt: string): Promise<AiGenerationResult> {
+    await this._ensureCapabilitiesReady();
     const provider = this.selectProvider("vision");
     if (!provider) {
       return {
@@ -246,6 +259,48 @@ export class ProviderRegistry {
 
     logger.info("registry.describeImage.routing", { provider: provider.name });
     return provider.describeImage(image, prompt);
+  }
+
+  /**
+   * Routes speech transcription to the best local provider.
+   *
+   * @param params Audio transcription parameters.
+   * @returns Speech transcription result.
+   */
+  async transcribeAudio(params: AiTranscriptionParams): Promise<AiTranscriptionResult> {
+    await this._ensureCapabilitiesReady();
+    const provider = this.selectProvider("speech-to-text");
+    if (!provider) {
+      return {
+        ok: false,
+        error: "No provider available for speech recognition",
+        retryable: false,
+      };
+    }
+
+    logger.info("registry.transcribe.routing", { provider: provider.name });
+    return provider.transcribeAudio(params);
+  }
+
+  /**
+   * Routes speech synthesis to the best local provider.
+   *
+   * @param params Speech synthesis parameters.
+   * @returns Speech synthesis result.
+   */
+  async synthesizeSpeech(params: AiSpeechSynthesisParams): Promise<AiSpeechSynthesisResult> {
+    await this._ensureCapabilitiesReady();
+    const provider = this.selectProvider("text-to-speech");
+    if (!provider) {
+      return {
+        ok: false,
+        error: "No provider available for speech synthesis",
+        retryable: false,
+      };
+    }
+
+    logger.info("registry.synthesize.routing", { provider: provider.name });
+    return provider.synthesizeSpeech(params);
   }
 
   /**
@@ -314,6 +369,10 @@ export class ProviderRegistry {
    * Starts periodic capability refresh.
    */
   private _startPeriodicRefresh(): void {
+    if (this._refreshHandle !== null) {
+      return;
+    }
+
     this._refreshHandle = setInterval(() => {
       if (this._disposed) {
         return;
@@ -323,5 +382,19 @@ export class ProviderRegistry {
         logger.warn("registry.refresh.failed", { error: String(err) });
       });
     }, appConfig.ai.capabilityRefreshIntervalMs);
+  }
+
+  /**
+   * Ensures the initial capability detection completes once before AI routes use the registry.
+   *
+   * @returns Promise resolved when initial capability discovery completes.
+   */
+  private _ensureCapabilitiesReady(): Promise<void> {
+    if (this._initialRefreshPromise) {
+      return this._initialRefreshPromise;
+    }
+
+    this._initialRefreshPromise = this.refreshCapabilities();
+    return this._initialRefreshPromise;
   }
 }

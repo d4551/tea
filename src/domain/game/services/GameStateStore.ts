@@ -111,14 +111,14 @@ const defaultSceneDefinition = (): SceneDefinition => {
  * Serializes and deserializes scene payloads safely.
  */
 const toScenePayload = (scene: GameSceneState): Prisma.InputJsonValue =>
-  scene as Prisma.InputJsonValue;
+  JSON.parse(JSON.stringify(scene));
 
 /**
  * Safely restores scene state from DB JSON with safe fallback.
  */
 const toSceneState = (value: Prisma.JsonValue): GameSceneState | null =>
   value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as GameSceneState)
+    ? JSON.parse(JSON.stringify(value))
     : null;
 
 interface SceneStateRestoreResult {

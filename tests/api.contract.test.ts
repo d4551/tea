@@ -58,6 +58,16 @@ describe("API contracts", () => {
     expect(response.status).toBe(httpStatus.ok);
     expect(payload.ok).toBe(true);
     expect(payload.data?.status).toBe("ok");
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  test("home route issues an anonymous session cookie", async () => {
+    const response = await app.handle(new Request(toUrl(appRoutes.home)));
+    const setCookie = response.headers.get("set-cookie");
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(setCookie?.includes(`${appConfig.auth.sessionCookieName}=`)).toBe(true);
+    expect(setCookie?.toLowerCase().includes("httponly")).toBe(true);
   });
 
   test("oracle endpoint returns success state", async () => {
@@ -694,6 +704,67 @@ describe("API contracts", () => {
     expect(typeof payload.data?.features?.assist).toBe("boolean");
     expect(typeof payload.data?.features?.test).toBe("boolean");
   });
+
+  test("AI status endpoint exposes local runtime and speech capabilities", async () => {
+    const response = await app.handle(new Request(toUrl(appRoutes.aiStatus)));
+    const payload = (await response.json()) as {
+      readonly ok: boolean;
+      readonly data?: {
+        readonly features?: {
+          readonly speechToText: boolean;
+          readonly speechSynthesis: boolean;
+          readonly localInference: boolean;
+        };
+        readonly localRuntime?: {
+          readonly transformers?: {
+            readonly integration: string;
+          };
+          readonly onnx?: {
+            readonly backend: string;
+          };
+          catalog?: Array<{
+            key: string;
+          }>;
+        };
+      };
+    };
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(payload.ok).toBe(true);
+    expect(typeof payload.data?.features?.speechToText).toBe("boolean");
+    expect(typeof payload.data?.features?.speechSynthesis).toBe("boolean");
+    expect(typeof payload.data?.features?.localInference).toBe("boolean");
+    expect(payload.data?.localRuntime?.transformers?.integration).toBe("huggingface");
+    expect(payload.data?.localRuntime?.onnx?.backend).toBe("wasm");
+    expect(payload.data?.localRuntime?.catalog?.some((entry) => entry.key === "speechToText")).toBe(
+      true,
+    );
+    expect(payload.data?.localRuntime?.catalog?.some((entry) => entry.key === "textToSpeech")).toBe(
+      true,
+    );
+  });
+
+  test("AI catalog endpoint exposes configurable local model targets", async () => {
+    const response = await app.handle(new Request(toUrl(appRoutes.aiCatalog)));
+    const payload = (await response.json()) as {
+      readonly ok: boolean;
+      readonly data?: {
+        catalog?: Array<{
+          configKey: string;
+          model: string;
+        }>;
+      };
+    };
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(payload.ok).toBe(true);
+    expect(payload.data?.catalog?.length).toBeGreaterThan(0);
+    expect(
+      payload.data?.catalog?.some(
+        (entry) => entry.configKey === "AI_LOCAL_SPEECH_TO_TEXT_MODEL" && entry.model.length > 0,
+      ),
+    ).toBe(true);
+  });
 });
 
 describe("HTMX partial rendering", () => {
@@ -718,6 +789,9 @@ describe("HTMX partial rendering", () => {
     expect(html.includes('name="lang" value="en-US"')).toBe(true);
     expect(html.includes('hx-params="*"')).toBe(true);
     expect(html.includes('aria-label="Switch language to Chinese"')).toBe(true);
+    expect(html.includes(appRoutes.aiCatalog)).toBe(true);
+    expect(html.includes(appRoutes.aiTranscribe)).toBe(true);
+    expect(html.includes(appConfig.api.docsPath)).toBe(true);
   });
 
   test("oracle form preserves locale in progressive-enhancement flow", async () => {

@@ -26,17 +26,30 @@ const corruptedCacheErrorFragments = [
 if (env.backends.onnx.wasm) {
   env.backends.onnx.wasm.wasmPaths = appConfig.ai.onnxWasmPath;
   env.backends.onnx.wasm.numThreads = appConfig.ai.onnxThreadCount;
+  env.backends.onnx.wasm.proxy = appConfig.ai.onnxProxyEnabled;
 }
 
 // Cache downloaded model weights locally between restarts.
 env.cacheDir = appConfig.ai.transformersCacheDirectory;
-env.allowLocalModels = true;
+env.localModelPath = appConfig.ai.transformersLocalModelPath;
+env.allowLocalModels = appConfig.ai.transformersAllowLocalModels;
+env.allowRemoteModels = appConfig.ai.transformersAllowRemoteModels;
 
 interface DisposablePipeline {
   readonly dispose?: () => void | Promise<void>;
 }
 
 type AnyPipeline = DisposablePipeline & object;
+type TensorLike = { readonly data: Float32Array | Float64Array | readonly number[] };
+
+interface AsrOutput {
+  readonly text?: string;
+}
+
+interface TtsOutput {
+  readonly audio: Float32Array;
+  readonly sampling_rate: number;
+}
 
 const isCorruptedCacheError = (error: unknown): boolean => {
   const message = String(error).toLowerCase();
@@ -224,6 +237,115 @@ export class ModelManager {
   }
 
   /**
+   * Generates a normalized embedding vector.
+   *
+   * @param text Input text.
+   * @returns Embedding vector or null when the model fails.
+   */
+  async generateEmbedding(text: string): Promise<Float32Array | null> {
+    const pipe = await this.getPipeline("embeddings").catch((error: unknown) => {
+      logger.error("model.embeddings.failed", { err: String(error) });
+      return null;
+    });
+    if (!pipe) return null;
+
+    const result = await withTimeout(
+      (pipe as (input: string, options: Record<string, unknown>) => Promise<TensorLike>)(text, {
+        pooling: "mean",
+        normalize: true,
+      }),
+      appConfig.ai.pipelineTimeoutMs,
+      "embedding:generate",
+    ).catch((error: unknown) => {
+      logger.error("model.embeddings.failed", { err: String(error) });
+      return null;
+    });
+
+    if (!result) {
+      return null;
+    }
+
+    const values =
+      result.data instanceof Float32Array
+        ? result.data
+        : result.data instanceof Float64Array
+          ? Float32Array.from(result.data)
+          : Float32Array.from(result.data);
+
+    return values;
+  }
+
+  /**
+   * Runs automatic speech recognition against mono PCM audio.
+   *
+   * @param audio Mono PCM audio.
+   * @returns Recognized text or null on failure.
+   */
+  async transcribeAudio(audio: Float32Array): Promise<string | null> {
+    const pipe = await this.getPipeline("speechToText").catch((error: unknown) => {
+      logger.error("model.stt.failed", { err: String(error) });
+      return null;
+    });
+    if (!pipe) return null;
+
+    const result = await withTimeout(
+      (
+        pipe as (
+          input: Float32Array,
+          options: Record<string, unknown>,
+        ) => Promise<AsrOutput | string>
+      )(audio, {}),
+      appConfig.ai.pipelineTimeoutMs * 4,
+      "speech-to-text:transcribe",
+    ).catch((error: unknown) => {
+      logger.error("model.stt.failed", { err: String(error) });
+      return null;
+    });
+
+    if (typeof result === "string") {
+      return result.trim();
+    }
+
+    return result?.text?.trim() ?? null;
+  }
+
+  /**
+   * Synthesizes mono PCM audio from text.
+   *
+   * @param text Input text to synthesize.
+   * @returns PCM audio and sample rate or null on failure.
+   */
+  async synthesizeSpeech(
+    text: string,
+  ): Promise<{ readonly audio: Float32Array; readonly sampleRate: number } | null> {
+    const pipe = await this.getPipeline("textToSpeech").catch((error: unknown) => {
+      logger.error("model.tts.failed", { err: String(error) });
+      return null;
+    });
+    if (!pipe) return null;
+
+    const result = await withTimeout(
+      (pipe as (input: string, options: Record<string, unknown>) => Promise<TtsOutput>)(text, {
+        speaker_embeddings: appConfig.ai.textToSpeechSpeakerEmbeddings,
+      }),
+      appConfig.ai.pipelineTimeoutMs * 4,
+      "text-to-speech:synthesize",
+    ).catch((error: unknown) => {
+      logger.error("model.tts.failed", { err: String(error) });
+      return null;
+    });
+
+    if (!result) {
+      return null;
+    }
+
+    return {
+      audio: result.audio,
+      sampleRate: result.sampling_rate,
+    };
+  }
+
+  /**
    * Releases model pipelines.
    */
   async dispose(): Promise<void> {
@@ -251,6 +373,9 @@ export class ModelManager {
     allowCacheRecovery: boolean = true,
   ): Promise<AnyPipeline> {
     const entry = MODEL_REGISTRY[key];
+    if (!entry.enabled) {
+      throw new Error(`Model target "${key}" is disabled.`);
+    }
     logger.info("model.loading", { key, model: entry.model });
 
     try {

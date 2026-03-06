@@ -42,6 +42,13 @@ export interface Messages {
       readonly reliabilityDescription: string;
       readonly progressiveEnhancementTitle: string;
       readonly progressiveEnhancementDescription: string;
+      readonly builderOptionsTitle: string;
+      readonly builderOptionsDescription: string;
+      readonly userFlowTitle: string;
+      readonly userFlowSteps: readonly string[];
+      readonly apiSurfaceTitle: string;
+      readonly apiSurfaceDescription: string;
+      readonly docsCta: string;
     };
     readonly pitchDeck: {
       readonly title: string;
@@ -136,6 +143,7 @@ export interface Messages {
     readonly projectNotFound: string;
     readonly sceneNotFound: string;
     readonly npcNotFound: string;
+    readonly dialogueNotFound: string;
     readonly noDialogues: string;
     readonly title: string;
     readonly dashboard: string;
@@ -183,6 +191,9 @@ export interface Messages {
     readonly visionLabel: string;
     readonly sentimentLabel: string;
     readonly embeddingsLabel: string;
+    readonly speechToTextLabel: string;
+    readonly speechSynthesisLabel: string;
+    readonly localInferenceLabel: string;
     readonly npcIdLabel: string;
     readonly messageLabel: string;
     readonly promptLabel: string;
@@ -196,6 +207,25 @@ export interface Messages {
     readonly testNpcPlaceholder: string;
     readonly testMessagePlaceholder: string;
     readonly assistPromptPlaceholder: string;
+    readonly flowTitle: string;
+    readonly flowDescription: string;
+    readonly flowSteps: readonly string[];
+    readonly engineOptionsTitle: string;
+    readonly engineOptionsDescription: string;
+    readonly runtimeLaneTitle: string;
+    readonly runtimeLaneDescription: string;
+    readonly pluginLaneTitle: string;
+    readonly pluginLaneDescription: string;
+    readonly aiLaneTitle: string;
+    readonly aiLaneDescription: string;
+    readonly apiSurfaceTitle: string;
+    readonly apiSurfaceDescription: string;
+    readonly localRuntimeTitle: string;
+    readonly localRuntimeDescription: string;
+    readonly runtimeLabel: string;
+    readonly modelLabel: string;
+    readonly configKeyLabel: string;
+    readonly docsLabel: string;
   };
 }
 
@@ -234,9 +264,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
     pages: {
       home: {
         title: "System Architecture",
-        heroTitle: "SSR-first platform with deterministic UI state mapping",
+        heroTitle: "Local-first AI game engine builder with SSR operator surfaces",
         heroDescription:
-          "The platform now runs on Bun + Elysia, renders on the server by default, and uses HTMX for progressive enhancement without hydration fragility.",
+          "The platform runs on Bun + Elysia, renders on the server by default, and now exposes a configurable local AI stack for dialogue, speech, embeddings, and builder operations.",
         architectureTitle: "Single-owner architecture",
         architectureDescription:
           "Config, logging, routing, UI rendering, and domain behavior are now isolated by concern with clear contracts at each boundary.",
@@ -246,6 +276,21 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         progressiveEnhancementTitle: "Progressive enhancement",
         progressiveEnhancementDescription:
           "Forms and navigation work without JavaScript, while HTMX upgrades responses for faster interaction loops when available.",
+        builderOptionsTitle: "Builder lanes",
+        builderOptionsDescription:
+          "Author scenes, ship plugin packs, validate the browser runtime, and exercise local AI features from one contract-driven workflow.",
+        userFlowTitle: "Builder flow",
+        userFlowSteps: [
+          "Choose the lane",
+          "Compose with AI",
+          "Author assets",
+          "Validate contracts",
+          "Publish the project",
+        ],
+        apiSurfaceTitle: "Platform surface",
+        apiSurfaceDescription:
+          "Operational endpoints, builder mutations, and local AI runtime details are exposed through documented APIs instead of hidden implementation paths.",
+        docsCta: "Open API docs",
       },
       pitchDeck: {
         title: "Pitch Deck",
@@ -361,6 +406,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       projectNotFound: "Project not found",
       sceneNotFound: "Scene not found",
       npcNotFound: "NPC not found",
+      dialogueNotFound: "Dialogue key not found",
       noDialogues: "No dialogue entries found",
       title: "Game Builder",
       dashboard: "Dashboard",
@@ -408,6 +454,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       visionLabel: "Vision",
       sentimentLabel: "Sentiment",
       embeddingsLabel: "Embeddings",
+      speechToTextLabel: "Speech to Text",
+      speechSynthesisLabel: "Text to Speech",
+      localInferenceLabel: "Local Inference",
       npcIdLabel: "NPC ID",
       messageLabel: "Message",
       promptLabel: "Prompt",
@@ -421,6 +470,38 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       testNpcPlaceholder: "teaMonk",
       testMessagePlaceholder: "Tell me about the five elements...",
       assistPromptPlaceholder: "How should I balance the tea trader NPC dialogue...",
+      flowTitle: "Guided flow",
+      flowDescription:
+        "Move from platform choice to publishable output with one SSR-first builder sequence.",
+      flowSteps: [
+        "Choose the runtime lane",
+        "Compose or test AI behavior",
+        "Author scenes, NPCs, and dialogue",
+        "Validate contracts and runtime health",
+        "Publish the project",
+      ],
+      engineOptionsTitle: "Engine options",
+      engineOptionsDescription:
+        "Choose the delivery path that matches the current milestone without splitting the content model.",
+      runtimeLaneTitle: "Browser runtime",
+      runtimeLaneDescription:
+        "Server-authoritative web runtime for live scene validation, HUD testing, and session contract checks.",
+      pluginLaneTitle: "RMMZ plugin pack",
+      pluginLaneDescription:
+        "Structured plugin output for RPG Maker authoring with the same scene and dialogue source of truth.",
+      aiLaneTitle: "Local AI stack",
+      aiLaneDescription:
+        "Configurable Hugging Face + ONNX targets for dialogue fallback, embeddings, speech recognition, and speech synthesis.",
+      apiSurfaceTitle: "API surface",
+      apiSurfaceDescription:
+        "Use the builder CRUD endpoints, AI catalog, and Swagger docs as the operating surface for tools and automations.",
+      localRuntimeTitle: "Local runtime",
+      localRuntimeDescription:
+        "The builder reads from the same Transformers.js, Hugging Face, and ONNX settings used by the API routes.",
+      runtimeLabel: "Runtime",
+      modelLabel: "Model",
+      configKeyLabel: "Config Key",
+      docsLabel: "Docs",
     },
   },
   "zh-CN": {
@@ -454,9 +535,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
     pages: {
       home: {
         title: "系统架构",
-        heroTitle: "以 SSR 为核心并具备确定性状态映射的平台",
+        heroTitle: "以本地 AI 为核心的 SSR 游戏引擎构建平台",
         heroDescription:
-          "平台现已基于 Bun + Elysia，默认服务端渲染，并通过 HTMX 实现渐进增强，避免脆弱的前端水合链路。",
+          "平台基于 Bun + Elysia，默认服务端渲染，并提供可配置的本地 AI 栈，用于对话、语音、嵌入与构建流程。",
         architectureTitle: "单一职责架构",
         architectureDescription:
           "配置、日志、路由、视图渲染与领域逻辑各自独立，边界通过类型契约约束。",
@@ -466,6 +547,15 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         progressiveEnhancementTitle: "渐进增强",
         progressiveEnhancementDescription:
           "在无 JavaScript 场景下功能可用；有 HTMX 时自动升级为更快的交互回路。",
+        builderOptionsTitle: "构建通道",
+        builderOptionsDescription:
+          "在同一套契约驱动流程中完成场景创作、插件输出、浏览器运行时验证与本地 AI 能力测试。",
+        userFlowTitle: "构建流程",
+        userFlowSteps: ["选择通道", "使用 AI 编排", "创作资源", "校验契约", "发布项目"],
+        apiSurfaceTitle: "平台接口面",
+        apiSurfaceDescription:
+          "运维端点、构建器写接口与本地 AI 运行时细节都通过文档化 API 暴露，而不是隐藏在实现内部。",
+        docsCta: "打开 API 文档",
       },
       pitchDeck: {
         title: "路演材料",
@@ -580,6 +670,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       projectNotFound: "项目未找到",
       sceneNotFound: "场景未找到",
       npcNotFound: "NPC 未找到",
+      dialogueNotFound: "对话键未找到",
       noDialogues: "未找到对话条目",
       title: "游戏构建器",
       dashboard: "仪表盘",
@@ -627,6 +718,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       visionLabel: "视觉",
       sentimentLabel: "情感分析",
       embeddingsLabel: "嵌入向量",
+      speechToTextLabel: "语音转文本",
+      speechSynthesisLabel: "文本转语音",
+      localInferenceLabel: "本地推理",
       npcIdLabel: "NPC ID",
       messageLabel: "消息",
       promptLabel: "提示词",
@@ -640,6 +734,33 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       testNpcPlaceholder: "teaMonk",
       testMessagePlaceholder: "请告诉我关于五行的事情...",
       assistPromptPlaceholder: "如何平衡茶商 NPC 的对话...",
+      flowTitle: "引导流程",
+      flowDescription: "从平台选择到可发布输出，统一走同一条 SSR 优先的构建路径。",
+      flowSteps: [
+        "选择运行时通道",
+        "编排或测试 AI 行为",
+        "创作场景、NPC 与对话",
+        "校验契约与运行时健康状态",
+        "发布项目",
+      ],
+      engineOptionsTitle: "引擎选项",
+      engineOptionsDescription: "在不拆分内容模型的前提下，根据当前里程碑选择最合适的交付路径。",
+      runtimeLaneTitle: "浏览器运行时",
+      runtimeLaneDescription: "用于实时场景验证、HUD 测试与会话契约检查的服务端权威 Web 运行时。",
+      pluginLaneTitle: "RMMZ 插件包",
+      pluginLaneDescription: "面向 RPG Maker 的结构化插件输出，复用同一套场景与对话源数据。",
+      aiLaneTitle: "本地 AI 栈",
+      aiLaneDescription:
+        "通过可配置的 Hugging Face + ONNX 目标提供对话兜底、嵌入、语音识别与语音合成能力。",
+      apiSurfaceTitle: "API 接口面",
+      apiSurfaceDescription: "把构建器 CRUD、AI 目录与 Swagger 文档作为工具和自动化的正式操作面。",
+      localRuntimeTitle: "本地运行时",
+      localRuntimeDescription:
+        "构建器直接读取与 API 路由相同的 Transformers.js、Hugging Face 与 ONNX 配置。",
+      runtimeLabel: "运行时",
+      modelLabel: "模型",
+      configKeyLabel: "配置键",
+      docsLabel: "文档",
     },
   },
 };
