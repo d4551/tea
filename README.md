@@ -204,18 +204,19 @@ sequenceDiagram
   participant B as Browser
   participant APP as Elysia App
   participant AUTH as auth-session
-  participant LOOP as GameLoop
+  participant GL as GameLoop
   participant STORE as GameStateStore
   participant DB as Prisma
 
   B->>APP: POST /api/game/session
   APP->>AUTH: Resolve or issue cookie session id
-  APP->>LOOP: createSession(locale, sceneId, projectId, ownerSessionId)
-  LOOP->>STORE: createSession and initialize stateVersion
+  APP->>GL: createSession
+
+  GL->>STORE: createSession and initialize stateVersion
   STORE->>DB: INSERT gameSession
   DB-->>STORE: persisted row
-  STORE-->>LOOP: GameSessionSnapshot
-  LOOP-->>APP: lifecycle snapshot and resume token
+  STORE-->>GL: GameSessionSnapshot
+  GL-->>APP: lifecycle snapshot and resume token
   APP-->>B: 200 with sessionId, resumeToken, resumeTokenExpiresAtMs
 ```
 
@@ -287,16 +288,16 @@ sequenceDiagram
   participant REST as REST api/game/session
   participant WS as WebSocket ws endpoint
   participant HUD as SSE hud endpoint
-  participant Loop as GameLoop
+  participant GL as GameLoop
 
   Client->>REST: POST create
   REST-->>Client: sessionId, resumeToken, resumeTokenExpiresAtMs
   Client->>WS: connect with resumeToken query
-  WS->>Loop: restoreSession
-  Loop-->>WS: accepted
+  WS->>GL: restoreSession
+  GL-->>WS: accepted
   Client->>REST: POST command
-  REST->>Loop: queue validated command
-  Loop-->>WS: publish state and rotated resume token
+  REST->>GL: queue validated command
+  GL-->>WS: publish state and rotated resume token
   Client->>HUD: SSE subscribe
   HUD-->>Client: scene-title, xp, dialogue events
   Note over Client,REST: Token expiry: POST restore with resumeToken in body
@@ -626,18 +627,18 @@ sequenceDiagram
   participant B as 浏览器
   participant APP as Elysia App
   participant AUTH as auth-session
-  participant LOOP as GameLoop
+  participant GL as GameLoop
   participant STORE as GameStateStore
   participant DB as Prisma
 
   B->>APP: POST 创建会话
   APP->>AUTH: 解析或签发 cookie 会话标识
-  APP->>LOOP: createSession
-  LOOP->>STORE: createSession 并初始化 stateVersion
+  APP->>GL: createSession
+  GL->>STORE: createSession 并初始化 stateVersion
   STORE->>DB: INSERT gameSession
   DB-->>STORE: 持久化行
-  STORE-->>LOOP: GameSessionSnapshot
-  LOOP-->>APP: 生命周期快照和恢复令牌
+  STORE-->>GL: GameSessionSnapshot
+  GL-->>APP: 生命周期快照和恢复令牌
   APP-->>B: 200 返回 sessionId resumeToken resumeTokenExpiresAtMs
 ```
 
@@ -706,16 +707,16 @@ sequenceDiagram
   participant REST as REST 会话接口
   participant WS as WebSocket 端点
   participant HUD as SSE HUD 端点
-  participant Loop as GameLoop
+  participant GL as GameLoop
 
   Client->>REST: POST create
   REST-->>Client: sessionId resumeToken resumeTokenExpiresAtMs
   Client->>WS: 带 resumeToken 建立连接
-  WS->>Loop: restoreSession
-  Loop-->>WS: 通过
+  WS->>GL: restoreSession
+  GL-->>WS: 通过
   Client->>REST: POST command
-  REST->>Loop: 命令入队
-  Loop-->>WS: 推送 state 和新 token
+  REST->>GL: 命令入队
+  GL-->>WS: 推送 state 和新 token
   Client->>HUD: 订阅 SSE
   HUD-->>Client: scene-title xp dialogue close
 ```
