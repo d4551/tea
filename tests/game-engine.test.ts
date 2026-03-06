@@ -38,10 +38,19 @@ const readSseUntil = async (
       break;
     }
 
-    collected +=
-      typeof next.value === "string"
-        ? next.value
-        : decoder.decode(next.value as ArrayBufferView, { stream: true });
+    const chunk: unknown = next.value;
+
+    if (chunk instanceof Uint8Array) {
+      collected += decoder.decode(chunk, { stream: true });
+      continue;
+    }
+
+    if (chunk instanceof ArrayBuffer) {
+      collected += decoder.decode(new Uint8Array(chunk), { stream: true });
+      continue;
+    }
+
+    collected += String(chunk);
     if (predicate(collected)) {
       break;
     }
@@ -227,6 +236,124 @@ describe("game engine runtime", () => {
     if (stored.ok) {
       expect(stored.payload.projectId).toBe(projectId);
     }
+  });
+
+  test("published builder projects seed authored flags and quest state", async () => {
+    const projectId = `mechanics-seed-${crypto.randomUUID()}`;
+    const project = await builderService.createProject(projectId);
+    expect(project).not.toBeNull();
+    if (!project) {
+      return;
+    }
+
+    await builderService.publishProject(projectId, true);
+
+    const session = await gameLoop.createSession("en-US", "teaHouse", projectId);
+    managedSessionIds.add(session.sessionId);
+    const seededState = await gameLoop.getSessionState(session.sessionId);
+
+    expect(seededState?.state.flags?.teaHouseVisited).toBe(true);
+    expect(seededState?.state.flags?.teaMonkMet).toBe(false);
+    const welcomeQuest = seededState?.state.quests?.find(
+      (quest) => quest.id === "quest.teaHouse.welcome",
+    );
+    expect(welcomeQuest).toBeDefined();
+    expect(welcomeQuest?.completed).toBe(false);
+    expect(welcomeQuest?.steps[0]?.state).toBe("active");
+  });
+
+  test("npc interact triggers authored flag mutation and quest completion", async () => {
+    const projectId = `mechanics-trigger-${crypto.randomUUID()}`;
+    const project = await builderService.createProject(projectId);
+    expect(project).not.toBeNull();
+    if (!project) {
+      return;
+    }
+
+    await builderService.publishProject(projectId, true);
+
+    const session = await gameLoop.createSession("en-US", "teaHouse", projectId);
+    managedSessionIds.add(session.sessionId);
+    const runtimeStore = gameLoop as unknown as {
+      readonly liveSessions: Map<
+        string,
+        {
+          scene: {
+            player: {
+              position: { x: number; y: number };
+            };
+            npcs: Array<{
+              id: string;
+              characterKey: string;
+              position: { x: number; y: number };
+            }>;
+          };
+        }
+      >;
+    };
+    const runtimeSession = runtimeStore.liveSessions.get(session.sessionId);
+    const teaMonk = runtimeSession?.scene.npcs.find((npc) => npc.characterKey === "teaMonk");
+    expect(teaMonk).toBeDefined();
+    if (!runtimeSession || !teaMonk) {
+      return;
+    }
+
+    runtimeSession.scene.player.position.x = teaMonk.position.x;
+    runtimeSession.scene.player.position.y = teaMonk.position.y;
+
+    const interactResult = gameLoop.processCommand(
+      session.sessionId,
+      { type: "interact" },
+      "en-US",
+    );
+    expect(interactResult.state).toBe("queued");
+    await gameLoop.tick(session.sessionId, defaultGameConfig.tickMs);
+
+    const triggeredState = await gameLoop.getSessionState(session.sessionId);
+    expect(triggeredState?.state.flags?.teaMonkMet).toBe(true);
+    const welcomeQuest = triggeredState?.state.quests?.find(
+      (quest) => quest.id === "quest.teaHouse.welcome",
+    );
+    expect(welcomeQuest?.completed).toBe(true);
+    expect(welcomeQuest?.steps[0]?.state).toBe("completed");
+  });
+
+  test("published mechanics remain immutable until republish", async () => {
+    const projectId = `mechanics-release-${crypto.randomUUID()}`;
+    const created = await builderService.createProject(projectId);
+    expect(created).not.toBeNull();
+    if (!created) {
+      return;
+    }
+
+    await builderService.publishProject(projectId, true);
+    const releaseOne = await builderService.getPublishedProject(projectId);
+    expect(releaseOne?.triggers.get("trigger.meet-teaMonk")?.label).toBe("Meet the tea monk");
+
+    await builderService.saveTrigger(projectId, {
+      id: "trigger.meet-teaMonk",
+      trigger: {
+        id: "trigger.meet-teaMonk",
+        label: "Meet the published guide",
+        event: "npc-interact",
+        sceneId: "teaHouse",
+        npcId: "teaMonk",
+        setFlags: {
+          teaMonkMet: true,
+        },
+        questId: "quest.teaHouse.welcome",
+        questStepId: "step.meet-teaMonk",
+      },
+    });
+
+    const stillReleaseOne = await builderService.getPublishedProject(projectId);
+    expect(stillReleaseOne?.triggers.get("trigger.meet-teaMonk")?.label).toBe("Meet the tea monk");
+
+    await builderService.publishProject(projectId, true);
+    const releaseTwo = await builderService.getPublishedProject(projectId);
+    expect(releaseTwo?.triggers.get("trigger.meet-teaMonk")?.label).toBe(
+      "Meet the published guide",
+    );
   });
 
   test("published builder releases remain immutable until republish", async () => {
@@ -430,16 +557,15 @@ describe("game engine HTTP contracts", () => {
     expect(body.includes("&lt;img src=x onerror=alert(&#39;line&#39;)&gt;")).toBe(true);
   });
 
-  test("builder assets page renders mounted runtime asset inventory", async () => {
+  test("builder assets page renders the authored asset and generation workspace", async () => {
     const response = await app.handle(new Request(toUrl(appRoutes.builderAssets)));
     const body = await response.text();
 
     expect(response.status).toBe(httpStatus.ok);
-    expect(body.includes(appConfig.playableGame.assetPrefix)).toBe(true);
-    expect(body.includes(gameAssetUrls.teaHouseBackground)).toBe(true);
-    expect(body.includes(gameAssetUrls.npcSpriteSheet)).toBe(true);
-    expect(body.includes("Runtime mount")).toBe(true);
-    expect(body.includes("Sprite sheets")).toBe(true);
+    expect(body.includes('id="builder-project-shell"')).toBe(true);
+    expect(body.includes('hx-post="/api/builder/assets/create/form"')).toBe(true);
+    expect(body.includes("Animation clips")).toBe(true);
+    expect(body.includes("Queue generation job")).toBe(true);
   });
 
   test("state route rejects requests from a different session owner", async () => {

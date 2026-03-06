@@ -6,18 +6,25 @@
 import { Elysia, t } from "elysia";
 import { appConfig, type LocaleCode, normalizeLocale } from "../config/environment.ts";
 import { ProviderRegistry } from "../domain/ai/providers/provider-registry.ts";
-import { builderService, defaultBuilderProjectId } from "../domain/builder/builder-service.ts";
+import { persistBuilderFile } from "../domain/builder/asset-storage.ts";
+import {
+  type BuilderPatchPreviewOperation,
+  builderService,
+  defaultBuilderProjectId,
+} from "../domain/builder/builder-service.ts";
+import { evaluateBuilderPlatformReadiness } from "../domain/builder/platform-readiness.ts";
 import {
   detectAvailableFeatures,
   generateNpcDialogue,
   suggestUserFlowStep,
 } from "../domain/game/ai/game-ai-service.ts";
+import { gameScenes, gameSpriteManifests } from "../domain/game/data/sprite-data.ts";
 import { ensureCorrelationIdHeader } from "../lib/correlation-id.ts";
 import type { AppErrorCode } from "../lib/error-envelope.ts";
 import { ApplicationError, errorEnvelope, successEnvelope } from "../lib/error-envelope.ts";
 import { defaultGameConfig, getGameContractValues } from "../shared/config/game-config.ts";
 import { httpStatus } from "../shared/constants/http.ts";
-import { appRoutes } from "../shared/constants/routes.ts";
+import { appRoutes, withQueryParameters } from "../shared/constants/routes.ts";
 import type {
   BuilderAIRequest,
   BuilderAIResponse,
@@ -29,13 +36,18 @@ import type {
   BuilderScenePayload,
   FeatureCapability,
   SceneDefinition,
+  SceneNodeDefinition,
   SceneNpcDefinition,
 } from "../shared/contracts/game.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
 import { safeDecodeUri, safeJsonParse } from "../shared/utils/safe-json.ts";
-import { renderDialogueDetail } from "../views/builder/dialogue-editor.ts";
-import { renderNpcDetail } from "../views/builder/npc-editor.ts";
-import { renderSceneDetail } from "../views/builder/scene-editor.ts";
+import { renderAssetsEditor } from "../views/builder/assets-editor.ts";
+import { renderAutomationPanel } from "../views/builder/automation-panel.ts";
+import { renderDialogueDetail, renderDialogueEditor } from "../views/builder/dialogue-editor.ts";
+import { renderMechanicsEditor, renderQuestEditForm } from "../views/builder/mechanics-editor.ts";
+import { renderNpcDetail, renderNpcEditor } from "../views/builder/npc-editor.ts";
+import { renderSceneDetail, renderSceneEditor } from "../views/builder/scene-editor.ts";
+import { renderBuilderProjectShell } from "../views/builder/builder-layout.ts";
 import { escapeHtml } from "../views/layout.ts";
 
 const route = (path: string): string => path.replace(/^\/api\/builder/, "");
@@ -91,14 +103,48 @@ const builderCollisionSchema = t.Object({
   height: t.Number(),
 });
 
+const builderSceneNode2dSchema = t.Object({
+  id: t.String(),
+  nodeType: t.Union([
+    t.Literal("sprite"),
+    t.Literal("tile"),
+    t.Literal("spawn"),
+    t.Literal("trigger"),
+    t.Literal("camera"),
+  ]),
+  assetId: t.Optional(t.String()),
+  animationClipId: t.Optional(t.String()),
+  position: t.Object({ x: t.Number(), y: t.Number() }),
+  size: t.Object({ width: t.Number(), height: t.Number() }),
+  layer: t.String(),
+});
+
+const builderSceneNode3dSchema = t.Object({
+  id: t.String(),
+  nodeType: t.Union([
+    t.Literal("model"),
+    t.Literal("light"),
+    t.Literal("camera"),
+    t.Literal("spawn"),
+    t.Literal("trigger"),
+  ]),
+  assetId: t.Optional(t.String()),
+  animationClipId: t.Optional(t.String()),
+  position: t.Object({ x: t.Number(), y: t.Number(), z: t.Number() }),
+  rotation: t.Object({ x: t.Number(), y: t.Number(), z: t.Number() }),
+  scale: t.Object({ x: t.Number(), y: t.Number(), z: t.Number() }),
+});
+
 const builderSceneSchema = t.Object({
   id: t.String(),
   titleKey: t.String(),
   background: t.String(),
+  sceneMode: t.Optional(t.Union([t.Literal("2d"), t.Literal("3d")])),
   geometry: t.Object({ width: t.Number(), height: t.Number() }),
   spawn: t.Object({ x: t.Number(), y: t.Number() }),
   npcs: t.Array(builderNpcSchema),
   collisions: t.Array(builderCollisionSchema),
+  nodes: t.Optional(t.Array(t.Union([builderSceneNode2dSchema, builderSceneNode3dSchema]))),
 });
 
 const builderSceneCatalogSchema = t.Record(t.String(), builderSceneSchema);
@@ -119,6 +165,14 @@ const builderMutationResultSchema = t.Object({
     t.Literal("scene"),
     t.Literal("npc"),
     t.Literal("dialogue"),
+    t.Literal("asset"),
+    t.Literal("animationClip"),
+    t.Literal("dialogueGraph"),
+    t.Literal("quest"),
+    t.Literal("trigger"),
+    t.Literal("generationJob"),
+    t.Literal("artifact"),
+    t.Literal("automationRun"),
   ]),
   resourceId: t.String(),
   action: t.Union([
@@ -126,6 +180,9 @@ const builderMutationResultSchema = t.Object({
     t.Literal("updated"),
     t.Literal("deleted"),
     t.Literal("published"),
+    t.Literal("queued"),
+    t.Literal("approved"),
+    t.Literal("canceled"),
   ]),
 });
 
@@ -329,6 +386,12 @@ const builderStatusDataSchema = t.Object({
   correlationId: t.String(),
 });
 
+const builderAssetUploadDataSchema = t.Object({
+  id: t.String(),
+  source: t.String(),
+  byteLength: t.Number(),
+});
+
 const builderSuccessDataSchema = t.Union([
   builderAiCapabilitiesDataSchema,
   builderAiResponseDataSchema,
@@ -344,6 +407,7 @@ const builderSuccessDataSchema = t.Union([
   builderPatchPreviewDataSchema,
   builderPatchApplyDataSchema,
   builderStatusDataSchema,
+  builderAssetUploadDataSchema,
 ]);
 
 /** TypeBox schema for success envelopes across builder endpoints. */
@@ -398,6 +462,7 @@ const toBuilderScene = (scene: SceneDefinition) => ({
   id: scene.id,
   titleKey: scene.titleKey,
   background: scene.background,
+  sceneMode: scene.sceneMode,
   geometry: {
     width: scene.geometry.width,
     height: scene.geometry.height,
@@ -413,6 +478,7 @@ const toBuilderScene = (scene: SceneDefinition) => ({
     width: collision.width,
     height: collision.height,
   })),
+  nodes: scene.nodes ? [...scene.nodes] : [],
 });
 
 const toBuilderScenesRecord = (input: ReadonlyMap<string, SceneDefinition>) =>
@@ -434,6 +500,110 @@ const projectDialogues = async (
   const catalog = project.dialogues.get(locale) ?? new Map<string, string>();
   return Object.fromEntries(Array.from(catalog.entries()));
 };
+
+const toChromeProject = async (projectId: string) => {
+  const project = await builderService.getProject(projectId);
+  if (!project) {
+    return null;
+  }
+  return {
+    id: project.id,
+    version: project.version,
+    latestReleaseVersion: project.latestReleaseVersion,
+    publishedReleaseVersion: project.publishedReleaseVersion,
+    published: project.published,
+    lastUpdatedAtMs: project.lastUpdatedAtMs,
+  };
+};
+
+const renderSceneWorkspace = async (locale: LocaleCode, projectId: string): Promise<string> => {
+  const project = await builderService.getProject(projectId);
+  const scenes = Object.fromEntries(project?.scenes.entries() ?? []);
+  return renderSceneEditor(getMessages(locale), scenes, locale, projectId);
+};
+
+const renderNpcWorkspace = async (locale: LocaleCode, projectId: string): Promise<string> => {
+  const project = await builderService.getProject(projectId);
+  const scenes = Object.fromEntries(project?.scenes.entries() ?? []);
+  return renderNpcEditor(getMessages(locale), scenes, gameSpriteManifests, locale, projectId);
+};
+
+const renderDialogueWorkspace = async (
+  locale: LocaleCode,
+  projectId: string,
+  search = "",
+): Promise<string> =>
+  renderDialogueEditor(
+    getMessages(locale),
+    await projectDialogues(projectId, locale),
+    locale,
+    projectId,
+    search,
+  );
+
+const renderAssetsWorkspace = async (locale: LocaleCode, projectId: string): Promise<string> => {
+  const project = await builderService.getProject(projectId);
+  return renderAssetsEditor(
+    getMessages(locale),
+    locale,
+    projectId,
+    Array.from(project?.assets.values() ?? []),
+    Array.from(project?.animationClips.values() ?? []),
+    Array.from(project?.generationJobs.values() ?? []),
+    Array.from(project?.artifacts.values() ?? []),
+  );
+};
+
+const renderMechanicsWorkspace = async (locale: LocaleCode, projectId: string): Promise<string> => {
+  const project = await builderService.getProject(projectId);
+  return renderMechanicsEditor(
+    getMessages(locale),
+    locale,
+    projectId,
+    Array.from(project?.quests.values() ?? []),
+    Array.from(project?.triggers.values() ?? []),
+    Array.from(project?.dialogueGraphs.values() ?? []),
+    Array.from(project?.flags.values() ?? []),
+  );
+};
+
+const renderAutomationWorkspace = async (
+  locale: LocaleCode,
+  projectId: string,
+): Promise<string> => {
+  const project = await builderService.getProject(projectId);
+  return renderAutomationPanel(
+    getMessages(locale),
+    locale,
+    projectId,
+    Array.from(project?.automationRuns.values() ?? []),
+  );
+};
+
+const renderProjectChromeOob = async (
+  locale: LocaleCode,
+  projectId: string,
+  currentPath: string,
+): Promise<string> => {
+  const chrome = renderBuilderProjectShell(
+    getMessages(locale),
+    locale,
+    projectId,
+    currentPath,
+    await toChromeProject(projectId),
+  );
+  return chrome.replace(
+    '<section id="builder-project-shell"',
+    '<section id="builder-project-shell" hx-swap-oob="outerHTML"',
+  );
+};
+
+const withProjectChromeRefresh = async (
+  locale: LocaleCode,
+  projectId: string,
+  currentPath: string,
+  html: string,
+): Promise<string> => `${await renderProjectChromeOob(locale, projectId, currentPath)}${html}`;
 
 const renderErrorHtml = (message: string): string =>
   `<div class="alert alert-error" role="alert">${escapeHtml(message)}</div>`;
@@ -468,6 +638,77 @@ const parseBooleanField = (value: string | undefined, fallback: boolean): boolea
     return false;
   }
   return fallback;
+};
+
+const upsertSceneNode = (
+  scene: SceneDefinition,
+  body: Record<string, string | undefined>,
+): SceneDefinition["nodes"] => {
+  const existingNodes = [...(scene.nodes ?? [])];
+  const nodeId = (body.id ?? "").trim();
+  if (nodeId.length === 0) {
+    return existingNodes;
+  }
+
+  const nextNode: SceneNodeDefinition =
+    body.nodeKind === "3d" || scene.sceneMode === "3d"
+      ? {
+          id: nodeId,
+          nodeType:
+            body.nodeType === "light" ||
+            body.nodeType === "camera" ||
+            body.nodeType === "spawn" ||
+            body.nodeType === "trigger"
+              ? body.nodeType
+              : "model",
+          assetId: body.assetId?.trim() || undefined,
+          animationClipId: body.animationClipId?.trim() || undefined,
+          position: {
+            x: parseFloatField(body.positionX, 0),
+            y: parseFloatField(body.positionY, 0),
+            z: parseFloatField(body.positionZ, 0),
+          },
+          rotation: {
+            x: parseFloatField(body.rotationX, 0),
+            y: parseFloatField(body.rotationY, 0),
+            z: parseFloatField(body.rotationZ, 0),
+          },
+          scale: {
+            x: Math.max(0.1, parseFloatField(body.scaleX, 1)),
+            y: Math.max(0.1, parseFloatField(body.scaleY, 1)),
+            z: Math.max(0.1, parseFloatField(body.scaleZ, 1)),
+          },
+        }
+      : {
+          id: nodeId,
+          nodeType:
+            body.nodeType === "tile" ||
+            body.nodeType === "spawn" ||
+            body.nodeType === "trigger" ||
+            body.nodeType === "camera"
+              ? body.nodeType
+              : "sprite",
+          assetId: body.assetId?.trim() || undefined,
+          animationClipId: body.animationClipId?.trim() || undefined,
+          position: {
+            x: parseFloatField(body.positionX, 0),
+            y: parseFloatField(body.positionY, 0),
+          },
+          size: {
+            width: Math.max(1, parseFloatField(body.sizeWidth, 64)),
+            height: Math.max(1, parseFloatField(body.sizeHeight, 64)),
+          },
+          layer: body.layer?.trim() || "foreground",
+        };
+
+  const existingIndex = existingNodes.findIndex((node) => node.id === nodeId);
+  if (existingIndex === -1) {
+    existingNodes.push(nextNode);
+  } else {
+    existingNodes[existingIndex] = nextNode;
+  }
+
+  return existingNodes;
 };
 
 const buildError = (
@@ -598,7 +839,88 @@ const asAiResponseEnvelope = (
   });
 };
 
+const serializeOperations = (operations: readonly BuilderArtifactPatch[]): string =>
+  JSON.stringify(operations.map(toBuilderArtifactPatch));
+
+const renderPatchPreviewHtml = (
+  locale: LocaleCode,
+  projectId: string,
+  version: number,
+  operations: readonly BuilderPatchPreviewOperation[],
+) => {
+  const messages = getMessages(locale);
+  const serializedOperations = escapeHtml(
+    serializeOperations(
+      operations.map((operation) => ({
+        ...operation.operation,
+      })),
+    ),
+  );
+  const rows = operations
+    .map(
+      (operation) => `<li class="rounded-box border border-base-300 bg-base-200/60 p-3">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="badge ${operation.valid ? "badge-success" : "badge-error"} badge-soft">${escapeHtml(operation.valid ? messages.builder.previewReady : messages.api.frameworkErrors.validation)}</span>
+          <code>${escapeHtml(operation.operation.op)} ${escapeHtml(operation.operation.path)}</code>
+        </div>
+        <p class="mt-2 text-sm">${escapeHtml(operation.message)}</p>
+        ${
+          operation.before || operation.after
+            ? `<div class="mt-2 grid gap-2 text-xs lg:grid-cols-2">
+                <div class="rounded-box bg-base-100 p-2"><div class="mt-1 break-words">${escapeHtml(operation.before ?? "—")}</div></div>
+                <div class="rounded-box bg-base-100 p-2"><div class="mt-1 break-words">${escapeHtml(operation.after ?? "—")}</div></div>
+              </div>`
+            : ""
+        }
+      </li>`,
+    )
+    .join("");
+
+  return `<article class="card card-border bg-base-100 shadow-sm">
+    <div class="card-body gap-4">
+      <div>
+        <h3 class="card-title">${escapeHtml(messages.builder.previewReady)}</h3>
+        <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.patchOperations)}</p>
+      </div>
+      <ul class="space-y-3">${rows}</ul>
+      <form
+        hx-post="${escapeHtml(appRoutes.aiBuilderPatchApplyForm)}"
+        hx-target="#ai-patch-result"
+        hx-swap="innerHTML"
+        class="flex flex-wrap gap-2"
+      >
+        <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
+        <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+        <input type="hidden" name="expectedVersion" value="${version}" />
+        <textarea name="operationsJson" class="hidden">${serializedOperations}</textarea>
+        <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.applyChanges)}</button>
+      </form>
+    </div>
+  </article>`;
+};
+
 export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/builder" })
+  .get(
+    route(appRoutes.builderPlatformReadiness),
+    async ({ query }) => {
+      const projectId = resolveProjectId(
+        typeof query === "object" && query !== null && "projectId" in query
+          ? String(query.projectId ?? "")
+          : undefined,
+      );
+      const project = await builderService.peekProject(projectId);
+      const features = await detectAvailableFeatures();
+      const readiness = evaluateBuilderPlatformReadiness({
+        sceneCount: project?.scenes.size ?? Object.keys(gameScenes).length,
+        spriteManifestCount: Object.keys(gameSpriteManifests).length,
+        aiFeatures: features,
+        rendererPreference: appConfig.playableGame.rendererPreference,
+        onnxDevice: appConfig.ai.onnxDevice,
+      });
+
+      return successEnvelope(readiness);
+    },
+  )
   .get(
     route(appRoutes.aiBuilderCapabilities),
     async () => {
@@ -758,18 +1080,33 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         riskFlags: [...response.riskFlags],
         requirements: ["tool-calling", "schema-validation"],
       };
-
+      const serializedOperations = escapeHtml(serializeOperations(response.proposedOperations));
       const operationRows = plan.operations
         .map(
           (operation) =>
-            `<li><code>${escapeHtml(operation.op)} ${escapeHtml(operation.path)}</code></li>`,
+            `<li class="rounded-box bg-base-200/60 p-2"><code>${escapeHtml(operation.op)} ${escapeHtml(operation.path)}</code></li>`,
         )
         .join("");
 
-      return `<article class="space-y-2">
-        <p><strong>${escapeHtml(plan.intent)}</strong></p>
-        <p class="text-sm">${escapeHtml(payload.rawText)}</p>
-        <ul class="list-disc ml-6 text-sm">${operationRows}</ul>
+      return `<article class="card card-border bg-base-100 shadow-sm">
+        <div class="card-body gap-4">
+          <div>
+            <h3 class="card-title">${escapeHtml(getMessages(locale).builder.assistantReviewTitle)}</h3>
+            <p class="text-sm text-base-content/70">${escapeHtml(payload.rawText)}</p>
+          </div>
+          <ul class="space-y-2 text-sm">${operationRows}</ul>
+          <form
+            hx-post="${escapeHtml(appRoutes.aiBuilderPatchPreviewForm)}"
+            hx-target="#ai-patch-result"
+            hx-swap="innerHTML"
+            class="flex flex-wrap gap-2"
+          >
+            <input type="hidden" name="projectId" value="${escapeHtml(body.projectId ?? defaultBuilderProjectId)}" />
+            <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+            <textarea name="operationsJson" class="hidden">${serializedOperations}</textarea>
+            <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(getMessages(locale).builder.previewChanges)}</button>
+          </form>
+        </div>
       </article>`;
     },
     {
@@ -778,10 +1115,92 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         context: t.Optional(t.String()),
         target: t.Optional(t.String()),
         locale: t.Optional(t.String()),
+        projectId: t.Optional(t.String()),
       }),
       response: {
         [httpStatus.ok]: t.Union([t.String(), builderOkResponse]),
         [httpStatus.badRequest]: builderErrorResponse,
+      },
+    },
+  )
+  .post(
+    route(appRoutes.aiBuilderPatchPreviewForm),
+    async ({ body, request, set, status }) => {
+      const projectId = resolveProjectId(body.projectId);
+      const locale = toLocale(body.locale);
+      const preview = await builderService.previewArtifactPatch(
+        projectId,
+        parseOperation(body.operationsJson),
+      );
+      if (!preview) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+      return renderPatchPreviewHtml(locale, projectId, preview.version, preview.operations);
+    },
+    {
+      body: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+        operationsJson: t.String(),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .post(
+    route(appRoutes.aiBuilderPatchApplyForm),
+    async ({ body, request, set, status }) => {
+      const projectId = resolveProjectId(body.projectId);
+      const locale = toLocale(body.locale);
+      const applied = await builderService.applyArtifactPatch(
+        projectId,
+        parseOperation(body.operationsJson),
+        body.expectedVersion ? Number.parseInt(body.expectedVersion, 10) : undefined,
+      );
+      if (!applied) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+
+      const messages = getMessages(locale);
+      const rows = applied.operations
+        .map(
+          (operation) =>
+            `<li class="rounded-box bg-base-200/60 p-2"><code>${escapeHtml(operation.operation.op)} ${escapeHtml(operation.operation.path)}</code></li>`,
+        )
+        .join("");
+
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderAi,
+        `<article class="card card-border bg-base-100 shadow-sm">
+          <div class="card-body gap-4">
+            <div role="alert" class="alert alert-success alert-soft">
+              <span>${escapeHtml(messages.builder.applyComplete)}: ${applied.applied}</span>
+            </div>
+            <ul class="space-y-2 text-sm">${rows}</ul>
+          </div>
+        </article>`,
+      );
+    },
+    {
+      body: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+        expectedVersion: t.Optional(t.String()),
+        operationsJson: t.String(),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
       },
     },
   )
@@ -953,6 +1372,13 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
           ),
         );
       }
+      if (wantsHtml(request.headers.get("accept"))) {
+        set.headers["HX-Redirect"] = withQueryParameters(body.redirectPath ?? appRoutes.builder, {
+          lang: toLocale(body.locale),
+          projectId: project.id,
+        });
+        return "";
+      }
       return successEnvelope({
         id: project.id,
         createdBy: project.createdBy,
@@ -973,9 +1399,11 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     {
       body: t.Object({
         projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+        redirectPath: t.Optional(t.String()),
       }),
       response: {
-        [httpStatus.ok]: builderOkResponse,
+        [httpStatus.ok]: t.Union([builderOkResponse, t.String()]),
         [httpStatus.badRequest]: builderErrorResponse,
         [httpStatus.notFound]: builderErrorResponse,
       },
@@ -1032,11 +1460,24 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     "/projects/:projectId/publish",
     async ({ params, body, request, set, status }) => {
       const projectId = resolveProjectId(params.projectId);
-      const project = await builderService.publishProject(projectId, body.published);
+      const shouldPublish =
+        typeof body.published === "boolean"
+          ? body.published
+          : parseBooleanField(body.published, false);
+      const project = await builderService.publishProject(projectId, shouldPublish);
       if (!project) {
         return status(
           httpStatus.notFound,
           buildBuilderNotFoundError(request, set.headers, undefined, "projectNotFound"),
+        );
+      }
+      if (wantsHtml(request.headers.get("accept"))) {
+        return renderBuilderProjectShell(
+          getMessages(toLocale(body.locale)),
+          toLocale(body.locale),
+          project.id,
+          body.currentPath?.trim() || appRoutes.builder,
+          await toChromeProject(project.id),
         );
       }
 
@@ -1048,7 +1489,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       };
 
       return successEnvelope({
-        action: body.published ? "publish" : "unpublish",
+        action: shouldPublish ? "publish" : "unpublish",
         releaseVersion: project.publishedReleaseVersion,
         result: toBuilderMutationResult(payload),
         checksum: project.checksum,
@@ -1056,10 +1497,72 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     },
     {
       params: t.Object({ projectId: t.Optional(t.String()) }),
-      body: t.Object({ published: t.Boolean() }),
+      body: t.Object({
+        published: t.Union([t.Boolean(), t.String()]),
+        locale: t.Optional(t.String()),
+        currentPath: t.Optional(t.String()),
+      }),
       response: {
-        [httpStatus.ok]: builderOkResponse,
+        [httpStatus.ok]: t.Union([builderOkResponse, t.String()]),
         [httpStatus.badRequest]: builderErrorResponse,
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .post(
+    "/scenes/create/form",
+    async ({ body, request, set, status }) => {
+      const projectId = resolveProjectId(body.projectId);
+      const locale = toLocale(body.locale);
+      const result = await builderService.saveScene(projectId, {
+        id: body.id.trim(),
+        scene: {
+          id: body.id.trim(),
+          titleKey: body.titleKey.trim(),
+          background: body.background.trim(),
+          sceneMode: body.sceneMode === "3d" ? "3d" : "2d",
+          geometry: {
+            width: Math.max(1, parseIntegerField(body.geometryWidth, 640)),
+            height: Math.max(1, parseIntegerField(body.geometryHeight, 360)),
+          },
+          spawn: {
+            x: parseIntegerField(body.spawnX, 320),
+            y: parseIntegerField(body.spawnY, 180),
+          },
+          npcs: [],
+          collisions: [],
+          nodes: [],
+        },
+      });
+      if (!result) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderScenes,
+        await renderSceneWorkspace(locale, projectId),
+      );
+    },
+    {
+      body: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+        id: t.String(),
+        titleKey: t.String(),
+        background: t.String(),
+        sceneMode: t.Optional(t.String()),
+        geometryWidth: t.Optional(t.String()),
+        geometryHeight: t.Optional(t.String()),
+        spawnX: t.Optional(t.String()),
+        spawnY: t.Optional(t.String()),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
         [httpStatus.notFound]: builderErrorResponse,
       },
     },
@@ -1088,7 +1591,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         checksum: result.checksum,
         detailHtml: renderSceneDetail(
           getMessages(normalizeLocale(body.locale)),
-          toBuilderScene(result.payload),
+          result.payload,
           normalizeLocale(body.locale),
           projectId,
         ),
@@ -1102,6 +1605,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
           id: t.String(),
           titleKey: t.String(),
           background: t.String(),
+          sceneMode: t.Optional(t.Union([t.Literal("2d"), t.Literal("3d")])),
           geometry: t.Object({ width: t.Number(), height: t.Number() }),
           spawn: t.Object({ x: t.Number(), y: t.Number() }),
           npcs: t.Array(
@@ -1129,6 +1633,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
               height: t.Number(),
             }),
           ),
+          nodes: t.Optional(t.Array(t.Union([builderSceneNode2dSchema, builderSceneNode3dSchema]))),
         }),
         checksum: t.Optional(t.String()),
       }),
@@ -1178,6 +1683,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         id: params.sceneId,
         titleKey: body.titleKey?.trim() || current.titleKey,
         background: body.background?.trim() || current.background,
+        sceneMode: body.sceneMode === "3d" ? "3d" : body.sceneMode === "2d" ? "2d" : current.sceneMode,
         geometry: {
           width: Math.max(1, parseIntegerField(body.geometryWidth, current.geometry.width)),
           height: Math.max(1, parseIntegerField(body.geometryHeight, current.geometry.height)),
@@ -1199,11 +1705,11 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         );
       }
 
-      return renderSceneDetail(
-        getMessages(locale),
-        toBuilderScene(result.payload),
+      return withProjectChromeRefresh(
         locale,
         projectId,
+        appRoutes.builderScenes,
+        renderSceneDetail(getMessages(locale), result.payload, locale, projectId),
       );
     },
     {
@@ -1213,6 +1719,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         locale: t.Optional(t.String()),
         titleKey: t.Optional(t.String()),
         background: t.Optional(t.String()),
+        sceneMode: t.Optional(t.String()),
         geometryWidth: t.Optional(t.String()),
         geometryHeight: t.Optional(t.String()),
         spawnX: t.Optional(t.String()),
@@ -1256,6 +1763,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         scene: t.Object({
           titleKey: t.String(),
           background: t.String(),
+          sceneMode: t.Optional(t.Union([t.Literal("2d"), t.Literal("3d")])),
           geometry: t.Object({ width: t.Number(), height: t.Number() }),
           spawn: t.Object({ x: t.Number(), y: t.Number() }),
           npcs: t.Array(
@@ -1283,6 +1791,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
               height: t.Number(),
             }),
           ),
+          nodes: t.Optional(t.Array(t.Union([builderSceneNode2dSchema, builderSceneNode3dSchema]))),
         }),
         checksum: t.Optional(t.String()),
       }),
@@ -1297,11 +1806,20 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     "/scenes/:sceneId",
     async ({ params, query, request, set, status }) => {
       const projectId = resolveProjectId(query.projectId);
+      const locale = toLocale(query.locale);
       const mutation = await builderService.removeScene(projectId, params.sceneId);
       if (!mutation) {
         return status(
           httpStatus.notFound,
           buildBuilderNotFoundError(request, set.headers, query.locale, "sceneNotFound"),
+        );
+      }
+      if (wantsHtml(request.headers.get("accept"))) {
+        return withProjectChromeRefresh(
+          locale,
+          projectId,
+          appRoutes.builderScenes,
+          await renderSceneWorkspace(locale, projectId),
         );
       }
 
@@ -1318,8 +1836,170 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         locale: t.Optional(t.String()),
       }),
       response: {
-        [httpStatus.ok]: builderOkResponse,
+        [httpStatus.ok]: t.Union([builderOkResponse, t.String()]),
         [httpStatus.badRequest]: builderErrorResponse,
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .post(
+    "/scenes/:sceneId/nodes",
+    async ({ params, body, request, set, status }) => {
+      const projectId = resolveProjectId(body.projectId);
+      const locale = toLocale(body.locale);
+      const current = await builderService.getScene(projectId, params.sceneId);
+      if (!current) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "sceneNotFound"),
+        );
+      }
+
+      const updatedScene: SceneDefinition = {
+        ...current,
+        nodes: upsertSceneNode(current, body as Record<string, string | undefined>),
+      };
+      const mutation = await builderService.saveScene(projectId, {
+        id: params.sceneId,
+        scene: updatedScene,
+      });
+      if (!mutation) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "sceneNotFound"),
+        );
+      }
+
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderScenes,
+        renderSceneDetail(getMessages(locale), mutation.payload, locale, projectId),
+      );
+    },
+    {
+      params: t.Object({ sceneId: t.String() }),
+      body: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+        id: t.String(),
+        nodeKind: t.Optional(t.String()),
+        nodeType: t.Optional(t.String()),
+        assetId: t.Optional(t.String()),
+        animationClipId: t.Optional(t.String()),
+        layer: t.Optional(t.String()),
+        positionX: t.Optional(t.String()),
+        positionY: t.Optional(t.String()),
+        positionZ: t.Optional(t.String()),
+        rotationX: t.Optional(t.String()),
+        rotationY: t.Optional(t.String()),
+        rotationZ: t.Optional(t.String()),
+        scaleX: t.Optional(t.String()),
+        scaleY: t.Optional(t.String()),
+        scaleZ: t.Optional(t.String()),
+        sizeWidth: t.Optional(t.String()),
+        sizeHeight: t.Optional(t.String()),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .delete(
+    "/scenes/:sceneId/nodes/:nodeId",
+    async ({ params, query, request, set, status }) => {
+      const projectId = resolveProjectId(query.projectId);
+      const locale = toLocale(query.locale);
+      const current = await builderService.getScene(projectId, params.sceneId);
+      if (!current) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "sceneNotFound"),
+        );
+      }
+
+      const updatedScene: SceneDefinition = {
+        ...current,
+        nodes: (current.nodes ?? []).filter((node) => node.id !== params.nodeId),
+      };
+      const mutation = await builderService.saveScene(projectId, {
+        id: params.sceneId,
+        scene: updatedScene,
+      });
+      if (!mutation) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "sceneNotFound"),
+        );
+      }
+
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderScenes,
+        renderSceneDetail(getMessages(locale), mutation.payload, locale, projectId),
+      );
+    },
+    {
+      params: t.Object({ sceneId: t.String(), nodeId: t.String() }),
+      query: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .post(
+    "/npcs/create/form",
+    async ({ body, request, set, status }) => {
+      const projectId = resolveProjectId(body.projectId);
+      const locale = toLocale(body.locale);
+      const mutation = await builderService.saveNpc(projectId, {
+        sceneId: body.sceneId,
+        npc: {
+          characterKey: body.characterKey.trim(),
+          x: 320,
+          y: 180,
+          labelKey: body.labelKey.trim(),
+          dialogueKeys: [],
+          interactRadius: 24,
+          ai: {
+            wanderRadius: 32,
+            wanderSpeed: 1,
+            idlePauseMs: [500, 1500],
+            greetOnApproach: false,
+            greetLineKey: `${body.characterKey.trim()}.greet`,
+          },
+        },
+      });
+      if (!mutation) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "sceneNotFound"),
+        );
+      }
+
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderNpcs,
+        await renderNpcWorkspace(locale, projectId),
+      );
+    },
+    {
+      body: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+        sceneId: t.String(),
+        characterKey: t.String(),
+        labelKey: t.String(),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
         [httpStatus.notFound]: builderErrorResponse,
       },
     },
@@ -1400,7 +2080,14 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         return renderErrorHtml(messages.builder.npcNotFound);
       }
 
-      return renderNpcDetail(messages, npc, locale, projectId, ownerSceneId);
+      return renderNpcDetail(
+        messages,
+        npc,
+        locale,
+        projectId,
+        ownerSceneId,
+        gameSpriteManifests[npc.characterKey] ?? null,
+      );
     },
     {
       params: t.Object({ npcId: t.String() }),
@@ -1489,7 +2176,19 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         );
       }
 
-      return renderNpcDetail(getMessages(locale), mutation.payload, locale, projectId, sceneId);
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderNpcs,
+        renderNpcDetail(
+          getMessages(locale),
+          mutation.payload,
+          locale,
+          projectId,
+          sceneId,
+          gameSpriteManifests[mutation.payload.characterKey] ?? null,
+        ),
+      );
     },
     {
       params: t.Object({ npcId: t.String() }),
@@ -1575,6 +2274,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     "/npcs/:npcId",
     async ({ params, query, request, set, status }) => {
       const projectId = resolveProjectId(query.projectId);
+      const locale = toLocale(query.locale);
       const scenes = await builderService.listScenes(projectId);
       const owner = scenes.find((scene) =>
         scene.npcs.some((candidate) => candidate.characterKey === params.npcId),
@@ -1593,6 +2293,14 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
           buildBuilderNotFoundError(request, set.headers, query.locale, "npcNotFound"),
         );
       }
+      if (wantsHtml(request.headers.get("accept"))) {
+        return withProjectChromeRefresh(
+          locale,
+          projectId,
+          appRoutes.builderNpcs,
+          await renderNpcWorkspace(locale, projectId),
+        );
+      }
 
       return successEnvelope({
         result: toBuilderMutationResult(mutation.result),
@@ -1607,8 +2315,45 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         locale: t.Optional(t.String()),
       }),
       response: {
-        [httpStatus.ok]: builderOkResponse,
+        [httpStatus.ok]: t.Union([builderOkResponse, t.String()]),
         [httpStatus.badRequest]: builderErrorResponse,
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .post(
+    "/dialogue/create/form",
+    async ({ body, request, set, status }) => {
+      const projectId = resolveProjectId(body.projectId);
+      const locale = toLocale(body.locale);
+      const mutation = await builderService.saveDialogue(projectId, {
+        key: body.key.trim(),
+        text: body.text.trim(),
+        locale,
+      });
+      if (!mutation) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderDialogue,
+        await renderDialogueWorkspace(locale, projectId),
+      );
+    },
+    {
+      body: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+        key: t.String(),
+        text: t.String(),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
         [httpStatus.notFound]: builderErrorResponse,
       },
     },
@@ -1705,12 +2450,17 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       }
 
       const catalog = await projectDialogues(projectId, locale);
-      return renderDialogueDetail(
-        getMessages(locale),
-        key,
-        catalog[key] ?? body.text ?? "",
+      return withProjectChromeRefresh(
         locale,
         projectId,
+        appRoutes.builderDialogue,
+        renderDialogueDetail(
+          getMessages(locale),
+          key,
+          catalog[key] ?? body.text ?? "",
+          locale,
+          projectId,
+        ),
       );
     },
     {
@@ -1786,6 +2536,14 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
           buildBuilderNotFoundError(request, set.headers, query.locale, "dialogueNotFound"),
         );
       }
+      if (wantsHtml(request.headers.get("accept"))) {
+        return withProjectChromeRefresh(
+          locale,
+          projectId,
+          appRoutes.builderDialogue,
+          await renderDialogueWorkspace(locale, projectId),
+        );
+      }
 
       return successEnvelope({
         result: toBuilderMutationResult(removed.result),
@@ -1800,8 +2558,716 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         locale: t.Optional(t.String()),
       }),
       response: {
-        [httpStatus.ok]: builderOkResponse,
+        [httpStatus.ok]: t.Union([builderOkResponse, t.String()]),
         [httpStatus.badRequest]: builderErrorResponse,
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .post(
+    "/assets/upload",
+    async ({ body, request, set, status }) => {
+      const projectId = resolveProjectId(body.projectId);
+      const locale = toLocale(body.locale);
+      const id = (body.id ?? "").trim() || body.file.name.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9_.-]/g, "-") || "asset";
+      const label = (body.label ?? "").trim() || id;
+      const kind = body.kind ?? "portrait";
+      const sceneMode = body.sceneMode === "3d" ? "3d" : "2d";
+
+      const bytes = await body.file.arrayBuffer();
+      const stored = await persistBuilderFile(
+        projectId,
+        "assets",
+        id,
+        bytes,
+        body.file.name,
+        body.file.type,
+      );
+
+      const sourceFormat = stored.format;
+      const now = Date.now();
+      const mutation = await builderService.saveAsset(projectId, {
+        id,
+        asset: {
+          id,
+          kind,
+          label,
+          sceneMode,
+          source: stored.publicUrl,
+          tags: [kind, sceneMode],
+          variants: [
+            {
+              id: `${id}.runtime`,
+              format: sourceFormat,
+              source: stored.publicUrl,
+              usage: "runtime",
+            },
+          ],
+          approved: false,
+          createdAtMs: now,
+          updatedAtMs: now,
+        },
+      });
+
+      if (!mutation) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+
+      if (wantsHtml(request.headers.get("accept"))) {
+        return withProjectChromeRefresh(
+          locale,
+          projectId,
+          appRoutes.builderAssets,
+          await renderAssetsWorkspace(locale, projectId),
+        );
+      }
+
+      return successEnvelope({
+        id,
+        source: stored.publicUrl,
+        byteLength: stored.byteLength,
+      });
+    },
+    {
+      body: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+        id: t.Optional(t.String()),
+        label: t.Optional(t.String()),
+        kind: t.Optional(
+          t.Union([
+            t.Literal("background"),
+            t.Literal("sprite-sheet"),
+            t.Literal("audio"),
+            t.Literal("model"),
+            t.Literal("portrait"),
+            t.Literal("tiles"),
+            t.Literal("tile-set"),
+            t.Literal("material"),
+          ]),
+        ),
+        sceneMode: t.Optional(t.Union([t.Literal("2d"), t.Literal("3d")])),
+        file: t.File(),
+      }),
+      response: {
+        [httpStatus.ok]: t.Union([builderOkResponse, t.String()]),
+        [httpStatus.badRequest]: builderErrorResponse,
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .post(
+    "/assets/create/form",
+    async ({ body, request, set, status }) => {
+      const projectId = resolveProjectId(body.projectId);
+      const locale = toLocale(body.locale);
+      const id = body.id.trim();
+      const source = body.source.trim();
+      const sourceSegments = source.split(".");
+      const sourceFormat = sourceSegments[sourceSegments.length - 1] ?? "dat";
+      const now = Date.now();
+      const mutation = await builderService.saveAsset(projectId, {
+        id,
+        asset: {
+          id,
+          kind: body.kind,
+          label: body.label.trim(),
+          sceneMode: body.sceneMode === "3d" ? "3d" : "2d",
+          source,
+          tags: [body.kind, body.sceneMode === "3d" ? "3d" : "2d"],
+          variants: [
+            {
+              id: `${id}.runtime`,
+              format: sourceFormat,
+              source,
+              usage: "runtime",
+            },
+          ],
+          approved: false,
+          createdAtMs: now,
+          updatedAtMs: now,
+        },
+      });
+      if (!mutation) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderAssets,
+        await renderAssetsWorkspace(locale, projectId),
+      );
+    },
+    {
+      body: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+        id: t.String(),
+        label: t.String(),
+        kind: t.Union([
+          t.Literal("background"),
+          t.Literal("sprite-sheet"),
+          t.Literal("audio"),
+          t.Literal("model"),
+          t.Literal("portrait"),
+          t.Literal("tiles"),
+          t.Literal("tile-set"),
+          t.Literal("material"),
+        ]),
+        sceneMode: t.Union([t.Literal("2d"), t.Literal("3d")]),
+        source: t.String(),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .post(
+    "/animation-clips/create/form",
+    async ({ body, request, set, status }) => {
+      const projectId = resolveProjectId(body.projectId);
+      const locale = toLocale(body.locale);
+      const asset = (await builderService.listAssets(projectId)).find(
+        (candidate) => candidate.id === body.assetId.trim(),
+      );
+      const direction =
+        body.stateTag.includes("up") ||
+        body.stateTag.includes("down") ||
+        body.stateTag.includes("left") ||
+        body.stateTag.includes("right")
+          ? (["up", "down", "left", "right"].find((candidate) => body.stateTag.includes(candidate)) as
+              | "up"
+              | "down"
+              | "left"
+              | "right"
+              | undefined)
+          : undefined;
+      const now = Date.now();
+      const mutation = await builderService.saveAnimationClip(projectId, {
+        id: body.id.trim(),
+        clip: {
+          id: body.id.trim(),
+          assetId: body.assetId.trim(),
+          label: body.id.trim(),
+          sceneMode: asset?.sceneMode ?? "2d",
+          stateTag: body.stateTag.trim(),
+          playbackFps: Math.max(1, parseIntegerField(body.playbackFps, 8)),
+          startFrame: 0,
+          frameCount: Math.max(1, parseIntegerField(body.frameCount, 4)),
+          loop: true,
+          direction,
+          createdAtMs: now,
+          updatedAtMs: now,
+        },
+      });
+      if (!mutation) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderAssets,
+        await renderAssetsWorkspace(locale, projectId),
+      );
+    },
+    {
+      body: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+        id: t.String(),
+        assetId: t.String(),
+        stateTag: t.String(),
+        frameCount: t.Optional(t.String()),
+        playbackFps: t.Optional(t.String()),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .post(
+    "/generation-jobs/create/form",
+    async ({ body, request, set, status }) => {
+      const projectId = resolveProjectId(body.projectId);
+      const locale = toLocale(body.locale);
+      const jobId = `job.${crypto.randomUUID()}`;
+      const now = Date.now();
+      const mutation = await builderService.saveGenerationJob(projectId, {
+        id: jobId,
+        job: {
+          id: jobId,
+          kind: body.kind,
+          status: "queued",
+          prompt: body.prompt.trim(),
+          targetId: body.targetId?.trim() || undefined,
+          artifactIds: [],
+          statusMessage: "queued-for-processing",
+          createdAtMs: now,
+          updatedAtMs: now,
+        },
+      });
+      if (!mutation) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+      await builderService.processQueuedWork(projectId);
+
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderAssets,
+        await renderAssetsWorkspace(locale, projectId),
+      );
+    },
+    {
+      body: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+        kind: t.Union([
+          t.Literal("sprite-sheet"),
+          t.Literal("portrait"),
+          t.Literal("tiles"),
+          t.Literal("voice-line"),
+          t.Literal("animation-plan"),
+        ]),
+        prompt: t.String(),
+        targetId: t.Optional(t.String()),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .post(
+    "/generation-jobs/:jobId/approve",
+    async ({ params, body, request, set, status }) => {
+      const projectId = resolveProjectId(body.projectId);
+      const locale = toLocale(body.locale);
+      const approved =
+        typeof body.approved === "boolean" ? body.approved : body.approved === "true";
+      const mutation = await builderService.approveGenerationJob(projectId, params.jobId, approved);
+      if (!mutation) {
+        return status(
+          httpStatus.notFound,
+          buildError(
+            request,
+            set.headers,
+            "NOT_FOUND",
+            httpStatus.notFound,
+            getMessages(locale).builder.projectNotFound,
+          ),
+        );
+      }
+
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderAssets,
+        await renderAssetsWorkspace(locale, projectId),
+      );
+    },
+    {
+      params: t.Object({ jobId: t.String() }),
+      body: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+        approved: t.Union([t.Boolean(), t.String()]),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .post(
+    "/quests/create/form",
+    async ({ body, request, set, status }) => {
+      const projectId = resolveProjectId(body.projectId);
+      const locale = toLocale(body.locale);
+      const mutation = await builderService.saveQuest(projectId, {
+        id: body.id.trim(),
+        quest: {
+          id: body.id.trim(),
+          title: body.title.trim(),
+          description: body.description.trim(),
+          steps: [
+            {
+              id: `${body.id.trim()}.step.1`,
+              title: body.title.trim(),
+              description: body.description.trim(),
+              triggerId: body.triggerId.trim(),
+            },
+          ],
+        },
+      });
+      if (!mutation) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderMechanics,
+        await renderMechanicsWorkspace(locale, projectId),
+      );
+    },
+    {
+      body: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+        id: t.String(),
+        title: t.String(),
+        description: t.String(),
+        triggerId: t.String(),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .get(
+    "/quests/:questId",
+    async ({ params, query, request, set, status }) => {
+      const projectId = resolveProjectId(query.projectId);
+      const locale = toLocale(query.locale);
+      const quests = await builderService.listQuests(projectId);
+      const quest = quests.find((q) => q.id === decodePathValue(params.questId));
+      if (!quest) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+      return renderQuestEditForm(getMessages(locale), locale, projectId, quest);
+    },
+    {
+      params: t.Object({ questId: t.String() }),
+      query: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .post(
+    "/quests/:questId/form",
+    async ({ params, body, request, set, status }) => {
+      const projectId = resolveProjectId(body.projectId);
+      const locale = toLocale(body.locale);
+      const questId = decodePathValue(params.questId);
+      const existing = (await builderService.listQuests(projectId)).find((q) => q.id === questId);
+      if (!existing) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+      const mutation = await builderService.saveQuest(projectId, {
+        id: questId,
+        quest: {
+          id: questId,
+          title: body.title.trim(),
+          description: body.description.trim(),
+          steps: [
+            {
+              id: `${questId}.step.1`,
+              title: body.title.trim(),
+              description: body.description.trim(),
+              triggerId: body.triggerId.trim(),
+            },
+          ],
+        },
+      });
+      if (!mutation) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderMechanics,
+        await renderMechanicsWorkspace(locale, projectId),
+      );
+    },
+    {
+      params: t.Object({ questId: t.String() }),
+      body: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+        id: t.String(),
+        title: t.String(),
+        description: t.String(),
+        triggerId: t.String(),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .delete(
+    "/quests/:questId",
+    async ({ params, query, request, set, status }) => {
+      const projectId = resolveProjectId(query.projectId);
+      const locale = toLocale(query.locale);
+      const questId = decodePathValue(params.questId);
+      const removed = await builderService.removeQuest(projectId, questId);
+      if (!removed) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderMechanics,
+        await renderMechanicsWorkspace(locale, projectId),
+      );
+    },
+    {
+      params: t.Object({ questId: t.String() }),
+      query: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .post(
+    "/triggers/create/form",
+    async ({ body, request, set, status }) => {
+      const projectId = resolveProjectId(body.projectId);
+      const locale = toLocale(body.locale);
+      const mutation = await builderService.saveTrigger(projectId, {
+        id: body.id.trim(),
+        trigger: {
+          id: body.id.trim(),
+          label: body.label.trim(),
+          event: body.event,
+          sceneId: body.sceneId?.trim() || undefined,
+          npcId: body.npcId?.trim() || undefined,
+        },
+      });
+      if (!mutation) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderMechanics,
+        await renderMechanicsWorkspace(locale, projectId),
+      );
+    },
+    {
+      body: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+        id: t.String(),
+        label: t.String(),
+        event: t.Union([
+          t.Literal("scene-enter"),
+          t.Literal("npc-interact"),
+          t.Literal("chat"),
+          t.Literal("dialogue-confirmed"),
+        ]),
+        sceneId: t.Optional(t.String()),
+        npcId: t.Optional(t.String()),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .post(
+    "/dialogue-graphs/create/form",
+    async ({ body, request, set, status }) => {
+      const projectId = resolveProjectId(body.projectId);
+      const locale = toLocale(body.locale);
+      const now = Date.now();
+      const mutation = await builderService.saveDialogueGraph(projectId, {
+        id: body.id.trim(),
+        graph: {
+          id: body.id.trim(),
+          title: body.title.trim(),
+          npcId: body.npcId?.trim() || undefined,
+          rootNodeId: "root",
+          nodes: [
+            {
+              id: "root",
+              line: body.line.trim(),
+              edges: [],
+            },
+          ],
+          createdAtMs: now,
+          updatedAtMs: now,
+        },
+      });
+      if (!mutation) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderMechanics,
+        await renderMechanicsWorkspace(locale, projectId),
+      );
+    },
+    {
+      body: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+        id: t.String(),
+        title: t.String(),
+        npcId: t.Optional(t.String()),
+        line: t.String(),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .post(
+    "/automation-runs/create/form",
+    async ({ body, request, set, status }) => {
+      const projectId = resolveProjectId(body.projectId);
+      const locale = toLocale(body.locale);
+      const id = `run.${crypto.randomUUID()}`;
+      const now = Date.now();
+      const mutation = await builderService.saveAutomationRun(projectId, {
+        id,
+        run: {
+          id,
+          status: "queued",
+          goal: body.goal.trim(),
+          steps: [
+            {
+              id: `${id}.browser`,
+              action: "browser",
+              summary: "Capture builder review context",
+              status: "pending",
+            },
+            {
+              id: `${id}.builder`,
+              action: "builder",
+              summary: "Prepare draft mutation plan",
+              status: "pending",
+            },
+            {
+              id: `${id}.attach`,
+              action: "attach-file",
+              summary: "Attach evidence to the draft review",
+              status: "pending",
+            },
+          ],
+          artifactIds: [],
+          statusMessage: "queued-for-processing",
+          createdAtMs: now,
+          updatedAtMs: now,
+        },
+      });
+      if (!mutation) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+      await builderService.processQueuedWork(projectId);
+
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderAutomation,
+        await renderAutomationWorkspace(locale, projectId),
+      );
+    },
+    {
+      body: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+        goal: t.String(),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .post(
+    "/automation-runs/:runId/approve",
+    async ({ params, body, request, set, status }) => {
+      const projectId = resolveProjectId(body.projectId);
+      const locale = toLocale(body.locale);
+      const approved =
+        typeof body.approved === "boolean" ? body.approved : body.approved === "true";
+      const mutation = await builderService.approveAutomationRun(projectId, params.runId, approved);
+      if (!mutation) {
+        return status(
+          httpStatus.notFound,
+          buildError(
+            request,
+            set.headers,
+            "NOT_FOUND",
+            httpStatus.notFound,
+            getMessages(locale).builder.projectNotFound,
+          ),
+        );
+      }
+
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderAutomation,
+        await renderAutomationWorkspace(locale, projectId),
+      );
+    },
+    {
+      params: t.Object({ runId: t.String() }),
+      body: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+        approved: t.Union([t.Boolean(), t.String()]),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
         [httpStatus.notFound]: builderErrorResponse,
       },
     },

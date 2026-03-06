@@ -26,7 +26,15 @@ export const assetPipelinePaths = {
     resolve(import.meta.dir, ".."),
     assetRelativePaths.playableGameClientEntryFile,
   ),
+  builderSceneEditorEntryPath: resolve(
+    resolve(import.meta.dir, ".."),
+    assetRelativePaths.builderSceneEditorEntryFile,
+  ),
   gameClientOutdir: resolve(resolve(import.meta.dir, ".."), appConfig.playableGame.sourceDirectory),
+  builderSceneEditorOutdir: resolve(
+    resolve(import.meta.dir, ".."),
+    appConfig.staticAssets.publicDirectory,
+  ),
   htmxExtensionsOutdir: resolve(
     resolve(import.meta.dir, ".."),
     joinLocalPath(
@@ -143,6 +151,19 @@ export const createGameClientBuildOptions = (): BunBuildOptions => ({
   entrypoints: [assetPipelinePaths.gameClientEntryPath],
   outdir: assetPipelinePaths.gameClientOutdir,
   naming: gameClientEntryNaming,
+  minify: true,
+  target: "browser",
+});
+
+/**
+ * Returns Bun.build options for the builder scene editor client bundle.
+ *
+ * @returns Static-build options.
+ */
+export const createBuilderSceneEditorBuildOptions = (): BunBuildOptions => ({
+  entrypoints: [assetPipelinePaths.builderSceneEditorEntryPath],
+  outdir: assetPipelinePaths.builderSceneEditorOutdir,
+  naming: assetRelativePaths.builderSceneEditorBundleFile,
   minify: true,
   target: "browser",
 });

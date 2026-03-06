@@ -1,7 +1,7 @@
 /**
  * NPC Editor View
  *
- * Table-based NPC configuration with AI tuning controls.
+ * NPC roster workspace with scene-aware creation and detail editing.
  */
 import type { LocaleCode } from "../../config/environment.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
@@ -14,11 +14,13 @@ import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 
 /**
- * Renders the NPC editor table across all scenes.
+ * Renders the NPC roster workspace.
  *
  * @param messages Locale-resolved messages.
  * @param scenes All scene definitions.
  * @param manifests Available sprite manifests.
+ * @param locale Active locale.
+ * @param projectId Active project id.
  * @returns HTML string for NPC editor panel.
  */
 export const renderNpcEditor = (
@@ -35,20 +37,18 @@ export const renderNpcEditor = (
     }
   }
 
-  if (allNpcs.length === 0) {
-    return `
-      <div class="space-y-4">
-        <h1 class="text-2xl font-bold">${escapeHtml(messages.builder.npcs)}</h1>
-        <div class="alert" role="alert">
-          <span>${escapeHtml(messages.builder.noNpcs)}</span>
-        </div>
-      </div>`;
-  }
+  const selectedNpc = allNpcs[0] ?? null;
+  const createAction = `${appRoutes.builderApiNpcs}/create/form`;
+  const sceneOptions = Object.values(scenes)
+    .map(
+      (scene) =>
+        `<option value="${escapeHtml(scene.id)}">${escapeHtml(scene.id)} (${scene.npcs.length})</option>`,
+    )
+    .join("");
 
-  const rows = allNpcs
+  const rosterCards = allNpcs
     .map(({ sceneId, npc }) => {
       const manifest = manifests[npc.characterKey];
-      const sheetThumb = manifest ? escapeHtml(manifest.sheet) : "—";
       const detailHref = withQueryParameters(
         `${appRoutes.builderApiNpcs}/${encodeURIComponent(npc.characterKey)}`,
         {
@@ -57,59 +57,94 @@ export const renderNpcEditor = (
           sceneId,
         },
       );
-      return `
-        <tr>
-          <td>
-            <div class="flex items-center gap-3">
-              ${manifest ? `<div class="avatar"><div class="mask mask-squircle h-10 w-10 bg-base-300"><img src="${sheetThumb}" alt="${escapeHtml(npc.characterKey)}" loading="lazy" /></div></div>` : ""}
-              <div class="font-bold">${escapeHtml(npc.characterKey)}</div>
+      return `<article class="card card-border bg-base-100 shadow-sm">
+        <div class="card-body gap-3">
+          <div class="flex items-start gap-3">
+            ${
+              manifest
+                ? `<div class="avatar">
+                    <div class="mask mask-squircle h-14 w-14 bg-base-200">
+                      <img src="${escapeHtml(manifest.sheet)}" alt="${escapeHtml(npc.characterKey)}" loading="lazy" />
+                    </div>
+                  </div>`
+                : ""
+            }
+            <div class="min-w-0 flex-1">
+              <h2 class="card-title text-lg">${escapeHtml(npc.characterKey)}</h2>
+              <p class="text-sm text-base-content/70">${escapeHtml(sceneId)} · ${escapeHtml(npc.labelKey)}</p>
             </div>
-          </td>
-          <td class="font-mono text-xs">${escapeHtml(sceneId)}</td>
-          <td>${npc.x}, ${npc.y}</td>
-          <td>${npc.ai.wanderRadius}</td>
-          <td>${npc.ai.wanderSpeed.toFixed(2)}</td>
-          <td>${npc.dialogueKeys.length}</td>
-          <td>
-            <button
-              class="btn btn-ghost btn-xs"
-              hx-get="${escapeHtml(detailHref)}"
-              hx-target="#npc-detail"
-              hx-swap="innerHTML"
-              aria-label="${escapeHtml(messages.builder.editNpc)}: ${escapeHtml(npc.characterKey)}"
-            >${escapeHtml(messages.builder.preview)}</button>
-          </td>
-        </tr>`;
+          </div>
+          <div class="flex flex-wrap gap-2 text-sm">
+            <span class="badge badge-soft">${npc.x}, ${npc.y}</span>
+            <span class="badge badge-soft">${escapeHtml(messages.builder.wanderRadius)} ${npc.ai.wanderRadius}</span>
+            <span class="badge badge-soft">${escapeHtml(messages.builder.dialogue)} ${npc.dialogueKeys.length}</span>
+          </div>
+          <button
+            class="btn btn-outline btn-sm"
+            hx-get="${escapeHtml(detailHref)}"
+            hx-target="#npc-detail"
+            hx-swap="innerHTML"
+            aria-label="${escapeHtml(messages.builder.editNpc)}: ${escapeHtml(npc.characterKey)}"
+          >${escapeHtml(messages.builder.preview)}</button>
+        </div>
+      </article>`;
     })
     .join("");
 
   return `
-    <div class="space-y-4">
-      <h1 class="text-2xl font-bold">${escapeHtml(messages.builder.npcs)}</h1>
+    <section class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+      <div class="space-y-4">
+        <article class="card card-border bg-base-100 shadow-sm">
+          <form
+            class="card-body gap-4"
+            hx-post="${escapeHtml(createAction)}"
+            hx-target="#builder-content"
+            hx-swap="innerHTML"
+            hx-indicator="#npc-create-spinner"
+            hx-disabled-elt="button, input, select, textarea"
+          >
+            <div class="space-y-1">
+              <h1 class="card-title text-2xl">${escapeHtml(messages.builder.npcRosterTitle)}</h1>
+              <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.npcCreateDescription)}</p>
+            </div>
+            <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
+            <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+            <fieldset class="fieldset">
+              <legend class="fieldset-legend">${escapeHtml(messages.builder.npcCreateSceneLabel)}</legend>
+              <select name="sceneId" class="select select-bordered w-full">${sceneOptions}</select>
+            </fieldset>
+            <fieldset class="fieldset">
+              <legend class="fieldset-legend">${escapeHtml(messages.builder.npcName)}</legend>
+              <input name="characterKey" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.npcCreateKeyPlaceholder)}" required />
+            </fieldset>
+            <fieldset class="fieldset">
+              <legend class="fieldset-legend">${escapeHtml(messages.builder.npcLabel)}</legend>
+              <input name="labelKey" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.npcCreateLabelPlaceholder)}" required />
+            </fieldset>
+            <div class="flex items-center gap-2">
+              <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.addNpc)}</button>
+              <span id="npc-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+            </div>
+          </form>
+        </article>
 
-      <div class="overflow-x-auto">
-        <table class="table table-zebra bg-base-100" aria-label="${escapeHtml(messages.builder.npcs)}">
-          <caption class="sr-only">${escapeHtml(messages.builder.npcs)}</caption>
-          <thead>
-            <tr>
-              <th scope="col">${escapeHtml(messages.builder.npcName)}</th>
-              <th scope="col">${escapeHtml(messages.builder.scenes)}</th>
-              <th scope="col">${escapeHtml(messages.builder.npcPosition)}</th>
-              <th scope="col">${escapeHtml(messages.builder.wanderRadius)}</th>
-              <th scope="col">${escapeHtml(messages.builder.wanderSpeed)}</th>
-              <th scope="col">${escapeHtml(messages.builder.dialogue)}</th>
-              <th scope="col"></th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
+        ${
+          rosterCards.length > 0
+            ? `<div class="grid gap-4">${rosterCards}</div>`
+            : `<div role="alert" class="alert alert-warning alert-soft"><span>${escapeHtml(messages.builder.noNpcs)}</span></div>`
+        }
       </div>
 
-      <div id="npc-detail" class="mt-4" aria-live="polite" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
-        <!-- NPC detail panel swapped here via HTMX -->
+      <div id="npc-detail" class="space-y-4" aria-live="polite" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
+        ${
+          selectedNpc
+            ? renderNpcDetail(messages, selectedNpc.npc, locale, projectId, selectedNpc.sceneId, manifests[selectedNpc.npc.characterKey] ?? null)
+            : `<div role="alert" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noNpcs)}</span></div>`
+        }
       </div>
-    </div>`;
+    </section>`;
 };
+
 /**
  * Renders an editable NPC detail form for HTMX updates.
  *
@@ -118,6 +153,7 @@ export const renderNpcEditor = (
  * @param locale Active locale.
  * @param projectId Active project id.
  * @param sceneId Owning scene id.
+ * @param manifest Available sprite manifest for the NPC.
  * @returns HTML string for the editable NPC card.
  */
 export const renderNpcDetail = (
@@ -126,6 +162,7 @@ export const renderNpcDetail = (
   locale: LocaleCode,
   projectId: string,
   sceneId: string,
+  manifest: SpriteManifest | null,
 ): string => {
   const formAction = withQueryParameters(
     `${appRoutes.builderApiNpcs}/${encodeURIComponent(npc.characterKey)}/form`,
@@ -135,23 +172,55 @@ export const renderNpcDetail = (
       sceneId,
     },
   );
+  const deleteAction = withQueryParameters(
+    `${appRoutes.builderApiNpcs}/${encodeURIComponent(npc.characterKey)}`,
+    {
+      locale,
+      projectId,
+    },
+  );
   const dialogueKeys = npc.dialogueKeys.join(", ");
 
   return `
-    <div class="card bg-base-100 shadow-sm">
-      <form
-        class="card-body gap-4"
-        hx-post="${escapeHtml(formAction)}"
-        hx-target="#npc-detail"
-        hx-swap="innerHTML"
-      >
-        <h2 class="card-title">${escapeHtml(messages.builder.editNpc)}: ${escapeHtml(npc.characterKey)}</h2>
-        <fieldset class="fieldset">
-          <legend class="fieldset-legend">${escapeHtml(messages.builder.npcName)}</legend>
-          <input name="labelKey" type="text" class="input input-bordered w-full" value="${escapeHtml(npc.labelKey)}" required />
-        </fieldset>
+    <div class="card card-border bg-base-100 shadow-sm">
+      <div class="card-body gap-4">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div class="flex items-start gap-3">
+            ${
+              manifest
+                ? `<div class="avatar">
+                    <div class="mask mask-squircle h-18 w-18 bg-base-200">
+                      <img src="${escapeHtml(manifest.sheet)}" alt="${escapeHtml(npc.characterKey)}" loading="lazy" />
+                    </div>
+                  </div>`
+                : ""
+            }
+            <div>
+              <h2 class="card-title text-2xl">${escapeHtml(messages.builder.editNpc)}: ${escapeHtml(npc.characterKey)}</h2>
+              <p class="text-sm text-base-content/70">${escapeHtml(sceneId)}</p>
+            </div>
+          </div>
+          <form hx-delete="${escapeHtml(deleteAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#npc-delete-spinner" hx-disabled-elt="button">
+            <span class="flex items-center gap-2">
+              <button type="submit" class="btn btn-error btn-outline btn-sm">${escapeHtml(messages.builder.delete)}</button>
+              <span id="npc-delete-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+            </span>
+          </form>
+        </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form
+          class="grid gap-4 lg:grid-cols-2"
+          hx-post="${escapeHtml(formAction)}"
+          hx-target="#npc-detail"
+          hx-swap="innerHTML"
+          hx-indicator="#npc-detail-spinner"
+          hx-disabled-elt="button, input, select, textarea"
+        >
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">${escapeHtml(messages.builder.npcLabel)}</legend>
+            <input name="labelKey" type="text" class="input input-bordered w-full" value="${escapeHtml(npc.labelKey)}" required />
+          </fieldset>
+
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.npcPosition)}</legend>
             <label class="label" for="npc-x">${escapeHtml(messages.builder.xLabel)}</label>
@@ -162,40 +231,45 @@ export const renderNpcDetail = (
 
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.geometry)}</legend>
-            <label class="label" for="npc-interact-radius">${escapeHtml(messages.builder.wanderRadius)}</label>
+            <label class="label" for="npc-interact-radius">${escapeHtml(messages.builder.interactRadius)}</label>
             <input id="npc-interact-radius" name="interactRadius" type="number" class="input input-bordered w-full" value="${npc.interactRadius}" min="1" required />
             <label class="label" for="npc-wander-radius">${escapeHtml(messages.builder.wanderRadius)}</label>
             <input id="npc-wander-radius" name="wanderRadius" type="number" class="input input-bordered w-full" value="${npc.ai.wanderRadius}" min="0" required />
           </fieldset>
-        </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.wanderSpeed)}</legend>
             <input name="wanderSpeed" type="number" class="input input-bordered w-full" value="${npc.ai.wanderSpeed}" min="0" step="0.1" required />
-            <label class="label" for="npc-idle-min">Idle pause min (ms)</label>
+            <label class="label" for="npc-idle-min">${escapeHtml(messages.builder.idlePauseMinMs)}</label>
             <input id="npc-idle-min" name="idlePauseMinMs" type="number" class="input input-bordered w-full" value="${npc.ai.idlePauseMs[0]}" min="0" step="1" required />
-            <label class="label" for="npc-idle-max">Idle pause max (ms)</label>
+            <label class="label" for="npc-idle-max">${escapeHtml(messages.builder.idlePauseMaxMs)}</label>
             <input id="npc-idle-max" name="idlePauseMaxMs" type="number" class="input input-bordered w-full" value="${npc.ai.idlePauseMs[1]}" min="0" step="1" required />
           </fieldset>
 
-          <fieldset class="fieldset">
+          <fieldset class="fieldset lg:col-span-2">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogue)}</legend>
             <label class="label" for="npc-dialogue-keys">${escapeHtml(messages.builder.dialogueKey)}</label>
             <textarea id="npc-dialogue-keys" name="dialogueKeys" class="textarea textarea-bordered w-full" rows="3">${escapeHtml(dialogueKeys)}</textarea>
-            <label class="label" for="npc-greet-line-key">Greeting line key</label>
-            <input id="npc-greet-line-key" name="greetLineKey" type="text" class="input input-bordered w-full" value="${escapeHtml(npc.ai.greetLineKey)}" />
-            <label class="label" for="npc-greet-enabled">Greet on approach</label>
-            <select id="npc-greet-enabled" name="greetOnApproach" class="select select-bordered w-full">
-              <option value="true"${npc.ai.greetOnApproach ? " selected" : ""}>true</option>
-              <option value="false"${npc.ai.greetOnApproach ? "" : " selected"}>false</option>
-            </select>
+            <div class="grid gap-4 lg:grid-cols-2">
+              <div>
+                <label class="label" for="npc-greet-line-key">${escapeHtml(messages.builder.greetLineKey)}</label>
+                <input id="npc-greet-line-key" name="greetLineKey" type="text" class="input input-bordered w-full" value="${escapeHtml(npc.ai.greetLineKey)}" />
+              </div>
+              <div>
+                <label class="label" for="npc-greet-enabled">${escapeHtml(messages.builder.greetOnApproach)}</label>
+                <select id="npc-greet-enabled" name="greetOnApproach" class="select select-bordered w-full">
+                  <option value="true"${npc.ai.greetOnApproach ? " selected" : ""}>true</option>
+                  <option value="false"${npc.ai.greetOnApproach ? "" : " selected"}>false</option>
+                </select>
+              </div>
+            </div>
           </fieldset>
-        </div>
 
-        <div class="flex items-center justify-end">
-          <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
-        </div>
-      </form>
+          <div class="lg:col-span-2 flex items-center justify-end gap-2">
+            <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
+            <span id="npc-detail-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+          </div>
+        </form>
+      </div>
     </div>`;
 };

@@ -1,11 +1,13 @@
 import {
   Assets,
+  autoDetectRenderer,
   Container,
-  WebGLRenderer as PixiWebGLRenderer,
+  Graphics,
   Rectangle,
   Sprite,
   Texture,
   Ticker,
+  type Renderer,
 } from "pixi.js";
 import { gameSpriteManifests } from "../domain/game/data/sprite-data.ts";
 import { appRoutes, interpolateRoutePath } from "../shared/constants/routes.ts";
@@ -63,6 +65,7 @@ type GameClientRuntimeConfig = {
   readonly socketReconnectDelayMs: number;
   readonly restoreRequestTimeoutMs: number;
   readonly restoreMaxAttempts: number;
+  readonly rendererPreference: "webgpu" | "webgl";
 };
 
 const SESSION_META_KEY = "lotfk:game:session-meta";
@@ -102,6 +105,10 @@ const readClientRuntimeConfig = (): GameClientRuntimeConfig | null => {
   const restoreMaxAttempts = parsePositiveInteger(
     readMeta('meta[name="game-client-restore-max-attempts"]')?.dataset.gameClientRestoreMaxAttempts,
   );
+  const rendererPreferenceRaw =
+    readMeta('meta[name="game-client-renderer-preference"]')?.dataset.gameClientRendererPreference;
+  const rendererPreference: "webgpu" | "webgl" =
+    rendererPreferenceRaw === "webgl" ? "webgl" : "webgpu";
   if (
     !commandSendIntervalMs ||
     !commandTtlMs ||
@@ -118,6 +125,7 @@ const readClientRuntimeConfig = (): GameClientRuntimeConfig | null => {
     socketReconnectDelayMs,
     restoreRequestTimeoutMs: Math.min(restoreRequestTimeoutMs, commandTtlMs),
     restoreMaxAttempts,
+    rendererPreference,
   };
 };
 
@@ -346,16 +354,48 @@ const initGameClient = async (): Promise<void> => {
   let runtimeSessionMeta = sessionMeta;
   const threeLayer = new ThreeLayer(wrapper.clientWidth, wrapper.clientHeight);
   threeLayer.addTeaHouseEffects();
-  wrapper.appendChild(threeLayer.renderer.domElement);
 
-  const pixiRenderer = new PixiWebGLRenderer();
-  await pixiRenderer.init({
-    context: threeLayer.getContext() as WebGL2RenderingContext,
-    width: wrapper.clientWidth,
-    height: wrapper.clientHeight,
-    clearBeforeRender: false,
-    antialias: false,
-  });
+  /** Resolve rendering mode: WebGPU uses separate canvases, WebGL shares context. */
+  const useWebGpuMode = runtimeConfig.rendererPreference === "webgpu";
+  let pixiRenderer: Renderer;
+
+  if (useWebGpuMode) {
+    /** WebGPU mode: Three.js canvas underneath, PixiJS canvas on top with transparent BG. */
+    const threeCanvas = threeLayer.renderer.domElement;
+    threeCanvas.style.position = "absolute";
+    threeCanvas.style.inset = "0";
+    threeCanvas.style.width = "100%";
+    threeCanvas.style.height = "100%";
+    wrapper.appendChild(threeCanvas);
+
+    pixiRenderer = await autoDetectRenderer({
+      preference: "webgpu",
+      width: wrapper.clientWidth,
+      height: wrapper.clientHeight,
+      backgroundAlpha: 0,
+      clearBeforeRender: true,
+      antialias: false,
+    });
+
+    const pixiCanvas = pixiRenderer.canvas as HTMLCanvasElement;
+    pixiCanvas.style.position = "absolute";
+    pixiCanvas.style.inset = "0";
+    pixiCanvas.style.width = "100%";
+    pixiCanvas.style.height = "100%";
+    wrapper.appendChild(pixiCanvas);
+  } else {
+    /** WebGL mode: shared context (existing pattern). */
+    wrapper.appendChild(threeLayer.renderer.domElement);
+
+    pixiRenderer = await autoDetectRenderer({
+      preference: "webgl",
+      context: threeLayer.getContext() as WebGL2RenderingContext,
+      width: wrapper.clientWidth,
+      height: wrapper.clientHeight,
+      clearBeforeRender: false,
+      antialias: false,
+    });
+  }
 
   const stage = new Container();
   stage.sortableChildren = true;
@@ -365,6 +405,7 @@ const initGameClient = async (): Promise<void> => {
   stage.addChild(world);
 
   const sprites = new Map<string, Sprite>();
+  const nodeOverlays = new Map<string, Graphics>();
   const queueBadge = document.getElementById("game-command-queue");
   const statusBadge = document.getElementById("game-connection-status");
   const reconnectButton = document.getElementById("game-reconnect") as HTMLButtonElement | null;
@@ -838,18 +879,19 @@ const initGameClient = async (): Promise<void> => {
     }
 
     if (targetState) {
+      threeLayer.syncSceneState(targetState);
       renderState(
         targetState,
         lastState,
         Math.min((now - lastMoveSentAt) / runtimeConfig.commandSendIntervalMs, 1),
         sprites,
+        nodeOverlays,
         world,
         resolveEntityTexture,
       );
     }
 
     threeLayer.tick(time.deltaMS);
-    pixiRenderer.resetState();
     pixiRenderer.render({ container: stage });
   });
   ticker.start();
@@ -871,10 +913,12 @@ const renderState = (
   previous: GameSceneState | null,
   alpha: number,
   sprites: Map<string, Sprite>,
+  nodeOverlays: Map<string, Graphics>,
   world: Container,
   resolveEntityTexture: (state: GameSceneState, entity: EntityState | NpcState) => Texture,
 ): void => {
   const entities: readonly (EntityState | NpcState)[] = [current.player, ...current.npcs];
+  const activeNodeIds = new Set<string>();
 
   for (const entity of entities) {
     const manifest = resolveSpriteManifest(entity.characterKey);
@@ -900,6 +944,47 @@ const renderState = (
     sprite.x = previousX + (entity.position.x - previousX) * alpha - current.camera.x;
     sprite.y = previousY + (entity.position.y - previousY) * alpha - current.camera.y;
     sprite.zIndex = sprite.y;
+  }
+
+  if (current.sceneMode !== "3d") {
+    for (const node of current.nodes ?? []) {
+      if (!("size" in node)) {
+        continue;
+      }
+
+      activeNodeIds.add(node.id);
+      const overlay =
+        nodeOverlays.get(node.id) ??
+        (() => {
+          const created = new Graphics();
+          world.addChild(created);
+          nodeOverlays.set(node.id, created);
+          return created;
+        })();
+
+      overlay.clear();
+      overlay.rect(0, 0, node.size.width, node.size.height).fill({
+        color: node.nodeType === "trigger" ? 0xf59e0b : 0x38bdf8,
+        alpha: node.nodeType === "trigger" ? 0.22 : 0.16,
+      });
+      overlay.stroke({
+        color: node.nodeType === "trigger" ? 0xf59e0b : 0x38bdf8,
+        width: 2,
+        alpha: 0.9,
+      });
+      overlay.x = node.position.x - current.camera.x;
+      overlay.y = node.position.y - current.camera.y;
+      overlay.zIndex = overlay.y + node.size.height;
+    }
+  }
+
+  for (const [nodeId, overlay] of nodeOverlays.entries()) {
+    if (activeNodeIds.has(nodeId)) {
+      continue;
+    }
+    world.removeChild(overlay);
+    overlay.destroy();
+    nodeOverlays.delete(nodeId);
   }
 };
 

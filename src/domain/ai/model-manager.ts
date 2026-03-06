@@ -408,6 +408,7 @@ export class ModelManager {
     try {
       const pipe = await pipeline(entry.task as Parameters<typeof pipeline>[0], entry.model, {
         dtype: entry.dtype,
+        device: entry.device,
       });
 
       this._pipelines.set(key, pipe);

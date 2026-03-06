@@ -5,10 +5,12 @@
  */
 import type { LocaleCode } from "../../config/environment.ts";
 import type { AiRuntimeProfile } from "../../domain/ai/local-runtime-profile.ts";
+import type { BuilderPlatformReadiness } from "../../domain/builder/platform-readiness.ts";
 import type { AvailableAiFeatures } from "../../domain/game/ai/game-ai-service.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
+import { renderPlatformReadinessSection } from "./platform-readiness.ts";
 
 /**
  * Renders the AI tools panel.
@@ -26,6 +28,7 @@ export const renderAiPanel = (
   runtimeProfile: AiRuntimeProfile,
   locale: LocaleCode,
   projectId: string,
+  readiness: BuilderPlatformReadiness,
 ): string => {
   const featureRows = [
     { label: messages.builder.dialogue, available: features.richDialogue },
@@ -57,6 +60,10 @@ export const renderAiPanel = (
       : `<span class="text-base-content/60">${escapeHtml(messages.ai.noProviderAvailable)}</span>`;
   const aiTestHref = withQueryParameters(appRoutes.aiBuilderTest, { projectId });
   const aiAssistHref = withQueryParameters(appRoutes.aiBuilderAssist, { projectId });
+  const aiPreviewHref = withQueryParameters(appRoutes.aiBuilderPatchPreviewForm, {
+    projectId,
+    locale,
+  });
 
   const modelRows = runtimeProfile.catalog
     .filter((entry) => entry.enabled)
@@ -83,6 +90,18 @@ export const renderAiPanel = (
 
   return `
     <div class="space-y-6">
+      <div role="alert" class="alert alert-warning alert-soft">
+        <span>${escapeHtml(messages.builder.platformReadinessWarning)}</span>
+      </div>
+
+      ${renderPlatformReadinessSection({
+        messages,
+        locale,
+        projectId,
+        readiness,
+        keys: ["aiAuthoring", "automation"],
+      })}
+
       <section class="hero rounded-[2rem] border border-base-300 bg-gradient-to-br from-base-200 via-base-100 to-base-200 shadow-sm">
         <div class="hero-content w-full px-0">
           <div class="grid w-full gap-6 lg:grid-cols-[1.3fr_0.7fr] lg:items-end">
@@ -99,7 +118,7 @@ export const renderAiPanel = (
                 <span class="badge badge-outline">${escapeHtml(`${runtimeProfile.onnx.threadCount}`)}</span>
               </div>
             </div>
-            <div class="card border border-base-300 bg-base-100 shadow-sm">
+            <div class="card card-border bg-base-100 shadow-sm">
               <div class="card-body gap-2">
                 <h2 class="card-title">${escapeHtml(messages.builder.providerStatus)}</h2>
                 <div>${providerList}</div>
@@ -116,7 +135,7 @@ export const renderAiPanel = (
       </section>
 
       <div class="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-        <div class="card bg-base-100 shadow-sm">
+        <div class="card card-border bg-base-100 shadow-sm">
           <div class="card-body">
             <h2 class="card-title">${escapeHtml(messages.builder.providerStatus)}</h2>
             <table class="table table-xs" aria-label="${escapeHtml(messages.builder.providerStatus)}">
@@ -131,7 +150,7 @@ export const renderAiPanel = (
           </div>
         </div>
 
-        <div class="card bg-base-100 shadow-sm">
+        <div class="card card-border bg-base-100 shadow-sm">
           <div class="card-body">
             <h2 class="card-title">${escapeHtml(messages.builder.availableModels)}</h2>
             <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.aiLaneDescription)}</p>
@@ -151,8 +170,37 @@ export const renderAiPanel = (
         </div>
       </div>
 
-      <div class="grid gap-4 xl:grid-cols-2">
-        <div class="card bg-base-100 shadow-sm">
+      <div class="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <div class="card card-border bg-base-100 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title">${escapeHtml(messages.builder.assistantReviewTitle)}</h2>
+            <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.assistantReviewDescription)}</p>
+            <form
+              hx-post="${escapeHtml(aiAssistHref)}"
+              hx-target="#ai-assist-result"
+              hx-swap="innerHTML"
+              hx-indicator="#ai-assist-spinner"
+              hx-disabled-elt="button, input, select, textarea"
+              class="space-y-3"
+            >
+              <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+              <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
+              <div class="form-control">
+                <label class="label" for="ai-assist-prompt">${escapeHtml(messages.builder.promptLabel)}</label>
+                <textarea id="ai-assist-prompt" name="prompt" class="textarea textarea-bordered w-full" rows="4" placeholder="${escapeHtml(messages.builder.assistPromptPlaceholder)}" required aria-required="true"></textarea>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="submit" class="btn btn-secondary btn-sm" aria-label="${escapeHtml(messages.builder.designAssist)}">
+                  ${escapeHtml(messages.builder.designAssist)}
+                </button>
+                <span id="ai-assist-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+              </div>
+            </form>
+            <div id="ai-assist-result" class="mt-3" aria-live="polite"></div>
+          </div>
+        </div>
+
+        <div class="card card-border bg-base-100 shadow-sm">
           <div class="card-body">
             <h2 class="card-title">${escapeHtml(messages.builder.testDialogue)}</h2>
             <form
@@ -160,6 +208,7 @@ export const renderAiPanel = (
               hx-target="#ai-test-result"
               hx-swap="innerHTML"
               hx-indicator="#ai-test-spinner"
+              hx-disabled-elt="button, input, select, textarea"
               class="space-y-3"
             >
               <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
@@ -182,36 +231,33 @@ export const renderAiPanel = (
             <div id="ai-test-result" class="mt-3" aria-live="polite"></div>
           </div>
         </div>
+      </div>
 
-        <div class="card bg-base-100 shadow-sm">
-          <div class="card-body">
-            <h2 class="card-title">${escapeHtml(messages.builder.designAssist)}</h2>
-            <form
-              hx-post="${escapeHtml(aiAssistHref)}"
-              hx-target="#ai-assist-result"
-              hx-swap="innerHTML"
-              hx-indicator="#ai-assist-spinner"
-              class="space-y-3"
-            >
-              <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
-              <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
-              <div class="form-control">
-                <label class="label" for="ai-assist-prompt">${escapeHtml(messages.builder.promptLabel)}</label>
-                <textarea id="ai-assist-prompt" name="prompt" class="textarea textarea-bordered w-full" rows="3" placeholder="${escapeHtml(messages.builder.assistPromptPlaceholder)}" required aria-required="true"></textarea>
-              </div>
-              <div class="flex items-center gap-2">
-                <button type="submit" class="btn btn-secondary btn-sm" aria-label="${escapeHtml(messages.builder.designAssist)}">
-                  ${escapeHtml(messages.builder.designAssist)}
-                </button>
-                <span id="ai-assist-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
-              </div>
-            </form>
-            <div id="ai-assist-result" class="mt-3" aria-live="polite"></div>
-          </div>
+      <div class="card card-border bg-base-100 shadow-sm">
+        <div class="card-body">
+          <h2 class="card-title">${escapeHtml(messages.builder.previewChanges)}</h2>
+          <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.patchOperations)}</p>
+          <form
+            hx-post="${escapeHtml(aiPreviewHref)}"
+            hx-target="#ai-patch-result"
+            hx-swap="innerHTML"
+            hx-indicator="#ai-patch-spinner"
+            hx-disabled-elt="button, input, select, textarea"
+            class="space-y-3"
+          >
+            <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
+            <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+            <textarea name="operationsJson" class="textarea textarea-bordered w-full min-h-28" placeholder='[{"op":"replace","path":"/dialogues/en-US/npc.teaMonk.greet","value":"..."}]'></textarea>
+            <div class="flex items-center gap-2">
+              <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.builder.previewChanges)}</button>
+              <span id="ai-patch-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+            </div>
+          </form>
+          <div id="ai-patch-result" class="mt-3" aria-live="polite"></div>
         </div>
       </div>
 
-      <div class="card bg-base-100 shadow-sm">
+      <div class="card card-border bg-base-100 shadow-sm">
         <div class="card-body">
           <h2 class="card-title">${escapeHtml(messages.builder.apiSurfaceTitle)}</h2>
           <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.apiSurfaceDescription)}</p>

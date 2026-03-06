@@ -1,4 +1,4 @@
-import { appConfig } from "../../config/environment.ts";
+import { appConfig, type OnnxDevicePreference } from "../../config/environment.ts";
 import { getLocalModelCatalog, type LocalModelCatalogEntry } from "./model-registry.ts";
 
 /**
@@ -16,7 +16,8 @@ export interface AiRuntimeProfile {
   };
   /** ONNX backend settings. */
   readonly onnx: {
-    readonly backend: "wasm";
+    readonly backend: OnnxDevicePreference;
+    readonly device: OnnxDevicePreference;
     readonly wasmPath: string;
     readonly threadCount: number;
     readonly proxyEnabled: boolean;
@@ -46,7 +47,8 @@ export const getAiRuntimeProfile = (): AiRuntimeProfile => ({
     allowLocalModels: appConfig.ai.transformersAllowLocalModels,
   },
   onnx: {
-    backend: "wasm",
+    backend: appConfig.ai.onnxDevice,
+    device: appConfig.ai.onnxDevice,
     wasmPath: appConfig.ai.onnxWasmPath,
     threadCount: appConfig.ai.onnxThreadCount,
     proxyEnabled: appConfig.ai.onnxProxyEnabled,

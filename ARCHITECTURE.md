@@ -127,11 +127,39 @@ Removed legacy transport:
 - Manual save uses `saveSessionNow()` plus cooldown gate from `saveCooldownMs`.
 - Optimistic versioning is maintained with `stateVersion` and guarded writes in persistence stores.
 
+## Builder/Player Loop
+
+```mermaid
+flowchart TB
+  subgraph Builder["Builder"]
+    B1["Author content"]
+    B2["Scenes / NPCs / Dialogue"]
+    B3["Assets / Clips / Mechanics"]
+    B4["AI patch review"]
+    B5["Publish release"]
+  end
+
+  subgraph Player["Player"]
+    P1["Play published build"]
+    P2["Validate content"]
+    P3["Back to builder"]
+  end
+
+  B1 --> B2
+  B2 --> B3
+  B3 --> B4
+  B4 --> B5
+  B5 -->|"projectId"| P1
+  P1 --> P2
+  P2 --> P3
+  P3 --> B1
+```
+
 ## Builder Publishing and Runtime Seeding
 
 ```mermaid
 flowchart TD
-  DRAFT["Draft mutations (scene/npc/dialogue)"] --> PROJECT["builderProject.state + version + checksum"]
+  DRAFT["Draft mutations (scenes, NPCs, dialogue, assets, mechanics)"] --> PROJECT["builderProject.state + version + checksum"]
   PROJECT --> PUBLISH["publishProject(true)"]
   PUBLISH --> SNAPSHOT["Create immutable builderProjectRelease"]
   SNAPSHOT --> POINTER["Update publishedReleaseVersion"]
@@ -142,7 +170,8 @@ flowchart TD
 
 Current behavior:
 
-- Draft edits mutate `builderProject.state`.
+- Draft edits mutate `builderProject.state` (scenes, NPCs, dialogue, assets, mechanics).
+- Asset upload via `POST /api/builder/assets/upload`; mechanics CRUD via quest/trigger/dialogue-graph routes.
 - Publish creates a new immutable release snapshot.
 - Runtime session seeding consumes the published snapshot, not mutable draft state.
 - Unpublish clears `publishedReleaseVersion` without deleting historical releases.

@@ -1,7 +1,9 @@
 import { appConfig, type LocaleCode } from "../../config/environment.ts";
+import type { BuilderPlatformReadiness } from "../../domain/builder/platform-readiness.ts";
 import { appRoutes, withLocaleQuery, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
+import { renderPlatformReadinessSection } from "./platform-readiness.ts";
 
 /**
  * Summary metrics for the builder landing page.
@@ -17,6 +19,8 @@ export interface DashboardStats {
   readonly aiAvailable: boolean;
   /** Available provider names for the current runtime. */
   readonly providers: readonly string[];
+  /** Platform capability status summary. */
+  readonly readiness: BuilderPlatformReadiness;
 }
 
 /**
@@ -31,12 +35,19 @@ export const renderBuilderDashboard = (
   messages: Messages,
   locale: LocaleCode,
   stats: DashboardStats,
+  projectId: string,
+  published: boolean,
 ): string => {
   const docsHref = withLocaleQuery(appConfig.api.docsPath, locale);
-  const scenesHref = withLocaleQuery(appRoutes.builderScenes, locale);
-  const npcsHref = withLocaleQuery(appRoutes.builderNpcs, locale);
-  const aiHref = withLocaleQuery(appRoutes.builderAi, locale);
-  const gameHref = withLocaleQuery(appRoutes.game, locale);
+  const scenesHref = withQueryParameters(appRoutes.builderScenes, { lang: locale, projectId });
+  const npcsHref = withQueryParameters(appRoutes.builderNpcs, { lang: locale, projectId });
+  const aiHref = withQueryParameters(appRoutes.builderAi, { lang: locale, projectId });
+  const gameHref = published
+    ? withQueryParameters(appRoutes.game, { lang: locale, projectId })
+    : withQueryParameters(appRoutes.builderAi, { lang: locale, projectId });
+  const primaryCtaLabel = published
+    ? messages.builder.playPublishedBuild
+    : messages.builder.ai;
   const builderStatusHref = withQueryParameters(appRoutes.aiBuilderCapabilities, {
     locale,
   });
@@ -51,6 +62,12 @@ export const renderBuilderDashboard = (
         `<li class="list-row"><span class="badge badge-outline">${index + 1}</span> ${escapeHtml(step)}</li>`,
     )
     .join("");
+  const readinessAlert =
+    stats.readiness.partialCount > 0 || stats.readiness.missingCount > 0
+      ? `<div role="alert" class="alert alert-warning alert-soft">
+          <span>${escapeHtml(messages.builder.platformReadinessWarning)}</span>
+        </div>`
+      : "";
 
   return `
     <div class="space-y-6">
@@ -62,8 +79,8 @@ export const renderBuilderDashboard = (
               <p class="max-w-3xl text-base-content/80">${escapeHtml(messages.builder.flowDescription)}</p>
             </div>
             <div class="card-actions flex-wrap">
-              <a class="btn btn-primary btn-sm" href="${escapeHtml(gameHref)}" aria-label="${escapeHtml(messages.navigation.game)}">
-                ${escapeHtml(messages.navigation.game)}
+              <a class="btn btn-primary btn-sm" href="${escapeHtml(gameHref)}" aria-label="${escapeHtml(primaryCtaLabel)}">
+                ${escapeHtml(primaryCtaLabel)}
               </a>
               <a class="btn btn-outline btn-sm" href="${escapeHtml(docsHref)}" aria-label="${escapeHtml(messages.builder.docsLabel)}">
                 ${escapeHtml(messages.builder.docsLabel)}
@@ -90,8 +107,17 @@ export const renderBuilderDashboard = (
               <div class="stat-desc">${escapeHtml(providersLabel)}</div>
             </div>
           </div>
+
+          ${readinessAlert}
         </div>
       </section>
+
+      ${renderPlatformReadinessSection({
+        messages,
+        locale,
+        projectId,
+        readiness: stats.readiness,
+      })}
 
       <section class="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <article class="card card-border bg-base-100 shadow-sm">

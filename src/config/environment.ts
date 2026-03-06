@@ -41,6 +41,7 @@ export interface AppConfig {
     readonly assetPrefix: string;
     readonly sourceDirectory: string;
     readonly clientScriptPath: string;
+    readonly rendererPreference: RendererPreference;
   };
   readonly auth: {
     readonly sessionCookieName: string;
@@ -88,6 +89,7 @@ export interface AppConfig {
     readonly onnxWasmPath: string;
     readonly onnxThreadCount: number;
     readonly onnxProxyEnabled: boolean;
+    readonly onnxDevice: OnnxDevicePreference;
     readonly ollamaBaseUrl: string;
     readonly ollamaEnabled: boolean;
     readonly ollamaChatModel: string;
@@ -255,6 +257,32 @@ export const parseInteger = (value: string | undefined, fallback: number, min: n
 type GameSessionStoreMode = "prisma" | "memory";
 type PreferredAiProvider = "auto" | "ollama" | "transformers";
 
+/**
+ * Renderer backend preference for the playable game client.
+ */
+export type RendererPreference = "webgpu" | "webgl";
+
+/**
+ * ONNX Runtime execution device preference.
+ */
+export type OnnxDevicePreference = "wasm" | "webgpu" | "cpu";
+
+const parseRendererPreference = (value: string | undefined): RendererPreference => {
+  if (value === "webgl") {
+    return "webgl";
+  }
+
+  return "webgpu";
+};
+
+const parseOnnxDevice = (value: string | undefined): OnnxDevicePreference => {
+  if (value === "webgpu" || value === "cpu") {
+    return value;
+  }
+
+  return "wasm";
+};
+
 const parseGameSessionStore = (value: string | undefined): GameSessionStoreMode => {
   if (value === "memory") {
     return "memory";
@@ -348,6 +376,7 @@ export const appConfig: AppConfig = {
     assetPrefix: resolvedPlayableGameAssetPrefix,
     sourceDirectory: resolvedPlayableGameSourceDirectory,
     clientScriptPath: resolvedPlayableGameClientScriptPath,
+    rendererPreference: parseRendererPreference(Bun.env.RENDERER_PREFERENCE),
   },
   auth: {
     sessionCookieName: Bun.env.SESSION_COOKIE_NAME ?? DEFAULT_SESSION_COOKIE_NAME,
@@ -465,6 +494,7 @@ export const appConfig: AppConfig = {
     onnxWasmPath: resolvedOnnxWasmPath,
     onnxThreadCount: parseInteger(Bun.env.AI_ONNX_THREAD_COUNT, DEFAULT_AI_ONNX_THREAD_COUNT, 1),
     onnxProxyEnabled: parseBoolean(Bun.env.AI_ONNX_PROXY_ENABLED, false),
+    onnxDevice: parseOnnxDevice(Bun.env.AI_ONNX_DEVICE),
     ollamaBaseUrl: Bun.env.OLLAMA_BASE_URL ?? DEFAULT_OLLAMA_BASE_URL,
     ollamaEnabled: parseBoolean(Bun.env.OLLAMA_ENABLED, true),
     ollamaChatModel: Bun.env.OLLAMA_CHAT_MODEL ?? DEFAULT_OLLAMA_CHAT_MODEL,

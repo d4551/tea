@@ -54,6 +54,7 @@ A server-driven game engine and worldbuilding platform.<br/>
   - [Plugin Pipeline](#plugin-pipeline)
   - [Domain Model](#domain-model)
   - [Session Transport Contract](#session-transport-contract)
+  - [Builder/Player Flow](#builderplayer-flow)
   - [Builder Publish Contract](#builder-publish-contract)
 - [Project Structure](#project-structure)
 - [Commands](#commands)
@@ -69,14 +70,32 @@ A server-driven game engine and worldbuilding platform.<br/>
 
 TEA Game Engine is an SSR-first game development platform that unifies server-rendered pages, real-time AI narrative generation, and a browser-native playable game client into a single runtime. Built for **Leaves of the Fallen Kingdom (LOTFK)** — a strategy worldbuilding experience.
 
+The product centers on a **builder/player loop**: author content in the builder, publish an immutable release, play the published build, and iterate. Legacy pitch/documentation pages are reachable via footer links; primary navigation routes to Home, Game, and Builder.
+
 ### Key Capabilities
 
-- **Server-Side Rendering** — all pages render on the server via Elysia; HTMX provides progressive enhancement
-- **AI Narrative Engine** — on-device inference via 🤗 Transformers with ONNX/WebGPU acceleration
+- **Builder/Player Loop** — project-scoped authoring, publish/unpublish, immutable releases, and playable validation
+- **Server-Side Rendering** — all pages render on the server via Elysia; HTMX provides progressive enhancement with `hx-indicator` and `hx-disabled-elt` for loading feedback
+- **AI Narrative Engine** — on-device inference via 🤗 Transformers with ONNX/WebGPU acceleration; patch preview/apply for reviewable co-author flow
 - **Playable Game Client** — PixiJS 8 canvas with Three.js 3D layer, bundled and hot-reloaded during development
 - **Type-Safe Stack** — end-to-end types from Prisma schema through Elysia route contracts and SSR views
 - **Internationalization** — `Accept-Language` q-weight parsing with deterministic locale persistence
 - **Structured Observability** — correlation ID propagation, levelled JSON logging, typed error envelopes
+
+### Platform Readiness
+
+The builder exposes a capability matrix that reflects current implementation state:
+
+| Capability | Status | Notes |
+|---|---|---|
+| Release flow | Implemented | Publish/unpublish, immutable releases |
+| 2D runtime | Partial | PixiJS; scene from authored data |
+| 3D runtime | Partial | Three.js atmosphere; no full scene graph from builder |
+| Sprite pipeline | Partial | Manifest-based; asset upload implemented |
+| Animation pipeline | Partial | Clip definitions; no frame editor |
+| Mechanics | Partial | Quests, triggers, dialogue graphs; quest edit/delete implemented |
+| AI authoring | Partial | Patch preview/apply; dialogue generate |
+| Automation / RPA | Missing | Worker stub; approval-gated workflow in place |
 
 ---
 
@@ -294,11 +313,39 @@ sequenceDiagram
   Note over Client,REST: On token expiry, client calls POST /api/game/session/:id with body { resumeToken }
 ```
 
+### Builder/Player Flow
+
+```mermaid
+flowchart TB
+  subgraph Builder["Builder"]
+    B1["Author content"]
+    B2["Scenes / NPCs / Dialogue"]
+    B3["Assets / Clips / Mechanics"]
+    B4["AI patch review"]
+    B5["Publish release"]
+  end
+
+  subgraph Player["Player"]
+    P1["Play published build"]
+    P2["Validate content"]
+    P3["Back to builder"]
+  end
+
+  B1 --> B2
+  B2 --> B3
+  B3 --> B4
+  B4 --> B5
+  B5 -->|"projectId"| P1
+  P1 --> P2
+  P2 --> P3
+  P3 --> B1
+```
+
 ### Builder Publish Contract
 
 ```mermaid
 flowchart TD
-  A["Draft mutations\n(saveScene/saveNpc/saveDialogue)"] --> B["builderProject.state\n(version + checksum)"]
+  A["Draft mutations\n(scenes, NPCs, dialogue, assets, mechanics)"] --> B["builderProject.state\n(version + checksum)"]
   B --> C["publishProject(true)"]
   C --> D["Create immutable builderProjectRelease\n(projectId, releaseVersion, checksum, state)"]
   D --> E["Set publishedReleaseVersion on project"]
@@ -407,6 +454,15 @@ Other primary endpoints:
 | `/api/oracle` | POST | Oracle interaction |
 | `/builder/*` | GET | Builder SSR views |
 | `/api/builder/*` | REST | Builder data + AI compose/test/assist |
+
+Builder API highlights:
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/builder/assets/upload` | POST | Multipart asset upload (file input) |
+| `/api/builder/quests/:questId` | GET | Quest edit form |
+| `/api/builder/quests/:questId/form` | POST | Save quest |
+| `/api/builder/quests/:questId` | DELETE | Delete quest |
 
 Deprecated/removed surface:
 

@@ -9,6 +9,8 @@ export const assetRelativePaths = {
   htmxExtensionsOutputDirectory: "vendor/htmx-ext",
   htmxExtensionOracleIndicatorFile: "vendor/htmx-ext/oracle-indicator.js",
   htmxExtensionFocusPanelFile: "vendor/htmx-ext/focus-panel.js",
+  builderSceneEditorEntryFile: "src/builder-scene-editor/client.ts",
+  builderSceneEditorBundleFile: "vendor/builder-scene-editor.js",
   onnxPublicDirectory: "onnx",
   htmxExtensionsSourceDirectory: "src/htmx-extensions",
   playableGameClientEntryFile: "src/playable-game/game-client.ts",

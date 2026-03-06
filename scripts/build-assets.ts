@@ -1,6 +1,7 @@
 import { createLogger } from "../src/lib/logger.ts";
 import {
   assetPipelinePaths,
+  createBuilderSceneEditorBuildOptions,
   createGameClientBuildOptions,
   createHtmxExtensionBuildOptions,
   createTailwindCommand,
@@ -67,6 +68,23 @@ const buildGameClient = async (): Promise<void> => {
   });
 };
 
+const buildBuilderSceneEditorClient = async (): Promise<void> => {
+  logger.info("builder-scene-editor.build.started");
+  const result = await Bun.build(createBuilderSceneEditorBuildOptions());
+
+  if (!result.success) {
+    logger.error("builder-scene-editor.build.failed", {
+      logCount: result.logs.length,
+      logs: serializeBuildLogs(result.logs),
+    });
+    throw new Error("Builder scene editor build failed");
+  }
+
+  logger.info("builder-scene-editor.build.completed", {
+    outputs: result.outputs.map((output) => output.path),
+  });
+};
+
 const buildHtmxExtensions = async (): Promise<void> => {
   logger.info("htmx.extensions.build.started");
   const result = await Bun.build(createHtmxExtensionBuildOptions());
@@ -108,3 +126,4 @@ await copyHtmxBundle();
 await copyOnnxWasm();
 await buildHtmxExtensions();
 await buildGameClient();
+await buildBuilderSceneEditorClient();

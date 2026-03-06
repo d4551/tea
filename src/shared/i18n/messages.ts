@@ -36,6 +36,16 @@ export interface Messages {
       readonly title: string;
       readonly heroTitle: string;
       readonly heroDescription: string;
+      readonly builderCardTitle: string;
+      readonly builderCardDescription: string;
+      readonly builderCardCta: string;
+      readonly playerCardTitle: string;
+      readonly playerCardDescription: string;
+      readonly playerCardCta: string;
+      readonly loopTitle: string;
+      readonly loopDescription: string;
+      readonly loopSteps: readonly string[];
+      readonly statusTitle: string;
       readonly architectureTitle: string;
       readonly architectureDescription: string;
       readonly reliabilityTitle: string;
@@ -48,6 +58,8 @@ export interface Messages {
       readonly userFlowSteps: readonly string[];
       readonly apiSurfaceTitle: string;
       readonly apiSurfaceDescription: string;
+      readonly legacyTitle: string;
+      readonly legacyDescription: string;
       readonly docsCta: string;
     };
     readonly pitchDeck: {
@@ -138,6 +150,23 @@ export interface Messages {
     readonly connectionMissing: string;
     readonly reconnectAction: string;
     readonly queueLabel: string;
+    readonly controlsTitle: string;
+    readonly controlsMove: string;
+    readonly controlsInteract: string;
+    readonly controlsAdvance: string;
+    readonly objectiveTitle: string;
+    readonly objectiveDescription: string;
+    readonly sessionContextTitle: string;
+    readonly sessionIdLabel: string;
+    readonly sceneLabel: string;
+    readonly projectLabel: string;
+    readonly builderReturn: string;
+    readonly publishedProjectLabel: string;
+    readonly projectUnavailableTitle: string;
+    readonly projectUnavailableDescription: string;
+    readonly projectUnpublishedTitle: string;
+    readonly projectUnpublishedDescription: string;
+    readonly returnToBuilder: string;
     readonly invalidCommand: string;
     readonly invalidDirection: string;
     readonly chatMissingFields: string;
@@ -155,6 +184,8 @@ export interface Messages {
     readonly npcs: string;
     readonly dialogue: string;
     readonly assets: string;
+    readonly mechanics: string;
+    readonly automation: string;
     readonly ai: string;
     readonly addScene: string;
     readonly editScene: string;
@@ -163,6 +194,8 @@ export interface Messages {
     readonly addDialogue: string;
     readonly generateDialogue: string;
     readonly uploadAsset: string;
+    readonly addAssetPath: string;
+    readonly addAssetFile: string;
     readonly critiqueAsset: string;
     readonly testDialogue: string;
     readonly designAssist: string;
@@ -180,16 +213,43 @@ export interface Messages {
     readonly sceneTitle: string;
     readonly spawnPoint: string;
     readonly geometry: string;
+    readonly sceneModeLabel: string;
+    readonly sceneMode2d: string;
+    readonly sceneMode3d: string;
+    readonly sceneNodes: string;
     readonly collisions: string;
     readonly npcName: string;
+    readonly npcLabel: string;
     readonly npcPosition: string;
+    readonly interactRadius: string;
     readonly wanderRadius: string;
     readonly wanderSpeed: string;
+    readonly idlePauseMinMs: string;
+    readonly idlePauseMaxMs: string;
+    readonly greetLineKey: string;
+    readonly greetOnApproach: string;
     readonly dialogueKey: string;
     readonly dialogueLine: string;
     readonly providerStatus: string;
     readonly availableModels: string;
     readonly closeSidebar: string;
+    readonly currentProject: string;
+    readonly projectIdLabel: string;
+    readonly projectIdPlaceholder: string;
+    readonly projectDraftVersion: string;
+    readonly projectPublishedVersion: string;
+    readonly projectStatus: string;
+    readonly projectLastUpdated: string;
+    readonly projectStatusDraft: string;
+    readonly projectStatusPublished: string;
+    readonly projectStatusUnpublished: string;
+    readonly createProject: string;
+    readonly switchProject: string;
+    readonly publishProject: string;
+    readonly unpublishProject: string;
+    readonly playPublishedBuild: string;
+    readonly createProjectHelp: string;
+    readonly projectPlayHint: string;
     readonly capabilityHeader: string;
     readonly statusHeader: string;
     readonly visionLabel: string;
@@ -230,6 +290,84 @@ export interface Messages {
     readonly modelLabel: string;
     readonly configKeyLabel: string;
     readonly docsLabel: string;
+    readonly sceneLibraryTitle: string;
+    readonly sceneCreateDescription: string;
+    readonly sceneCreateTitlePlaceholder: string;
+    readonly sceneBackgroundPlaceholder: string;
+    readonly npcRosterTitle: string;
+    readonly npcCreateDescription: string;
+    readonly npcCreateSceneLabel: string;
+    readonly npcCreateKeyPlaceholder: string;
+    readonly npcCreateLabelPlaceholder: string;
+    readonly assetsWorkspaceTitle: string;
+    readonly assetKindLabel: string;
+    readonly assetSourceLabel: string;
+    readonly animationClipsTitle: string;
+    readonly clipAssetLabel: string;
+    readonly clipStateTagLabel: string;
+    readonly clipFrameCountLabel: string;
+    readonly clipPlaybackLabel: string;
+    readonly generationJobsTitle: string;
+    readonly generationJobKindLabel: string;
+    readonly generationPromptLabel: string;
+    readonly createGenerationJob: string;
+    readonly dialogueSearchLabel: string;
+    readonly dialogueSearchPlaceholder: string;
+    readonly dialogueWorkspaceTitle: string;
+    readonly dialogueCreateDescription: string;
+    readonly dialogueKeyPlaceholder: string;
+    readonly addLinePlaceholder: string;
+    readonly mechanicsWorkspaceTitle: string;
+    readonly questsTitle: string;
+    readonly triggersTitle: string;
+    readonly dialogueGraphsTitle: string;
+    readonly createQuest: string;
+    readonly editQuest: string;
+    readonly createTrigger: string;
+    readonly editTrigger: string;
+    readonly createDialogueGraph: string;
+    readonly editDialogueGraph: string;
+    readonly automationWorkspaceTitle: string;
+    readonly automationGoalLabel: string;
+    readonly createAutomationRun: string;
+    readonly approveAction: string;
+    readonly cancelAction: string;
+    readonly assistantReviewTitle: string;
+    readonly assistantReviewDescription: string;
+    readonly previewChanges: string;
+    readonly applyChanges: string;
+    readonly previewReady: string;
+    readonly applyComplete: string;
+    readonly noPublishedRelease: string;
+    readonly patchOperations: string;
+    readonly activeProjectMissing: string;
+    readonly platformReadinessTitle: string;
+    readonly platformReadinessDescription: string;
+    readonly platformReadinessWarning: string;
+    readonly readinessImplemented: string;
+    readonly readinessPartial: string;
+    readonly readinessMissing: string;
+    readonly implementedCountLabel: string;
+    readonly partialCountLabel: string;
+    readonly missingCountLabel: string;
+    readonly sceneBaselineCountLabel: string;
+    readonly spriteManifestCountLabel: string;
+    readonly capabilityReleaseFlowTitle: string;
+    readonly capabilityReleaseFlowDescription: string;
+    readonly capability2dRuntimeTitle: string;
+    readonly capability2dRuntimeDescription: string;
+    readonly capability3dRuntimeTitle: string;
+    readonly capability3dRuntimeDescription: string;
+    readonly capabilitySpritePipelineTitle: string;
+    readonly capabilitySpritePipelineDescription: string;
+    readonly capabilityAnimationPipelineTitle: string;
+    readonly capabilityAnimationPipelineDescription: string;
+    readonly capabilityMechanicsTitle: string;
+    readonly capabilityMechanicsDescription: string;
+    readonly capabilityAiAuthoringTitle: string;
+    readonly capabilityAiAuthoringDescription: string;
+    readonly capabilityAutomationTitle: string;
+    readonly capabilityAutomationDescription: string;
   };
 }
 
@@ -243,7 +381,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       appSubtitle: "Tea-first strategy worldbuilding toolkit",
     },
     navigation: {
-      home: "Architecture",
+      home: "Start",
       pitchDeck: "Pitch Deck",
       narrativeBible: "Narrative Bible",
       developmentPlan: "Dev Plan",
@@ -267,10 +405,23 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
     },
     pages: {
       home: {
-        title: "System Architecture",
-        heroTitle: "Local-first AI game engine builder with SSR operator surfaces",
+        title: "Builder / Player Workspace",
+        heroTitle: "Author, publish, and play from one server-rendered workspace",
         heroDescription:
-          "The platform runs on Bun + Elysia, renders on the server by default, and now exposes a configurable local AI stack for dialogue, speech, embeddings, and builder operations.",
+          "The primary loop is now builder-first: shape the world, publish an immutable release, then validate the live player experience against that release.",
+        builderCardTitle: "Author the world",
+        builderCardDescription:
+          "Edit scenes, NPCs, dialogue, and AI-assisted changes from one project-aware builder shell.",
+        builderCardCta: "Open builder",
+        playerCardTitle: "Play the release",
+        playerCardDescription:
+          "Launch the published build, validate onboarding, and verify that runtime behavior matches the authored release.",
+        playerCardCta: "Open player",
+        loopTitle: "Primary loop",
+        loopDescription:
+          "Everything in the product now points at the same release cycle instead of separate pitch and operator surfaces.",
+        loopSteps: ["Author in builder", "Review AI changes", "Publish release", "Play published build"],
+        statusTitle: "Current workspace status",
         architectureTitle: "Single-owner architecture",
         architectureDescription:
           "Config, logging, routing, UI rendering, and domain behavior are now isolated by concern with clear contracts at each boundary.",
@@ -294,6 +445,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         apiSurfaceTitle: "Platform surface",
         apiSurfaceDescription:
           "Operational endpoints, builder mutations, and local AI runtime details are exposed through documented APIs instead of hidden implementation paths.",
+        legacyTitle: "Legacy references",
+        legacyDescription:
+          "Pitch, narrative, and delivery documents remain available as supporting material, but they are no longer the main product entrypoint.",
         docsCta: "Open API docs",
       },
       pitchDeck: {
@@ -405,6 +559,26 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       connectionMissing: "session missing",
       reconnectAction: "Reconnect",
       queueLabel: "queue",
+      controlsTitle: "Controls",
+      controlsMove: "Move: WASD or arrow keys",
+      controlsInteract: "Interact: E, Enter, or Space",
+      controlsAdvance: "Advance dialogue: Escape",
+      objectiveTitle: "Session objective",
+      objectiveDescription:
+        "Validate the published scene, dialogue pacing, and runtime stability before returning to the builder.",
+      sessionContextTitle: "Current session",
+      sessionIdLabel: "Session ID",
+      sceneLabel: "Scene",
+      projectLabel: "Project",
+      builderReturn: "Back to builder",
+      publishedProjectLabel: "Published project",
+      projectUnavailableTitle: "Project not found",
+      projectUnavailableDescription:
+        "The requested project does not exist. Switch back to the builder and select or create a valid project.",
+      projectUnpublishedTitle: "Project is not published",
+      projectUnpublishedDescription:
+        "This player surface only runs immutable published releases. Publish the draft in the builder first.",
+      returnToBuilder: "Return to builder",
       invalidCommand: "Invalid command payload",
       invalidDirection: "Invalid move direction",
       chatMissingFields: "Chat commands require npcId and message",
@@ -422,6 +596,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       npcs: "NPCs",
       dialogue: "Dialogue",
       assets: "Assets",
+      mechanics: "Mechanics",
+      automation: "Automation",
       ai: "AI Tools",
       addScene: "Add Scene",
       editScene: "Edit Scene",
@@ -430,6 +606,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       addDialogue: "Add Line",
       generateDialogue: "Generate with AI",
       uploadAsset: "Upload Asset",
+      addAssetPath: "Add Asset (path)",
+      addAssetFile: "Upload File",
       critiqueAsset: "AI Critique",
       testDialogue: "Test Dialogue",
       designAssist: "Design Assistant",
@@ -447,16 +625,44 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       sceneTitle: "Scene Title",
       spawnPoint: "Spawn Point",
       geometry: "Geometry",
+      sceneModeLabel: "Scene mode",
+      sceneMode2d: "2D",
+      sceneMode3d: "3D",
+      sceneNodes: "Scene nodes",
       collisions: "Collisions",
       npcName: "NPC Name",
+      npcLabel: "NPC Label",
       npcPosition: "Position",
+      interactRadius: "Interact Radius",
       wanderRadius: "Wander Radius",
       wanderSpeed: "Wander Speed",
+      idlePauseMinMs: "Idle pause min (ms)",
+      idlePauseMaxMs: "Idle pause max (ms)",
+      greetLineKey: "Greeting line key",
+      greetOnApproach: "Greet on approach",
       dialogueKey: "Dialogue Key",
       dialogueLine: "Dialogue Line",
       providerStatus: "Provider Status",
       availableModels: "Available Models",
       closeSidebar: "Close sidebar",
+      currentProject: "Current project",
+      projectIdLabel: "Project ID",
+      projectIdPlaceholder: "tea-house-release",
+      projectDraftVersion: "Draft version",
+      projectPublishedVersion: "Published release",
+      projectStatus: "Status",
+      projectLastUpdated: "Last updated",
+      projectStatusDraft: "Draft only",
+      projectStatusPublished: "Published",
+      projectStatusUnpublished: "Unpublished",
+      createProject: "Create project",
+      switchProject: "Switch project",
+      publishProject: "Publish release",
+      unpublishProject: "Unpublish release",
+      playPublishedBuild: "Play published build",
+      createProjectHelp:
+        "Create a new project from the current baseline or switch to an existing project by ID.",
+      projectPlayHint: "Only published releases can be launched in the player.",
       capabilityHeader: "Capability",
       statusHeader: "Status",
       visionLabel: "Vision",
@@ -510,6 +716,96 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       modelLabel: "Model",
       configKeyLabel: "Config Key",
       docsLabel: "Docs",
+      sceneLibraryTitle: "Scene library",
+      sceneCreateDescription: "Create or select a scene, then refine its layout and runtime preview.",
+      sceneCreateTitlePlaceholder: "teaHouseAnnex",
+      sceneBackgroundPlaceholder: "/assets/images/backgrounds/tea-house-annex.png",
+      npcRosterTitle: "NPC roster",
+      npcCreateDescription: "Add NPCs into a scene, then tune movement, dialogue, and greet behavior.",
+      npcCreateSceneLabel: "Owning scene",
+      npcCreateKeyPlaceholder: "teaMonk",
+      npcCreateLabelPlaceholder: "npc.teaMonk.label",
+      assetsWorkspaceTitle: "Asset workspace",
+      assetKindLabel: "Asset kind",
+      assetSourceLabel: "Asset source",
+      animationClipsTitle: "Animation clips",
+      clipAssetLabel: "Asset",
+      clipStateTagLabel: "State tag",
+      clipFrameCountLabel: "Frame count",
+      clipPlaybackLabel: "Playback FPS",
+      generationJobsTitle: "Generation jobs",
+      generationJobKindLabel: "Job kind",
+      generationPromptLabel: "Prompt",
+      createGenerationJob: "Queue generation job",
+      dialogueSearchLabel: "Filter dialogue",
+      dialogueSearchPlaceholder: "Search by NPC or dialogue key",
+      dialogueWorkspaceTitle: "Dialogue workspace",
+      dialogueCreateDescription: "Keep dialogue grouped by NPC and use AI to draft new lines before saving.",
+      dialogueKeyPlaceholder: "npc.teaMonk.greet",
+      addLinePlaceholder: "Welcome, traveler. The leaves have been expecting you.",
+      mechanicsWorkspaceTitle: "Mechanics workspace",
+      questsTitle: "Quests",
+      triggersTitle: "Triggers",
+      dialogueGraphsTitle: "Dialogue graphs",
+      createQuest: "Create quest",
+      editQuest: "Edit quest",
+      createTrigger: "Create trigger",
+      editTrigger: "Edit trigger",
+      createDialogueGraph: "Create graph",
+      editDialogueGraph: "Edit dialogue graph",
+      automationWorkspaceTitle: "Automation workspace",
+      automationGoalLabel: "Automation goal",
+      createAutomationRun: "Queue automation run",
+      approveAction: "Approve",
+      cancelAction: "Cancel",
+      assistantReviewTitle: "Review AI changes",
+      assistantReviewDescription:
+        "Generate structured operations, preview them against the active project, then apply only the valid changes.",
+      previewChanges: "Preview changes",
+      applyChanges: "Apply changes",
+      previewReady: "Preview ready",
+      applyComplete: "Changes applied",
+      noPublishedRelease: "No published release",
+      patchOperations: "Patch operations",
+      activeProjectMissing:
+        "The selected project could not be loaded. Create it or switch to an existing project.",
+      platformReadinessTitle: "Platform readiness",
+      platformReadinessDescription:
+        "This matrix shows the real product surface today: release publishing works, but game creation systems beyond the narrow baseline runtime remain partial or missing.",
+      platformReadinessWarning:
+        "The builder can author and publish the current baseline, but sprite generation, animation tooling, advanced mechanics, and automation are not fully wired yet.",
+      readinessImplemented: "Implemented",
+      readinessPartial: "Partial",
+      readinessMissing: "Missing",
+      implementedCountLabel: "Implemented",
+      partialCountLabel: "Partial",
+      missingCountLabel: "Missing",
+      sceneBaselineCountLabel: "Baseline scenes",
+      spriteManifestCountLabel: "Sprite manifests",
+      capabilityReleaseFlowTitle: "Release flow",
+      capabilityReleaseFlowDescription:
+        "Projects can be authored, published into immutable releases, and opened in the player against a project-bound build.",
+      capability2dRuntimeTitle: "2D runtime",
+      capability2dRuntimeDescription:
+        "A narrow browser runtime exists for one baseline content model, but there is no broad 2D world editor or reusable game-authoring pipeline yet.",
+      capability3dRuntimeTitle: "3D runtime",
+      capability3dRuntimeDescription:
+        "Three.js is only used for atmosphere and lighting under the sprite scene. There is no 3D scene graph, asset pipeline, or builder workflow.",
+      capabilitySpritePipelineTitle: "Sprite pipeline",
+      capabilitySpritePipelineDescription:
+        "Mounted sprite manifests exist for the current baseline assets, but import, upload, generation, and sprite-pack management are not wired into the builder.",
+      capabilityAnimationPipelineTitle: "Animation pipeline",
+      capabilityAnimationPipelineDescription:
+        "Runtime animation manifests are supported, but there is no animation timeline, state editor, retargeting flow, or generator for new motion sets.",
+      capabilityMechanicsTitle: "Mechanics systems",
+      capabilityMechanicsDescription:
+        "Movement, collisions, and NPC interaction exist, but authored quests, combat, inventory, cutscenes, and trigger-based mechanics are still absent.",
+      capabilityAiAuthoringTitle: "AI authoring",
+      capabilityAiAuthoringDescription:
+        "Dialogue, scene description, critique, and patch review are wired, but AI-driven asset generation and mechanics authoring are only partial today.",
+      capabilityAutomationTitle: "Automation / RPA",
+      capabilityAutomationDescription:
+        "There is no background worker, browser automation runner, or tool-orchestrated production pipeline connected to the builder yet.",
     },
   },
   "zh-CN": {
@@ -518,7 +814,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       appSubtitle: "以茶为核心的策略世界观工具集",
     },
     navigation: {
-      home: "架构",
+      home: "入口",
       pitchDeck: "路演材料",
       narrativeBible: "叙事圣经",
       developmentPlan: "开发计划",
@@ -542,10 +838,20 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
     },
     pages: {
       home: {
-        title: "系统架构",
-        heroTitle: "以本地 AI 为核心的 SSR 游戏引擎构建平台",
+        title: "构建 / 游玩工作区",
+        heroTitle: "在同一个服务端渲染工作区中完成创作、发布与游玩",
         heroDescription:
-          "平台基于 Bun + Elysia，默认服务端渲染，并提供可配置的本地 AI 栈，用于对话、语音、嵌入与构建流程。",
+          "主循环现在以构建器为中心：先创作世界，发布不可变版本，再回到玩家视角验证真实运行效果。",
+        builderCardTitle: "创作世界",
+        builderCardDescription: "在具备项目上下文的构建器中编辑场景、NPC、对话与 AI 建议。",
+        builderCardCta: "打开构建器",
+        playerCardTitle: "游玩发布版本",
+        playerCardDescription: "启动已发布版本，从玩家视角验证引导、节奏与运行时表现。",
+        playerCardCta: "打开玩家视图",
+        loopTitle: "主循环",
+        loopDescription: "产品入口聚焦于同一条发布路径，而不再分散到路演与文档页面。",
+        loopSteps: ["在构建器中创作", "审查 AI 修改", "发布版本", "游玩已发布内容"],
+        statusTitle: "当前工作区状态",
         architectureTitle: "单一职责架构",
         architectureDescription:
           "配置、日志、路由、视图渲染与领域逻辑各自独立，边界通过类型契约约束。",
@@ -563,6 +869,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         apiSurfaceTitle: "平台接口面",
         apiSurfaceDescription:
           "运维端点、构建器写接口与本地 AI 运行时细节都通过文档化 API 暴露，而不是隐藏在实现内部。",
+        legacyTitle: "历史文档入口",
+        legacyDescription: "路演材料、叙事文档与开发计划仍可查看，但不再作为产品主入口。",
         docsCta: "打开 API 文档",
       },
       pitchDeck: {
@@ -673,6 +981,23 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       connectionMissing: "会话不存在",
       reconnectAction: "重新连接",
       queueLabel: "队列",
+      controlsTitle: "操作说明",
+      controlsMove: "移动：WASD 或方向键",
+      controlsInteract: "交互：E、回车或空格",
+      controlsAdvance: "推进对话：Escape",
+      objectiveTitle: "本次验证目标",
+      objectiveDescription: "确认已发布场景、对话节奏与运行时稳定性后，再返回构建器继续迭代。",
+      sessionContextTitle: "当前会话",
+      sessionIdLabel: "会话 ID",
+      sceneLabel: "场景",
+      projectLabel: "项目",
+      builderReturn: "返回构建器",
+      publishedProjectLabel: "已发布项目",
+      projectUnavailableTitle: "项目不存在",
+      projectUnavailableDescription: "请求的项目不存在。请返回构建器，切换到有效项目或创建新项目。",
+      projectUnpublishedTitle: "项目尚未发布",
+      projectUnpublishedDescription: "玩家视图只运行不可变的已发布版本。请先在构建器中发布草稿。",
+      returnToBuilder: "返回构建器",
       invalidCommand: "无效命令",
       invalidDirection: "无效移动方向",
       chatMissingFields: "缺少聊天对象或消息内容",
@@ -690,6 +1015,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       npcs: "NPC",
       dialogue: "对话",
       assets: "资源",
+      mechanics: "机制",
+      automation: "自动化",
       ai: "AI 工具",
       addScene: "添加场景",
       editScene: "编辑场景",
@@ -698,6 +1025,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       addDialogue: "添加对话",
       generateDialogue: "AI 生成",
       uploadAsset: "上传资源",
+      addAssetPath: "添加资源（路径）",
+      addAssetFile: "上传文件",
       critiqueAsset: "AI 评审",
       testDialogue: "测试对话",
       designAssist: "设计助手",
@@ -715,16 +1044,43 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       sceneTitle: "场景标题",
       spawnPoint: "出生点",
       geometry: "几何尺寸",
+      sceneModeLabel: "场景模式",
+      sceneMode2d: "2D",
+      sceneMode3d: "3D",
+      sceneNodes: "场景节点",
       collisions: "碰撞区域",
       npcName: "NPC 名称",
+      npcLabel: "NPC 标签",
       npcPosition: "位置",
+      interactRadius: "交互半径",
       wanderRadius: "游走半径",
       wanderSpeed: "游走速度",
+      idlePauseMinMs: "最短停顿（毫秒）",
+      idlePauseMaxMs: "最长停顿（毫秒）",
+      greetLineKey: "问候语键",
+      greetOnApproach: "接近时问候",
       dialogueKey: "对话键",
       dialogueLine: "对话内容",
       providerStatus: "提供商状态",
       availableModels: "可用模型",
       closeSidebar: "关闭侧边栏",
+      currentProject: "当前项目",
+      projectIdLabel: "项目 ID",
+      projectIdPlaceholder: "tea-house-release",
+      projectDraftVersion: "草稿版本",
+      projectPublishedVersion: "发布版本",
+      projectStatus: "状态",
+      projectLastUpdated: "最近更新",
+      projectStatusDraft: "仅草稿",
+      projectStatusPublished: "已发布",
+      projectStatusUnpublished: "未发布",
+      createProject: "创建项目",
+      switchProject: "切换项目",
+      publishProject: "发布版本",
+      unpublishProject: "取消发布",
+      playPublishedBuild: "游玩已发布版本",
+      createProjectHelp: "按 ID 创建新项目，或切换到现有项目。",
+      projectPlayHint: "只有已发布版本才能在玩家视图中启动。",
       capabilityHeader: "能力",
       statusHeader: "状态",
       visionLabel: "视觉",
@@ -773,6 +1129,94 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       modelLabel: "模型",
       configKeyLabel: "配置键",
       docsLabel: "文档",
+      sceneLibraryTitle: "场景库",
+      sceneCreateDescription: "先创建或选择场景，再细化布局与运行时预览。",
+      sceneCreateTitlePlaceholder: "teaHouseAnnex",
+      sceneBackgroundPlaceholder: "/assets/images/backgrounds/tea-house-annex.png",
+      npcRosterTitle: "NPC 阵列",
+      npcCreateDescription: "先把 NPC 放进场景，再调节移动、对话与接近问候行为。",
+      npcCreateSceneLabel: "所属场景",
+      npcCreateKeyPlaceholder: "teaMonk",
+      npcCreateLabelPlaceholder: "npc.teaMonk.label",
+      assetsWorkspaceTitle: "资源工作区",
+      assetKindLabel: "资源类型",
+      assetSourceLabel: "资源来源",
+      animationClipsTitle: "动画片段",
+      clipAssetLabel: "所属资源",
+      clipStateTagLabel: "状态标签",
+      clipFrameCountLabel: "帧数",
+      clipPlaybackLabel: "播放 FPS",
+      generationJobsTitle: "生成任务",
+      generationJobKindLabel: "任务类型",
+      generationPromptLabel: "提示词",
+      createGenerationJob: "加入生成队列",
+      dialogueSearchLabel: "筛选对话",
+      dialogueSearchPlaceholder: "按 NPC 或对话键搜索",
+      dialogueWorkspaceTitle: "对话工作区",
+      dialogueCreateDescription: "按 NPC 管理对话，并先用 AI 起草再保存。",
+      dialogueKeyPlaceholder: "npc.teaMonk.greet",
+      addLinePlaceholder: "旅人，欢迎你。茶叶早已预见你的到来。",
+      mechanicsWorkspaceTitle: "机制工作区",
+      questsTitle: "任务",
+      triggersTitle: "触发器",
+      dialogueGraphsTitle: "对话图",
+      createQuest: "创建任务",
+      editQuest: "编辑任务",
+      createTrigger: "创建触发器",
+      editTrigger: "编辑触发器",
+      createDialogueGraph: "创建对话图",
+      editDialogueGraph: "编辑对话图",
+      automationWorkspaceTitle: "自动化工作区",
+      automationGoalLabel: "自动化目标",
+      createAutomationRun: "加入自动化队列",
+      approveAction: "批准",
+      cancelAction: "取消",
+      assistantReviewTitle: "审查 AI 修改",
+      assistantReviewDescription: "先生成结构化操作，再对当前项目预览，仅在有效时应用。",
+      previewChanges: "预览修改",
+      applyChanges: "应用修改",
+      previewReady: "预览已生成",
+      applyComplete: "修改已应用",
+      noPublishedRelease: "尚无已发布版本",
+      patchOperations: "补丁操作",
+      activeProjectMissing: "当前选择的项目无法加载。请创建项目或切换到已有项目。",
+      platformReadinessTitle: "平台完成度",
+      platformReadinessDescription:
+        "这里展示的是当前真实产品面：发布与回放链路已可用，但超出当前基线运行时的创作系统仍多为部分实现或缺失。",
+      platformReadinessWarning:
+        "构建器已经可以编辑并发布当前基线项目，但精灵生成、动画工具、复杂机制与自动化流程尚未真正接通。",
+      readinessImplemented: "已实现",
+      readinessPartial: "部分实现",
+      readinessMissing: "缺失",
+      implementedCountLabel: "已实现",
+      partialCountLabel: "部分实现",
+      missingCountLabel: "缺失",
+      sceneBaselineCountLabel: "基线场景数",
+      spriteManifestCountLabel: "精灵清单数",
+      capabilityReleaseFlowTitle: "发布链路",
+      capabilityReleaseFlowDescription:
+        "项目已经可以创作、发布为不可变版本，并在玩家视图中按项目进入已发布构建。",
+      capability2dRuntimeTitle: "2D 运行时",
+      capability2dRuntimeDescription:
+        "当前只有一套较窄的浏览器运行时可验证基线内容模型，还没有通用的 2D 世界编辑器或复用型游戏创作流水线。",
+      capability3dRuntimeTitle: "3D 运行时",
+      capability3dRuntimeDescription:
+        "Three.js 目前只承担精灵场景下方的氛围与光照效果，并没有 3D 场景图、资源管线或对应的构建流程。",
+      capabilitySpritePipelineTitle: "精灵资源管线",
+      capabilitySpritePipelineDescription:
+        "当前基线资源已有挂载好的精灵清单，但导入、上传、生成与精灵包管理还没有接入构建器。",
+      capabilityAnimationPipelineTitle: "动画管线",
+      capabilityAnimationPipelineDescription:
+        "运行时已经支持动画清单，但没有动画时间轴、状态编辑器、重定向流程或新动作生成能力。",
+      capabilityMechanicsTitle: "机制系统",
+      capabilityMechanicsDescription:
+        "移动、碰撞与 NPC 交互已经存在，但任务、战斗、背包、过场与触发式机制仍未建成。",
+      capabilityAiAuthoringTitle: "AI 创作",
+      capabilityAiAuthoringDescription:
+        "对话、场景描述、资源评审与补丁审查已经接通，但 AI 驱动的资源生成与机制创作目前仍只是部分实现。",
+      capabilityAutomationTitle: "自动化 / RPA",
+      capabilityAutomationDescription:
+        "构建器尚未接入后台 worker、浏览器自动化执行器或面向生产流程的工具编排系统。",
     },
   },
 };

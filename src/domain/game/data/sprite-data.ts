@@ -114,6 +114,7 @@ const teaHouseNpcAiTemplate: Readonly<NpcAiBlueprint> = {
 export const gameScenes: Record<string, SceneDefinition> = {
   teaHouse: {
     id: "teaHouse",
+    sceneMode: "2d",
     titleKey: "scene.teaHouse.title",
     background: gameAssetUrls.teaHouseBackground,
     geometry: {
@@ -124,6 +125,23 @@ export const gameScenes: Record<string, SceneDefinition> = {
       x: 300,
       y: 380,
     },
+    nodes: [
+      {
+        id: "node.teaHouse.background",
+        nodeType: "sprite",
+        assetId: "asset.background.teaHouse",
+        position: { x: 0, y: 0 },
+        size: { width: 640, height: 640 },
+        layer: "background",
+      },
+      {
+        id: "node.teaHouse.spawn",
+        nodeType: "spawn",
+        position: { x: 300, y: 380 },
+        size: { width: 24, height: 24 },
+        layer: "gameplay",
+      },
+    ],
     npcs: [
       {
         characterKey: "teaMonk",

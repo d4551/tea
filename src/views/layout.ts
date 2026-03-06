@@ -1,5 +1,5 @@
 import { appConfig, type LocaleCode } from "../config/environment.ts";
-import { appRoutes, withLocaleQuery } from "../shared/constants/routes.ts";
+import { appRoutes, withLocaleQuery, withQueryParameters } from "../shared/constants/routes.ts";
 import type { Messages } from "../shared/i18n/messages.ts";
 
 /**
@@ -89,26 +89,14 @@ const renderNavigation = (
   languageSwitch: LocaleCode,
   currentPathWithQuery: string,
 ): string => {
+  const currentUrl = new URL(currentPathWithQuery, "https://app.local");
+  const persistentProjectId = currentUrl.searchParams.get("projectId")?.trim() ?? "";
+  const projectScopedRoutes = new Set([appRoutes.builder, appRoutes.game]);
   const navigationItems = [
     {
       key: "home",
       label: messages.navigation.home,
       href: appRoutes.home,
-    },
-    {
-      key: "pitchDeck",
-      label: messages.navigation.pitchDeck,
-      href: appRoutes.pitchDeck,
-    },
-    {
-      key: "narrativeBible",
-      label: messages.navigation.narrativeBible,
-      href: appRoutes.narrativeBible,
-    },
-    {
-      key: "developmentPlan",
-      label: messages.navigation.developmentPlan,
-      href: appRoutes.developmentPlan,
     },
     {
       key: "game",
@@ -126,7 +114,11 @@ const renderNavigation = (
     const isActive = item.key === activeRoute;
     const classes = isActive ? "menu-active font-semibold" : "";
     const ariaCurrent = isActive ? ' aria-current="page"' : "";
-    const href = withLocaleQuery(item.href, locale);
+    const localizedHref = withLocaleQuery(item.href, locale);
+    const href =
+      persistentProjectId.length > 0 && projectScopedRoutes.has(item.href)
+        ? withQueryParameters(localizedHref, { projectId: persistentProjectId })
+        : localizedHref;
 
     return `<li><a class="${classes}" href="${href}" aria-label="${escapeHtml(item.label)}"${ariaCurrent}>${escapeHtml(item.label)}</a></li>`;
   };
@@ -177,15 +169,40 @@ const renderNavigation = (
   </header>`;
 };
 
-const renderFooter = (messages: Messages, locale: LocaleCode): string =>
-  `<footer class="border-t border-base-300 bg-base-200/70">
+const renderFooter = (messages: Messages, locale: LocaleCode): string => {
+  const secondaryLinks = [
+    {
+      label: messages.navigation.pitchDeck,
+      href: withLocaleQuery(appRoutes.pitchDeck, locale),
+    },
+    {
+      label: messages.navigation.narrativeBible,
+      href: withLocaleQuery(appRoutes.narrativeBible, locale),
+    },
+    {
+      label: messages.navigation.developmentPlan,
+      href: withLocaleQuery(appRoutes.developmentPlan, locale),
+    },
+    {
+      label: messages.pages.home.docsCta,
+      href: withLocaleQuery(appConfig.api.docsPath, locale),
+    },
+  ]
+    .map(
+      (item) =>
+        `<a class="link link-hover text-sm" href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a>`,
+    )
+    .join("");
+
+  return `<footer class="border-t border-base-300 bg-base-200/70">
     <div class="mx-auto flex w-full ${escapeHtml(appConfig.ui.maxContentWidthClass)} flex-col gap-4 px-4 py-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
       <div>
         <p class="text-lg font-semibold">${escapeHtml(messages.footer.title)}</p>
         <p class="text-sm opacity-80">${escapeHtml(messages.footer.copy)}</p>
       </div>
-      <a href="${withLocaleQuery(`${appRoutes.home}#architecture`, locale)}" class="btn btn-primary btn-sm" aria-label="${escapeHtml(
-        messages.footer.ctaLabel,
-      )}">${escapeHtml(messages.footer.ctaLabel)}</a>
+      <div class="flex flex-wrap items-center gap-4">
+        ${secondaryLinks}
+      </div>
     </div>
   </footer>`;
+};

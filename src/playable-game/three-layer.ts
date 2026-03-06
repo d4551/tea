@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { GameSceneState, SceneNode3D } from "../shared/contracts/game.ts";
 
 const LEAF_COUNT = 80;
 const LEAF_SPREAD_X = 8;
@@ -19,6 +20,8 @@ export class ThreeLayer {
   private _leafMesh: THREE.Points | null = null;
   private _leafVelocities: Float32Array | null = null;
   private _elapsedMs = 0;
+  private _authoredNodes = new Map<string, THREE.Object3D>();
+  private _lastNodeSignature = "";
 
   constructor(width: number, height: number) {
     this.renderer = new THREE.WebGLRenderer({
@@ -66,6 +69,52 @@ export class ThreeLayer {
   }
 
   /**
+   * Syncs authored runtime nodes into the Three scene for 3D scenes.
+   *
+   * @param state Current game scene state.
+   */
+  syncSceneState(state: GameSceneState): void {
+    const nodes = state.sceneMode === "3d" ? state.nodes ?? [] : [];
+    const signature = JSON.stringify(
+      nodes.map((node) =>
+        "scale" in node
+          ? [
+              node.id,
+              node.nodeType,
+              node.position.x,
+              node.position.y,
+              node.position.z,
+              node.rotation.x,
+              node.rotation.y,
+              node.rotation.z,
+              node.scale.x,
+              node.scale.y,
+              node.scale.z,
+            ]
+          : [node.id, node.nodeType],
+      ),
+    );
+    if (signature === this._lastNodeSignature) {
+      return;
+    }
+
+    this._lastNodeSignature = signature;
+    for (const object of this._authoredNodes.values()) {
+      this.scene.remove(object);
+    }
+    this._authoredNodes.clear();
+
+    for (const node of nodes) {
+      if (!("scale" in node)) {
+        continue;
+      }
+      const object = this._createAuthoredNodeObject(node);
+      this.scene.add(object);
+      this._authoredNodes.set(node.id, object);
+    }
+  }
+
+  /**
    * Advances the environment simulation and renders one frame.
    *
    * @param deltaMs Elapsed time since the previous tick.
@@ -82,11 +131,47 @@ export class ThreeLayer {
    * Releases GPU resources held by the layer.
    */
   dispose(): void {
+    for (const object of this._authoredNodes.values()) {
+      this.scene.remove(object);
+    }
+    this._authoredNodes.clear();
     this._leafGeometry?.dispose();
     if (this._leafMesh?.material instanceof THREE.Material) {
       this._leafMesh.material.dispose();
     }
     this.renderer.dispose();
+  }
+
+  private _createAuthoredNodeObject(node: SceneNode3D): THREE.Object3D {
+    if (node.nodeType === "light") {
+      const light = new THREE.PointLight(0x7dd3fc, 1.4, 12);
+      light.position.set(node.position.x, node.position.y, node.position.z);
+      return light;
+    }
+
+    const geometry =
+      node.nodeType === "camera"
+        ? new THREE.ConeGeometry(0.24, 0.6, 8)
+        : node.nodeType === "trigger"
+          ? new THREE.BoxGeometry(1.2, 1.2, 1.2)
+          : new THREE.BoxGeometry(1, 1, 1);
+    const material = new THREE.MeshStandardMaterial({
+      color:
+        node.nodeType === "trigger"
+          ? 0xf59e0b
+          : node.nodeType === "spawn"
+            ? 0x22c55e
+            : node.nodeType === "camera"
+              ? 0xe879f9
+              : 0xf8fafc,
+      transparent: node.nodeType === "trigger",
+      opacity: node.nodeType === "trigger" ? 0.45 : 0.92,
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(node.position.x, node.position.y, node.position.z);
+    mesh.rotation.set(node.rotation.x, node.rotation.y, node.rotation.z);
+    mesh.scale.set(node.scale.x, node.scale.y, node.scale.z);
+    return mesh;
   }
 
   private _buildLeafParticles(): void {

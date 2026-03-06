@@ -15,8 +15,11 @@ export type AiCapability =
   | "text-classification"
   | "chat"
   | "vision"
+  | "image-generation"
   | "embeddings"
   | "tool-calling"
+  | "structured-planning"
+  | "job-execution"
   | "speech-to-text"
   | "text-to-speech";
 
@@ -194,6 +197,92 @@ export interface AiSpeechSynthesisFailure {
 export type AiSpeechSynthesisResult = AiSpeechSynthesisSuccess | AiSpeechSynthesisFailure;
 
 /**
+ * Parameters for image-generation requests.
+ */
+export interface AiImageGenerationParams {
+  /** Human-authored generation prompt. */
+  readonly prompt: string;
+  /** Optional target aspect ratio label. */
+  readonly aspectRatio?: "square" | "landscape" | "portrait";
+  /** Optional project-scoped target identifier. */
+  readonly targetId?: string;
+  /** Optional model override. */
+  readonly model?: string;
+}
+
+/**
+ * Successful image-generation result.
+ */
+export interface AiImageGenerationSuccess {
+  readonly ok: true;
+  /** Raw image bytes returned by the provider. */
+  readonly image: Uint8Array;
+  /** MIME type of the generated image. */
+  readonly mimeType: string;
+  /** Model that produced the output. */
+  readonly model: string;
+  /** Generation duration in milliseconds. */
+  readonly durationMs: number;
+}
+
+/**
+ * Failed image-generation result.
+ */
+export interface AiImageGenerationFailure {
+  readonly ok: false;
+  /** Error description. */
+  readonly error: string;
+  /** Whether the caller should retry. */
+  readonly retryable: boolean;
+}
+
+/**
+ * Discriminated union for image-generation requests.
+ */
+export type AiImageGenerationResult = AiImageGenerationSuccess | AiImageGenerationFailure;
+
+/**
+ * Parameters for structured tool planning requests.
+ */
+export interface AiToolPlanParams {
+  /** User goal to plan against. */
+  readonly goal: string;
+  /** Optional project id for scoping builder actions. */
+  readonly projectId?: string;
+  /** Optional model override. */
+  readonly model?: string;
+}
+
+/**
+ * Successful structured tool planning result.
+ */
+export interface AiToolPlanSuccess {
+  readonly ok: true;
+  /** Ordered plan step summaries. */
+  readonly steps: readonly string[];
+  /** Model that produced the plan. */
+  readonly model: string;
+  /** Planning duration in milliseconds. */
+  readonly durationMs: number;
+}
+
+/**
+ * Failed structured tool planning result.
+ */
+export interface AiToolPlanFailure {
+  readonly ok: false;
+  /** Error description. */
+  readonly error: string;
+  /** Whether the caller should retry. */
+  readonly retryable: boolean;
+}
+
+/**
+ * Discriminated union for structured tool planning requests.
+ */
+export type AiToolPlanResult = AiToolPlanSuccess | AiToolPlanFailure;
+
+/**
  * Sentiment classification result.
  */
 export interface AiClassificationResult {
@@ -285,12 +374,28 @@ export interface AiProvider {
   describeImage(image: Uint8Array, prompt: string): Promise<AiGenerationResult>;
 
   /**
+   * Generates an image artifact when the provider supports multimodal generation.
+   *
+   * @param params Image generation parameters.
+   * @returns Image generation result.
+   */
+  generateImage?(params: AiImageGenerationParams): Promise<AiImageGenerationResult>;
+
+  /**
    * Generates a text embedding vector.
    *
    * @param text Input text.
    * @returns Float32 embedding vector, or null on failure.
    */
   generateEmbedding(text: string): Promise<Float32Array | null>;
+
+  /**
+   * Produces a structured tool or automation plan for approval-gated workers.
+   *
+   * @param params Planning parameters.
+   * @returns Structured plan result.
+   */
+  planTools?(params: AiToolPlanParams): Promise<AiToolPlanResult>;
 
   /**
    * Releases provider resources.

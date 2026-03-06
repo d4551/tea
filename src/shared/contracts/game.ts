@@ -79,6 +79,161 @@ export interface SpriteManifest {
 }
 
 /**
+ * Supported authored scene runtime modes.
+ */
+export type SceneMode = "2d" | "3d";
+
+/**
+ * Supported authored asset kinds in the builder platform.
+ */
+export type BuilderAssetKind =
+  | "background"
+  | "sprite-sheet"
+  | "audio"
+  | "model"
+  | "portrait"
+  | "tiles"
+  | "tile-set"
+  | "material";
+
+/**
+ * Optional authored asset variant derived from a canonical asset.
+ */
+export interface AssetVariant {
+  /** Stable variant identifier. */
+  readonly id: string;
+  /** Variant format such as png, wav, glb, or json. */
+  readonly format: string;
+  /** Browser-accessible source path or remote URL. */
+  readonly source: string;
+  /** Short usage label such as preview, runtime, or thumbnail. */
+  readonly usage: string;
+}
+
+/**
+ * Builder-authored asset metadata.
+ */
+export interface BuilderAsset {
+  /** Stable asset identifier. */
+  readonly id: string;
+  /** Asset kind. */
+  readonly kind: BuilderAssetKind;
+  /** Human-readable asset label. */
+  readonly label: string;
+  /** Preferred runtime mode for the asset. */
+  readonly sceneMode: SceneMode;
+  /** Canonical source path or URL. */
+  readonly source: string;
+  /** Optional tag list for filtering and grouping. */
+  readonly tags: readonly string[];
+  /** Available derived variants for this asset. */
+  readonly variants: readonly AssetVariant[];
+  /** Whether the asset is approved for attachment to scenes. */
+  readonly approved: boolean;
+  /** Creation timestamp in ms since epoch. */
+  readonly createdAtMs: number;
+  /** Last update timestamp in ms since epoch. */
+  readonly updatedAtMs: number;
+}
+
+/**
+ * Authored animation clip metadata used by 2D and 3D nodes.
+ */
+export interface AnimationClip {
+  /** Stable clip identifier. */
+  readonly id: string;
+  /** Owning asset identifier. */
+  readonly assetId: string;
+  /** Human-readable clip label. */
+  readonly label: string;
+  /** Target runtime mode for the clip. */
+  readonly sceneMode: SceneMode;
+  /** Named state tag such as idle, walk, or reveal. */
+  readonly stateTag: string;
+  /** Playback rate in frames per second. */
+  readonly playbackFps: number;
+  /** Zero-based frame offset. */
+  readonly startFrame: number;
+  /** Number of frames or samples in the clip. */
+  readonly frameCount: number;
+  /** Whether the clip loops. */
+  readonly loop: boolean;
+  /** Optional facing/direction hint. */
+  readonly direction?: Facing;
+  /** Creation timestamp in ms since epoch. */
+  readonly createdAtMs: number;
+  /** Last update timestamp in ms since epoch. */
+  readonly updatedAtMs: number;
+}
+
+/**
+ * Shared 2D vector definition.
+ */
+export interface Vector2 {
+  /** Horizontal coordinate. */
+  readonly x: number;
+  /** Vertical coordinate. */
+  readonly y: number;
+}
+
+/**
+ * Shared 3D vector definition.
+ */
+export interface Vector3 {
+  /** X coordinate. */
+  readonly x: number;
+  /** Y coordinate. */
+  readonly y: number;
+  /** Z coordinate. */
+  readonly z: number;
+}
+
+/**
+ * Author-time 2D scene node.
+ */
+export interface SceneNode2D {
+  /** Stable node identifier. */
+  readonly id: string;
+  /** Node role in the scene graph. */
+  readonly nodeType: "sprite" | "tile" | "spawn" | "trigger" | "camera";
+  /** Optional attached asset. */
+  readonly assetId?: string;
+  /** Optional attached clip. */
+  readonly animationClipId?: string;
+  /** Node position in scene space. */
+  readonly position: Vector2;
+  /** Node size in authored pixels. */
+  readonly size: Readonly<{ readonly width: number; readonly height: number }>;
+  /** Painter's-order layer key. */
+  readonly layer: string;
+}
+
+/**
+ * Author-time 3D scene node.
+ */
+export interface SceneNode3D {
+  /** Stable node identifier. */
+  readonly id: string;
+  /** Node role in the scene graph. */
+  readonly nodeType: "model" | "light" | "camera" | "spawn" | "trigger";
+  /** Optional attached asset. */
+  readonly assetId?: string;
+  /** Optional attached clip. */
+  readonly animationClipId?: string;
+  /** Node translation in scene space. */
+  readonly position: Vector3;
+  /** Node rotation in radians. */
+  readonly rotation: Vector3;
+  /** Node scale multipliers. */
+  readonly scale: Vector3;
+}
+
+/**
+ * Authored scene node definition.
+ */
+export type SceneNodeDefinition = SceneNode2D | SceneNode3D;
+
+/**
  * Runtime collision and interaction geometry for a scene.
  */
 export interface SceneGeometry {
@@ -130,6 +285,8 @@ export interface NpcAiBlueprint {
 export interface SceneDefinition {
   /** Stable scene identifier. */
   readonly id: string;
+  /** Scene runtime mode. */
+  readonly sceneMode?: SceneMode;
   /** Human-readable scene title key. */
   readonly titleKey: string;
   /** Scene background path. */
@@ -140,8 +297,272 @@ export interface SceneDefinition {
   readonly spawn: Readonly<{ readonly x: number; readonly y: number }>;
   /** Scene NPC definitions. */
   readonly npcs: readonly SceneNpcDefinition[];
+  /** Authored scene graph nodes. */
+  readonly nodes?: readonly SceneNodeDefinition[];
   /** Static world collision rectangles. */
   readonly collisions: readonly CollisionMask[];
+}
+
+/**
+ * Dialogue graph edge between authored dialogue nodes.
+ */
+export interface DialogueGraphEdge {
+  /** Destination node identifier. */
+  readonly to: string;
+  /** Optional required flag before the edge is valid. */
+  readonly requiredFlag?: string;
+  /** Optional quest step to advance when traversed. */
+  readonly advanceQuestStepId?: string;
+}
+
+/**
+ * Dialogue graph node used for branching authored dialogue.
+ */
+export interface DialogueGraphNode {
+  /** Stable node identifier. */
+  readonly id: string;
+  /** Localized dialogue line key or literal string. */
+  readonly line: string;
+  /** Optional next edges available from this node. */
+  readonly edges: readonly DialogueGraphEdge[];
+}
+
+/**
+ * Builder-authored dialogue graph.
+ */
+export interface DialogueGraph {
+  /** Stable graph identifier. */
+  readonly id: string;
+  /** Human-readable graph title. */
+  readonly title: string;
+  /** Optional owning NPC key. */
+  readonly npcId?: string;
+  /** Entry node identifier. */
+  readonly rootNodeId: string;
+  /** Authored nodes in this graph. */
+  readonly nodes: readonly DialogueGraphNode[];
+  /** Creation timestamp in ms since epoch. */
+  readonly createdAtMs: number;
+  /** Last update timestamp in ms since epoch. */
+  readonly updatedAtMs: number;
+}
+
+/**
+ * Supported trigger event types in the first mechanics slice.
+ */
+export type TriggerEventType =
+  | "scene-enter"
+  | "npc-interact"
+  | "chat"
+  | "dialogue-confirmed";
+
+/**
+ * Builder-authored game flag definition.
+ */
+export interface GameFlagDefinition {
+  /** Stable flag key. */
+  readonly key: string;
+  /** Human-readable label. */
+  readonly label: string;
+  /** Initial flag value. */
+  readonly initialValue: string | number | boolean;
+}
+
+/**
+ * Builder-authored trigger definition.
+ */
+export interface TriggerDefinition {
+  /** Stable trigger identifier. */
+  readonly id: string;
+  /** Human-readable trigger label. */
+  readonly label: string;
+  /** Runtime event that can activate the trigger. */
+  readonly event: TriggerEventType;
+  /** Optional scene scoping. */
+  readonly sceneId?: string;
+  /** Optional NPC scoping. */
+  readonly npcId?: string;
+  /** Optional authored scene-node scoping. */
+  readonly nodeId?: string;
+  /** Optional flag prerequisites keyed by flag id. */
+  readonly requiredFlags?: Readonly<Record<string, string | number | boolean>>;
+  /** Flag mutations applied when the trigger fires. */
+  readonly setFlags?: Readonly<Record<string, string | number | boolean>>;
+  /** Optional quest identifier to advance. */
+  readonly questId?: string;
+  /** Optional quest step identifier to complete. */
+  readonly questStepId?: string;
+}
+
+/**
+ * Supported quest step states in session runtime.
+ */
+export type QuestStepState = "pending" | "active" | "completed";
+
+/**
+ * Builder-authored quest step.
+ */
+export interface QuestStep {
+  /** Stable step identifier. */
+  readonly id: string;
+  /** Short user-facing title. */
+  readonly title: string;
+  /** Optional player-facing description. */
+  readonly description: string;
+  /** Trigger that completes this step. */
+  readonly triggerId: string;
+}
+
+/**
+ * Builder-authored quest definition.
+ */
+export interface QuestDefinition {
+  /** Stable quest identifier. */
+  readonly id: string;
+  /** Player-facing title. */
+  readonly title: string;
+  /** Player-facing description. */
+  readonly description: string;
+  /** Ordered quest steps. */
+  readonly steps: readonly QuestStep[];
+}
+
+/**
+ * Runtime quest step state.
+ */
+export interface GameQuestStepState {
+  /** Stable step identifier. */
+  readonly id: string;
+  /** Player-facing title. */
+  readonly title: string;
+  /** Player-facing description. */
+  readonly description: string;
+  /** Current runtime status. */
+  readonly state: QuestStepState;
+}
+
+/**
+ * Runtime quest state mirrored into the session snapshot.
+ */
+export interface GameQuestState {
+  /** Stable quest identifier. */
+  readonly id: string;
+  /** Quest title. */
+  readonly title: string;
+  /** Quest description. */
+  readonly description: string;
+  /** Whether the quest is complete. */
+  readonly completed: boolean;
+  /** Ordered runtime quest step states. */
+  readonly steps: readonly GameQuestStepState[];
+}
+
+/**
+ * Supported long-running generation job statuses.
+ */
+export type GenerationJobStatus =
+  | "queued"
+  | "running"
+  | "blocked_for_approval"
+  | "succeeded"
+  | "failed"
+  | "canceled";
+
+/**
+ * Generated artifact metadata attached to a job.
+ */
+export interface GenerationArtifact {
+  /** Stable artifact identifier. */
+  readonly id: string;
+  /** Owning generation job identifier. */
+  readonly jobId: string;
+  /** Artifact kind. */
+  readonly kind: BuilderAssetKind | "animation-plan" | "automation-evidence";
+  /** Human-readable artifact label. */
+  readonly label: string;
+  /** Browser-accessible preview source or URL. */
+  readonly previewSource: string;
+  /** Short review summary. */
+  readonly summary: string;
+  /** Optional machine-readable MIME type for preview/rendering. */
+  readonly mimeType?: string;
+  /** Whether the artifact has been approved. */
+  readonly approved: boolean;
+  /** Creation timestamp in ms since epoch. */
+  readonly createdAtMs: number;
+}
+
+/**
+ * Builder-authored long-running generation job.
+ */
+export interface GenerationJob {
+  /** Stable job identifier. */
+  readonly id: string;
+  /** Requested output kind. */
+  readonly kind: "sprite-sheet" | "portrait" | "tiles" | "voice-line" | "animation-plan";
+  /** Current job status. */
+  readonly status: GenerationJobStatus;
+  /** User prompt or request summary. */
+  readonly prompt: string;
+  /** Optional target scene/entity/asset identifier. */
+  readonly targetId?: string;
+  /** Artifacts produced so far. */
+  readonly artifactIds: readonly string[];
+  /** Optional status message. */
+  readonly statusMessage: string;
+  /** Creation timestamp in ms since epoch. */
+  readonly createdAtMs: number;
+  /** Last update timestamp in ms since epoch. */
+  readonly updatedAtMs: number;
+}
+
+/**
+ * Supported automation run statuses.
+ */
+export type AutomationRunStatus =
+  | "queued"
+  | "running"
+  | "blocked_for_approval"
+  | "succeeded"
+  | "failed"
+  | "canceled";
+
+/**
+ * Single auditable automation step.
+ */
+export interface AutomationRunStep {
+  /** Stable step identifier. */
+  readonly id: string;
+  /** Action type performed by the automation. */
+  readonly action: "browser" | "http" | "builder" | "attach-file";
+  /** Human-readable summary. */
+  readonly summary: string;
+  /** Step status. */
+  readonly status: "pending" | "running" | "completed" | "failed";
+  /** Optional evidence URL produced by the step. */
+  readonly evidenceSource?: string;
+}
+
+/**
+ * Approval-gated automation run metadata.
+ */
+export interface AutomationRun {
+  /** Stable automation run identifier. */
+  readonly id: string;
+  /** Current status. */
+  readonly status: AutomationRunStatus;
+  /** Human-readable goal. */
+  readonly goal: string;
+  /** Structured auditable steps. */
+  readonly steps: readonly AutomationRunStep[];
+  /** Optional output artifact ids generated by the run. */
+  readonly artifactIds: readonly string[];
+  /** Optional status note. */
+  readonly statusMessage: string;
+  /** Creation timestamp in ms since epoch. */
+  readonly createdAtMs: number;
+  /** Last update timestamp in ms since epoch. */
+  readonly updatedAtMs: number;
 }
 
 /**
@@ -271,6 +692,8 @@ export type NpcStateMachine = "idle" | "wander" | "face_player" | "talking";
 export interface GameSceneState {
   /** Active scene identifier. */
   readonly sceneId: string;
+  /** Active scene runtime mode. */
+  readonly sceneMode?: SceneMode;
   /** Human-readable scene title resolved for the active locale. */
   readonly sceneTitle: string;
   /** Background image path used by the playable renderer. */
@@ -283,6 +706,8 @@ export interface GameSceneState {
   readonly npcs: readonly NpcState[];
   /** Collision zones for HUD/debug overlays. */
   readonly collisions: readonly CollisionMask[];
+  /** Authored scene nodes active in this scene. */
+  readonly nodes?: readonly SceneNodeDefinition[];
   /** Current viewport offset for rendering/scrolling. */
   readonly camera: Readonly<{ readonly x: number; readonly y: number }>;
   /** UI-level route state (idle/loading/playing/error...). */
@@ -291,6 +716,10 @@ export interface GameSceneState {
   readonly actionState: GameActionState;
   /** Optional dialogue payload. */
   readonly dialogue: GameDialogue | null;
+  /** Runtime quest states for the active release. */
+  readonly quests?: readonly GameQuestState[];
+  /** Session-scoped flag bag. */
+  readonly flags?: Readonly<Record<string, string | number | boolean>>;
   /** World time tracked in ms for diagnostics. */
   readonly worldTimeMs: number;
 }
@@ -311,6 +740,10 @@ export interface GameSession {
   readonly scene: GameSceneState;
   /** Last project binding used to seed this session, if any. */
   readonly projectId?: string;
+  /** Published release version captured when the session was created. */
+  readonly releaseVersion?: number;
+  /** Published trigger definitions captured when the session was created. */
+  readonly triggerDefinitions?: readonly TriggerDefinition[];
   /** Monotonic scene-state version used for optimistic persistence. */
   readonly stateVersion: number;
   /** Last persisted tick marker. */
@@ -407,6 +840,10 @@ export interface GameSessionSnapshot {
   readonly locale: GameLocale;
   /** Timestamp in ISO 8601 format for deterministic clients. */
   readonly timestamp: string;
+  /** Published project bound to this session, if any. */
+  readonly projectId?: string;
+  /** Published release version bound to this session, if any. */
+  readonly releaseVersion?: number;
   /** Scene and gameplay state. */
   readonly state: GameSceneState;
 }
@@ -837,6 +1274,10 @@ export interface GameSessionLifecycleResult {
   readonly locale: LocaleCode;
   /** Current server timestamp. */
   readonly timestamp: string;
+  /** Published project bound to this session, if any. */
+  readonly projectId?: string;
+  /** Published release version bound to this session, if any. */
+  readonly releaseVersion?: number;
   /** Command queue depth at this point in time. */
   readonly commandQueueDepth: number;
   /** Contract version for compatibility and replay tooling. */
@@ -990,17 +1431,120 @@ export interface BuilderDialoguePayload {
 }
 
 /**
+ * Builder asset mutation payload.
+ */
+export interface BuilderAssetPayload {
+  /** Asset identifier. */
+  readonly id: string;
+  /** Asset definition. */
+  readonly asset: BuilderAsset;
+  /** Optional checksum for idempotent writes. */
+  readonly checksum?: string;
+}
+
+/**
+ * Builder animation clip mutation payload.
+ */
+export interface BuilderAnimationClipPayload {
+  /** Clip identifier. */
+  readonly id: string;
+  /** Clip definition. */
+  readonly clip: AnimationClip;
+  /** Optional checksum for idempotent writes. */
+  readonly checksum?: string;
+}
+
+/**
+ * Builder dialogue graph mutation payload.
+ */
+export interface BuilderDialogueGraphPayload {
+  /** Graph identifier. */
+  readonly id: string;
+  /** Graph definition. */
+  readonly graph: DialogueGraph;
+  /** Optional checksum for idempotent writes. */
+  readonly checksum?: string;
+}
+
+/**
+ * Builder quest mutation payload.
+ */
+export interface BuilderQuestPayload {
+  /** Quest identifier. */
+  readonly id: string;
+  /** Quest definition. */
+  readonly quest: QuestDefinition;
+  /** Optional checksum for idempotent writes. */
+  readonly checksum?: string;
+}
+
+/**
+ * Builder trigger mutation payload.
+ */
+export interface BuilderTriggerPayload {
+  /** Trigger identifier. */
+  readonly id: string;
+  /** Trigger definition. */
+  readonly trigger: TriggerDefinition;
+  /** Optional checksum for idempotent writes. */
+  readonly checksum?: string;
+}
+
+/**
+ * Builder automation creation payload.
+ */
+export interface BuilderAutomationRunPayload {
+  /** Run identifier. */
+  readonly id: string;
+  /** Automation run definition. */
+  readonly run: AutomationRun;
+  /** Optional checksum for idempotent writes. */
+  readonly checksum?: string;
+}
+
+/**
+ * Builder generation job creation payload.
+ */
+export interface BuilderGenerationJobPayload {
+  /** Job identifier. */
+  readonly id: string;
+  /** Job definition. */
+  readonly job: GenerationJob;
+  /** Optional checksum for idempotent writes. */
+  readonly checksum?: string;
+}
+
+/**
  * Builder mutation result returned by CRUD endpoints.
  */
 export interface BuilderMutationResult {
   /** Affected project identifier. */
   readonly projectId: string;
   /** Resource type. */
-  readonly resourceType: "project" | "scene" | "npc" | "dialogue";
+  readonly resourceType:
+    | "project"
+    | "scene"
+    | "npc"
+    | "dialogue"
+    | "asset"
+    | "animationClip"
+    | "dialogueGraph"
+    | "quest"
+    | "trigger"
+    | "generationJob"
+    | "artifact"
+    | "automationRun";
   /** Stable resource identifier. */
   readonly resourceId: string;
   /** Mutation action that occurred. */
-  readonly action: "created" | "updated" | "deleted" | "published";
+  readonly action:
+    | "created"
+    | "updated"
+    | "deleted"
+    | "published"
+    | "queued"
+    | "approved"
+    | "canceled";
   /** Resulting checksum, if produced. */
   readonly checksum?: string;
 }

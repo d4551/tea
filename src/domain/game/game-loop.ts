@@ -3,16 +3,22 @@ import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
 import { defaultGameConfig, resolveScene } from "../../shared/config/game-config.ts";
 import type {
+  GameFlagDefinition,
   GameActionState,
   GameCommandEnvelope,
   GameCommandInput,
   GameCommandResult,
   GameCommandState,
+  GameQuestState,
   GameLocale,
   GameSceneState,
   GameSession,
   GameSessionSnapshot,
   GameSessionState,
+  QuestDefinition,
+  SceneNodeDefinition,
+  TriggerDefinition,
+  TriggerEventType,
 } from "../../shared/contracts/game.ts";
 import { validateGameCommandInput } from "../../shared/contracts/game.ts";
 import { safeJsonParse } from "../../shared/utils/safe-json.ts";
@@ -158,6 +164,153 @@ export class GameLoopService {
     return commandLocale === "zh-CN" || commandLocale === "en-US" ? commandLocale : sessionLocale;
   };
 
+  private buildInitialFlags(
+    definitions: readonly GameFlagDefinition[] | undefined,
+  ): Readonly<Record<string, string | number | boolean>> {
+    return Object.fromEntries(
+      (definitions ?? []).map((definition) => [definition.key, definition.initialValue]),
+    );
+  }
+
+  private buildInitialQuests(
+    definitions: readonly QuestDefinition[] | undefined,
+  ): NonNullable<MutableGameSceneState["quests"]> {
+    return (definitions ?? []).map((definition) => ({
+      id: definition.id,
+      title: definition.title,
+      description: definition.description,
+      completed: false,
+      steps: definition.steps.map((step, index) => ({
+        id: step.id,
+        title: step.title,
+        description: step.description,
+        state: index === 0 ? "active" : "pending",
+      })),
+    })) as NonNullable<MutableGameSceneState["quests"]>;
+  }
+
+  private triggerMatchesRequiredFlags(
+    state: MutableGameSceneState,
+    trigger: TriggerDefinition,
+  ): boolean {
+    const requiredFlags = trigger.requiredFlags;
+    if (!requiredFlags) {
+      return true;
+    }
+
+    const runtimeFlags = state.flags ?? {};
+    return Object.entries(requiredFlags).every(([key, value]) => runtimeFlags[key] === value);
+  }
+
+  private advanceQuestState(
+    state: MutableGameSceneState,
+    questId: string,
+    questStepId: string,
+  ): boolean {
+    const quest = state.quests?.find((candidate) => candidate.id === questId);
+    if (!quest) {
+      return false;
+    }
+
+    const targetStep = quest.steps.find((candidate) => candidate.id === questStepId);
+    if (!targetStep || targetStep.state === "completed") {
+      return false;
+    }
+
+    targetStep.state = "completed";
+    const nextPendingStep = quest.steps.find((candidate) => candidate.state === "pending");
+    if (nextPendingStep) {
+      nextPendingStep.state = "active";
+    }
+    quest.completed = quest.steps.every((candidate) => candidate.state === "completed");
+    return true;
+  }
+
+  private applyMatchingTriggers(
+    state: MutableGameSceneState,
+    triggers: readonly TriggerDefinition[],
+    event: TriggerEventType,
+    context: Readonly<{
+      readonly sceneId: string;
+      readonly npcCharacterKey?: string;
+      readonly nodeId?: string;
+    }>,
+  ): boolean {
+    let changed = false;
+
+    for (const trigger of triggers) {
+      if (trigger.event !== event) {
+        continue;
+      }
+      if (trigger.sceneId && trigger.sceneId !== context.sceneId) {
+        continue;
+      }
+      if (trigger.npcId && trigger.npcId !== context.npcCharacterKey) {
+        continue;
+      }
+      if (trigger.nodeId && trigger.nodeId !== context.nodeId) {
+        continue;
+      }
+      if (!this.triggerMatchesRequiredFlags(state, trigger)) {
+        continue;
+      }
+
+      let triggerChanged = false;
+      if (trigger.setFlags) {
+        const runtimeFlags = { ...(state.flags ?? {}) };
+        for (const [key, value] of Object.entries(trigger.setFlags)) {
+          if (runtimeFlags[key] !== value) {
+            runtimeFlags[key] = value;
+            triggerChanged = true;
+          }
+        }
+        if (triggerChanged) {
+          state.flags = runtimeFlags;
+        }
+      }
+
+      if (trigger.questId && trigger.questStepId) {
+        triggerChanged =
+          this.advanceQuestState(state, trigger.questId, trigger.questStepId) || triggerChanged;
+      }
+
+      changed = triggerChanged || changed;
+    }
+
+    return changed;
+  }
+
+  private resolveTriggeredSceneNode(state: MutableGameSceneState): SceneNodeDefinition | null {
+    const nodes = state.nodes ?? [];
+    const playerX = state.player.position.x;
+    const playerY = state.player.position.y;
+
+    for (const node of nodes) {
+      if (node.nodeType !== "trigger") {
+        continue;
+      }
+
+      if ("size" in node) {
+        const withinX = playerX >= node.position.x && playerX <= node.position.x + node.size.width;
+        const withinY =
+          playerY >= node.position.y && playerY <= node.position.y + node.size.height;
+        if (withinX && withinY) {
+          return node;
+        }
+        continue;
+      }
+
+      const dx = playerX - node.position.x;
+      const dy = playerY - node.position.y;
+      const dz = 0 - node.position.z;
+      if (Math.sqrt(dx * dx + dy * dy + dz * dz) <= 64) {
+        return node;
+      }
+    }
+
+    return null;
+  }
+
   // ── Session creation ────────────────────────────────────────────────────────
 
   public async createSession(
@@ -172,6 +325,11 @@ export class GameLoopService {
       typeof projectId === "string" && projectId.trim().length > 0
         ? await builderService.getPublishedProject(projectId)
         : null;
+    const publishedFlags = publishedProject ? Array.from(publishedProject.flags.values()) : [];
+    const publishedQuests = publishedProject ? Array.from(publishedProject.quests.values()) : [];
+    const publishedTriggers = publishedProject
+      ? Array.from(publishedProject.triggers.values())
+      : [];
     const dialogueCatalog = Object.fromEntries(
       (
         publishedProject?.dialogues.get(locale) ??
@@ -192,7 +350,20 @@ export class GameLoopService {
       locale as GameLocale,
       seed,
       dialogueCatalog,
+      publishedFlags,
+      publishedQuests,
     );
+    const mutableScene = scene as MutableGameSceneState;
+    mutableScene.flags = this.buildInitialFlags(publishedFlags);
+    mutableScene.quests = this.buildInitialQuests(publishedQuests);
+    if (publishedTriggers.length > 0) {
+      this.applyMatchingTriggers(
+        mutableScene,
+        publishedTriggers,
+        "scene-enter",
+        { sceneId: resolvedScene.id },
+      );
+    }
 
     await gameStateStore.createSession({
       id: sessionId,
@@ -201,6 +372,8 @@ export class GameLoopService {
       locale,
       scene,
       projectId: publishedProject ? projectId : undefined,
+      releaseVersion: publishedProject?.publishedReleaseVersion ?? undefined,
+      triggerDefinitions: publishedTriggers,
     });
     await initializeProgress(sessionId);
     await processInteractionProgress(sessionId, `scene-${resolvedScene.id}`);
@@ -781,6 +954,13 @@ export class GameLoopService {
         playerMoved = result.moved || playerMoved;
         commandApplied = true;
         nextActionState = result.moved ? "moved" : "blockedByCollision";
+        const triggeredNode = this.resolveTriggeredSceneNode(state);
+        if (triggeredNode) {
+          this.applyMatchingTriggers(state, session.triggerDefinitions ?? [], "scene-enter", {
+            sceneId: state.sceneId,
+            nodeId: triggeredNode.id,
+          });
+        }
       } else if (commandType === "interact") {
         commandApplied = true;
         const interactable = sceneEngine.findInteractableNpc(
@@ -812,6 +992,15 @@ export class GameLoopService {
             };
             interactable.dialogueIndex++;
             nextActionState = "dialogueOpen";
+            this.applyMatchingTriggers(
+              state,
+              session.triggerDefinitions ?? [],
+              "npc-interact",
+              {
+                sceneId: state.sceneId,
+                npcCharacterKey: interactable.characterKey,
+              },
+            );
           } else {
             nextActionState = "error.nonRetryable";
           }
@@ -859,6 +1048,15 @@ export class GameLoopService {
               lineKey: "ai-response",
             };
             nextActionState = "dialogueOpen";
+            this.applyMatchingTriggers(
+              state,
+              session.triggerDefinitions ?? [],
+              "chat",
+              {
+                sceneId: state.sceneId,
+                npcCharacterKey: interactable.characterKey,
+              },
+            );
 
             await processInteractionProgress(sessionId, `chat-${interactable.id}`);
             await awardXp(sessionId, XP_CONFIG.dialogue, "chat");
@@ -871,12 +1069,24 @@ export class GameLoopService {
       } else if (commandType === "confirmDialogue") {
         commandApplied = true;
         if (state.dialogue) {
+          const dialogueNpcCharacterKey =
+            state.npcs.find((npc) => npc.id === state.dialogue?.npcId)?.characterKey ??
+            state.npcs.find((npc) => npc.state === "talking")?.characterKey;
           state.dialogue = null;
           for (const npc of state.npcs) {
             if (npc.state === "talking") {
               npc.state = "idle";
             }
           }
+          this.applyMatchingTriggers(
+            state,
+            session.triggerDefinitions ?? [],
+            "dialogue-confirmed",
+            {
+              sceneId: state.sceneId,
+              npcCharacterKey: dialogueNpcCharacterKey,
+            },
+          );
           nextActionState = "success";
         } else {
           nextActionState = "empty";

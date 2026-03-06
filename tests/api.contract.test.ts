@@ -3,6 +3,7 @@ import { createApp } from "../src/app.ts";
 import { appConfig } from "../src/config/environment.ts";
 import { ProviderRegistry } from "../src/domain/ai/providers/provider-registry.ts";
 import { correlationIdHeader } from "../src/lib/correlation-id.ts";
+import { gameAssetUrls } from "../src/shared/constants/game-assets.ts";
 import { contentType, httpStatus } from "../src/shared/constants/http.ts";
 import { defaultOracleMode } from "../src/shared/constants/oracle.ts";
 import { appRoutes } from "../src/shared/constants/routes.ts";
@@ -21,6 +22,29 @@ const readSessionCookieHeader = (response: Response): string | null => {
   }
 
   return setCookie.split(";")[0] ?? null;
+};
+
+const createBuilderProject = async (projectId = `contract-${Date.now()}`) => {
+  const response = await app.handle(
+    new Request(toUrl("/api/builder/projects"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({ projectId }),
+    }),
+  );
+
+  const payload = (await response.json()) as {
+    readonly ok: boolean;
+    readonly data?: {
+      readonly id: string;
+      readonly checksum: string;
+    };
+  };
+
+  return { response, payload };
 };
 
 beforeAll(async () => {
@@ -561,25 +585,8 @@ describe("API contracts", () => {
   });
 
   test("builder endpoints support project read/write and dialogue mutation flow", async () => {
-    const createProjectResponse = await app.handle(
-      new Request(toUrl("/api/builder/projects"), {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          projectId: `contract-${Date.now()}`,
-        }),
-      }),
-    );
-
-    const createProjectPayload = (await createProjectResponse.json()) as {
-      readonly ok: boolean;
-      readonly data?: {
-        readonly id: string;
-        readonly checksum: string;
-      };
-    };
+    const { response: createProjectResponse, payload: createProjectPayload } =
+      await createBuilderProject();
 
     expect(createProjectResponse.status).toBe(httpStatus.ok);
     expect(createProjectPayload.ok).toBe(true);
@@ -636,6 +643,9 @@ describe("API contracts", () => {
         ),
         {
           method: "DELETE",
+          headers: {
+            accept: "application/json",
+          },
         },
       ),
     );
@@ -729,6 +739,40 @@ describe("API contracts", () => {
     expect(typeof payload.data?.features?.test).toBe("boolean");
   });
 
+  test("builder platform readiness endpoint exposes partial and missing capability states", async () => {
+    const projectId = `readiness-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+    const response = await app.handle(
+      new Request(toUrl(`${appRoutes.builderPlatformReadiness}?projectId=${projectId}`)),
+    );
+    const payload = (await response.json()) as {
+      readonly ok: boolean;
+      readonly data?: {
+        readonly partialCount: number;
+        readonly missingCount: number;
+        readonly capabilities: ReadonlyArray<{
+          readonly key: string;
+          readonly status: string;
+        }>;
+      };
+    };
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(payload.ok).toBe(true);
+    expect(payload.data?.partialCount).toBeGreaterThan(0);
+    expect(payload.data?.missingCount).toBeGreaterThan(0);
+    expect(
+      payload.data?.capabilities.some(
+        (capability) => capability.key === "automation" && capability.status === "missing",
+      ),
+    ).toBe(true);
+    expect(
+      payload.data?.capabilities.some(
+        (capability) => capability.key === "runtime2d" && capability.status === "partial",
+      ),
+    ).toBe(true);
+  });
+
   test("AI status endpoint exposes local runtime and speech capabilities", async () => {
     const response = await app.handle(new Request(toUrl(appRoutes.aiStatus)));
     const payload = (await response.json()) as {
@@ -803,19 +847,21 @@ describe("HTMX partial rendering", () => {
     expect(html.includes("Skip to main content")).toBe(true);
     expect(html.includes('aria-label="Mobile navigation"')).toBe(true);
     expect(html.includes('aria-current="page"')).toBe(true);
+    expect(html.includes("/builder?lang=en-US")).toBe(true);
+    expect(html.includes("/game?lang=en-US")).toBe(true);
+    expect(html.includes("/?lang=en-US#architecture")).toBe(false);
     expect(html.includes("/pitch-deck?lang=en-US")).toBe(true);
     expect(html.includes("/narrative-bible?lang=en-US")).toBe(true);
     expect(html.includes("/dev-plan?lang=en-US")).toBe(true);
-    expect(html.includes("/?lang=en-US#architecture")).toBe(true);
-    expect(countOccurrences(html, '/pitch-deck?lang=en-US"')).toBeGreaterThanOrEqual(2);
-    expect(countOccurrences(html, '/narrative-bible?lang=en-US"')).toBeGreaterThanOrEqual(2);
-    expect(countOccurrences(html, '/dev-plan?lang=en-US"')).toBeGreaterThanOrEqual(2);
+    expect(countOccurrences(html, '/pitch-deck?lang=en-US"')).toBeGreaterThanOrEqual(1);
+    expect(countOccurrences(html, '/narrative-bible?lang=en-US"')).toBeGreaterThanOrEqual(1);
+    expect(countOccurrences(html, '/dev-plan?lang=en-US"')).toBeGreaterThanOrEqual(1);
     expect(html.includes('name="lang" value="en-US"')).toBe(true);
     expect(html.includes('hx-params="*"')).toBe(true);
     expect(html.includes('aria-label="Switch language to Chinese"')).toBe(true);
     expect(html.includes(appRoutes.aiCatalog)).toBe(true);
     expect(html.includes(appRoutes.aiTranscribe)).toBe(true);
-    expect(html.includes(appConfig.api.docsPath)).toBe(true);
+    expect(html.includes(`${appConfig.api.docsPath}?lang=en-US`)).toBe(true);
   });
 
   test("oracle form preserves locale in progressive-enhancement flow", async () => {
@@ -977,13 +1023,474 @@ describe("HTMX partial rendering", () => {
   });
 
   test("builder dashboard preserves locale-aware navigation links", async () => {
-    const response = await app.handle(new Request(toUrl(`${appRoutes.builder}?lang=zh-CN`)));
+    const projectId = `builder-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+    const response = await app.handle(
+      new Request(toUrl(`${appRoutes.builder}?lang=zh-CN&projectId=${projectId}`)),
+    );
     const html = await response.text();
 
     expect(response.status).toBe(httpStatus.ok);
-    expect(html.includes("/builder/scenes?lang=zh-CN")).toBe(true);
-    expect(html.includes("/builder/npcs?lang=zh-CN")).toBe(true);
-    expect(html.includes("/builder/ai?lang=zh-CN")).toBe(true);
+    expect(html.includes(`/game?lang=zh-CN&amp;projectId=${projectId}`)).toBe(true);
+    expect(html.includes(`/builder/scenes?lang=zh-CN&amp;projectId=${projectId}`)).toBe(true);
+    expect(html.includes(`/builder/npcs?lang=zh-CN&amp;projectId=${projectId}`)).toBe(true);
+    expect(html.includes(`/builder/ai?lang=zh-CN&amp;projectId=${projectId}`)).toBe(true);
     expect(html.includes("/public/vendor/htmx-ext/focus-panel.js")).toBe(true);
+    expect(html.includes('id="builder-project-shell"')).toBe(true);
+    expect(html.includes(projectId)).toBe(true);
+    expect(html.includes('id="builder-platform-readiness"')).toBe(true);
+  });
+
+  test("scene editor preview avoids inline style attributes", async () => {
+    const projectId = `scene-preview-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+    const response = await app.handle(
+      new Request(toUrl(`${appRoutes.builderScenes}?lang=en-US&projectId=${projectId}`)),
+    );
+    const html = await response.text();
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(html.includes("<svg")).toBe(true);
+    expect(html.includes("style=")).toBe(false);
+  });
+
+  test("builder assets page makes sprite and animation pipeline gaps explicit", async () => {
+    const projectId = `assets-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+    const response = await app.handle(
+      new Request(toUrl(`${appRoutes.builderAssets}?lang=en-US&projectId=${projectId}`)),
+    );
+    const html = await response.text();
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(html.includes("Sprite pipeline")).toBe(true);
+    expect(html.includes("Animation pipeline")).toBe(true);
+    expect(html.includes("Platform readiness")).toBe(true);
+  });
+
+  test("builder AI page exposes AI authoring and automation readiness", async () => {
+    const projectId = `ai-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+    const response = await app.handle(
+      new Request(toUrl(`${appRoutes.builderAi}?lang=en-US&projectId=${projectId}`)),
+    );
+    const html = await response.text();
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(html.includes("AI authoring")).toBe(true);
+    expect(html.includes("Automation / RPA")).toBe(true);
+    expect(html.includes("Platform readiness")).toBe(true);
+  });
+
+  test("builder publish shell exposes play link for published projects", async () => {
+    const projectId = `publish-${crypto.randomUUID()}`;
+    const { payload } = await createBuilderProject(projectId);
+    expect(payload.ok).toBe(true);
+
+    const publishResponse = await app.handle(
+      new Request(toUrl(`/api/builder/projects/${projectId}/publish`), {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          accept: "text/html",
+        },
+        body: JSON.stringify({
+          published: true,
+          locale: "en-US",
+          currentPath: appRoutes.builder,
+        }),
+      }),
+    );
+    const publishHtml = await publishResponse.text();
+
+    expect(publishResponse.status).toBe(httpStatus.ok);
+    expect(publishHtml.includes('id="builder-project-shell"')).toBe(true);
+    expect(publishHtml.includes(`/game?lang=en-US&amp;projectId=${projectId}`)).toBe(true);
+    expect(publishHtml.includes("/api/builder/projects/")).toBe(true);
+  });
+
+  test("builder HTML form mutations refresh the project shell out-of-band", async () => {
+    const projectId = `forms-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+    const sceneId = `scene-${crypto.randomUUID().slice(0, 8)}`;
+    const npcId = `npc-${crypto.randomUUID().slice(0, 8)}`;
+    const dialogueKey = `npc.${npcId}.intro`;
+
+    const sceneResponse = await app.handle(
+      new Request(toUrl("/api/builder/scenes/create/form"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+        },
+        body: new URLSearchParams({
+          projectId,
+          locale: "en-US",
+          id: sceneId,
+          titleKey: `${sceneId}.title`,
+          background: gameAssetUrls.teaHouseBackground,
+          geometryWidth: "640",
+          geometryHeight: "360",
+          spawnX: "320",
+          spawnY: "180",
+        }).toString(),
+      }),
+    );
+    const sceneHtml = await sceneResponse.text();
+
+    expect(sceneResponse.status).toBe(httpStatus.ok);
+    expect(sceneHtml.includes('hx-swap-oob="outerHTML"')).toBe(true);
+    expect(sceneHtml.includes(sceneId)).toBe(true);
+    expect(sceneHtml.includes("style=")).toBe(false);
+    expect(sceneHtml.includes('data-focus-panel="true"')).toBe(true);
+
+    const npcResponse = await app.handle(
+      new Request(toUrl("/api/builder/npcs/create/form"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+        },
+        body: new URLSearchParams({
+          projectId,
+          locale: "en-US",
+          sceneId,
+          characterKey: npcId,
+          labelKey: `${npcId}.label`,
+        }).toString(),
+      }),
+    );
+    const npcHtml = await npcResponse.text();
+
+    expect(npcResponse.status).toBe(httpStatus.ok);
+    expect(npcHtml.includes('hx-swap-oob="outerHTML"')).toBe(true);
+    expect(npcHtml.includes(npcId)).toBe(true);
+
+    const dialogueResponse = await app.handle(
+      new Request(toUrl("/api/builder/dialogue/create/form"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+        },
+        body: new URLSearchParams({
+          projectId,
+          locale: "en-US",
+          key: dialogueKey,
+          text: "Fresh builder line.",
+        }).toString(),
+      }),
+    );
+    const dialogueHtml = await dialogueResponse.text();
+
+    expect(dialogueResponse.status).toBe(httpStatus.ok);
+    expect(dialogueHtml.includes('hx-swap-oob="outerHTML"')).toBe(true);
+    expect(dialogueHtml.includes(dialogueKey)).toBe(true);
+  });
+
+  test("builder creator workspaces render and round-trip authored asset, mechanics, and automation forms", async () => {
+    const projectId = `creator-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+
+    const mechanicsPageResponse = await app.handle(
+      new Request(toUrl(`${appRoutes.builderMechanics}?lang=en-US&projectId=${projectId}`)),
+    );
+    const mechanicsPageHtml = await mechanicsPageResponse.text();
+    expect(mechanicsPageResponse.status).toBe(httpStatus.ok);
+    expect(mechanicsPageHtml.includes('id="builder-project-shell"')).toBe(true);
+    expect(mechanicsPageHtml.includes("Quests")).toBe(true);
+
+    const automationPageResponse = await app.handle(
+      new Request(toUrl(`${appRoutes.builderAutomation}?lang=en-US&projectId=${projectId}`)),
+    );
+    const automationPageHtml = await automationPageResponse.text();
+    expect(automationPageResponse.status).toBe(httpStatus.ok);
+    expect(automationPageHtml.includes('id="builder-project-shell"')).toBe(true);
+    expect(automationPageHtml.includes("Automation workspace")).toBe(true);
+
+    const assetId = `asset-${crypto.randomUUID().slice(0, 8)}`;
+    const assetResponse = await app.handle(
+      new Request(toUrl("/api/builder/assets/create/form"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+        },
+        body: new URLSearchParams({
+          projectId,
+          locale: "en-US",
+          id: assetId,
+          label: "Creator Portrait",
+          kind: "portrait",
+          sceneMode: "2d",
+          source: "/assets/images/custom/creator-portrait.png",
+        }).toString(),
+      }),
+    );
+    const assetHtml = await assetResponse.text();
+    expect(assetResponse.status).toBe(httpStatus.ok);
+    expect(assetHtml.includes('hx-swap-oob="outerHTML"')).toBe(true);
+    expect(assetHtml.includes(assetId)).toBe(true);
+
+    const clipId = `clip-${crypto.randomUUID().slice(0, 8)}`;
+    const clipResponse = await app.handle(
+      new Request(toUrl("/api/builder/animation-clips/create/form"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+        },
+        body: new URLSearchParams({
+          projectId,
+          locale: "en-US",
+          id: clipId,
+          assetId,
+          stateTag: "idle-down",
+          frameCount: "4",
+          playbackFps: "8",
+        }).toString(),
+      }),
+    );
+    const clipHtml = await clipResponse.text();
+    expect(clipResponse.status).toBe(httpStatus.ok);
+    expect(clipHtml.includes(clipId)).toBe(true);
+
+    const generationResponse = await app.handle(
+      new Request(toUrl("/api/builder/generation-jobs/create/form"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+        },
+        body: new URLSearchParams({
+          projectId,
+          locale: "en-US",
+          kind: "portrait",
+          prompt: "Generate a review-ready tea trader portrait.",
+          targetId: assetId,
+        }).toString(),
+      }),
+    );
+    const generationHtml = await generationResponse.text();
+    expect(generationResponse.status).toBe(httpStatus.ok);
+    expect(generationHtml.includes("blocked_for_approval")).toBe(true);
+    const generationJobIdMatch = generationHtml.match(/generation-jobs\/([^/"?]+)\/approve/);
+    expect(generationJobIdMatch).not.toBeNull();
+    const generationJobId = generationJobIdMatch?.[1];
+    expect(generationJobId).toBeDefined();
+    if (!generationJobId) {
+      return;
+    }
+
+    const generationApproveResponse = await app.handle(
+      new Request(toUrl(`/api/builder/generation-jobs/${generationJobId}/approve`), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+        },
+        body: new URLSearchParams({
+          projectId,
+          locale: "en-US",
+          approved: "true",
+        }).toString(),
+      }),
+    );
+    const generationApproveHtml = await generationApproveResponse.text();
+    expect(generationApproveResponse.status).toBe(httpStatus.ok);
+    expect(generationApproveHtml.includes("succeeded")).toBe(true);
+    expect(generationApproveHtml.includes(`asset.generated.${generationJobId}`)).toBe(true);
+
+    const triggerId = `trigger-${crypto.randomUUID().slice(0, 8)}`;
+    const triggerResponse = await app.handle(
+      new Request(toUrl("/api/builder/triggers/create/form"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+        },
+        body: new URLSearchParams({
+          projectId,
+          locale: "en-US",
+          id: triggerId,
+          label: "Meet the builder guide",
+          event: "npc-interact",
+          sceneId: "teaHouse",
+          npcId: "teaMonk",
+        }).toString(),
+      }),
+    );
+    const triggerHtml = await triggerResponse.text();
+    expect(triggerResponse.status).toBe(httpStatus.ok);
+    expect(triggerHtml.includes(triggerId)).toBe(true);
+
+    const questId = `quest-${crypto.randomUUID().slice(0, 8)}`;
+    const questResponse = await app.handle(
+      new Request(toUrl("/api/builder/quests/create/form"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+        },
+        body: new URLSearchParams({
+          projectId,
+          locale: "en-US",
+          id: questId,
+          title: "Builder intro",
+          description: "Walk through the first authored mechanic.",
+          triggerId,
+        }).toString(),
+      }),
+    );
+    const questHtml = await questResponse.text();
+    expect(questResponse.status).toBe(httpStatus.ok);
+    expect(questHtml.includes(questId)).toBe(true);
+
+    const graphId = `graph-${crypto.randomUUID().slice(0, 8)}`;
+    const graphResponse = await app.handle(
+      new Request(toUrl("/api/builder/dialogue-graphs/create/form"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+        },
+        body: new URLSearchParams({
+          projectId,
+          locale: "en-US",
+          id: graphId,
+          title: "Guide intro graph",
+          npcId: "teaMonk",
+          line: "npc.teaMonk.greet",
+        }).toString(),
+      }),
+    );
+    const graphHtml = await graphResponse.text();
+    expect(graphResponse.status).toBe(httpStatus.ok);
+    expect(graphHtml.includes(graphId)).toBe(true);
+
+    const automationResponse = await app.handle(
+      new Request(toUrl("/api/builder/automation-runs/create/form"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+        },
+        body: new URLSearchParams({
+          projectId,
+          locale: "en-US",
+          goal: "Collect builder review evidence for the new quest flow.",
+        }).toString(),
+      }),
+    );
+    const automationHtml = await automationResponse.text();
+    expect(automationResponse.status).toBe(httpStatus.ok);
+    expect(automationHtml.includes("blocked_for_approval")).toBe(true);
+    const automationRunIdMatch = automationHtml.match(/automation-runs\/([^/"?]+)\/approve/);
+    expect(automationRunIdMatch).not.toBeNull();
+    const automationRunId = automationRunIdMatch?.[1];
+    expect(automationRunId).toBeDefined();
+    if (!automationRunId) {
+      return;
+    }
+
+    const automationApproveResponse = await app.handle(
+      new Request(toUrl(`/api/builder/automation-runs/${automationRunId}/approve`), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+        },
+        body: new URLSearchParams({
+          projectId,
+          locale: "en-US",
+          approved: "true",
+        }).toString(),
+      }),
+    );
+    const automationApproveHtml = await automationApproveResponse.text();
+    expect(automationApproveResponse.status).toBe(httpStatus.ok);
+    expect(automationApproveHtml.includes("succeeded")).toBe(true);
+  });
+
+  test("AI patch preview and apply form routes expose review flow and refresh project shell", async () => {
+    const projectId = `patch-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+    const operationsJson = JSON.stringify([
+      {
+        op: "replace",
+        path: "/dialogues/en-US/npc.teaMonk.greet",
+        value: "Reviewed patch line.",
+      },
+    ]);
+
+    const previewResponse = await app.handle(
+      new Request(toUrl(appRoutes.aiBuilderPatchPreviewForm), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+        },
+        body: new URLSearchParams({
+          projectId,
+          locale: "en-US",
+          operationsJson,
+        }).toString(),
+      }),
+    );
+    const previewHtml = await previewResponse.text();
+
+    expect(previewResponse.status).toBe(httpStatus.ok);
+    expect(previewHtml.includes('name="expectedVersion"')).toBe(true);
+    expect(previewHtml.includes(appRoutes.aiBuilderPatchApplyForm)).toBe(true);
+
+    const applyResponse = await app.handle(
+      new Request(toUrl(appRoutes.aiBuilderPatchApplyForm), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+        },
+        body: new URLSearchParams({
+          projectId,
+          locale: "en-US",
+          expectedVersion: "1",
+          operationsJson,
+        }).toString(),
+      }),
+    );
+    const applyHtml = await applyResponse.text();
+
+    expect(applyResponse.status).toBe(httpStatus.ok);
+    expect(applyHtml.includes('hx-swap-oob="outerHTML"')).toBe(true);
+    expect(applyHtml.includes('id="builder-project-shell"')).toBe(true);
+  });
+
+  test("game route renders explicit missing and unpublished project states", async () => {
+    const missingProjectId = `missing-${crypto.randomUUID()}`;
+    const missingResponse = await app.handle(
+      new Request(toUrl(`${appRoutes.game}?projectId=${missingProjectId}`)),
+    );
+    const missingHtml = await missingResponse.text();
+
+    expect(missingResponse.status).toBe(httpStatus.ok);
+    expect(missingHtml.includes(missingProjectId)).toBe(true);
+    expect(missingHtml.includes(`/builder?lang=en-US&amp;projectId=${missingProjectId}`)).toBe(
+      true,
+    );
+    expect(missingHtml.includes('id="game-canvas-wrapper"')).toBe(false);
+
+    const unpublishedProjectId = `unpublished-${crypto.randomUUID()}`;
+    await createBuilderProject(unpublishedProjectId);
+    const unpublishedResponse = await app.handle(
+      new Request(toUrl(`${appRoutes.game}?projectId=${unpublishedProjectId}`)),
+    );
+    const unpublishedHtml = await unpublishedResponse.text();
+
+    expect(unpublishedResponse.status).toBe(httpStatus.ok);
+    expect(unpublishedHtml.includes(unpublishedProjectId)).toBe(true);
+    expect(
+      unpublishedHtml.includes(`/builder?lang=en-US&amp;projectId=${unpublishedProjectId}`),
+    ).toBe(true);
+    expect(unpublishedHtml.includes('id="game-canvas-wrapper"')).toBe(false);
   });
 });

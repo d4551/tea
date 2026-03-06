@@ -1,10 +1,13 @@
 import { resolveSpriteManifest } from "../../../shared/config/game-config.ts";
 import type {
   Direction,
+  GameFlagDefinition,
   GameDialogueEntry,
   GameLocale,
+  GameQuestState,
   GameSceneState,
   NpcStateMachine,
+  QuestDefinition,
   SceneDefinition,
 } from "../../../shared/contracts/game.ts";
 import { resolveGameText } from "../data/game-text.ts";
@@ -63,6 +66,8 @@ export const buildSessionSceneState = (
   locale: GameLocale,
   seed: number,
   dialogues: Readonly<Record<string, string>> = {},
+  flags: readonly GameFlagDefinition[] = [],
+  quests: readonly QuestDefinition[] = [],
 ): GameSceneState => {
   const playerManifest = resolveSpriteManifest("chaJiang");
   const playerBounds = playerManifest
@@ -119,16 +124,33 @@ export const buildSessionSceneState = (
 
   return {
     sceneId: sceneDefinition.id,
+    sceneMode: sceneDefinition.sceneMode,
     sceneTitle: resolveGameText(locale, sceneDefinition.titleKey),
     background: sceneDefinition.background,
     geometry: sceneDefinition.geometry,
     player: playerState,
     npcs,
     collisions: sceneDefinition.collisions,
+    nodes: sceneDefinition.nodes ?? [],
     camera: { x: 0, y: 0 },
     uiState: "playing",
     actionState: "actionQueued",
     dialogue: null,
+    quests: quests.map(
+      (quest): GameQuestState => ({
+        id: quest.id,
+        title: quest.title,
+        description: quest.description,
+        completed: false,
+        steps: quest.steps.map((step, index) => ({
+          id: step.id,
+          title: step.title,
+          description: step.description,
+          state: index === 0 ? "active" : "pending",
+        })),
+      }),
+    ),
+    flags: Object.fromEntries(flags.map((flag) => [flag.key, flag.initialValue])),
     worldTimeMs: 0,
   };
 };

@@ -12,6 +12,16 @@ export type LocalModelTask =
   | "text-to-speech";
 
 /**
+ * Supported quantization dtype for local ONNX models.
+ */
+export type ModelDtype = "q4" | "q4f16" | "q8" | "fp16" | "fp32";
+
+/**
+ * Supported ONNX execution device.
+ */
+export type ModelDevice = "wasm" | "webgpu" | "cpu";
+
+/**
  * Local ONNX model configuration entry.
  */
 export interface ModelEntry {
@@ -26,7 +36,9 @@ export interface ModelEntry {
   /** Model identifier resolved by Transformers.js. */
   readonly model: string;
   /** ONNX dtype preference. */
-  readonly dtype: "q8" | "fp16" | "fp32";
+  readonly dtype: ModelDtype;
+  /** ONNX execution device. */
+  readonly device: ModelDevice;
   /** Capability flags exposed by the provider layer. */
   readonly capabilities: readonly AiCapability[];
   /** Environment variable used to override the default target. */
@@ -62,7 +74,9 @@ export interface LocalModelCatalogEntry {
   /** Capability list for docs and routing visibility. */
   readonly capabilities: readonly AiCapability[];
   /** ONNX runtime backend used by the app. */
-  readonly runtime: "onnx-wasm";
+  readonly runtime: `onnx-${ModelDevice}`;
+  /** ONNX quantization dtype. */
+  readonly dtype: ModelDtype;
   /** Upstream integration provider. */
   readonly integration: "huggingface";
   /** Environment variable used to override the model. */
@@ -82,6 +96,7 @@ export const MODEL_REGISTRY = {
     task: "text-classification",
     model: appConfig.ai.localSentimentModel,
     dtype: "fp32",
+    device: appConfig.ai.onnxDevice,
     capabilities: ["text-classification"],
     configKey: "AI_LOCAL_SENTIMENT_MODEL",
     enabled: true,
@@ -95,6 +110,7 @@ export const MODEL_REGISTRY = {
     task: "text-generation",
     model: appConfig.ai.localTextGenerationModel,
     dtype: "fp32",
+    device: appConfig.ai.onnxDevice,
     capabilities: ["text-generation", "chat"],
     configKey: "AI_LOCAL_TEXT_GENERATION_MODEL",
     enabled: true,
@@ -114,6 +130,7 @@ export const MODEL_REGISTRY = {
     task: "text-generation",
     model: appConfig.ai.localNpcDialogueModel,
     dtype: "fp32",
+    device: appConfig.ai.onnxDevice,
     capabilities: ["text-generation", "chat"],
     configKey: "AI_LOCAL_NPC_DIALOGUE_MODEL",
     enabled: true,
@@ -132,6 +149,7 @@ export const MODEL_REGISTRY = {
     task: "feature-extraction",
     model: appConfig.ai.localEmbeddingModel,
     dtype: "fp32",
+    device: appConfig.ai.onnxDevice,
     capabilities: ["embeddings"],
     configKey: "AI_LOCAL_EMBEDDING_MODEL",
     enabled: appConfig.ai.localEmbeddingsEnabled,
@@ -146,6 +164,7 @@ export const MODEL_REGISTRY = {
     task: "automatic-speech-recognition",
     model: appConfig.ai.localSpeechToTextModel,
     dtype: "fp32",
+    device: appConfig.ai.onnxDevice,
     capabilities: ["speech-to-text"],
     configKey: "AI_LOCAL_SPEECH_TO_TEXT_MODEL",
     enabled: appConfig.ai.localSpeechToTextEnabled,
@@ -159,6 +178,7 @@ export const MODEL_REGISTRY = {
     task: "text-to-speech",
     model: appConfig.ai.localTextToSpeechModel,
     dtype: "fp32",
+    device: appConfig.ai.onnxDevice,
     capabilities: ["text-to-speech"],
     configKey: "AI_LOCAL_TEXT_TO_SPEECH_MODEL",
     enabled: appConfig.ai.localTextToSpeechEnabled,
@@ -185,7 +205,8 @@ export const getLocalModelCatalog = (): readonly LocalModelCatalogEntry[] =>
     task: entry.task,
     model: entry.model,
     capabilities: entry.capabilities,
-    runtime: "onnx-wasm",
+    runtime: `onnx-${entry.device}` as const,
+    dtype: entry.dtype,
     integration: "huggingface",
     configKey: entry.configKey,
     enabled: entry.enabled,

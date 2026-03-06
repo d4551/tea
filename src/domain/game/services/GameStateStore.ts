@@ -9,6 +9,7 @@ import type {
   GameSession,
   GameSessionSnapshot,
   SceneDefinition,
+  TriggerDefinition,
 } from "../../../shared/contracts/game.ts";
 import { prisma } from "../../../shared/services/db.ts";
 import { buildSessionSceneState } from "../utils/session-state.ts";
@@ -49,6 +50,10 @@ export interface GameSessionSeed {
   readonly scene: GameSceneState;
   /** Optional project binding used to seed the scene. */
   readonly projectId?: string;
+  /** Published release version captured when the session was created. */
+  readonly releaseVersion?: number;
+  /** Published trigger definitions captured at session creation. */
+  readonly triggerDefinitions?: readonly TriggerDefinition[];
 }
 
 /**
@@ -91,6 +96,10 @@ interface PersistedSessionState {
   readonly scene: GameSceneState;
   /** Optional builder project binding. */
   readonly projectId?: string;
+  /** Published release version captured at session creation. */
+  readonly releaseVersion?: number;
+  /** Published trigger definitions captured at session creation. */
+  readonly triggerDefinitions?: readonly TriggerDefinition[];
 }
 
 /**
@@ -114,6 +123,7 @@ const defaultSceneDefinition = (): SceneDefinition => {
 
   return {
     id: defaultGameConfig.defaultSceneId,
+    sceneMode: "2d",
     titleKey: "scene.teaHouse.title",
     background: gameAssetUrls.teaHouseBackground,
     geometry: {
@@ -124,6 +134,7 @@ const defaultSceneDefinition = (): SceneDefinition => {
       x: 300,
       y: 380,
     },
+    nodes: [],
     npcs: [],
     collisions: [],
   };
@@ -132,11 +143,18 @@ const defaultSceneDefinition = (): SceneDefinition => {
 /**
  * Serializes and deserializes scene payloads safely.
  */
-const toScenePayload = (scene: GameSceneState, projectId?: string): Prisma.InputJsonValue =>
+const toScenePayload = (
+  scene: GameSceneState,
+  projectId?: string,
+  releaseVersion?: number,
+  triggerDefinitions?: readonly TriggerDefinition[],
+): Prisma.InputJsonValue =>
   JSON.parse(
     JSON.stringify({
       scene,
       projectId,
+      releaseVersion,
+      triggerDefinitions,
     } satisfies PersistedSessionState),
   );
 
@@ -158,6 +176,13 @@ const toSceneState = (value: Prisma.JsonValue): PersistedSessionState | null => 
     return {
       scene: JSON.parse(JSON.stringify(record.scene)) as GameSceneState,
       projectId: typeof record.projectId === "string" ? record.projectId : undefined,
+      releaseVersion:
+        typeof record.releaseVersion === "number" && Number.isFinite(record.releaseVersion)
+          ? record.releaseVersion
+          : undefined,
+      triggerDefinitions: Array.isArray(record.triggerDefinitions)
+        ? (JSON.parse(JSON.stringify(record.triggerDefinitions)) as readonly TriggerDefinition[])
+        : undefined,
     };
   }
 
@@ -170,6 +195,8 @@ const toSceneState = (value: Prisma.JsonValue): PersistedSessionState | null => 
 interface SceneStateRestoreResult {
   readonly scene: GameSceneState;
   readonly projectId?: string;
+  readonly releaseVersion?: number;
+  readonly triggerDefinitions?: readonly TriggerDefinition[];
   readonly repaired: boolean;
 }
 
@@ -182,6 +209,8 @@ const restoreSceneState = (row: GameSessionRow): SceneStateRestoreResult => {
     return {
       scene: parsed.scene,
       projectId: parsed.projectId,
+      releaseVersion: parsed.releaseVersion,
+      triggerDefinitions: parsed.triggerDefinitions,
       repaired: false,
     };
   }
@@ -190,6 +219,8 @@ const restoreSceneState = (row: GameSessionRow): SceneStateRestoreResult => {
   return {
     scene: buildSessionSceneState(sceneDefinition, row.locale as GameLocale, row.seed),
     projectId: undefined,
+    releaseVersion: undefined,
+    triggerDefinitions: undefined,
     repaired: true,
   };
 };
@@ -201,6 +232,8 @@ const toSnapshotSession = (session: GameSession): GameSessionSnapshot => ({
   sessionId: session.id,
   locale: session.locale,
   timestamp: new Date(session.updatedAtMs).toISOString(),
+  projectId: session.projectId,
+  releaseVersion: session.releaseVersion,
   state: session.scene,
 });
 
@@ -231,6 +264,8 @@ const toGameSessionFromRow = (
       locale: row.locale as GameLocale,
       scene: restored.scene,
       projectId: restored.projectId,
+      releaseVersion: restored.releaseVersion,
+      triggerDefinitions: restored.triggerDefinitions,
       stateVersion: row.stateVersion,
       updatedAtMs: row.updatedAt.getTime(),
       createdAtMs: row.createdAt.getTime(),
@@ -258,6 +293,8 @@ class InMemoryGameStateStore implements GameStateStore {
       seed: seed.seed,
       locale: seed.locale,
       projectId: seed.projectId,
+      releaseVersion: seed.releaseVersion,
+      triggerDefinitions: seed.triggerDefinitions,
       stateVersion: 1,
       createdAtMs,
       updatedAtMs: createdAtMs,
@@ -332,7 +369,7 @@ class PrismaGameStateStore implements GameStateStore {
         seed: seed.seed,
         locale: seed.locale as string,
         sceneId: seed.scene.sceneId,
-        state: toScenePayload(seed.scene, seed.projectId),
+        state: toScenePayload(seed.scene, seed.projectId, seed.releaseVersion, seed.triggerDefinitions),
         stateVersion: 1,
         createdAt,
         updatedAt: createdAt,
@@ -343,6 +380,8 @@ class PrismaGameStateStore implements GameStateStore {
     return {
       ...toGameSessionFromRow(persisted).session,
       projectId: seed.projectId,
+      releaseVersion: seed.releaseVersion,
+      triggerDefinitions: seed.triggerDefinitions,
     };
   }
 
@@ -369,7 +408,12 @@ class PrismaGameStateStore implements GameStateStore {
       await prisma.gameSession.update({
         where: { id: sessionId },
         data: {
-          state: toScenePayload(restored.session.scene, restored.session.projectId),
+          state: toScenePayload(
+            restored.session.scene,
+            restored.session.projectId,
+            restored.session.releaseVersion,
+            restored.session.triggerDefinitions,
+          ),
           updatedAt: new Date(),
         },
       });
@@ -392,7 +436,12 @@ class PrismaGameStateStore implements GameStateStore {
         ownerSessionId: session.ownerSessionId,
         locale: session.locale,
         sceneId: session.scene.sceneId,
-        state: toScenePayload(session.scene, session.projectId),
+        state: toScenePayload(
+          session.scene,
+          session.projectId,
+          session.releaseVersion,
+          session.triggerDefinitions,
+        ),
         stateVersion: session.stateVersion,
         updatedAt: now,
         expiresAt,
