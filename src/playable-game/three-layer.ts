@@ -74,7 +74,7 @@ export class ThreeLayer {
    * @param state Current game scene state.
    */
   syncSceneState(state: GameSceneState): void {
-    const nodes = state.sceneMode === "3d" ? state.nodes ?? [] : [];
+    const nodes = state.sceneMode === "3d" ? (state.nodes ?? []) : [];
     const signature = JSON.stringify(
       nodes.map((node) =>
         "scale" in node

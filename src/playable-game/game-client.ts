@@ -4,10 +4,10 @@ import {
   Container,
   Graphics,
   Rectangle,
+  type Renderer,
   Sprite,
   Texture,
   Ticker,
-  type Renderer,
 } from "pixi.js";
 import { gameSpriteManifests } from "../domain/game/data/sprite-data.ts";
 import { appRoutes, interpolateRoutePath } from "../shared/constants/routes.ts";
@@ -105,8 +105,8 @@ const readClientRuntimeConfig = (): GameClientRuntimeConfig | null => {
   const restoreMaxAttempts = parsePositiveInteger(
     readMeta('meta[name="game-client-restore-max-attempts"]')?.dataset.gameClientRestoreMaxAttempts,
   );
-  const rendererPreferenceRaw =
-    readMeta('meta[name="game-client-renderer-preference"]')?.dataset.gameClientRendererPreference;
+  const rendererPreferenceRaw = readMeta('meta[name="game-client-renderer-preference"]')?.dataset
+    .gameClientRendererPreference;
   const rendererPreference: "webgpu" | "webgl" =
     rendererPreferenceRaw === "webgl" ? "webgl" : "webgpu";
   if (

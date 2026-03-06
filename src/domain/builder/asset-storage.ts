@@ -20,7 +20,10 @@ export interface StoredBuilderAssetFile {
 }
 
 const sanitizePathSegment = (value: string, fallback: string): string => {
-  const normalized = value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-");
   const collapsed = normalized.replace(/-{2,}/g, "-").replace(/^-+|-+$/g, "");
   return collapsed.length > 0 ? collapsed : fallback;
 };

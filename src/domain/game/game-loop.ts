@@ -3,14 +3,14 @@ import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
 import { defaultGameConfig, resolveScene } from "../../shared/config/game-config.ts";
 import type {
-  GameFlagDefinition,
   GameActionState,
   GameCommandEnvelope,
   GameCommandInput,
   GameCommandResult,
   GameCommandState,
-  GameQuestState,
+  GameFlagDefinition,
   GameLocale,
+  GameQuestState,
   GameSceneState,
   GameSession,
   GameSessionSnapshot,
@@ -292,8 +292,7 @@ export class GameLoopService {
 
       if ("size" in node) {
         const withinX = playerX >= node.position.x && playerX <= node.position.x + node.size.width;
-        const withinY =
-          playerY >= node.position.y && playerY <= node.position.y + node.size.height;
+        const withinY = playerY >= node.position.y && playerY <= node.position.y + node.size.height;
         if (withinX && withinY) {
           return node;
         }
@@ -357,12 +356,9 @@ export class GameLoopService {
     mutableScene.flags = this.buildInitialFlags(publishedFlags);
     mutableScene.quests = this.buildInitialQuests(publishedQuests);
     if (publishedTriggers.length > 0) {
-      this.applyMatchingTriggers(
-        mutableScene,
-        publishedTriggers,
-        "scene-enter",
-        { sceneId: resolvedScene.id },
-      );
+      this.applyMatchingTriggers(mutableScene, publishedTriggers, "scene-enter", {
+        sceneId: resolvedScene.id,
+      });
     }
 
     await gameStateStore.createSession({
@@ -992,15 +988,10 @@ export class GameLoopService {
             };
             interactable.dialogueIndex++;
             nextActionState = "dialogueOpen";
-            this.applyMatchingTriggers(
-              state,
-              session.triggerDefinitions ?? [],
-              "npc-interact",
-              {
-                sceneId: state.sceneId,
-                npcCharacterKey: interactable.characterKey,
-              },
-            );
+            this.applyMatchingTriggers(state, session.triggerDefinitions ?? [], "npc-interact", {
+              sceneId: state.sceneId,
+              npcCharacterKey: interactable.characterKey,
+            });
           } else {
             nextActionState = "error.nonRetryable";
           }
@@ -1048,15 +1039,10 @@ export class GameLoopService {
               lineKey: "ai-response",
             };
             nextActionState = "dialogueOpen";
-            this.applyMatchingTriggers(
-              state,
-              session.triggerDefinitions ?? [],
-              "chat",
-              {
-                sceneId: state.sceneId,
-                npcCharacterKey: interactable.characterKey,
-              },
-            );
+            this.applyMatchingTriggers(state, session.triggerDefinitions ?? [], "chat", {
+              sceneId: state.sceneId,
+              npcCharacterKey: interactable.characterKey,
+            });
 
             await processInteractionProgress(sessionId, `chat-${interactable.id}`);
             await awardXp(sessionId, XP_CONFIG.dialogue, "chat");

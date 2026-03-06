@@ -3,7 +3,6 @@ import {
   Assets,
   Container,
   Graphics,
-  Rectangle,
   Sprite,
   Text,
   Texture,
@@ -29,8 +28,10 @@ const readPayload = (element: HTMLElement): SceneEditorPayload | null => {
 
 const isSceneNode2D = (
   node: SceneNodeDefinition,
-): node is Extract<SceneNodeDefinition, { readonly nodeType: "sprite" | "tile" | "spawn" | "trigger" | "camera" }> =>
-  "size" in node;
+): node is Extract<
+  SceneNodeDefinition,
+  { readonly nodeType: "sprite" | "tile" | "spawn" | "trigger" | "camera" }
+> => "size" in node;
 
 const nodeColor = (node: SceneNodeDefinition): number => {
   if (node.nodeType === "trigger") {
@@ -75,7 +76,9 @@ const render2dScene = async (element: HTMLElement, scene: SceneDefinition): Prom
   }
 
   const overlay = new Graphics();
-  overlay.rect(0, 0, scene.geometry.width, scene.geometry.height).fill({ color: 0x0f172a, alpha: 0.2 });
+  overlay
+    .rect(0, 0, scene.geometry.width, scene.geometry.height)
+    .fill({ color: 0x0f172a, alpha: 0.2 });
   world.addChild(overlay);
 
   for (const node of scene.nodes ?? []) {
@@ -107,7 +110,10 @@ const render2dScene = async (element: HTMLElement, scene: SceneDefinition): Prom
   }
 
   world.scale.set(
-    Math.min(viewport.clientWidth / scene.geometry.width, viewport.clientHeight / scene.geometry.height),
+    Math.min(
+      viewport.clientWidth / scene.geometry.width,
+      viewport.clientHeight / scene.geometry.height,
+    ),
   );
 };
 
@@ -119,9 +125,10 @@ const buildThreeObject = (node: SceneNodeDefinition): THREE.Object3D => {
     return light;
   }
 
-  const geometry = node.nodeType === "trigger"
-    ? new THREE.BoxGeometry(1.5, 1.5, 1.5)
-    : new THREE.BoxGeometry(1, 1, 1);
+  const geometry =
+    node.nodeType === "trigger"
+      ? new THREE.BoxGeometry(1.5, 1.5, 1.5)
+      : new THREE.BoxGeometry(1, 1, 1);
   const material = new THREE.MeshStandardMaterial({
     color: nodeColor(node),
     transparent: node.nodeType === "trigger",

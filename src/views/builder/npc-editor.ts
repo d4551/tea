@@ -138,7 +138,14 @@ export const renderNpcEditor = (
       <div id="npc-detail" class="space-y-4" aria-live="polite" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
         ${
           selectedNpc
-            ? renderNpcDetail(messages, selectedNpc.npc, locale, projectId, selectedNpc.sceneId, manifests[selectedNpc.npc.characterKey] ?? null)
+            ? renderNpcDetail(
+                messages,
+                selectedNpc.npc,
+                locale,
+                projectId,
+                selectedNpc.sceneId,
+                manifests[selectedNpc.npc.characterKey] ?? null,
+              )
             : `<div role="alert" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noNpcs)}</span></div>`
         }
       </div>

@@ -2895,6 +2895,52 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       },
     },
   )
+  .get(
+    "/generation-jobs/:jobId/stream",
+    async ({ params, query, request, set, status }) => {
+      const projectId = resolveProjectId(query.projectId);
+      const locale = toLocale(query.locale);
+      const job = (await builderService.listGenerationJobs(projectId)).find(
+        (candidate) => candidate.id === params.jobId,
+      );
+      if (!job) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+
+      const artifacts = (await builderService.listArtifacts(projectId)).filter((artifact) =>
+        job.artifactIds.includes(artifact.id),
+      );
+      const payload = JSON.stringify({
+        ok: true,
+        data: {
+          job,
+          artifacts,
+        },
+      });
+      return new Response(`event: status\ndata: ${payload}\n\n`, {
+        headers: {
+          "cache-control": "no-cache, no-transform",
+          connection: "keep-alive",
+          "content-type": "text/event-stream; charset=utf-8",
+        },
+        status: httpStatus.ok,
+      });
+    },
+    {
+      params: t.Object({ jobId: t.String() }),
+      query: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+      }),
+      response: {
+        [httpStatus.ok]: t.Any(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
   .post(
     "/quests/create/form",
     async ({ body, request, set, status }) => {

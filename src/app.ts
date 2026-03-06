@@ -33,6 +33,20 @@ export const createApp = async () => {
 
       // Global error handler
       .onError(({ code, error, request, set }) => {
+        // #region agent log
+        const url = new URL(request.url);
+        fetch("http://127.0.0.1:7824/ingest/2a1ebe22-3205-47a7-ac66-14b2478b8cbc", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f14b60" },
+          body: JSON.stringify({
+            sessionId: "f14b60",
+            location: "app.ts:onError",
+            message: "request.error",
+            data: { code, error: String(error), path: url.pathname, hypothesisId: "H3,H5" },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
         const errorResponse = createErrorResponse(
           code,
           error instanceof Error ? error : new Error(String(error)),

@@ -350,11 +350,7 @@ export interface DialogueGraph {
 /**
  * Supported trigger event types in the first mechanics slice.
  */
-export type TriggerEventType =
-  | "scene-enter"
-  | "npc-interact"
-  | "chat"
-  | "dialogue-confirmed";
+export type TriggerEventType = "scene-enter" | "npc-interact" | "chat" | "dialogue-confirmed";
 
 /**
  * Builder-authored game flag definition.

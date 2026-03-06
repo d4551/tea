@@ -70,7 +70,7 @@ A server-driven game engine and worldbuilding platform.<br/>
 
 TEA Game Engine is an SSR-first game development platform that unifies server-rendered pages, real-time AI narrative generation, and a browser-native playable game client into a single runtime. Built for **Leaves of the Fallen Kingdom (LOTFK)** — a strategy worldbuilding experience.
 
-The product centers on a **builder/player loop**: author content in the builder, publish an immutable release, play the published build, and iterate. Legacy pitch/documentation pages are reachable via footer links; primary navigation routes to Home, Game, and Builder.
+The product centers on a **builder/player loop**: author content in the builder, publish an immutable release, play the published build, and iterate. Primary navigation routes to Home, Game, and Builder.
 
 ### Key Capabilities
 
@@ -142,6 +142,8 @@ bun run dev
 
 ### System Overview
 
+Browser runtime (SSR + HTMX, Playable Client with Pixi + Three, HUD via SSE, Command stream via WebSocket) connects to the Elysia server. Plugins run in strict order. Domain services persist via Prisma.
+
 ```mermaid
 graph TB
   subgraph Browser["Browser Runtime"]
@@ -151,48 +153,46 @@ graph TB
     WS["Command Stream (WebSocket)"]
   end
 
-  subgraph Elysia["Elysia Server"]
-    APP["app.ts"]
-
-    subgraph PluginOrder["Plugin + Route Order"]
-      RC["request-context"]
-      EH["global onError"]
-      CT["onAfterHandle content-type"]
-      SW["swagger"]
-      SA["static-assets"]
-      PR["page-routes"]
-      GR["game-routes (SSR game page)"]
-      AR["api-routes"]
-      AIR["ai-routes"]
-      GP["game-plugin (REST + WS + SSE)"]
-      BR["builder-routes"]
-      BA["builder-api-routes"]
-      SP["session-purge"]
-    end
-
-    subgraph Domain["Domain Services"]
-      LOOP["GameLoopService"]
-      STORE["GameStateStore"]
-      SCENE["SceneEngine + NpcAiEngine"]
-      BUILDER["PrismaBuilderService"]
-      AI["ProviderRegistry + AI Services"]
-    end
+  subgraph Elysia["Elysia Server - app.ts"]
+    RC["request-context"]
+    EH["global onError"]
+    CT["onAfterHandle content-type"]
+    SW["swagger"]
+    SA["static-assets"]
+    PR["page-routes"]
+    GR["game-routes"]
+    AR["api-routes"]
+    AIR["ai-routes"]
+    GP["game-plugin"]
+    BR["builder-routes"]
+    BA["builder-api-routes"]
+    SP["session-purge"]
   end
 
-  subgraph Storage["Persistence"]
-    PRI["Prisma ORM"]
-    DB["GameSession + PlayerProgress + BuilderProject + BuilderProjectRelease"]
+  subgraph Domain["Domain Services"]
+    LOOP["GameLoopService"]
+    STORE["GameStateStore"]
+    SCENE["SceneEngine + NpcAiEngine"]
+    BUILDER["PrismaBuilderService"]
+    AI["ProviderRegistry + AI Services"]
   end
 
-  SSR -->|"HTTP / HTMX"| APP
-  CLIENT -->|"REST create/state/restore/save/command"| GP
-  CLIENT -->|"WebSocket /api/game/session/:id/ws"| GP
-  CLIENT -->|"SSE /api/game/session/:id/hud"| GP
-  APP --> RC --> EH --> CT --> SW --> SA --> PR --> GR --> AR --> AIR --> GP --> BR --> BA --> SP
-  GP --> LOOP --> STORE --> PRI --> DB
+  subgraph Storage["Persistence - Prisma"]
+    DB["GameSession, PlayerProgress, BuilderProject, BuilderProjectRelease"]
+  end
+
+  SSR -->|HTTP / HTMX| RC
+  CLIENT -->|REST create/state/restore/save/command| GP
+  CLIENT -->|WebSocket| GP
+  CLIENT -->|SSE HUD stream| GP
+  RC --> EH --> CT --> SW --> SA --> PR --> GR --> AR --> AIR --> GP --> BR --> BA --> SP
+  GP --> LOOP
+  LOOP --> STORE
   LOOP --> SCENE
   LOOP --> AI
-  BA --> BUILDER --> PRI
+  STORE --> DB
+  BA --> BUILDER
+  BUILDER --> DB
 ```
 
 ### Request Lifecycle
@@ -209,19 +209,19 @@ sequenceDiagram
   participant DB as Prisma
 
   B->>APP: POST /api/game/session
-  APP->>AUTH: Resolve/issue cookie session id
+  APP->>AUTH: Resolve or issue cookie session id
   APP->>LOOP: createSession(locale, sceneId, projectId, ownerSessionId)
-  LOOP->>STORE: createSession + initialize stateVersion
+  LOOP->>STORE: createSession and initialize stateVersion
   STORE->>DB: INSERT gameSession
   DB-->>STORE: persisted row
   STORE-->>LOOP: GameSessionSnapshot
-  LOOP-->>APP: lifecycle snapshot + resume token
-  APP-->>B: 200 { sessionId, resumeToken, resumeTokenExpiresAtMs }
+  LOOP-->>APP: lifecycle snapshot and resume token
+  APP-->>B: 200 with sessionId, resumeToken, resumeTokenExpiresAtMs
 ```
 
 ### Plugin Pipeline
 
-Plugins are composed in strict order. Each plugin decorates the request context for downstream consumers:
+Plugins are composed in strict order. Each plugin decorates the request context for downstream consumers. Infrastructure plugins (request-context, onError, content-type, swagger, static-assets) run first; then page, game, API, and AI routes; then game-plugin; then builder routes; finally session-purge.
 
 ```mermaid
 flowchart LR
@@ -237,83 +237,74 @@ flowchart LR
   J --> K["builder-routes"]
   K --> L["builder-api-routes"]
   L --> M["session-purge"]
-
-  style A fill:#4ade80,color:#000
-  style B fill:#f87171,color:#000
-  style C fill:#60a5fa,color:#000
-  style D fill:#fbbf24,color:#000
-  style E fill:#94a3b8,color:#000
-  style F fill:#2dd4bf,color:#000
-  style G fill:#2dd4bf,color:#000
-  style H fill:#2dd4bf,color:#000
-  style I fill:#2dd4bf,color:#000
-  style J fill:#fb923c,color:#000
-  style K fill:#c084fc,color:#000
-  style L fill:#c084fc,color:#000
-  style M fill:#a3e635,color:#000
 ```
 
 ### Domain Model
 
+Core entities: GameSession (authoritative runtime state), PlayerProgress (XP and level), BuilderProject (draft state and versioning), BuilderProjectRelease (immutable published snapshots).
+
 ```mermaid
 erDiagram
-    GAME_SESSION {
-      string id PK
-      string ownerSessionId
-      int stateVersion
-      datetime expiresAt
-      json scene
-      string projectId
-    }
-    PLAYER_PROGRESS {
-      string sessionId PK
-      int xp
-      int level
-    }
-    BUILDER_PROJECT {
-      string id PK
-      int version
-      string checksum
-      int latestReleaseVersion
-      int publishedReleaseVersion
-      json state
-    }
-    BUILDER_PROJECT_RELEASE {
-      string projectId FK
-      int releaseVersion
-      string checksum
-      json state
-    }
-
-    GAME_SESSION ||--|| PLAYER_PROGRESS : has
-    BUILDER_PROJECT ||--o{ BUILDER_PROJECT_RELEASE : publishes
-    BUILDER_PROJECT ||..o{ GAME_SESSION : seeds
+  GAME_SESSION {
+    string id PK
+    string ownerSessionId
+    int stateVersion
+    datetime expiresAt
+    json scene
+    string projectId
+  }
+  PLAYER_PROGRESS {
+    string sessionId PK
+    int xp
+    int level
+  }
+  BUILDER_PROJECT {
+    string id PK
+    int version
+    string checksum
+    int latestReleaseVersion
+    int publishedReleaseVersion
+    json state
+  }
+  BUILDER_PROJECT_RELEASE {
+    string projectId FK
+    int releaseVersion
+    string checksum
+    json state
+  }
+  GAME_SESSION ||--|| PLAYER_PROGRESS : has
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_RELEASE : publishes
+  BUILDER_PROJECT ||..o{ GAME_SESSION : seeds
 ```
 
 ### Session Transport Contract
 
+Client creates session via REST, connects WebSocket with resume token, sends commands via REST, and subscribes to HUD events via SSE. On token expiry, client calls POST restore with resume token in body.
+
 ```mermaid
 sequenceDiagram
   participant Client as Playable Client
-  participant REST as /api/game/session
-  participant WS as /api/game/session/:id/ws
-  participant HUD as /api/game/session/:id/hud
+  participant REST as REST api/game/session
+  participant WS as WebSocket ws endpoint
+  participant HUD as SSE hud endpoint
   participant Loop as GameLoop
 
   Client->>REST: POST create
-  REST-->>Client: sessionId + resumeToken + resumeTokenExpiresAtMs
+  REST-->>Client: sessionId, resumeToken, resumeTokenExpiresAtMs
   Client->>WS: connect with resumeToken query
-  WS->>Loop: restoreSession(sessionId, resumeToken, ownerSessionId)
+  WS->>Loop: restoreSession
   Loop-->>WS: accepted
   Client->>REST: POST command
   REST->>Loop: queue validated command
-  Loop-->>WS: publish state + rotated resume token
+  Loop-->>WS: publish state and rotated resume token
   Client->>HUD: SSE subscribe
-  HUD-->>Client: scene-title/xp/dialogue events
-  Note over Client,REST: On token expiry, client calls POST /api/game/session/:id with body { resumeToken }
+  HUD-->>Client: scene-title, xp, dialogue events
+  Note over Client,REST: Token expiry: POST restore with resumeToken in body
 ```
 
 ### Builder/Player Flow
+
+Authors create content in the builder, publish immutable releases, and players validate the published build. The loop continues with iteration back in the builder.
 
 ```mermaid
 flowchart TB
@@ -335,7 +326,7 @@ flowchart TB
   B2 --> B3
   B3 --> B4
   B4 --> B5
-  B5 -->|"projectId"| P1
+  B5 -->|projectId| P1
   P1 --> P2
   P2 --> P3
   P3 --> B1
@@ -343,13 +334,15 @@ flowchart TB
 
 ### Builder Publish Contract
 
+Draft mutations update builderProject.state. Publish creates an immutable release snapshot. Runtime sessions load only published release data.
+
 ```mermaid
 flowchart TD
-  A["Draft mutations<br>(scenes, NPCs, dialogue, assets, mechanics)"] --> B["builderProject.state<br>(version + checksum)"]
-  B --> C["publishProject(true)"]
-  C --> D["Create immutable builderProjectRelease<br>(projectId, releaseVersion, checksum, state)"]
+  A["Draft mutations: scenes, NPCs, dialogue, assets, mechanics"] --> B["builderProject.state with version and checksum"]
+  B --> C["publishProject true"]
+  C --> D["Create immutable builderProjectRelease"]
   D --> E["Set publishedReleaseVersion on project"]
-  E --> F["gameLoop.createSession(projectId)"]
+  E --> F["gameLoop.createSession with projectId"]
   F --> G["Load published release snapshot only"]
   G --> H["Session seeded with immutable release data"]
 ```
@@ -573,57 +566,57 @@ bun run dev
 
 #### 系统概览
 
+浏览器运行时（SSR + HTMX、可玩客户端 Pixi + Three、HUD 通过 SSE、命令流通过 WebSocket）连接 Elysia 服务器。插件按严格顺序执行。领域服务通过 Prisma 持久化。
+
 ```mermaid
 graph TB
   subgraph Browser["浏览器运行时"]
     SSR["SSR + HTMX 页面"]
     CLIENT["可玩客户端 (Pixi + Three)"]
-    SSEHUD["HUD 推送流 (SSE)"]
+    SSEHUD["HUD 流 (SSE)"]
     WS["命令流 (WebSocket)"]
   end
 
-  subgraph Elysia["Elysia 服务器"]
-    APP["app.ts"]
-
-    subgraph PluginOrder["插件与路由顺序"]
-      RC["request-context"]
-      EH["全局 onError"]
-      CT["onAfterHandle content-type"]
-      SW["swagger"]
-      SA["static-assets"]
-      PR["page-routes"]
-      GR["game-routes (SSR 游戏页)"]
-      AR["api-routes"]
-      AIR["ai-routes"]
-      GP["game-plugin (REST + WS + SSE)"]
-      BR["builder-routes"]
-      BA["builder-api-routes"]
-      SP["session-purge"]
-    end
-
-    subgraph Domain["领域服务"]
-      LOOP["GameLoopService"]
-      STORE["GameStateStore"]
-      SCENE["SceneEngine + NpcAiEngine"]
-      BUILDER["PrismaBuilderService"]
-      AI["ProviderRegistry + AI 服务"]
-    end
+  subgraph Elysia["Elysia 服务器 - app.ts"]
+    RC["request-context"]
+    EH["全局 onError"]
+    CT["onAfterHandle content-type"]
+    SW["swagger"]
+    SA["static-assets"]
+    PR["page-routes"]
+    GR["game-routes"]
+    AR["api-routes"]
+    AIR["ai-routes"]
+    GP["game-plugin"]
+    BR["builder-routes"]
+    BA["builder-api-routes"]
+    SP["session-purge"]
   end
 
-  subgraph Storage["持久化"]
-    PRI["Prisma ORM"]
-    DB["GameSession + PlayerProgress + BuilderProject + BuilderProjectRelease"]
+  subgraph Domain["领域服务"]
+    LOOP["GameLoopService"]
+    STORE["GameStateStore"]
+    SCENE["SceneEngine + NpcAiEngine"]
+    BUILDER["PrismaBuilderService"]
+    AI["ProviderRegistry + AI 服务"]
   end
 
-  SSR -->|"HTTP / HTMX"| APP
-  CLIENT -->|"REST create/state/restore/save/command"| GP
-  CLIENT -->|"WebSocket /api/game/session/:id/ws"| GP
-  CLIENT -->|"SSE /api/game/session/:id/hud"| GP
-  APP --> RC --> EH --> CT --> SW --> SA --> PR --> GR --> AR --> AIR --> GP --> BR --> BA --> SP
-  GP --> LOOP --> STORE --> PRI --> DB
+  subgraph Storage["持久化 - Prisma"]
+    DB["GameSession, PlayerProgress, BuilderProject, BuilderProjectRelease"]
+  end
+
+  SSR -->|HTTP / HTMX| RC
+  CLIENT -->|REST create/state/restore/save/command| GP
+  CLIENT -->|WebSocket| GP
+  CLIENT -->|SSE HUD 流| GP
+  RC --> EH --> CT --> SW --> SA --> PR --> GR --> AR --> AIR --> GP --> BR --> BA --> SP
+  GP --> LOOP
+  LOOP --> STORE
   LOOP --> SCENE
   LOOP --> AI
-  BA --> BUILDER --> PRI
+  STORE --> DB
+  BA --> BUILDER
+  BUILDER --> DB
 ```
 
 #### 请求生命周期
@@ -637,18 +630,20 @@ sequenceDiagram
   participant STORE as GameStateStore
   participant DB as Prisma
 
-  B->>APP: POST /api/game/session
-  APP->>AUTH: 解析/签发 cookie 会话标识
-  APP->>LOOP: createSession(locale, sceneId, projectId, ownerSessionId)
-  LOOP->>STORE: createSession + 初始化 stateVersion
+  B->>APP: POST 创建会话
+  APP->>AUTH: 解析或签发 cookie 会话标识
+  APP->>LOOP: createSession
+  LOOP->>STORE: createSession 并初始化 stateVersion
   STORE->>DB: INSERT gameSession
   DB-->>STORE: 持久化行
   STORE-->>LOOP: GameSessionSnapshot
-  LOOP-->>APP: 生命周期快照 + 恢复令牌
-  APP-->>B: 200 { sessionId, resumeToken, resumeTokenExpiresAtMs }
+  LOOP-->>APP: 生命周期快照和恢复令牌
+  APP-->>B: 200 返回 sessionId resumeToken resumeTokenExpiresAtMs
 ```
 
 #### 插件流水线
+
+插件按严格顺序组合，每个插件为下游消费者装饰请求上下文。基础设施插件先执行，然后是页面、游戏、API、AI 路由，接着是 game-plugin，最后是 builder 路由和 session-purge。
 
 ```mermaid
 flowchart LR
@@ -664,20 +659,6 @@ flowchart LR
   J --> K["builder-routes"]
   K --> L["builder-api-routes"]
   L --> M["session-purge"]
-
-  style A fill:#4ade80,color:#000
-  style B fill:#f87171,color:#000
-  style C fill:#60a5fa,color:#000
-  style D fill:#fbbf24,color:#000
-  style E fill:#94a3b8,color:#000
-  style F fill:#2dd4bf,color:#000
-  style G fill:#2dd4bf,color:#000
-  style H fill:#2dd4bf,color:#000
-  style I fill:#2dd4bf,color:#000
-  style J fill:#fb923c,color:#000
-  style K fill:#c084fc,color:#000
-  style L fill:#c084fc,color:#000
-  style M fill:#a3e635,color:#000
 ```
 
 #### 领域模型
@@ -722,32 +703,32 @@ erDiagram
 ```mermaid
 sequenceDiagram
   participant Client as 可玩客户端
-  participant REST as /api/game/session
-  participant WS as /api/game/session/:id/ws
-  participant HUD as /api/game/session/:id/hud
+  participant REST as REST 会话接口
+  participant WS as WebSocket 端点
+  participant HUD as SSE HUD 端点
   participant Loop as GameLoop
 
   Client->>REST: POST create
-  REST-->>Client: sessionId + resumeToken + resumeTokenExpiresAtMs
-  Client->>WS: 带 resumeToken query 建立连接
-  WS->>Loop: restoreSession(sessionId, resumeToken, ownerSessionId)
-  Loop-->>WS: 通过/拒绝
+  REST-->>Client: sessionId resumeToken resumeTokenExpiresAtMs
+  Client->>WS: 带 resumeToken 建立连接
+  WS->>Loop: restoreSession
+  Loop-->>WS: 通过
   Client->>REST: POST command
-  REST->>Loop: 命令入队并处理
-  Loop-->>WS: 推送 state + 新 token
+  REST->>Loop: 命令入队
+  Loop-->>WS: 推送 state 和新 token
   Client->>HUD: 订阅 SSE
-  HUD-->>Client: scene-title/xp/dialogue/close
+  HUD-->>Client: scene-title xp dialogue close
 ```
 
 #### 构建器发布契约
 
 ```mermaid
 flowchart TD
-  A["草稿变更<br>(saveScene/saveNpc/saveDialogue)"] --> B["builderProject.state<br>(version + checksum)"]
-  B --> C["publishProject(true)"]
+  A["草稿变更 scenes NPCs dialogue assets mechanics"] --> B["builderProject.state version checksum"]
+  B --> C["publishProject true"]
   C --> D["创建不可变 builderProjectRelease"]
   D --> E["更新 publishedReleaseVersion"]
-  E --> F["gameLoop.createSession(projectId)"]
+  E --> F["gameLoop.createSession projectId"]
   F --> G["仅加载已发布快照"]
   G --> H["会话由不可变发布数据初始化"]
 ```

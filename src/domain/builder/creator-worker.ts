@@ -53,7 +53,10 @@ const SVG_PALETTE = {
   text: "oklch(0.98 0.01 250)",
 } as const;
 
-const buildImageSvg = (title: string, body: string): string => `<?xml version="1.0" encoding="UTF-8"?>
+const buildImageSvg = (
+  title: string,
+  body: string,
+): string => `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="1024" height="576" viewBox="0 0 1024 576" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -229,10 +232,9 @@ const attemptPlaywrightEvidence = async (
   projectId: string,
   runId: string,
 ): Promise<string | null> => {
-  const playwrightModule = await new Function(
-    "moduleName",
-    "return import(moduleName)",
-  )("playwright")
+  const playwrightModule = await new Function("moduleName", "return import(moduleName)")(
+    "playwright",
+  )
     .then((module: Record<string, unknown>) => module)
     .catch(() => null);
   if (!playwrightModule) {
@@ -283,7 +285,9 @@ export const executeGenerationJob = async (
   projectId: string,
   job: GenerationJob,
 ): Promise<WorkerResult<GenerationJobExecution>> => {
-  const artifact = await buildGenerationArtifact(projectId, job).catch((error: unknown) => error as Error);
+  const artifact = await buildGenerationArtifact(projectId, job).catch(
+    (error: unknown) => error as Error,
+  );
   if (artifact instanceof Error) {
     return {
       ok: false,
@@ -324,7 +328,9 @@ export const executeAutomationRun = async (
   const evidenceUrl = await attemptPlaywrightEvidence(projectId, run.id);
   const fallbackArtifact =
     evidenceUrl === null
-      ? await buildGenerationArtifact(projectId, fallbackJob).catch((error: unknown) => error as Error)
+      ? await buildGenerationArtifact(projectId, fallbackJob).catch(
+          (error: unknown) => error as Error,
+        )
       : null;
   if (fallbackArtifact instanceof Error) {
     return {

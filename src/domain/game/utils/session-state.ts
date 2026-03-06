@@ -1,8 +1,8 @@
 import { resolveSpriteManifest } from "../../../shared/config/game-config.ts";
 import type {
   Direction,
-  GameFlagDefinition,
   GameDialogueEntry,
+  GameFlagDefinition,
   GameLocale,
   GameQuestState,
   GameSceneState,

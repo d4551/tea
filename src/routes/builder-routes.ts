@@ -20,17 +20,14 @@ import { renderAiPanel } from "../views/builder/ai-panel.ts";
 import { renderAssetsEditor } from "../views/builder/assets-editor.ts";
 import { renderAutomationPanel } from "../views/builder/automation-panel.ts";
 import { type DashboardStats, renderBuilderDashboard } from "../views/builder/builder-dashboard.ts";
-import {
-  type BuilderChromeProject,
-  renderBuilderLayout,
-} from "../views/builder/builder-layout.ts";
+import { type BuilderChromeProject, renderBuilderLayout } from "../views/builder/builder-layout.ts";
 import { renderDialogueEditor } from "../views/builder/dialogue-editor.ts";
 import { renderMechanicsEditor } from "../views/builder/mechanics-editor.ts";
 import { renderNpcEditor } from "../views/builder/npc-editor.ts";
 import { renderPlatformReadinessSection } from "../views/builder/platform-readiness.ts";
 import { renderSceneEditor } from "../views/builder/scene-editor.ts";
-import { escapeHtml, renderLayout } from "../views/layout.ts";
 import type { LayoutScript } from "../views/layout.ts";
+import { escapeHtml, renderLayout } from "../views/layout.ts";
 
 /**
  * Wraps builder content in the full page layout or returns partial for HTMX.
@@ -225,8 +222,8 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
       sceneCount: project.scenes.size,
       spriteManifestCount: project.assets.size,
       aiFeatures: features,
-        rendererPreference: appConfig.playableGame.rendererPreference,
-        onnxDevice: appConfig.ai.onnxDevice,
+      rendererPreference: appConfig.playableGame.rendererPreference,
+      onnxDevice: appConfig.ai.onnxDevice,
     });
 
     const body = `
@@ -324,8 +321,8 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
       sceneCount: project?.scenes.size ?? Object.keys(gameScenes).length,
       spriteManifestCount: Object.keys(gameSpriteManifests).length,
       aiFeatures: features,
-        rendererPreference: appConfig.playableGame.rendererPreference,
-        onnxDevice: appConfig.ai.onnxDevice,
+      rendererPreference: appConfig.playableGame.rendererPreference,
+      onnxDevice: appConfig.ai.onnxDevice,
     });
     const body = renderAiPanel(
       messages,

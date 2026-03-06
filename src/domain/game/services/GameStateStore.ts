@@ -369,7 +369,12 @@ class PrismaGameStateStore implements GameStateStore {
         seed: seed.seed,
         locale: seed.locale as string,
         sceneId: seed.scene.sceneId,
-        state: toScenePayload(seed.scene, seed.projectId, seed.releaseVersion, seed.triggerDefinitions),
+        state: toScenePayload(
+          seed.scene,
+          seed.projectId,
+          seed.releaseVersion,
+          seed.triggerDefinitions,
+        ),
         stateVersion: 1,
         createdAt,
         updatedAt: createdAt,

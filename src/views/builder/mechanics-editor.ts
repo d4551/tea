@@ -9,10 +9,8 @@ import type {
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 
-const questFormAction = (base: string, id: string) =>
-  `${base}/${encodeURIComponent(id)}/form`;
-const questDeleteAction = (base: string, id: string) =>
-  `${base}/${encodeURIComponent(id)}`;
+const questFormAction = (base: string, id: string) => `${base}/${encodeURIComponent(id)}/form`;
+const questDeleteAction = (base: string, id: string) => `${base}/${encodeURIComponent(id)}`;
 
 /**
  * Renders a quest edit form partial for HTMX swap into #mechanics-detail.
@@ -27,10 +25,13 @@ export const renderQuestEditForm = (
     locale,
     projectId,
   });
-  const deleteAction = withQueryParameters(questDeleteAction(appRoutes.builderApiQuests, quest.id), {
-    locale,
-    projectId,
-  });
+  const deleteAction = withQueryParameters(
+    questDeleteAction(appRoutes.builderApiQuests, quest.id),
+    {
+      locale,
+      projectId,
+    },
+  );
   const firstStep = quest.steps[0];
   return `<div class="card card-border bg-base-100 shadow-sm">
     <div class="card-body gap-3">
@@ -65,14 +66,20 @@ export const renderTriggerEditForm = (
   projectId: string,
   trigger: TriggerDefinition,
 ): string => {
-  const formAction = withQueryParameters(questFormAction(appRoutes.builderApiTriggers, trigger.id), {
-    locale,
-    projectId,
-  });
-  const deleteAction = withQueryParameters(questDeleteAction(appRoutes.builderApiTriggers, trigger.id), {
-    locale,
-    projectId,
-  });
+  const formAction = withQueryParameters(
+    questFormAction(appRoutes.builderApiTriggers, trigger.id),
+    {
+      locale,
+      projectId,
+    },
+  );
+  const deleteAction = withQueryParameters(
+    questDeleteAction(appRoutes.builderApiTriggers, trigger.id),
+    {
+      locale,
+      projectId,
+    },
+  );
   return `<div class="card card-border bg-base-100 shadow-sm">
     <div class="card-body gap-3">
       <div class="flex items-center justify-between gap-3">
@@ -112,15 +119,22 @@ export const renderDialogueGraphEditForm = (
   projectId: string,
   graph: DialogueGraph,
 ): string => {
-  const formAction = withQueryParameters(questFormAction(appRoutes.builderApiDialogueGraphs, graph.id), {
-    locale,
-    projectId,
-  });
-  const deleteAction = withQueryParameters(questDeleteAction(appRoutes.builderApiDialogueGraphs, graph.id), {
-    locale,
-    projectId,
-  });
-  const rootNode = graph.nodes.find((n) => n.id === "root" || n.id === graph.rootNodeId) ?? graph.nodes[0];
+  const formAction = withQueryParameters(
+    questFormAction(appRoutes.builderApiDialogueGraphs, graph.id),
+    {
+      locale,
+      projectId,
+    },
+  );
+  const deleteAction = withQueryParameters(
+    questDeleteAction(appRoutes.builderApiDialogueGraphs, graph.id),
+    {
+      locale,
+      projectId,
+    },
+  );
+  const rootNode =
+    graph.nodes.find((n) => n.id === "root" || n.id === graph.rootNodeId) ?? graph.nodes[0];
   const line = rootNode?.line ?? "";
   return `<div class="card card-border bg-base-100 shadow-sm">
     <div class="card-body gap-3">

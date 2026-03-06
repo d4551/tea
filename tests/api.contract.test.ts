@@ -6,7 +6,7 @@ import { correlationIdHeader } from "../src/lib/correlation-id.ts";
 import { gameAssetUrls } from "../src/shared/constants/game-assets.ts";
 import { contentType, httpStatus } from "../src/shared/constants/http.ts";
 import { defaultOracleMode } from "../src/shared/constants/oracle.ts";
-import { appRoutes } from "../src/shared/constants/routes.ts";
+import { appRoutes, withQueryParameters } from "../src/shared/constants/routes.ts";
 import { prisma } from "../src/shared/services/db.ts";
 
 let app: Awaited<ReturnType<typeof createApp>>;
@@ -1208,6 +1208,31 @@ describe("HTMX partial rendering", () => {
     expect(automationPageHtml.includes('id="builder-project-shell"')).toBe(true);
     expect(automationPageHtml.includes("Automation workspace")).toBe(true);
 
+    const uploadAssetId = `upload-${crypto.randomUUID().slice(0, 8)}`;
+    const uploadPayload = new FormData();
+    uploadPayload.set("projectId", projectId);
+    uploadPayload.set("locale", "en-US");
+    uploadPayload.set("id", uploadAssetId);
+    uploadPayload.set("label", "Uploaded Builder Portrait");
+    uploadPayload.set("kind", "portrait");
+    uploadPayload.set("sceneMode", "2d");
+    uploadPayload.set(
+      "file",
+      new File([new Uint8Array([137, 80, 78, 71])], "portrait.png", { type: "image/png" }),
+    );
+    const uploadResponse = await app.handle(
+      new Request(toUrl(appRoutes.builderApiAssetsUpload), {
+        method: "POST",
+        headers: {
+          accept: "text/html",
+        },
+        body: uploadPayload,
+      }),
+    );
+    const uploadHtml = await uploadResponse.text();
+    expect(uploadResponse.status).toBe(httpStatus.ok);
+    expect(uploadHtml.includes(uploadAssetId)).toBe(true);
+
     const assetId = `asset-${crypto.randomUUID().slice(0, 8)}`;
     const assetResponse = await app.handle(
       new Request(toUrl("/api/builder/assets/create/form"), {
@@ -1281,6 +1306,30 @@ describe("HTMX partial rendering", () => {
     if (!generationJobId) {
       return;
     }
+
+    const generationStreamResponse = await app.handle(
+      new Request(
+        toUrl(
+          withQueryParameters(
+            appRoutes.builderApiGenerationJobStream.replace(":jobId", generationJobId),
+            {
+              projectId,
+              locale: "en-US",
+            },
+          ),
+        ),
+        {
+          headers: {
+            accept: "text/event-stream",
+          },
+        },
+      ),
+    );
+    const generationStreamText = await generationStreamResponse.text();
+    expect(generationStreamResponse.status).toBe(httpStatus.ok);
+    expect(generationStreamResponse.headers.get("content-type")).toContain("text/event-stream");
+    expect(generationStreamText.includes('"ok":true')).toBe(true);
+    expect(generationStreamText.includes(generationJobId)).toBe(true);
 
     const generationApproveResponse = await app.handle(
       new Request(toUrl(`/api/builder/generation-jobs/${generationJobId}/approve`), {

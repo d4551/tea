@@ -94,8 +94,9 @@ export const gameRoutes = new Elysia({ prefix: appRoutes.game }).guard(authSessi
       sceneTitle: session.state.sceneTitle,
       sceneMode: session.state.sceneMode,
       activeQuestTitle:
-        session.state.quests?.find((quest) => !quest.completed)?.steps.find((step) => step.state === "active")
-          ?.title ??
+        session.state.quests
+          ?.find((quest) => !quest.completed)
+          ?.steps.find((step) => step.state === "active")?.title ??
         session.state.quests?.find((quest) => !quest.completed)?.title,
       resumeToken: session.resumeToken,
       resumeTokenExpiresAtMs: session.resumeTokenExpiresAtMs,

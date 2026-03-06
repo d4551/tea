@@ -436,7 +436,12 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         loopTitle: "Primary loop",
         loopDescription:
           "Everything in the product now points at the same release cycle instead of separate pitch and operator surfaces.",
-        loopSteps: ["Author in builder", "Review AI changes", "Publish release", "Play published build"],
+        loopSteps: [
+          "Author in builder",
+          "Review AI changes",
+          "Publish release",
+          "Play published build",
+        ],
         statusTitle: "Current workspace status",
         architectureTitle: "Single-owner architecture",
         architectureDescription:
@@ -733,11 +738,13 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       configKeyLabel: "Config Key",
       docsLabel: "Docs",
       sceneLibraryTitle: "Scene library",
-      sceneCreateDescription: "Create or select a scene, then refine its layout and runtime preview.",
+      sceneCreateDescription:
+        "Create or select a scene, then refine its layout and runtime preview.",
       sceneCreateTitlePlaceholder: "teaHouseAnnex",
       sceneBackgroundPlaceholder: "/assets/images/backgrounds/tea-house-annex.png",
       npcRosterTitle: "NPC roster",
-      npcCreateDescription: "Add NPCs into a scene, then tune movement, dialogue, and greet behavior.",
+      npcCreateDescription:
+        "Add NPCs into a scene, then tune movement, dialogue, and greet behavior.",
       npcCreateSceneLabel: "Owning scene",
       npcCreateKeyPlaceholder: "teaMonk",
       npcCreateLabelPlaceholder: "npc.teaMonk.label",
@@ -756,7 +763,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       dialogueSearchLabel: "Filter dialogue",
       dialogueSearchPlaceholder: "Search by NPC or dialogue key",
       dialogueWorkspaceTitle: "Dialogue workspace",
-      dialogueCreateDescription: "Keep dialogue grouped by NPC and use AI to draft new lines before saving.",
+      dialogueCreateDescription:
+        "Keep dialogue grouped by NPC and use AI to draft new lines before saving.",
       dialogueKeyPlaceholder: "npc.teaMonk.greet",
       addLinePlaceholder: "Welcome, traveler. The leaves have been expecting you.",
       mechanicsWorkspaceTitle: "Mechanics workspace",
