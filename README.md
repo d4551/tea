@@ -319,8 +319,8 @@ sequenceDiagram
 flowchart TB
   subgraph Builder["Builder"]
     B1["Author content"]
-    B2["Scenes / NPCs / Dialogue"]
-    B3["Assets / Clips / Mechanics"]
+    B2["Scenes, NPCs, Dialogue"]
+    B3["Assets, Clips, Mechanics"]
     B4["AI patch review"]
     B5["Publish release"]
   end
@@ -345,9 +345,9 @@ flowchart TB
 
 ```mermaid
 flowchart TD
-  A["Draft mutations\n(scenes, NPCs, dialogue, assets, mechanics)"] --> B["builderProject.state\n(version + checksum)"]
+  A["Draft mutations<br>(scenes, NPCs, dialogue, assets, mechanics)"] --> B["builderProject.state<br>(version + checksum)"]
   B --> C["publishProject(true)"]
-  C --> D["Create immutable builderProjectRelease\n(projectId, releaseVersion, checksum, state)"]
+  C --> D["Create immutable builderProjectRelease<br>(projectId, releaseVersion, checksum, state)"]
   D --> E["Set publishedReleaseVersion on project"]
   E --> F["gameLoop.createSession(projectId)"]
   F --> G["Load published release snapshot only"]
@@ -743,7 +743,7 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-  A["草稿变更\n(saveScene/saveNpc/saveDialogue)"] --> B["builderProject.state\n(version + checksum)"]
+  A["草稿变更<br>(saveScene/saveNpc/saveDialogue)"] --> B["builderProject.state<br>(version + checksum)"]
   B --> C["publishProject(true)"]
   C --> D["创建不可变 builderProjectRelease"]
   D --> E["更新 publishedReleaseVersion"]

@@ -207,7 +207,7 @@ export const renderMechanicsEditor = (
             </div>
             <span class="badge badge-outline">${escapeHtml(trigger.event)}</span>
           </div>
-          <p class="text-sm text-base-content/75">${escapeHtml(trigger.sceneId ?? "global")}</p>
+          <p class="text-sm text-base-content/75">${escapeHtml(trigger.sceneId ?? messages.builder.triggerSceneGlobal)}</p>
         </div>
       </article>`,
     )
@@ -222,7 +222,7 @@ export const renderMechanicsEditor = (
             <div class="font-mono text-xs text-base-content/60">${escapeHtml(graph.id)}</div>
           </div>
           <div class="flex flex-wrap gap-2">
-            <span class="badge badge-soft">${graph.nodes.length} nodes</span>
+            <span class="badge badge-soft">${graph.nodes.length} ${escapeHtml(messages.builder.nodesCountLabel)}</span>
             ${
               graph.npcId
                 ? `<span class="badge badge-outline">${escapeHtml(graph.npcId)}</span>`
@@ -242,8 +242,8 @@ export const renderMechanicsEditor = (
           <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
           <h2 class="card-title">${escapeHtml(messages.builder.questsTitle)}</h2>
           <input name="id" type="text" class="input input-bordered w-full" placeholder="quest.new" required />
-          <input name="title" type="text" class="input input-bordered w-full" placeholder="Meet the guide" required />
-          <textarea name="description" class="textarea textarea-bordered w-full" rows="3" placeholder="Guide the player through the authored intro." required></textarea>
+          <input name="title" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.questTitlePlaceholder)}" required />
+          <textarea name="description" class="textarea textarea-bordered w-full" rows="3" placeholder="${escapeHtml(messages.builder.questDescriptionPlaceholder)}" required></textarea>
           <input name="triggerId" type="text" class="input input-bordered w-full" placeholder="trigger.new" required />
           <div class="flex items-center gap-2">
             <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.createQuest)}</button>
@@ -258,7 +258,7 @@ export const renderMechanicsEditor = (
           <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
           <h2 class="card-title">${escapeHtml(messages.builder.triggersTitle)}</h2>
           <input name="id" type="text" class="input input-bordered w-full" placeholder="trigger.new" required />
-          <input name="label" type="text" class="input input-bordered w-full" placeholder="Talk to the guide" required />
+          <input name="label" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.triggerLabelPlaceholder)}" required />
           <select name="event" class="select select-bordered w-full">
             <option value="scene-enter">scene-enter</option>
             <option value="npc-interact">npc-interact</option>
@@ -280,7 +280,7 @@ export const renderMechanicsEditor = (
           <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
           <h2 class="card-title">${escapeHtml(messages.builder.dialogueGraphsTitle)}</h2>
           <input name="id" type="text" class="input input-bordered w-full" placeholder="graph.npc.guide" required />
-          <input name="title" type="text" class="input input-bordered w-full" placeholder="Guide intro graph" required />
+          <input name="title" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.graphTitlePlaceholder)}" required />
           <input name="npcId" type="text" class="input input-bordered w-full" placeholder="teaMonk" />
           <textarea name="line" class="textarea textarea-bordered w-full" rows="3" placeholder="npc.teaMonk.greet" required></textarea>
           <div class="flex items-center gap-2">

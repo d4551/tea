@@ -100,6 +100,18 @@ const capabilityCopy = (
         description: messages.builder.capabilityAutomationDescription,
         href: appRoutes.builderAi,
       };
+    case "webgpuRenderer":
+      return {
+        title: messages.builder.capabilityWebgpuRendererTitle,
+        description: messages.builder.capabilityWebgpuRendererDescription,
+        href: appRoutes.builder,
+      };
+    case "aiOnnxGpu":
+      return {
+        title: messages.builder.capabilityAiOnnxGpuTitle,
+        description: messages.builder.capabilityAiOnnxGpuDescription,
+        href: appRoutes.builderAi,
+      };
   }
 };
 

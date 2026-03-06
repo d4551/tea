@@ -47,7 +47,7 @@ export const renderAssetsEditor = (
           </div>
           <div class="flex flex-wrap gap-2 text-xs">
             <span class="badge badge-soft">${escapeHtml(asset.sceneMode)}</span>
-            <span class="badge ${asset.approved ? "badge-success" : "badge-warning"} badge-soft">${asset.approved ? "approved" : "draft"}</span>
+            <span class="badge ${asset.approved ? "badge-success" : "badge-warning"} badge-soft">${asset.approved ? escapeHtml(messages.builder.assetStatusApproved) : escapeHtml(messages.builder.assetStatusDraft)}</span>
           </div>
           <p class="break-all text-sm text-base-content/70">${escapeHtml(asset.source)}</p>
         </div>
@@ -136,7 +136,7 @@ export const renderAssetsEditor = (
             <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
             <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
             <input name="id" type="text" class="input input-bordered w-full" placeholder="asset.custom.hero" />
-            <input name="label" type="text" class="input input-bordered w-full" placeholder="Hero Portrait" />
+            <input name="label" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.assetLabelPlaceholder)}" />
             <select name="kind" class="select select-bordered w-full">
               <option value="portrait">portrait</option>
               <option value="sprite-sheet">sprite-sheet</option>
@@ -159,7 +159,7 @@ export const renderAssetsEditor = (
             <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
             <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
             <input name="id" type="text" class="input input-bordered w-full" placeholder="asset.custom.hero" required />
-            <input name="label" type="text" class="input input-bordered w-full" placeholder="Hero Portrait" required />
+            <input name="label" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.assetLabelPlaceholder)}" required />
             <select name="kind" class="select select-bordered w-full">
               <option value="portrait">portrait</option>
               <option value="sprite-sheet">sprite-sheet</option>
@@ -209,8 +209,8 @@ export const renderAssetsEditor = (
             <option value="voice-line">voice-line</option>
             <option value="animation-plan">animation-plan</option>
           </select>
-          <textarea name="prompt" class="textarea textarea-bordered w-full" rows="4" placeholder="Generate an autumn river trader portrait with warm tones." required></textarea>
-          <input name="targetId" type="text" class="input input-bordered w-full" placeholder="scene or asset target (optional)" />
+          <textarea name="prompt" class="textarea textarea-bordered w-full" rows="4" placeholder="${escapeHtml(messages.builder.generationPromptPlaceholder)}" required></textarea>
+          <input name="targetId" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.generationTargetPlaceholder)}" />
           <div class="flex items-center gap-2">
             <button type="submit" class="btn btn-secondary btn-sm">${escapeHtml(messages.builder.createGenerationJob)}</button>
             <span id="job-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>

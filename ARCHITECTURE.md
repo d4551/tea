@@ -5,7 +5,7 @@
 ```mermaid
 graph TB
   subgraph Browser["Browser"]
-    HOME["SSR/HTMX pages"]
+    HOME["SSR + HTMX pages"]
     GAME["Playable client (Pixi + Three)"]
     SSE["HUD SSE stream"]
     WS["Command WebSocket"]
@@ -133,8 +133,8 @@ Removed legacy transport:
 flowchart TB
   subgraph Builder["Builder"]
     B1["Author content"]
-    B2["Scenes / NPCs / Dialogue"]
-    B3["Assets / Clips / Mechanics"]
+    B2["Scenes, NPCs, Dialogue"]
+    B3["Assets, Clips, Mechanics"]
     B4["AI patch review"]
     B5["Publish release"]
   end
@@ -165,7 +165,7 @@ flowchart TD
   SNAPSHOT --> POINTER["Update publishedReleaseVersion"]
   POINTER --> RUNTIME["gameLoop.createSession(projectId)"]
   RUNTIME --> RELEASE["load published release state"]
-  RELEASE --> SESSION["seed runtime scene/dialogue from immutable release"]
+  RELEASE --> SESSION["seed runtime scene, dialogue from immutable release"]
 ```
 
 Current behavior:
@@ -193,6 +193,8 @@ If these are missing/invalid, the playable client aborts initialization instead 
 | Concern | Source |
 |---|---|
 | Environment parsing and defaults | `src/config/environment.ts` |
+| i18n message catalogs (en-US, zh-CN) | `src/shared/i18n/messages.ts` |
+| Locale resolution (Accept-Language, ?lang=) | `src/shared/i18n/translator.ts` |
 | Runtime game contract | `src/shared/config/game-config.ts` |
 | Public route constants | `src/shared/constants/routes.ts` |
 | Game type contracts | `src/shared/contracts/game.ts` |

@@ -73,7 +73,7 @@ export const renderAutomationPanel = (
         <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
         <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
         <h1 class="card-title text-2xl">${escapeHtml(messages.builder.automationWorkspaceTitle)}</h1>
-        <textarea name="goal" class="textarea textarea-bordered w-full" rows="4" placeholder="Collect review evidence for the current scene, queue attachments, and prepare a draft apply plan." required></textarea>
+        <textarea name="goal" class="textarea textarea-bordered w-full" rows="4" placeholder="${escapeHtml(messages.builder.automationGoalPlaceholder)}" required></textarea>
         <div class="flex items-center gap-2">
           <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.createAutomationRun)}</button>
           <span id="automation-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>

@@ -233,7 +233,7 @@ const attemptPlaywrightEvidence = async (
     "moduleName",
     "return import(moduleName)",
   )("playwright")
-    .then((module) => module)
+    .then((module: Record<string, unknown>) => module)
     .catch(() => null);
   if (!playwrightModule) {
     return null;
@@ -283,7 +283,7 @@ export const executeGenerationJob = async (
   projectId: string,
   job: GenerationJob,
 ): Promise<WorkerResult<GenerationJobExecution>> => {
-  const artifact = await buildGenerationArtifact(projectId, job).catch((error: unknown) => error);
+  const artifact = await buildGenerationArtifact(projectId, job).catch((error: unknown) => error as Error);
   if (artifact instanceof Error) {
     return {
       ok: false,
@@ -324,7 +324,7 @@ export const executeAutomationRun = async (
   const evidenceUrl = await attemptPlaywrightEvidence(projectId, run.id);
   const fallbackArtifact =
     evidenceUrl === null
-      ? await buildGenerationArtifact(projectId, fallbackJob).catch((error: unknown) => error)
+      ? await buildGenerationArtifact(projectId, fallbackJob).catch((error: unknown) => error as Error)
       : null;
   if (fallbackArtifact instanceof Error) {
     return {
@@ -338,7 +338,7 @@ export const executeAutomationRun = async (
     jobId: run.id,
     kind: "automation-evidence",
     label: "Automation evidence",
-    previewSource: evidenceUrl,
+    previewSource: evidenceUrl ?? "",
     summary: "Captured builder review evidence",
     mimeType: "image/png",
     approved: false,

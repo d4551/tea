@@ -323,12 +323,24 @@ export interface Messages {
     readonly dialogueGraphsTitle: string;
     readonly createQuest: string;
     readonly editQuest: string;
+    readonly questTitlePlaceholder: string;
+    readonly questDescriptionPlaceholder: string;
     readonly createTrigger: string;
     readonly editTrigger: string;
+    readonly triggerLabelPlaceholder: string;
     readonly createDialogueGraph: string;
     readonly editDialogueGraph: string;
+    readonly graphTitlePlaceholder: string;
+    readonly assetLabelPlaceholder: string;
+    readonly assetStatusApproved: string;
+    readonly assetStatusDraft: string;
+    readonly generationPromptPlaceholder: string;
+    readonly generationTargetPlaceholder: string;
+    readonly triggerSceneGlobal: string;
+    readonly nodesCountLabel: string;
     readonly automationWorkspaceTitle: string;
     readonly automationGoalLabel: string;
+    readonly automationGoalPlaceholder: string;
     readonly createAutomationRun: string;
     readonly approveAction: string;
     readonly cancelAction: string;
@@ -368,6 +380,10 @@ export interface Messages {
     readonly capabilityAiAuthoringDescription: string;
     readonly capabilityAutomationTitle: string;
     readonly capabilityAutomationDescription: string;
+    readonly capabilityWebgpuRendererTitle: string;
+    readonly capabilityWebgpuRendererDescription: string;
+    readonly capabilityAiOnnxGpuTitle: string;
+    readonly capabilityAiOnnxGpuDescription: string;
   };
 }
 
@@ -749,12 +765,25 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       dialogueGraphsTitle: "Dialogue graphs",
       createQuest: "Create quest",
       editQuest: "Edit quest",
+      questTitlePlaceholder: "Meet the guide",
+      questDescriptionPlaceholder: "Guide the player through the authored intro.",
       createTrigger: "Create trigger",
       editTrigger: "Edit trigger",
+      triggerLabelPlaceholder: "Talk to the guide",
       createDialogueGraph: "Create graph",
       editDialogueGraph: "Edit dialogue graph",
+      graphTitlePlaceholder: "Guide intro graph",
+      assetLabelPlaceholder: "Hero Portrait",
+      assetStatusApproved: "approved",
+      assetStatusDraft: "draft",
+      generationPromptPlaceholder: "Generate an autumn river trader portrait with warm tones.",
+      generationTargetPlaceholder: "scene or asset target (optional)",
+      triggerSceneGlobal: "global",
+      nodesCountLabel: "nodes",
       automationWorkspaceTitle: "Automation workspace",
       automationGoalLabel: "Automation goal",
+      automationGoalPlaceholder:
+        "Collect review evidence for the current scene, queue attachments, and prepare a draft apply plan.",
       createAutomationRun: "Queue automation run",
       approveAction: "Approve",
       cancelAction: "Cancel",
@@ -806,6 +835,12 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       capabilityAutomationTitle: "Automation / RPA",
       capabilityAutomationDescription:
         "There is no background worker, browser automation runner, or tool-orchestrated production pipeline connected to the builder yet.",
+      capabilityWebgpuRendererTitle: "WebGPU Renderer",
+      capabilityWebgpuRendererDescription:
+        "PixiJS can auto-detect and prefer WebGPU for 2D rendering when supported, falling back to WebGL seamlessly.",
+      capabilityAiOnnxGpuTitle: "ONNX GPU Acceleration",
+      capabilityAiOnnxGpuDescription:
+        "Transformers.js pipelines can target the WebGPU device for GPU-accelerated ONNX inference when available.",
     },
   },
   "zh-CN": {
@@ -1162,12 +1197,24 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       dialogueGraphsTitle: "对话图",
       createQuest: "创建任务",
       editQuest: "编辑任务",
+      questTitlePlaceholder: "遇见向导",
+      questDescriptionPlaceholder: "引导玩家完成已创作的介绍流程。",
       createTrigger: "创建触发器",
       editTrigger: "编辑触发器",
+      triggerLabelPlaceholder: "与向导交谈",
       createDialogueGraph: "创建对话图",
       editDialogueGraph: "编辑对话图",
+      graphTitlePlaceholder: "向导介绍对话图",
+      assetLabelPlaceholder: "英雄肖像",
+      assetStatusApproved: "已批准",
+      assetStatusDraft: "草稿",
+      generationPromptPlaceholder: "生成一幅秋日河畔商人的暖色调肖像。",
+      generationTargetPlaceholder: "场景或资源目标（可选）",
+      triggerSceneGlobal: "全局",
+      nodesCountLabel: "节点",
       automationWorkspaceTitle: "自动化工作区",
       automationGoalLabel: "自动化目标",
+      automationGoalPlaceholder: "收集当前场景的审查证据，排队附件，并准备草稿应用计划。",
       createAutomationRun: "加入自动化队列",
       approveAction: "批准",
       cancelAction: "取消",
@@ -1217,6 +1264,12 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       capabilityAutomationTitle: "自动化 / RPA",
       capabilityAutomationDescription:
         "构建器尚未接入后台 worker、浏览器自动化执行器或面向生产流程的工具编排系统。",
+      capabilityWebgpuRendererTitle: "WebGPU 渲染器",
+      capabilityWebgpuRendererDescription:
+        "PixiJS 可在支持 WebGPU 时自动检测并优先使用 WebGPU 进行 2D 渲染，否则无缝回退至 WebGL。",
+      capabilityAiOnnxGpuTitle: "ONNX GPU 加速",
+      capabilityAiOnnxGpuDescription:
+        "Transformers.js 管线可在支持时将 ONNX 推理定向至 WebGPU 设备进行 GPU 加速。",
     },
   },
 };

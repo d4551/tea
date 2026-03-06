@@ -128,7 +128,7 @@ const buildThreeObject = (node: SceneNodeDefinition): THREE.Object3D => {
     opacity: node.nodeType === "trigger" ? 0.35 : 0.92,
   });
   const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.set(node.position.x, node.position.y, node.position.z);
+  mesh.position.set(node.position.x, node.position.y, "z" in node.position ? node.position.z : 0);
   if ("rotation" in node) {
     mesh.rotation.set(node.rotation.x, node.rotation.y, node.rotation.z);
     mesh.scale.set(node.scale.x, node.scale.y, node.scale.z);
