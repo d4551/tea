@@ -226,7 +226,7 @@ sequenceDiagram
 
 ### Plugin Pipeline
 
-Plugins are composed in strict order. Each plugin decorates the request context for downstream consumers. Infrastructure plugins (request-context, onError, content-type, swagger, static-assets) run first; then page, game, API, and AI routes; then the AI provider lifecycle plugin; then game-plugin; then builder routes; finally session-purge and creator-worker for lifecycle-owned background execution. Builder locale, project id, and current-path resolution are centralized in `src/plugins/builder-request-context.ts`, full-page SSR shells consume a shared `LayoutContext` from `src/views/layout.ts`, builder JSON draft-state decode/versioned-save/snapshot projection now live behind `src/domain/builder/builder-project-state-store.ts`, `src/shared/contracts/game.ts` now owns persisted scene-state / realtime-frame validation, `game-plugin` now owns session-scoped websocket tick cleanup plus transport teardown when a session closes or is deleted, and `game-loop` owns canonical session resolution, dashboard/session metrics, expired-session purging, and the HUD state read path consumed by SSE transport rendering.
+Plugins are composed in strict order. Each plugin decorates the request context for downstream consumers. Infrastructure plugins (request-context, onError, content-type, swagger, static-assets) run first; then page, game, API, and AI routes; then the AI provider lifecycle plugin; then game-plugin; then builder routes; finally session-purge and creator-worker for lifecycle-owned background execution. Builder locale, project id, and current-path resolution are now attached once through the scoped `builder-request-context` derive plugin in `src/plugins/builder-request-context.ts`, full-page SSR shells consume a shared `LayoutContext` from `src/views/layout.ts`, builder JSON draft-state decode/versioned-save/snapshot projection now live behind `src/domain/builder/builder-project-state-store.ts`, `src/shared/contracts/game.ts` now owns persisted scene-state / realtime-frame validation, `game-plugin` now owns session-scoped websocket tick cleanup plus transport teardown when a session closes or is deleted, and `game-loop` owns canonical session resolution, dashboard/session metrics, expired-session purging, and the HUD state read path consumed by SSE transport rendering.
 
 ```mermaid
 flowchart LR
@@ -760,39 +760,111 @@ flowchart LR
 
 #### 领域模型
 
+核心实体：GameSession（服务端权威运行时状态）、PlayerProgress（经验值与等级）、BuilderProject（草稿状态/版本控制）、BuilderProjectScene / BuilderProjectDialogueEntry（关系型草稿世界内容注册表）、BuilderProjectAsset / BuilderProjectAnimationClip（关系型草稿媒体注册表）、BuilderProjectDialogueGraph / BuilderProjectQuest / BuilderProjectTrigger / BuilderProjectFlag（关系型草稿机制注册表）、BuilderProjectGenerationJob / BuilderProjectArtifact / BuilderProjectAutomationRun（关系型草稿工作进程状态），以及 BuilderProjectRelease（不可变的发布快照）。
+
 ```mermaid
 erDiagram
-    GAME_SESSION {
-      string id PK
-      string ownerSessionId
-      int stateVersion
-      datetime expiresAt
-      json scene
-      string projectId
-    }
-    PLAYER_PROGRESS {
-      string sessionId PK
-      int xp
-      int level
-    }
-    BUILDER_PROJECT {
-      string id PK
-      int version
-      string checksum
-      int latestReleaseVersion
-      int publishedReleaseVersion
-      json state
-    }
-    BUILDER_PROJECT_RELEASE {
-      string projectId FK
-      int releaseVersion
-      string checksum
-      json state
-    }
-
-    GAME_SESSION ||--|| PLAYER_PROGRESS : 关联
-    BUILDER_PROJECT ||--o{ BUILDER_PROJECT_RELEASE : 发布
-    BUILDER_PROJECT ||..o{ GAME_SESSION : 生成
+  GAME_SESSION {
+    string id PK
+    string ownerSessionId
+    int stateVersion
+    datetime expiresAt
+    json scene
+    string projectId
+  }
+  PLAYER_PROGRESS {
+    string sessionId PK
+    int xp
+    int level
+  }
+  BUILDER_PROJECT {
+    string id PK
+    int version
+    string checksum
+    int latestReleaseVersion
+    int publishedReleaseVersion
+    json state
+  }
+  BUILDER_PROJECT_SCENE {
+    string projectId PK
+    string id PK
+    string titleKey
+  }
+  BUILDER_PROJECT_DIALOGUE_ENTRY {
+    string projectId PK
+    string locale PK
+    string key PK
+  }
+  BUILDER_PROJECT_ASSET {
+    string projectId PK
+    string id PK
+    string kind
+    string sceneMode
+  }
+  BUILDER_PROJECT_ANIMATION_CLIP {
+    string projectId PK
+    string id PK
+    string assetId
+    string sceneMode
+  }
+  BUILDER_PROJECT_DIALOGUE_GRAPH {
+    string projectId PK
+    string id PK
+    string rootNodeId
+  }
+  BUILDER_PROJECT_QUEST {
+    string projectId PK
+    string id PK
+    string title
+  }
+  BUILDER_PROJECT_TRIGGER {
+    string projectId PK
+    string id PK
+    string event
+  }
+  BUILDER_PROJECT_FLAG {
+    string projectId PK
+    string key PK
+    string label
+  }
+  BUILDER_PROJECT_GENERATION_JOB {
+    string projectId PK
+    string id PK
+    string kind
+    string status
+  }
+  BUILDER_PROJECT_ARTIFACT {
+    string projectId PK
+    string id PK
+    string jobId
+    string kind
+  }
+  BUILDER_PROJECT_AUTOMATION_RUN {
+    string projectId PK
+    string id PK
+    string status
+  }
+  BUILDER_PROJECT_RELEASE {
+    string projectId FK
+    int releaseVersion
+    string checksum
+    json state
+  }
+  GAME_SESSION ||--|| PLAYER_PROGRESS : 包含
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_SCENE : 拥有
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_DIALOGUE_ENTRY : 拥有
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_ASSET : 拥有
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_ANIMATION_CLIP : 拥有
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_DIALOGUE_GRAPH : 拥有
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_QUEST : 拥有
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_TRIGGER : 拥有
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_FLAG : 拥有
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_GENERATION_JOB : 拥有
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_ARTIFACT : 拥有
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_AUTOMATION_RUN : 拥有
+  BUILDER_PROJECT_ASSET ||--o{ BUILDER_PROJECT_ANIMATION_CLIP : 驱动
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_RELEASE : 发布
+  BUILDER_PROJECT ||..o{ GAME_SESSION : 初始化
 ```
 
 #### 会话传输契约
@@ -819,17 +891,25 @@ sequenceDiagram
 
 #### 构建器发布契约
 
+草稿变更仅更新 `builderProject.state` 中残留的草稿元数据，而场景、本地化对话目录、媒体、机制以及工作进程状态则保存在关系型的草稿表中。发布操作会创建包含完整序列化项目的不可变发布快照。运行时会话仅加载已发布的版本数据。
+
 ```mermaid
 flowchart TD
-  A["草稿变更 scenes NPCs dialogue mechanics"] --> B["builderProject.state version checksum"]
-  A --> C["builderProjectAsset + builderProjectAnimationClip"]
-  B --> D["publishProject true"]
-  C --> D
-  D --> E["创建不可变 builderProjectRelease"]
-  E --> F["更新 publishedReleaseVersion"]
-  F --> G["gameLoop.createSession projectId"]
-  G --> H["仅加载已发布快照"]
-  H --> I["会话由不可变发布数据初始化"]
+  A["草稿变更：scenes, NPCs, dialogue, mechanics"] --> B["builderProject.state + version + checksum"]
+  A --> C["builderProjectScene + builderProjectDialogueEntry"]
+  A --> D["builderProjectAsset + builderProjectAnimationClip"]
+  A --> E["builderProjectDialogueGraph + builderProjectQuest + builderProjectTrigger + builderProjectFlag"]
+  A --> F["builderProjectGenerationJob + builderProjectArtifact + builderProjectAutomationRun"]
+  B --> G["publishProject(true)"]
+  C --> G
+  D --> G
+  E --> G
+  F --> G
+  G --> H["创建不可变 builderProjectRelease"]
+  H --> I["更新 publishedReleaseVersion"]
+  I --> J["gameLoop.createSession(projectId)"]
+  J --> K["仅加载已发布快照"]
+  K --> L["会话由不可变发布数据初始化 (包含 scene, dialogue, media 等)"]
 ```
 
 ### 项目结构
