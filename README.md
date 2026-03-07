@@ -671,29 +671,29 @@ graph TB
   end
 
   subgraph Elysia["Elysia 服务器 - app.ts"]
-    RC["request-context"]
+    RC["请求上下文"]
     EH["全局 onError"]
-    CT["onAfterHandle content-type"]
-    SW["swagger"]
-    SA["static-assets"]
-    PR["page-routes"]
-    GR["game-routes"]
-    AR["api-routes"]
-    AIR["ai-routes"]
-    AIP["ai-provider-plugin"]
-    GP["game-plugin"]
-    BR["builder-routes"]
-    BA["builder-api-routes"]
-    SP["session-purge"]
-    CW["creator-worker"]
+    CT["onAfterHandle 内容类型"]
+    SW["Swagger 原生文档"]
+    SA["静态资产支持"]
+    PR["页面路由"]
+    GR["游戏路由"]
+    AR["API 路由"]
+    AIR["AI 路由"]
+    AIP["AI 提供商插件"]
+    GP["游戏核心插件"]
+    BR["构建器路由"]
+    BA["构建器 API 路由"]
+    SP["会话清理后台"]
+    CW["创建者工作者后台"]
   end
 
   subgraph Domain["领域服务"]
-    LOOP["GameLoopService"]
-    STORE["GameStateStore"]
-    SCENE["SceneEngine + NpcAiEngine"]
-    BUILDER["PrismaBuilderService"]
-    AI["ProviderRegistry + AI 服务"]
+    LOOP["GameLoopService (游戏循环)"]
+    STORE["GameStateStore (状态存储)"]
+    SCENE["SceneEngine + NpcAiEngine (场景与 AI)"]
+    BUILDER["PrismaBuilderService (构建器)"]
+    AI["ProviderRegistry (服务提供商)"]
   end
 
   subgraph Storage["持久化 - Prisma"]
@@ -719,19 +719,19 @@ graph TB
 ```mermaid
 sequenceDiagram
   participant B as 浏览器
-  participant APP as Elysia App
-  participant AUTH as auth-session
-  participant GL as GameLoop
-  participant STORE as GameStateStore
-  participant DB as Prisma
+  participant APP as Elysia 服务器
+  participant AUTH as 身份会话
+  participant GL as GameLoop (游戏循环)
+  participant STORE as GameStateStore (状态库)
+  participant DB as Prisma (数据库)
 
   B->>APP: POST 创建会话
   APP->>AUTH: 解析或签发 cookie 会话标识
-  APP->>GL: createSession
+  APP->>GL: createSession (创建)
   GL->>STORE: createSession 并初始化 stateVersion
-  STORE->>DB: INSERT gameSession
+  STORE->>DB: INSERT gameSession (写入数据)
   DB-->>STORE: 持久化行
-  STORE-->>GL: GameSessionSnapshot
+  STORE-->>GL: GameSessionSnapshot (返回快照)
   GL-->>APP: 生命周期快照和恢复令牌
   APP-->>B: 200 返回 sessionId resumeToken resumeTokenExpiresAtMs
 ```
@@ -742,20 +742,20 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-  A["request-context"] --> B["全局 onError"]
-  B --> C["onAfterHandle content-type"]
-  C --> D["swagger"]
-  D --> E["static-assets"]
-  E --> F["page-routes"]
-  F --> G["game-routes"]
-  G --> H["api-routes"]
-  H --> I["ai-routes"]
-  I --> J["ai-provider-plugin"]
-  J --> K["game-plugin"]
-  K --> L["builder-routes"]
-  L --> M["builder-api-routes"]
-  M --> N["session-purge"]
-  N --> O["creator-worker"]
+  A["请求上下文"] --> B["全局 onError"]
+  B --> C["onAfterHandle 内容类型"]
+  C --> D["Swagger"]
+  D --> E["静态资产"]
+  E --> F["页面路由"]
+  F --> G["游戏路由"]
+  G --> H["API 路由"]
+  H --> I["AI 路由"]
+  I --> J["AI 提供商插件"]
+  J --> K["游戏插件"]
+  K --> L["构建器路由"]
+  L --> M["构建器 API 路由"]
+  M --> N["会话清理"]
+  N --> O["创建者工作者"]
 ```
 
 #### 领域模型
@@ -875,18 +875,18 @@ sequenceDiagram
   participant REST as REST 会话接口
   participant WS as WebSocket 端点
   participant HUD as SSE HUD 端点
-  participant GL as GameLoop
+  participant GL as GameLoop (游戏循环)
 
-  Client->>REST: POST create
+  Client->>REST: POST create (创建会话)
   REST-->>Client: sessionId resumeToken resumeTokenExpiresAtMs
   Client->>WS: 带 resumeToken 建立连接
-  WS->>GL: restoreSession
+  WS->>GL: restoreSession (恢复会话)
   GL-->>WS: 通过
-  Client->>REST: POST command
+  Client->>REST: POST command (发送命令)
   REST->>GL: 命令入队
-  GL-->>WS: 推送 state 和新 token
-  Client->>HUD: 订阅 SSE
-  HUD-->>Client: scene-title xp dialogue close
+  GL-->>WS: 推送 state (状态) 和 new token (新令牌)
+  Client->>HUD: 订阅 SSE 流
+  HUD-->>Client: scene-title, xp, dialogue, close 等事件
 ```
 
 #### 构建器发布契约
