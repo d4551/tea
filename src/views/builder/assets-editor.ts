@@ -192,7 +192,7 @@ export const renderAssetsEditor = (
             </fieldset>
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.uploadAsset)}</legend>
-              <input name="file" type="file" class="file-input file-input-bordered file-input-sm w-full" accept="image/*,audio/*,.glb,.gltf,.json" required />
+              <input name="file" type="file" class="file-input file-input-bordered file-input-sm w-full" accept="image/*,audio/*,.glb,.gltf,.usd,.usda,.usdc,.usdz,.json" required />
             </fieldset>
             <div class="flex items-center gap-2">
               <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.addAssetFile)}</button>

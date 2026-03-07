@@ -29,6 +29,7 @@ type PersistedSessionMeta = {
   readonly sessionId: string;
   readonly resumeToken: string;
   readonly locale: string;
+  readonly participantRole: "owner" | "controller" | "spectator";
   readonly commandQueueDepth: number;
   readonly version: number;
   readonly expiresAtMs: number;
@@ -233,6 +234,14 @@ const readSessionMeta = (runtimeConfig: GameClientRuntimeConfig): PersistedSessi
     resolveDocumentLocale();
   const resumeToken =
     readMeta('meta[name="game-session-resume-token"]')?.dataset.sessionResumeToken ?? "";
+  const participantRoleRaw = readMeta('meta[name="game-session-participant-role"]')?.dataset
+    .gameSessionParticipantRole;
+  const participantRole =
+    participantRoleRaw === "spectator"
+      ? "spectator"
+      : participantRoleRaw === "controller"
+        ? "controller"
+        : "owner";
   const commandQueueDepth =
     Number.parseInt(
       readMeta('meta[name="game-session-command-queue-depth"]')?.dataset
@@ -255,6 +264,7 @@ const readSessionMeta = (runtimeConfig: GameClientRuntimeConfig): PersistedSessi
     sessionId,
     resumeToken,
     locale,
+    participantRole,
     commandQueueDepth,
     version,
     expiresAtMs,
@@ -280,6 +290,10 @@ const readSessionMeta = (runtimeConfig: GameClientRuntimeConfig): PersistedSessi
       version: stored.version,
       locale: stored.locale,
       expiresAtMs: stored.expiresAtMs,
+      participantRole:
+        stored.participantRole === "spectator" || stored.participantRole === "controller"
+          ? stored.participantRole
+          : runtimeMeta.participantRole,
     };
   }
 
@@ -653,6 +667,10 @@ const initGameClient = async (): Promise<void> => {
       expiresAtMs: nextExpiry,
       commandQueueDepth:
         typeof frame.commandQueueDepth === "number" ? frame.commandQueueDepth : commandQueueDepth,
+      participantRole:
+        frame.participantRole === undefined
+          ? runtimeSessionMeta.participantRole
+          : frame.participantRole,
     };
     persistSessionMeta(runtimeSessionMeta, runtimeConfig);
   };
@@ -839,6 +857,9 @@ const initGameClient = async (): Promise<void> => {
   };
 
   const sendEnvelope = (command: GameCommand): void => {
+    if (runtimeSessionMeta.participantRole === "spectator") {
+      return;
+    }
     if (activeSocket?.readyState !== WebSocket.OPEN) {
       return;
     }

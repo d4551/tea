@@ -7,6 +7,10 @@ import {
 import type { Messages } from "../shared/i18n/messages.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
 import { escapeHtml, type LayoutContext, renderDocument } from "./layout.ts";
+import type {
+  GameSessionParticipant,
+  GameSessionParticipantRole,
+} from "../shared/contracts/game.ts";
 
 /**
  * Props for the playable runtime page.
@@ -23,6 +27,8 @@ interface PlayableGamePageProps {
   readonly resumeTokenExpiresAtMs: number;
   readonly commandQueueDepth: number;
   readonly version: number;
+  readonly participantRole: GameSessionParticipantRole;
+  readonly participants: readonly GameSessionParticipant[];
   readonly clientRuntimeConfig: {
     readonly commandSendIntervalMs: number;
     readonly commandTtlMs: number;
@@ -36,9 +42,9 @@ interface PlayableGamePageProps {
  * Props for non-playable project states.
  */
 interface InactiveGamePageProps {
-  readonly state: "missing-project" | "unpublished-project";
+  readonly state: "missing-project" | "unpublished-project" | "invalid-invite";
   readonly locale: LocaleCode;
-  readonly projectId: string;
+  readonly projectId?: string;
 }
 
 /**
@@ -51,10 +57,20 @@ const resolveLocaleDisplayName = (messages: Messages, locale: LocaleCode): strin
     ? messages.navigation.localeNameChinese
     : messages.navigation.localeNameEnglish;
 
+const resolveParticipantRoleLabel = (
+  messages: Messages,
+  role: GameSessionParticipantRole,
+): string =>
+  role === "owner"
+    ? messages.game.participantRoleOwner
+    : role === "controller"
+      ? messages.game.participantRoleController
+      : messages.game.participantRoleSpectator;
+
 const renderInactiveState = (
   messages: Messages,
   locale: LocaleCode,
-  projectId: string,
+  projectId: string | undefined,
   state: InactiveGamePageProps["state"],
 ): string => {
   const builderHref = withQueryParameters(appRoutes.builder, {
@@ -62,13 +78,17 @@ const renderInactiveState = (
     projectId,
   });
   const title =
-    state === "missing-project"
-      ? messages.game.projectUnavailableTitle
-      : messages.game.projectUnpublishedTitle;
+    state === "invalid-invite"
+      ? messages.game.invalidInviteTitle
+      : state === "missing-project"
+        ? messages.game.projectUnavailableTitle
+        : messages.game.projectUnpublishedTitle;
   const description =
-    state === "missing-project"
-      ? messages.game.projectUnavailableDescription
-      : messages.game.projectUnpublishedDescription;
+    state === "invalid-invite"
+      ? messages.game.invalidInviteDescription
+      : state === "missing-project"
+        ? messages.game.projectUnavailableDescription
+        : messages.game.projectUnpublishedDescription;
 
   return `<section class="mx-auto grid max-w-3xl gap-6 pt-8">
     <article class="card card-border bg-base-100 shadow-xl">
@@ -76,7 +96,11 @@ const renderInactiveState = (
         <span class="badge badge-warning badge-soft w-max">${escapeHtml(messages.game.publishedProjectLabel)}</span>
         <h1 class="card-title text-3xl">${escapeHtml(title)}</h1>
         <p class="text-base-content/75">${escapeHtml(description)}</p>
-        <div class="rounded-box bg-base-200/70 p-4 font-mono text-sm">${escapeHtml(projectId)}</div>
+        ${
+          projectId
+            ? `<div class="rounded-box bg-base-200/70 p-4 font-mono text-sm">${escapeHtml(projectId)}</div>`
+            : ""
+        }
         <div class="card-actions justify-end">
           <a href="${escapeHtml(builderHref)}" class="btn btn-primary">${escapeHtml(messages.game.returnToBuilder)}</a>
         </div>
@@ -123,6 +147,8 @@ export function GamePage(props: GamePageProps) {
     resumeTokenExpiresAtMs,
     commandQueueDepth,
     version,
+    participantRole,
+    participants,
     locale,
     clientRuntimeConfig,
   } = props;
@@ -140,6 +166,7 @@ export function GamePage(props: GamePageProps) {
   };
   const gameHudStreamPath = interpolateRoutePath(appRoutes.gameApiSessionHud, { id: sessionId });
   const builderHref = withQueryParameters(appRoutes.builder, { lang: locale, projectId });
+  const inviteAction = interpolateRoutePath(appRoutes.gameApiSessionInvite, { id: sessionId });
   const pageScripts = [
     {
       src: appConfig.playableGame.clientScriptPath,
@@ -154,6 +181,7 @@ export function GamePage(props: GamePageProps) {
     <meta name="game-session-resume-expires-at-ms" data-game-session-resume-expires-at-ms="${escapeHtml(String(resumeTokenExpiresAtMs))}" />
     <meta name="game-session-command-queue-depth" data-game-session-command-queue-depth="${commandQueueDepth}" />
     <meta name="game-session-version" data-game-session-version="${version}" />
+    <meta name="game-session-participant-role" data-game-session-participant-role="${escapeHtml(participantRole)}" />
     <meta name="game-client-command-send-interval-ms" data-game-client-command-send-interval-ms="${escapeHtml(String(clientRuntimeConfig.commandSendIntervalMs))}" />
     <meta name="game-client-command-ttl-ms" data-game-client-command-ttl-ms="${escapeHtml(String(clientRuntimeConfig.commandTtlMs))}" />
     <meta name="game-client-socket-reconnect-delay-ms" data-game-client-socket-reconnect-delay-ms="${escapeHtml(String(clientRuntimeConfig.socketReconnectDelayMs))}" />
@@ -316,6 +344,12 @@ export function GamePage(props: GamePageProps) {
                       resolveLocaleDisplayName(messages, locale),
                     )}</span>
                   </div>
+                  <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
+                    <span>${escapeHtml(messages.game.participantRoleLabel)}</span>
+                    <span class="font-medium">${escapeHtml(
+                      resolveParticipantRoleLabel(messages, participantRole),
+                    )}</span>
+                  </div>
                 </div>
               </div>
             </article>
@@ -329,6 +363,50 @@ export function GamePage(props: GamePageProps) {
                     resolveLocaleDisplayName(messages, locale),
                   )}</span>
                 </div>
+              </div>
+            </article>
+            <article class="card card-border bg-base-100 shadow-sm">
+              <div class="card-body gap-4">
+                <h2 class="card-title text-lg">${escapeHtml(messages.game.multiplayerTitle)}</h2>
+                <p class="text-sm text-base-content/70">${escapeHtml(messages.game.multiplayerDescription)}</p>
+                <div class="space-y-2">
+                  <div class="text-xs font-semibold uppercase tracking-wide text-base-content/60">${escapeHtml(
+                    messages.game.participantsLabel,
+                  )}</div>
+                  <div id="game-participants-list" sse-swap="participants" hx-swap="outerHTML" class="space-y-2">
+                    ${participants
+                      .map(
+                        (
+                          participant,
+                        ) => `<div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2 text-sm">
+                          <span class="font-mono text-xs">${escapeHtml(participant.sessionId)}</span>
+                          <span class="badge badge-outline">${escapeHtml(resolveParticipantRoleLabel(messages, participant.role))}</span>
+                        </div>`,
+                      )
+                      .join("")}
+                  </div>
+                </div>
+                ${
+                  participantRole === "owner"
+                    ? `<div class="space-y-3">
+                        <form hx-post="${escapeHtml(inviteAction)}" hx-target="#game-multiplayer-share-result" hx-swap="outerHTML" class="flex flex-wrap gap-2">
+                          <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+                          <input type="hidden" name="role" value="controller" />
+                          <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.game.inviteControllerAction)}</button>
+                        </form>
+                        <form hx-post="${escapeHtml(inviteAction)}" hx-target="#game-multiplayer-share-result" hx-swap="outerHTML" class="flex flex-wrap gap-2">
+                          <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+                          <input type="hidden" name="role" value="spectator" />
+                          <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.game.inviteSpectatorAction)}</button>
+                        </form>
+                        <div id="game-multiplayer-share-result" class="hidden"></div>
+                      </div>`
+                    : participantRole === "spectator"
+                      ? `<div class="alert alert-soft">
+                        <span>${escapeHtml(messages.game.spectatorModeHint)}</span>
+                      </div>`
+                      : ""
+                }
               </div>
             </article>
             <article class="card card-border bg-base-100 shadow-sm">

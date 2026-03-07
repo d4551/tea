@@ -1827,6 +1827,8 @@ class PrismaBuilderService implements BuilderService {
               label: `generation.asset.label.generated:${job.kind === "animation-plan" ? "sprite-sheet" : job.kind}:${job.id}`,
               sceneMode: "2d",
               source: primaryArtifact.previewSource,
+              sourceFormat: primaryArtifact.mimeType?.split("/")[1] ?? "dat",
+              sourceMimeType: primaryArtifact.mimeType,
               tags: ["generated", job.kind],
               variants: [
                 {
@@ -1834,6 +1836,7 @@ class PrismaBuilderService implements BuilderService {
                   format: primaryArtifact.mimeType?.split("/")[1] ?? "dat",
                   source: primaryArtifact.previewSource,
                   usage: "runtime",
+                  mimeType: primaryArtifact.mimeType,
                 },
               ],
               approved: true,

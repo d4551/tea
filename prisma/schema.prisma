@@ -117,7 +117,7 @@ model BuilderProjectAsset {
   label       String
   sceneMode   String
   source      String
-  sourceFormat String
+  sourceFormat String @default("dat")
   sourceMimeType String?
   tags        Json
   variants    Json

@@ -458,7 +458,8 @@ class InMemoryGameStateStore implements GameStateStore {
     role: Exclude<GameSessionParticipantRole, "owner">,
   ): Promise<GameSessionParticipant> {
     const createdAtMs = nowMs();
-    const sessionParticipants = this.participants.get(sessionId) ?? new Map<string, StoredParticipantEntry>();
+    const sessionParticipants =
+      this.participants.get(sessionId) ?? new Map<string, StoredParticipantEntry>();
     const current = sessionParticipants.get(participantSessionId);
     const nextEntry: StoredParticipantEntry = {
       role,
@@ -559,7 +560,10 @@ class PrismaGameStateStore implements GameStateStore {
       ok: true,
       payload: {
         ...restored.session,
-        participants: [toOwnerParticipant(restored.session), ...(await this.listParticipants(sessionId))],
+        participants: [
+          toOwnerParticipant(restored.session),
+          ...(await this.listParticipants(sessionId)),
+        ],
       },
     };
   }

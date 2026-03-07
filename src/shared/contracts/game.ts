@@ -785,7 +785,13 @@ export interface GameSessionParticipant {
 /**
  * Canonical HUD stream event names emitted by server sent events.
  */
-export type GameSseEventName = "scene-title" | "xp" | "dialogue" | "close" | "error";
+export type GameSseEventName =
+  | "scene-title"
+  | "xp"
+  | "dialogue"
+  | "participants"
+  | "close"
+  | "error";
 
 /**
  * Deterministic stream close reasons for SSE clients.

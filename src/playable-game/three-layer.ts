@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { USDLoader } from "three/addons/loaders/USDLoader.js";
 import type { GameSceneState, SceneNode3D } from "../shared/contracts/game.ts";
 
 const LEAF_COUNT = 80;
@@ -21,7 +23,11 @@ export class ThreeLayer {
   private _leafVelocities: Float32Array | null = null;
   private _elapsedMs = 0;
   private _authoredNodes = new Map<string, THREE.Object3D>();
+  private _authoredModelCache = new Map<string, Promise<THREE.Object3D | null>>();
   private _lastNodeSignature = "";
+  private _nodeRenderVersion = 0;
+  private readonly _gltfLoader = new GLTFLoader();
+  private readonly _usdLoader = new USDLoader();
 
   constructor(width: number, height: number) {
     this.renderer = new THREE.WebGLRenderer({
@@ -99,6 +105,7 @@ export class ThreeLayer {
     }
 
     this._lastNodeSignature = signature;
+    this._nodeRenderVersion += 1;
     for (const object of this._authoredNodes.values()) {
       this.scene.remove(object);
     }
@@ -108,7 +115,7 @@ export class ThreeLayer {
       if (!("scale" in node)) {
         continue;
       }
-      const object = this._createAuthoredNodeObject(node);
+      const object = this._createAuthoredNodeObject(node, state, this._nodeRenderVersion);
       this.scene.add(object);
       this._authoredNodes.set(node.id, object);
     }
@@ -142,11 +149,32 @@ export class ThreeLayer {
     this.renderer.dispose();
   }
 
-  private _createAuthoredNodeObject(node: SceneNode3D): THREE.Object3D {
+  private _createAuthoredNodeObject(
+    node: SceneNode3D,
+    state: GameSceneState,
+    renderVersion: number,
+  ): THREE.Object3D {
     if (node.nodeType === "light") {
       const light = new THREE.PointLight(0x7dd3fc, 1.4, 12);
       light.position.set(node.position.x, node.position.y, node.position.z);
       return light;
+    }
+
+    if (node.nodeType === "model" && typeof node.assetId === "string" && node.assetId.length > 0) {
+      const container = new THREE.Group();
+      container.position.set(node.position.x, node.position.y, node.position.z);
+      container.rotation.set(node.rotation.x, node.rotation.y, node.rotation.z);
+      container.scale.set(node.scale.x, node.scale.y, node.scale.z);
+      void this._resolveModelObject(state, node.assetId).then((resolved) => {
+        const currentObject = this._authoredNodes.get(node.id);
+        if (!resolved || currentObject !== container || this._nodeRenderVersion !== renderVersion) {
+          return;
+        }
+
+        container.clear();
+        container.add(resolved.clone(true));
+      });
+      return container;
     }
 
     const geometry =
@@ -172,6 +200,56 @@ export class ThreeLayer {
     mesh.rotation.set(node.rotation.x, node.rotation.y, node.rotation.z);
     mesh.scale.set(node.scale.x, node.scale.y, node.scale.z);
     return mesh;
+  }
+
+  private _resolveModelObject(
+    state: GameSceneState,
+    assetId: string,
+  ): Promise<THREE.Object3D | null> {
+    const runtimeAsset = this._resolveRuntimeAsset(state, assetId);
+    if (!runtimeAsset) {
+      return Promise.resolve(null);
+    }
+
+    const cacheKey = `${runtimeAsset.format}:${runtimeAsset.source}`;
+    const cached = this._authoredModelCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const pending =
+      runtimeAsset.format === "glb" || runtimeAsset.format === "gltf"
+        ? this._gltfLoader.loadAsync(runtimeAsset.source).then((gltf) => gltf.scene)
+        : runtimeAsset.format === "usdz"
+          ? this._usdLoader.loadAsync(runtimeAsset.source)
+          : Promise.resolve(null);
+    this._authoredModelCache.set(cacheKey, pending);
+    return pending;
+  }
+
+  private _resolveRuntimeAsset(
+    state: GameSceneState,
+    assetId: string,
+  ): { readonly source: string; readonly format: string } | null {
+    const asset = state.assets?.find((candidate) => candidate.id === assetId);
+    if (!asset) {
+      return null;
+    }
+
+    const runtimeVariant =
+      asset.variants.find((variant) => variant.usage === "runtime") ??
+      asset.variants.find((variant) => variant.usage === "source");
+    if (runtimeVariant) {
+      return {
+        source: runtimeVariant.source,
+        format: runtimeVariant.format.toLowerCase(),
+      };
+    }
+
+    return {
+      source: asset.source,
+      format: asset.sourceFormat.toLowerCase(),
+    };
   }
 
   private _buildLeafParticles(): void {

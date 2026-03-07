@@ -2,12 +2,14 @@ import { Elysia, t } from "elysia";
 import { normalizeLocale } from "../config/environment.ts";
 import { gameTextByLocale } from "../domain/game/data/game-text.ts";
 import { gameLoop } from "../domain/game/game-loop.ts";
+import { ensureCorrelationIdHeader } from "../lib/correlation-id.ts";
 import { ApplicationError } from "../lib/error-envelope.ts";
+import { errorEnvelope } from "../lib/error-envelope.ts";
 import { createLogger } from "../lib/logger.ts";
 import { authSessionGuard, resolveAuthSession } from "../plugins/auth-session.ts";
 import { defaultGameConfig } from "../shared/config/game-config.ts";
 import { httpStatus } from "../shared/constants/http.ts";
-import { appRoutes } from "../shared/constants/routes.ts";
+import { appRoutes, withQueryParameters } from "../shared/constants/routes.ts";
 import type {
   GameHudState,
   GameSession,
@@ -21,6 +23,8 @@ import { escapeHtml } from "../views/layout.ts";
 import { type SseUtils, ssePlugin } from "./sse-plugin.ts";
 
 const _logger = createLogger("game.plugin");
+const wantsHtml = (acceptHeader: string | null | undefined): boolean =>
+  (acceptHeader ?? "").includes("text/html");
 
 const endpoint = (path: string): string => path.replace(/^\/api\/game/, "");
 const route = {
@@ -32,6 +36,8 @@ const route = {
   dialogue: endpoint(appRoutes.gameApiSessionDialogue),
   save: endpoint(appRoutes.gameApiSessionSave),
   hud: endpoint(appRoutes.gameApiSessionHud),
+  invite: endpoint(appRoutes.gameApiSessionInvite),
+  join: endpoint(appRoutes.gameApiSessionJoin),
 };
 
 const gameCommandPayloadSchema = t.Union([
@@ -99,6 +105,13 @@ const createSessionBodySchema = t.Object({
 const restoreSessionBodySchema = t.Object({
   resumeToken: t.String(),
 });
+const inviteSessionBodySchema = t.Object({
+  role: t.Union([t.Literal("controller"), t.Literal("spectator")]),
+  locale: t.Optional(t.String()),
+});
+const joinSessionBodySchema = t.Object({
+  inviteToken: t.String(),
+});
 const errorResponse = t.Object({
   ok: t.Literal(false),
   error: t.Object({
@@ -114,6 +127,12 @@ const _snapshotState = t.Object({
   timestamp: t.String(),
   state: t.Object({}, { additionalProperties: true }),
 });
+const gameParticipantSchema = t.Object({
+  sessionId: t.String(),
+  role: t.Union([t.Literal("owner"), t.Literal("controller"), t.Literal("spectator")]),
+  joinedAtMs: t.Number(),
+  updatedAtMs: t.Number(),
+});
 const gameSessionStateSchema = t.Object({
   sessionId: t.String(),
   locale: t.String(),
@@ -125,6 +144,10 @@ const gameSessionStateSchema = t.Object({
   resumeTokenVersion: t.Optional(t.Number()),
   stateVersion: t.Optional(t.Number()),
   version: t.Optional(t.Number()),
+  participantRole: t.Optional(
+    t.Union([t.Literal("owner"), t.Literal("controller"), t.Literal("spectator")]),
+  ),
+  participants: t.Optional(t.Array(gameParticipantSchema)),
 });
 
 const closeSessionResponse = t.Object({
@@ -150,6 +173,16 @@ const deleteSessionResponse = t.Object({
     sessionId: t.String(),
     locale: t.String(),
     status: t.Literal("deleted"),
+  }),
+});
+
+const inviteSessionResponse = t.Object({
+  ok: t.Literal(true),
+  data: t.Object({
+    sessionId: t.String(),
+    role: t.Union([t.Literal("controller"), t.Literal("spectator")]),
+    inviteToken: t.String(),
+    joinPath: t.String(),
   }),
 });
 
@@ -234,6 +267,11 @@ const asLifecycleState = async (
   ownerSessionId: string,
 ): Promise<GameSessionState | null> => gameLoop.getSessionState(sessionId, ownerSessionId);
 
+const toGameSessionStatePayload = (state: GameSessionState) => ({
+  ...state,
+  participants: state.participants.map((participant) => ({ ...participant })),
+});
+
 const requireGameSession = async (sessionId: string): Promise<GameSession> => {
   const sessionResult = await gameLoop.getStoredSession(sessionId);
   if (sessionResult.ok) {
@@ -273,18 +311,72 @@ const requireOwnedGameSession = async (
 };
 
 /**
+ * Validates that the current auth-session is allowed to observe the requested session.
+ */
+const requireAccessibleGameSession = async (
+  sessionId: string,
+  participantSessionId: string,
+): Promise<GameSessionState> => {
+  const state = await gameLoop.getSessionState(sessionId, participantSessionId);
+  if (!state) {
+    throw new ApplicationError(
+      "UNAUTHORIZED",
+      "Session access denied.",
+      httpStatus.unauthorized,
+      false,
+    );
+  }
+
+  return state;
+};
+
+/**
+ * Validates that the current auth-session can issue gameplay commands.
+ */
+const requireControllableGameSession = async (
+  sessionId: string,
+  participantSessionId: string,
+): Promise<GameSessionState> => {
+  const state = await requireAccessibleGameSession(sessionId, participantSessionId);
+  if (state.participantRole === "spectator") {
+    throw new ApplicationError(
+      "UNAUTHORIZED",
+      "Spectators cannot control gameplay.",
+      httpStatus.unauthorized,
+      false,
+    );
+  }
+
+  return state;
+};
+
+const renderInviteResult = (
+  sessionId: string,
+  title: string,
+  linkLabel: string,
+  joinPath: string,
+): string => `<div id="game-multiplayer-share-result" class="rounded-box bg-base-200/80 p-3 text-sm">
+  <div class="font-medium">${escapeHtml(title)}</div>
+  <div class="text-xs text-base-content/60">${escapeHtml(linkLabel)}</div>
+  <div class="break-all font-mono text-xs text-base-content/70">${escapeHtml(joinPath)}</div>
+  <div class="text-xs text-base-content/60">${escapeHtml(sessionId)}</div>
+</div>`;
+
+/**
  * Hardens HUD streaming with deterministic close reasons and bounded stop conditions.
  */
 const createHudStream = async function* ({
   session,
+  participantSessionId,
   sse,
   signal,
 }: {
-  session: Pick<GameSession, "id" | "locale" | "scene" | "ownerSessionId">;
+  session: Pick<GameSessionState, "sessionId" | "locale" | "participants" | "state">;
+  participantSessionId: string;
   sse: SseUtils;
   signal: AbortSignal;
 }): AsyncGenerator<string> {
-  const sessionId = session.id;
+  const sessionId = session.sessionId;
   const catalog =
     gameTextByLocale[session.locale as keyof typeof gameTextByLocale] ?? gameTextByLocale["en-US"];
   const messages = getMessages(session.locale as "en-US" | "zh-CN");
@@ -314,18 +406,35 @@ const createHudStream = async function* ({
     `<span id="game-scene-mode-value" sse-swap="scene-mode" hx-swap="outerHTML" class="font-medium">${escapeHtml(
       sceneMode === "3d" ? messages.game.sceneMode3d : messages.game.sceneMode2d,
     )}</span>`;
+  const renderParticipants = (participants: GameHudState["participants"]): string =>
+    `<div id="game-participants-list" sse-swap="participants" hx-swap="outerHTML" class="space-y-2">${participants
+      .map(
+        (
+          participant,
+        ) => `<div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2 text-sm">
+          <span class="font-mono text-xs">${escapeHtml(participant.sessionId)}</span>
+          <span class="badge badge-outline">${escapeHtml(
+            participant.role === "owner"
+              ? messages.game.participantRoleOwner
+              : participant.role === "controller"
+                ? messages.game.participantRoleController
+                : messages.game.participantRoleSpectator,
+          )}</span>
+        </div>`,
+      )
+      .join("")}</div>`;
 
   const initialObjectiveTitle = messages.game.objectiveDescription;
 
-  yield sse.event("scene-badge", renderSceneBadge(session.scene.sceneTitle), {
+  yield sse.event("scene-badge", renderSceneBadge(session.state.sceneTitle), {
     id: `${sessionId}-scene-badge`,
     retry: retryMs,
   });
-  yield sse.event("scene-title-heading", renderSceneHeading(session.scene.sceneTitle), {
+  yield sse.event("scene-title-heading", renderSceneHeading(session.state.sceneTitle), {
     id: `${sessionId}-scene-heading`,
     retry: retryMs,
   });
-  yield sse.event("scene-title-value", renderSceneValue(session.scene.sceneTitle), {
+  yield sse.event("scene-title-value", renderSceneValue(session.state.sceneTitle), {
     id: `${sessionId}-scene-value`,
     retry: retryMs,
   });
@@ -337,8 +446,12 @@ const createHudStream = async function* ({
     id: `${sessionId}-objective-card`,
     retry: retryMs,
   });
-  yield sse.event("scene-mode", renderSceneMode(session.scene.sceneMode), {
+  yield sse.event("scene-mode", renderSceneMode(session.state.sceneMode), {
     id: `${sessionId}-scene-mode`,
+    retry: retryMs,
+  });
+  yield sse.event("participants", renderParticipants(session.participants), {
+    id: `${sessionId}-participants`,
     retry: retryMs,
   });
 
@@ -347,9 +460,10 @@ const createHudStream = async function* ({
   let lastSceneTitle = "";
   let lastObjectiveTitle = "";
   let lastSceneMode: GameHudState["sceneMode"] | "__missing" = "__missing";
+  let lastParticipantsSignature = "";
 
   while (!signal.aborted) {
-    const hudState = await gameLoop.getHudState(sessionId, session.ownerSessionId);
+    const hudState = await gameLoop.getHudState(sessionId, participantSessionId);
     if (!hudState) {
       const frame = buildCloseFrame(
         "session-missing",
@@ -404,6 +518,16 @@ const createHudStream = async function* ({
       sequence += 1;
     }
 
+    const participantsSignature = JSON.stringify(hudState.participants);
+    if (participantsSignature !== lastParticipantsSignature) {
+      yield sse.event("participants", renderParticipants(hudState.participants), {
+        id: `${sessionId}-participants-${sequence}`,
+        retry: retryMs,
+      });
+      lastParticipantsSignature = participantsSignature;
+      sequence += 1;
+    }
+
     const xp = hudState.xp;
     const level = hudState.level;
 
@@ -454,9 +578,9 @@ const createHudStreamHandler = async function* ({
   cookie: Parameters<typeof resolveAuthSession>[0];
   request: Request;
 }): AsyncGenerator<string> {
-  const ownerSessionId = resolveAuthSession(cookie).sessionId;
-  const session = await requireOwnedGameSession(params.id, ownerSessionId);
-  yield* createHudStream({ session, sse, signal: request.signal });
+  const participantSessionId = resolveAuthSession(cookie).sessionId;
+  const session = await requireAccessibleGameSession(params.id, participantSessionId);
+  yield* createHudStream({ session, participantSessionId, sse, signal: request.signal });
 };
 
 const wsConnKeys = new WeakMap<object, string>();
@@ -586,7 +710,34 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
           const state = await asLifecycleState(snapshot.sessionId, ownerSessionId);
           return {
             ok: true,
-            data: state ?? snapshot,
+            data: state
+              ? toGameSessionStatePayload(state)
+              : {
+                  sessionId: snapshot.sessionId,
+                  locale: snapshot.locale,
+                  timestamp: snapshot.timestamp,
+                  projectId: snapshot.projectId,
+                  releaseVersion: snapshot.releaseVersion,
+                  state: snapshot.state,
+                  commandQueueDepth: gameLoop.getCommandQueueDepth(snapshot.sessionId),
+                  resumeToken: gameLoop.getResumeToken(snapshot.sessionId, ownerSessionId) ?? "",
+                  resumeTokenExpiresAtMs: gameLoop.getResumeTokenExpiresAtMs(
+                    snapshot.sessionId,
+                    ownerSessionId,
+                  ),
+                  resumeTokenVersion: 1,
+                  stateVersion: 1,
+                  version: 1,
+                  participantRole: "owner" as const,
+                  participants: [
+                    {
+                      sessionId: ownerSessionId,
+                      role: "owner" as const,
+                      joinedAtMs: Date.now(),
+                      updatedAtMs: Date.now(),
+                    },
+                  ],
+                },
           };
         },
         {
@@ -601,18 +752,9 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       .get(
         route.state,
         async ({ params, cookie }) => {
-          const ownerSessionId = resolveAuthSession(cookie).sessionId;
-          const session = await requireOwnedGameSession(params.id, ownerSessionId);
-          const state = await asLifecycleState(session.id, ownerSessionId);
-          if (!state) {
-            throw new ApplicationError(
-              "SESSION_NOT_FOUND",
-              "Session not found.",
-              httpStatus.notFound,
-              false,
-            );
-          }
-          return { ok: true, data: state };
+          const participantSessionId = resolveAuthSession(cookie).sessionId;
+          const state = await requireAccessibleGameSession(params.id, participantSessionId);
+          return { ok: true, data: toGameSessionStatePayload(state) };
         },
         {
           params: t.Object({ id: t.String() }),
@@ -627,11 +769,11 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       .post(
         route.restore,
         async ({ params, body, set, cookie }) => {
-          const ownerSessionId = resolveAuthSession(cookie).sessionId;
+          const participantSessionId = resolveAuthSession(cookie).sessionId;
           const sessionState = await gameLoop.restoreSession(
             params.id,
             body.resumeToken,
-            ownerSessionId,
+            participantSessionId,
           );
           if (!sessionState) {
             set.status = httpStatus.unauthorized;
@@ -643,7 +785,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
             );
           }
 
-          return { ok: true, data: sessionState };
+          return { ok: true, data: toGameSessionStatePayload(sessionState) };
         },
         {
           params: t.Object({ id: t.String() }),
@@ -653,6 +795,37 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
             [httpStatus.unauthorized]: errorResponse,
             [httpStatus.notFound]: errorResponse,
             [httpStatus.gone]: errorResponse,
+          },
+        },
+      )
+      .post(
+        route.join,
+        async ({ params, body, cookie, set, request, status }) => {
+          const participantSessionId = resolveAuthSession(cookie).sessionId;
+          const sessionState = await gameLoop.joinSession(body.inviteToken, participantSessionId);
+          if (!sessionState || sessionState.sessionId !== params.id) {
+            return status(
+              httpStatus.unauthorized,
+              errorEnvelope(
+                new ApplicationError(
+                  "UNAUTHORIZED",
+                  "Invite token invalid.",
+                  httpStatus.unauthorized,
+                  false,
+                ),
+                ensureCorrelationIdHeader(request, set.headers),
+              ),
+            );
+          }
+
+          return { ok: true, data: toGameSessionStatePayload(sessionState) };
+        },
+        {
+          params: t.Object({ id: t.String() }),
+          body: joinSessionBodySchema,
+          response: {
+            [httpStatus.ok]: t.Object({ ok: t.Literal(true), data: gameSessionStateSchema }),
+            [httpStatus.unauthorized]: errorResponse,
           },
         },
       )
@@ -686,6 +859,68 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
           params: t.Object({ id: t.String() }),
           response: {
             [httpStatus.ok]: closeSessionResponse,
+            [httpStatus.unauthorized]: errorResponse,
+            [httpStatus.notFound]: errorResponse,
+          },
+        },
+      )
+      .post(
+        route.invite,
+        async ({ params, body, cookie, request, set, status }) => {
+          const ownerSessionId = resolveAuthSession(cookie).sessionId;
+          await requireOwnedGameSession(params.id, ownerSessionId);
+          const inviteToken = await gameLoop.createInviteToken(
+            params.id,
+            ownerSessionId,
+            body.role,
+          );
+          if (!inviteToken) {
+            return status(
+              httpStatus.notFound,
+              errorEnvelope(
+                new ApplicationError(
+                  "SESSION_NOT_FOUND",
+                  "Session not found.",
+                  httpStatus.notFound,
+                  false,
+                ),
+                ensureCorrelationIdHeader(request, set.headers),
+              ),
+            );
+          }
+          const locale = normalizeLocale(body.locale);
+          const joinPath = withQueryParameters(appRoutes.game, {
+            lang: locale,
+            invite: inviteToken,
+            sessionId: params.id,
+          });
+          if (wantsHtml(request.headers.get("accept"))) {
+            const messages = getMessages(locale);
+            return renderInviteResult(
+              params.id,
+              body.role === "controller"
+                ? messages.game.inviteControllerAction
+                : messages.game.inviteSpectatorAction,
+              messages.game.inviteLinkLabel,
+              joinPath,
+            );
+          }
+
+          return {
+            ok: true,
+            data: {
+              sessionId: params.id,
+              role: body.role,
+              inviteToken,
+              joinPath,
+            },
+          };
+        },
+        {
+          params: t.Object({ id: t.String() }),
+          body: inviteSessionBodySchema,
+          response: {
+            [httpStatus.ok]: t.Union([inviteSessionResponse, t.String()]),
             [httpStatus.unauthorized]: errorResponse,
             [httpStatus.notFound]: errorResponse,
           },
@@ -767,9 +1002,9 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       .post(
         route.command,
         async ({ body, params, set, cookie }) => {
-          const ownerSessionId = resolveAuthSession(cookie).sessionId;
-          const session = await requireOwnedGameSession(params.id, ownerSessionId);
-          const result = gameLoop.processCommand(session.id, body, session.locale);
+          const participantSessionId = resolveAuthSession(cookie).sessionId;
+          const session = await requireControllableGameSession(params.id, participantSessionId);
+          const result = gameLoop.processCommand(session.sessionId, body, session.locale);
           if (result.state === "rejected") {
             set.status = httpStatus.unprocessableEntity;
             throw new ApplicationError(
@@ -823,7 +1058,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
               errorCode: result.errorCode,
               errorReason: result.errorReason,
               commandState: result.commandState,
-              queueDepth: gameLoop.getCommandQueueDepth(session.id),
+              queueDepth: gameLoop.getCommandQueueDepth(session.sessionId),
               accepted: result.state === "queued" || result.state === "accepted",
             },
           };
@@ -845,9 +1080,9 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       .get(
         route.dialogue,
         async ({ params, cookie }) => {
-          const ownerSessionId = resolveAuthSession(cookie).sessionId;
-          const session = await requireOwnedGameSession(params.id, ownerSessionId);
-          return { ok: true, data: session.scene.dialogue };
+          const participantSessionId = resolveAuthSession(cookie).sessionId;
+          const session = await requireAccessibleGameSession(params.id, participantSessionId);
+          return { ok: true, data: session.state.dialogue };
         },
         {
           params: t.Object({ id: t.String() }),
@@ -874,7 +1109,9 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
           ws.subscribe(`game:${sessionId}`);
 
           const resumeToken = readResumeTokenFromWsQuery(readObjectProperty(ws.data, "query"));
-          const ownerSessionId = resolveWsOwnerSessionId(readObjectProperty(ws.data, "cookie"));
+          const participantSessionId = resolveWsOwnerSessionId(
+            readObjectProperty(ws.data, "cookie"),
+          );
           const sessionResult = await gameLoop.getStoredSession(sessionId);
           if (!sessionResult.ok) {
             ws.close(
@@ -885,11 +1122,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
             return;
           }
 
-          if (typeof resumeToken !== "string" || typeof ownerSessionId !== "string") {
-            ws.close(wsCloseCode.sessionExpired);
-            return;
-          }
-          if (sessionResult.payload.ownerSessionId !== ownerSessionId) {
+          if (typeof resumeToken !== "string" || typeof participantSessionId !== "string") {
             ws.close(wsCloseCode.sessionExpired);
             return;
           }
@@ -897,7 +1130,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
           const joinedSession = await gameLoop.restoreSession(
             sessionId,
             resumeToken,
-            ownerSessionId,
+            participantSessionId,
           );
           if (!joinedSession) {
             ws.close(wsCloseCode.sessionExpired);
@@ -909,7 +1142,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
           const locale = sessionResult.payload.locale as SupportedLocale;
 
           const cleanup = gameLoop.startTick(sessionId, () => {
-            void asLifecycleState(sessionId, ownerSessionId).then((state) => {
+            void asLifecycleState(sessionId, participantSessionId).then((state) => {
               if (!state) {
                 ws.unsubscribe(`game:${sessionId}`);
                 cleanupWsConnection(connKey);
@@ -923,6 +1156,8 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
                   commandQueueDepth: state.commandQueueDepth,
                   resumeToken: state.resumeToken,
                   resumeTokenExpiresAtMs: state.resumeTokenExpiresAtMs,
+                  participants: state.participants,
+                  participantRole: state.participantRole,
                 }),
               );
             });

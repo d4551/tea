@@ -42,6 +42,7 @@ import type {
   BuilderAIResponse,
   BuilderAIRunPlan,
   BuilderArtifactPatch,
+  BuilderAsset,
   BuilderDialoguePayload,
   BuilderMutationResult,
   BuilderNpcPayload,
@@ -675,6 +676,62 @@ const parseBooleanField = (value: string | undefined, fallback: boolean): boolea
     return false;
   }
   return fallback;
+};
+
+const inferAssetSourceFormat = (source: string): string => {
+  const normalized = source.trim().toLowerCase();
+  const extension = normalized.split(".").pop()?.trim();
+  return extension && extension.length > 0 ? extension : "dat";
+};
+
+const inferAssetMimeType = (format: string, fallback?: string): string | undefined => {
+  const normalized = format.trim().toLowerCase();
+  const mappedMimeType: Readonly<Record<string, string>> = {
+    gltf: "model/gltf+json",
+    glb: "model/gltf-binary",
+    usd: "application/usd",
+    usda: "model/vnd.usda",
+    usdc: "model/vnd.usdc",
+    usdz: "model/vnd.usd+zip",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    webp: "image/webp",
+    wav: "audio/wav",
+    mp3: "audio/mpeg",
+    json: "application/json",
+  };
+  return mappedMimeType[normalized] ?? fallback;
+};
+
+const buildAssetVariants = (
+  id: string,
+  source: string,
+  sourceFormat: string,
+  sourceMimeType: string | undefined,
+): BuilderAsset["variants"] => {
+  const normalizedFormat = sourceFormat.toLowerCase();
+  if (normalizedFormat === "usd" || normalizedFormat === "usda" || normalizedFormat === "usdc") {
+    return [
+      {
+        id: `${id}.source`,
+        format: normalizedFormat,
+        source,
+        usage: "source",
+        mimeType: sourceMimeType,
+      },
+    ];
+  }
+
+  return [
+    {
+      id: `${id}.runtime`,
+      format: normalizedFormat,
+      source,
+      usage: "runtime",
+      mimeType: sourceMimeType,
+    },
+  ];
 };
 
 const buildError = (
@@ -2564,6 +2621,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
 
       const sourceFormat = stored.format;
+      const sourceMimeType = inferAssetMimeType(sourceFormat, body.file.type || undefined);
       const now = Date.now();
       const mutation = await builderService.saveAsset(projectId, {
         id,
@@ -2573,15 +2631,10 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
           label,
           sceneMode,
           source: stored.publicUrl,
+          sourceFormat,
+          sourceMimeType,
           tags: [kind, sceneMode],
-          variants: [
-            {
-              id: `${id}.runtime`,
-              format: sourceFormat,
-              source: stored.publicUrl,
-              usage: "runtime",
-            },
-          ],
+          variants: buildAssetVariants(id, stored.publicUrl, sourceFormat, sourceMimeType),
           approved: false,
           createdAtMs: now,
           updatedAtMs: now,
@@ -2645,8 +2698,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         resolveBuilderBodyContext(body);
       const id = body.id.trim();
       const source = body.source.trim();
-      const sourceSegments = source.split(".");
-      const sourceFormat = sourceSegments[sourceSegments.length - 1] ?? "dat";
+      const sourceFormat = inferAssetSourceFormat(source);
+      const sourceMimeType = inferAssetMimeType(sourceFormat);
       const now = Date.now();
       const mutation = await builderService.saveAsset(projectId, {
         id,
@@ -2656,15 +2709,10 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
           label: body.label.trim(),
           sceneMode: body.sceneMode === "3d" ? "3d" : "2d",
           source,
+          sourceFormat,
+          sourceMimeType,
           tags: [body.kind, body.sceneMode === "3d" ? "3d" : "2d"],
-          variants: [
-            {
-              id: `${id}.runtime`,
-              format: sourceFormat,
-              source,
-              usage: "runtime",
-            },
-          ],
+          variants: buildAssetVariants(id, source, sourceFormat, sourceMimeType),
           approved: false,
           createdAtMs: now,
           updatedAtMs: now,

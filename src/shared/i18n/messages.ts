@@ -175,7 +175,20 @@ export interface Messages {
     readonly projectUnavailableDescription: string;
     readonly projectUnpublishedTitle: string;
     readonly projectUnpublishedDescription: string;
+    readonly invalidInviteTitle: string;
+    readonly invalidInviteDescription: string;
     readonly returnToBuilder: string;
+    readonly multiplayerTitle: string;
+    readonly multiplayerDescription: string;
+    readonly participantsLabel: string;
+    readonly participantRoleLabel: string;
+    readonly participantRoleOwner: string;
+    readonly participantRoleController: string;
+    readonly participantRoleSpectator: string;
+    readonly inviteControllerAction: string;
+    readonly inviteSpectatorAction: string;
+    readonly inviteLinkLabel: string;
+    readonly spectatorModeHint: string;
     readonly invalidCommand: string;
     readonly invalidDirection: string;
     readonly chatMissingFields: string;
@@ -732,7 +745,23 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       projectUnpublishedTitle: "Project is not published",
       projectUnpublishedDescription:
         "This player surface only runs immutable published releases. Publish the draft in the builder first.",
+      invalidInviteTitle: "Invite is invalid",
+      invalidInviteDescription:
+        "The multiplayer invite has expired or is no longer valid. Ask the session owner for a fresh invite link.",
       returnToBuilder: "Return to builder",
+      multiplayerTitle: "Multiplayer",
+      multiplayerDescription:
+        "Invite controllers or spectators into the current runtime session without leaving the published build.",
+      participantsLabel: "Participants",
+      participantRoleLabel: "Role",
+      participantRoleOwner: "Owner",
+      participantRoleController: "Controller",
+      participantRoleSpectator: "Spectator",
+      inviteControllerAction: "Create controller invite",
+      inviteSpectatorAction: "Create spectator invite",
+      inviteLinkLabel: "Join link",
+      spectatorModeHint:
+        "Spectators can observe the live session but cannot issue gameplay commands.",
       invalidCommand: "Invalid command payload",
       invalidDirection: "Invalid move direction",
       chatMissingFields: "Chat commands require npcId and message",
@@ -1297,7 +1326,20 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       projectUnavailableDescription: "请求的项目不存在。请返回构建器，切换到有效项目或创建新项目。",
       projectUnpublishedTitle: "项目尚未发布",
       projectUnpublishedDescription: "玩家视图只运行不可变的已发布版本。请先在构建器中发布草稿。",
+      invalidInviteTitle: "邀请已失效",
+      invalidInviteDescription: "该多人邀请已经过期或不可用。请向会话所有者索取新的邀请链接。",
       returnToBuilder: "返回构建器",
+      multiplayerTitle: "多人协作",
+      multiplayerDescription: "在不离开已发布构建的前提下，邀请控制者或旁观者加入当前运行会话。",
+      participantsLabel: "参与者",
+      participantRoleLabel: "角色",
+      participantRoleOwner: "所有者",
+      participantRoleController: "控制者",
+      participantRoleSpectator: "旁观者",
+      inviteControllerAction: "创建控制者邀请",
+      inviteSpectatorAction: "创建旁观者邀请",
+      inviteLinkLabel: "加入链接",
+      spectatorModeHint: "旁观者可以观察实时会话，但不能发送游戏指令。",
       invalidCommand: "无效命令",
       invalidDirection: "无效移动方向",
       chatMissingFields: "缺少聊天对象或消息内容",

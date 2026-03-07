@@ -20,6 +20,8 @@ export const appRoutes = {
   gameApiSessionSave: "/api/game/session/:id/save",
   gameApiSessionHud: "/api/game/session/:id/hud",
   gameApiSessionWebSocket: "/api/game/session/:id/ws",
+  gameApiSessionInvite: "/api/game/session/:id/invite",
+  gameApiSessionJoin: "/api/game/session/:id/join",
   oraclePartial: "/partials/oracle",
   oracleApi: "/api/oracle",
   healthApi: "/api/health",

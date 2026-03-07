@@ -1047,6 +1047,26 @@ const withDraftWorkerState = (
   automationRuns,
 });
 
+const normalizeBuilderAsset = (asset: BuilderAsset): BuilderAsset => {
+  const sourceFormat =
+    asset.sourceFormat?.trim().length > 0
+      ? asset.sourceFormat
+      : (asset.source.split(".").pop()?.trim().toLowerCase() ?? "dat");
+  const sourceMimeType =
+    asset.sourceMimeType ??
+    asset.variants.find((variant) => typeof variant.mimeType === "string")?.mimeType;
+
+  return {
+    ...asset,
+    sourceFormat,
+    sourceMimeType,
+    variants: asset.variants.map((variant) => ({
+      ...variant,
+      mimeType: variant.mimeType ?? sourceMimeType,
+    })),
+  };
+};
+
 const parseProjectState = (state: Prisma.JsonValue): BuilderProjectState => {
   const parsed = safeJsonParse<unknown>(JSON.stringify(state), {});
   const record = asRecord(parsed);
@@ -1084,7 +1104,14 @@ const parseProjectState = (state: Prisma.JsonValue): BuilderProjectState => {
   return {
     scenes,
     dialogues,
-    assets: cloneRecord(assetsRecord as Record<string, BuilderAsset>),
+    assets: Object.fromEntries(
+      Object.entries(assetsRecord)
+        .filter((entry): entry is [string, BuilderAsset] => entry[0].length > 0)
+        .map(([assetId, asset]) => [
+          assetId,
+          normalizeBuilderAsset(structuredClone(asset as BuilderAsset)),
+        ]),
+    ) as Record<string, BuilderAsset>,
     animationClips: cloneRecord(animationClipsRecord as Record<string, AnimationClip>),
     dialogueGraphs: cloneRecord(dialogueGraphsRecord as Record<string, DialogueGraph>),
     quests: cloneRecord(questsRecord as Record<string, QuestDefinition>),

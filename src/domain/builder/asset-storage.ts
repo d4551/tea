@@ -43,6 +43,12 @@ const inferExtension = (fileName: string, contentType?: string): string => {
     "image/webp": "webp",
     "model/gltf+json": "gltf",
     "model/gltf-binary": "glb",
+    "model/vnd.usd+zip": "usdz",
+    "model/vnd.usda": "usda",
+    "model/vnd.usdc": "usdc",
+    "model/vnd.pixar.usd": "usd",
+    "application/usd": "usd",
+    "application/octet-stream+usdz": "usdz",
     "application/json": "json",
   };
 

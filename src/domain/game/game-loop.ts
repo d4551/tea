@@ -13,6 +13,8 @@ import type {
   GameLocale,
   GameSceneState,
   GameSession,
+  GameSessionParticipant,
+  GameSessionParticipantRole,
   GameSessionSnapshot,
   GameSessionState,
   QuestDefinition,
@@ -77,7 +79,7 @@ type ResumeTokenPayload = {
   /** Stable session identifier. */
   readonly sessionId: string;
   /** Session-cookie identity allowed to restore this token. */
-  readonly ownerSessionId: string;
+  readonly participantSessionId: string;
   /** Expiry timestamp in ms since epoch. */
   readonly expiresAtMs: number;
   /** Monotonic token version per gameplay session. */
@@ -86,32 +88,72 @@ type ResumeTokenPayload = {
   readonly signature: string;
 };
 
+type InviteTokenPayload = {
+  /** Stable session identifier. */
+  readonly sessionId: string;
+  /** Owner session allowed to mint the invite. */
+  readonly ownerSessionId: string;
+  /** Granted room role. */
+  readonly role: Exclude<GameSessionParticipantRole, "owner">;
+  /** Invite expiry timestamp in ms since epoch. */
+  readonly expiresAtMs: number;
+  /** Integrity signature over the payload. */
+  readonly signature: string;
+};
+
 const hashResumePayload = (
   sessionId: string,
-  ownerSessionId: string,
+  participantSessionId: string,
   expiresAtMs: number,
   tokenVersion: number,
 ): string =>
   createHash("sha256")
     .update(
-      `${sessionId}:${ownerSessionId}:${expiresAtMs}:${tokenVersion}:${resumeTokenSecretMaterial}`,
+      `${sessionId}:${participantSessionId}:${expiresAtMs}:${tokenVersion}:${resumeTokenSecretMaterial}`,
     )
+    .digest("base64url");
+
+const hashInvitePayload = (
+  sessionId: string,
+  ownerSessionId: string,
+  role: Exclude<GameSessionParticipantRole, "owner">,
+  expiresAtMs: number,
+): string =>
+  createHash("sha256")
+    .update(`${sessionId}:${ownerSessionId}:${role}:${expiresAtMs}:${resumeTokenSecretMaterial}`)
     .digest("base64url");
 
 const encodeResumeToken = (
   sessionId: string,
-  ownerSessionId: string,
+  participantSessionId: string,
   expiresAtMs: number,
   tokenVersion: number,
 ): string =>
   Buffer.from(
     JSON.stringify({
       sessionId,
-      ownerSessionId,
+      participantSessionId,
       expiresAtMs,
       tokenVersion,
-      signature: hashResumePayload(sessionId, ownerSessionId, expiresAtMs, tokenVersion),
+      signature: hashResumePayload(sessionId, participantSessionId, expiresAtMs, tokenVersion),
     } satisfies ResumeTokenPayload),
+    "utf8",
+  ).toString("base64url");
+
+const encodeInviteToken = (
+  sessionId: string,
+  ownerSessionId: string,
+  role: Exclude<GameSessionParticipantRole, "owner">,
+  expiresAtMs: number,
+): string =>
+  Buffer.from(
+    JSON.stringify({
+      sessionId,
+      ownerSessionId,
+      role,
+      expiresAtMs,
+      signature: hashInvitePayload(sessionId, ownerSessionId, role, expiresAtMs),
+    } satisfies InviteTokenPayload),
     "utf8",
   ).toString("base64url");
 
@@ -122,9 +164,27 @@ const decodeResumeToken = (token: string): ResumeTokenPayload | null => {
   if (
     !payload ||
     payload.sessionId.length === 0 ||
-    payload.ownerSessionId.length === 0 ||
+    payload.participantSessionId.length === 0 ||
     !Number.isFinite(payload.expiresAtMs) ||
     !Number.isFinite(payload.tokenVersion) ||
+    payload.signature.length === 0
+  ) {
+    return null;
+  }
+
+  return payload;
+};
+
+const decodeInviteToken = (token: string): InviteTokenPayload | null => {
+  const decoded = Buffer.from(token, "base64url").toString("utf8");
+  const payload = safeJsonParse<InviteTokenPayload | null>(decoded, null);
+
+  if (
+    !payload ||
+    payload.sessionId.length === 0 ||
+    payload.ownerSessionId.length === 0 ||
+    (payload.role !== "controller" && payload.role !== "spectator") ||
+    !Number.isFinite(payload.expiresAtMs) ||
     payload.signature.length === 0
   ) {
     return null;
@@ -156,6 +216,46 @@ export class GameLoopService {
   public constructor(deps: GameLoopDependencies = {}) {
     this.stateStore = deps.stateStore ?? gameStateStore;
     this.progressStore = deps.progressStore ?? playerProgressStore;
+  }
+
+  private actorTokenKey(sessionId: string, participantSessionId: string): string {
+    return `${sessionId}:${participantSessionId}`;
+  }
+
+  private async listSessionParticipants(
+    session: GameSession,
+  ): Promise<readonly GameSessionParticipant[]> {
+    const persistedParticipants = await this.stateStore.listParticipants(session.id);
+    return [
+      {
+        sessionId: session.ownerSessionId,
+        role: "owner",
+        joinedAtMs: session.createdAtMs,
+        updatedAtMs: session.updatedAtMs,
+      },
+      ...persistedParticipants,
+    ];
+  }
+
+  private async enrichSessionParticipants(
+    session: Mutable<GameSession>,
+  ): Promise<Mutable<GameSession>> {
+    session.participants = [...(await this.listSessionParticipants(session))];
+    return session;
+  }
+
+  private resolveParticipantRole(
+    session: GameSession,
+    participantSessionId: string,
+  ): GameSessionParticipantRole | null {
+    if (session.ownerSessionId === participantSessionId) {
+      return "owner";
+    }
+
+    return (
+      session.participants.find((participant) => participant.sessionId === participantSessionId)
+        ?.role ?? null
+    );
   }
 
   private mapCommandState = (state: GameCommandState): GameActionState | undefined => {
@@ -365,6 +465,7 @@ export class GameLoopService {
       dialogueCatalog,
       publishedFlags,
       publishedQuests,
+      publishedProject ? Array.from(publishedProject.assets.values()) : [],
     );
     const mutableScene = scene as MutableGameSceneState;
     mutableScene.flags = this.buildInitialFlags(publishedFlags);
@@ -396,22 +497,24 @@ export class GameLoopService {
     if (!saved.ok) throw new Error(`Failed to create session: ${sessionId}`);
 
     this.ensureSessionMaps(sessionId);
-    this.liveSessions.set(sessionId, saved.payload as Mutable<GameSession>);
+    const liveSession = (await this.enrichSessionParticipants(
+      saved.payload as Mutable<GameSession>,
+    )) as Mutable<GameSession>;
+    this.liveSessions.set(sessionId, liveSession);
     this.lastPersistAtMs.set(sessionId, Date.now());
-    this.resumeTokenVersion.set(sessionId, 1);
     this.chatWindow.set(sessionId, []);
     if (typeof ownerSessionId === "string" && ownerSessionId.length > 0) {
       this.getResumeTokenState(sessionId, ownerSessionId, false);
     }
-    return this.stateStore.toSnapshot(saved.payload);
+    return this.stateStore.toSnapshot(liveSession);
   }
 
   public async restoreSession(
     sessionId: string,
     resumeToken: string,
-    ownerSessionId: string,
+    participantSessionId: string,
   ): Promise<GameSessionSnapshot | null> {
-    if (!this.isResumeTokenValid(sessionId, resumeToken, ownerSessionId)) {
+    if (!this.isResumeTokenValid(sessionId, resumeToken, participantSessionId)) {
       return null;
     }
 
@@ -419,12 +522,14 @@ export class GameLoopService {
     if (!sessionResult.ok) {
       return null;
     }
-    if (sessionResult.payload.ownerSessionId !== ownerSessionId) {
+    await this.enrichSessionParticipants(sessionResult.payload);
+    if (!this.resolveParticipantRole(sessionResult.payload, participantSessionId)) {
       return null;
     }
 
     this.ensureSessionMaps(sessionId);
-    this.rotateResumeTokenVersion(sessionId);
+    this.rotateResumeTokenVersion(sessionId, participantSessionId);
+    await this.enrichSessionParticipants(sessionResult.payload);
     return this.stateStore.toSnapshot(sessionResult.payload);
   }
 
@@ -461,7 +566,11 @@ export class GameLoopService {
     this.lastManualSaveAtMs.delete(sessionId);
     this.liveSessions.delete(sessionId);
     this.lastPersistAtMs.delete(sessionId);
-    this.resumeTokenVersion.delete(sessionId);
+    for (const tokenKey of [...this.resumeTokenVersion.keys()]) {
+      if (tokenKey.startsWith(`${sessionId}:`)) {
+        this.resumeTokenVersion.delete(tokenKey);
+      }
+    }
     this.chatWindow.delete(sessionId);
     return true;
   }
@@ -472,21 +581,28 @@ export class GameLoopService {
 
   public async getSessionState(
     sessionId: string,
-    ownerSessionId: string = "anonymous",
+    participantSessionId: string = "anonymous",
   ): Promise<GameSessionState | null> {
     const sessionResult = await this.getRuntimeSession(sessionId, true);
     if (!sessionResult.ok) {
       return null;
     }
-    if (sessionResult.payload.ownerSessionId !== ownerSessionId) {
+    await this.enrichSessionParticipants(sessionResult.payload);
+    const participantRole = this.resolveParticipantRole(
+      sessionResult.payload,
+      participantSessionId,
+    );
+    if (!participantRole) {
       return null;
     }
 
     const snapshot = this.stateStore.toSnapshot(sessionResult.payload);
-    const resumeTokenState = this.getResumeTokenState(sessionId, ownerSessionId);
+    const resumeTokenState = this.getResumeTokenState(sessionId, participantSessionId);
 
     return {
       ...snapshot,
+      participantRole,
+      participants: sessionResult.payload.participants,
       commandQueueDepth: this.getCommandQueueDepth(sessionId),
       resumeToken: resumeTokenState.token,
       resumeTokenExpiresAtMs: resumeTokenState.expiresAtMs,
@@ -501,13 +617,18 @@ export class GameLoopService {
    */
   public async getHudState(
     sessionId: string,
-    ownerSessionId: string = "anonymous",
+    participantSessionId: string = "anonymous",
   ): Promise<GameHudState | null> {
     const sessionResult = await this.getRuntimeSession(sessionId, true);
     if (!sessionResult.ok) {
       return null;
     }
-    if (sessionResult.payload.ownerSessionId !== ownerSessionId) {
+    await this.enrichSessionParticipants(sessionResult.payload);
+    const participantRole = this.resolveParticipantRole(
+      sessionResult.payload,
+      participantSessionId,
+    );
+    if (!participantRole) {
       return null;
     }
 
@@ -522,6 +643,8 @@ export class GameLoopService {
       sceneMode: sessionResult.payload.scene.sceneMode,
       activeQuestTitle: activeQuest?.title,
       locale: sessionResult.payload.locale,
+      participantRole,
+      participants: sessionResult.payload.participants,
       xp: progress?.xp ?? 0,
       level: progress?.level ?? 1,
       dialogue: sessionResult.payload.scene.dialogue,
@@ -530,17 +653,59 @@ export class GameLoopService {
 
   public async getExistingOrThrow(
     sessionId: string,
-    ownerSessionId: string = "anonymous",
+    participantSessionId: string = "anonymous",
   ): Promise<GameSessionState | null> {
-    return this.getSessionState(sessionId, ownerSessionId);
+    return this.getSessionState(sessionId, participantSessionId);
   }
 
-  public getResumeToken(sessionId: string, ownerSessionId: string): string | null {
-    return this.getResumeTokenState(sessionId, ownerSessionId).token;
+  public getResumeToken(sessionId: string, participantSessionId: string): string | null {
+    return this.getResumeTokenState(sessionId, participantSessionId).token;
   }
 
-  public getResumeTokenExpiresAtMs(sessionId: string, ownerSessionId: string): number {
-    return this.getResumeTokenState(sessionId, ownerSessionId).expiresAtMs;
+  public getResumeTokenExpiresAtMs(sessionId: string, participantSessionId: string): number {
+    return this.getResumeTokenState(sessionId, participantSessionId).expiresAtMs;
+  }
+
+  /**
+   * Creates a shareable invite token for a non-owner multiplayer participant.
+   */
+  public async createInviteToken(
+    sessionId: string,
+    ownerSessionId: string,
+    role: Exclude<GameSessionParticipantRole, "owner">,
+  ): Promise<string | null> {
+    const sessionResult = await this.getRuntimeSession(sessionId, true);
+    if (!sessionResult.ok || sessionResult.payload.ownerSessionId !== ownerSessionId) {
+      return null;
+    }
+
+    const expiresAtMs =
+      Date.now() + Math.max(defaultGameConfig.sessionResumeWindowMs, defaultGameConfig.tickMs);
+    return encodeInviteToken(sessionId, ownerSessionId, role, expiresAtMs);
+  }
+
+  /**
+   * Admits a participant into an existing shared gameplay session.
+   */
+  public async joinSession(
+    inviteToken: string,
+    participantSessionId: string,
+  ): Promise<GameSessionState | null> {
+    const payload = decodeInviteToken(inviteToken);
+    if (!payload || payload.expiresAtMs < Date.now()) {
+      return null;
+    }
+
+    const sessionResult = await this.getRuntimeSession(payload.sessionId, true);
+    if (!sessionResult.ok || sessionResult.payload.ownerSessionId !== payload.ownerSessionId) {
+      return null;
+    }
+
+    if (participantSessionId !== payload.ownerSessionId) {
+      await this.stateStore.saveParticipant(payload.sessionId, participantSessionId, payload.role);
+    }
+
+    return this.getSessionState(payload.sessionId, participantSessionId);
   }
 
   public getSaveCooldownRemainingMs(sessionId: string, nowMs: number = Date.now()): number {
@@ -609,9 +774,6 @@ export class GameLoopService {
     if (!this.commandSeq.has(sessionId)) {
       this.commandSeq.set(sessionId, 0);
     }
-    if (!this.resumeTokenVersion.has(sessionId)) {
-      this.resumeTokenVersion.set(sessionId, 1);
-    }
     if (!this.chatWindow.has(sessionId)) {
       this.chatWindow.set(sessionId, []);
     }
@@ -619,21 +781,22 @@ export class GameLoopService {
 
   private getResumeTokenState(
     sessionId: string,
-    ownerSessionId: string,
+    participantSessionId: string,
     rotate: boolean = false,
   ): {
     readonly token: string;
     readonly expiresAtMs: number;
     readonly tokenVersion: number;
   } {
-    const currentVersion = this.resumeTokenVersion.get(sessionId) ?? 1;
+    const tokenKey = this.actorTokenKey(sessionId, participantSessionId);
+    const currentVersion = this.resumeTokenVersion.get(tokenKey) ?? 1;
     const tokenVersion = rotate ? currentVersion + 1 : currentVersion;
-    this.resumeTokenVersion.set(sessionId, tokenVersion);
+    this.resumeTokenVersion.set(tokenKey, tokenVersion);
     const expiresAtMs =
       Date.now() + Math.max(defaultGameConfig.sessionResumeWindowMs, defaultGameConfig.tickMs);
 
     return {
-      token: encodeResumeToken(sessionId, ownerSessionId, expiresAtMs, tokenVersion),
+      token: encodeResumeToken(sessionId, participantSessionId, expiresAtMs, tokenVersion),
       expiresAtMs,
       tokenVersion,
     };
@@ -642,7 +805,7 @@ export class GameLoopService {
   private isResumeTokenValid(
     sessionId: string,
     resumeToken: string,
-    ownerSessionId: string,
+    participantSessionId: string,
   ): boolean {
     const payload = decodeResumeToken(resumeToken);
     if (!payload) {
@@ -651,13 +814,14 @@ export class GameLoopService {
 
     if (
       payload.sessionId !== sessionId ||
-      payload.ownerSessionId !== ownerSessionId ||
+      payload.participantSessionId !== participantSessionId ||
       payload.expiresAtMs < Date.now()
     ) {
       return false;
     }
 
-    const expectedVersion = this.resumeTokenVersion.get(sessionId) ?? 1;
+    const expectedVersion =
+      this.resumeTokenVersion.get(this.actorTokenKey(sessionId, participantSessionId)) ?? 1;
     if (payload.tokenVersion !== expectedVersion) {
       return false;
     }
@@ -666,15 +830,16 @@ export class GameLoopService {
       payload.signature ===
       hashResumePayload(
         payload.sessionId,
-        payload.ownerSessionId,
+        payload.participantSessionId,
         payload.expiresAtMs,
         payload.tokenVersion,
       )
     );
   }
 
-  private rotateResumeTokenVersion(sessionId: string): void {
-    this.resumeTokenVersion.set(sessionId, (this.resumeTokenVersion.get(sessionId) ?? 1) + 1);
+  private rotateResumeTokenVersion(sessionId: string, participantSessionId: string): void {
+    const tokenKey = this.actorTokenKey(sessionId, participantSessionId);
+    this.resumeTokenVersion.set(tokenKey, (this.resumeTokenVersion.get(tokenKey) ?? 1) + 1);
   }
 
   private async getRuntimeSession(
@@ -700,10 +865,12 @@ export class GameLoopService {
             persisted.payload.updatedAtMs > liveSession.updatedAtMs)
         ) {
           const refreshedSession = persisted.payload as Mutable<GameSession>;
+          await this.enrichSessionParticipants(refreshedSession);
           this.liveSessions.set(sessionId, refreshedSession);
           return { ok: true, payload: refreshedSession };
         }
       }
+      await this.enrichSessionParticipants(liveSession);
       return { ok: true, payload: liveSession };
     }
 
@@ -713,6 +880,7 @@ export class GameLoopService {
     }
 
     const mutableSession = sessionResult.payload as Mutable<GameSession>;
+    await this.enrichSessionParticipants(mutableSession);
     this.liveSessions.set(sessionId, mutableSession);
     this.ensureSessionMaps(sessionId);
     this.lastPersistAtMs.set(sessionId, Date.now());

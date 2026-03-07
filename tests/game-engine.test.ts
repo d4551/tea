@@ -396,6 +396,13 @@ describe("game engine runtime", () => {
       deleteSession: async (sessionId) => gameStateStore.deleteSession(sessionId),
       toSnapshot: (session) => gameStateStore.toSnapshot(session),
       purgeExpiredSessions: async (nowMs) => gameStateStore.purgeExpiredSessions(nowMs),
+      listParticipants: async () => [],
+      saveParticipant: async (_sessionId, participantSessionId, role) => ({
+        sessionId: participantSessionId,
+        role,
+        joinedAtMs: Date.now(),
+        updatedAtMs: Date.now(),
+      }),
     };
     const isolatedGameLoop = new GameLoopService({ stateStore: failingStore });
     const session = await isolatedGameLoop.createSession("en-US", "teaHouse");
@@ -431,6 +438,13 @@ describe("game engine runtime", () => {
         purgeCalls += 1;
         return 4;
       },
+      listParticipants: async () => [],
+      saveParticipant: async (_sessionId, participantSessionId, role) => ({
+        sessionId: participantSessionId,
+        role,
+        joinedAtMs: Date.now(),
+        updatedAtMs: Date.now(),
+      }),
     };
 
     const isolatedGameLoop = new GameLoopService({ stateStore: purgingStore });
