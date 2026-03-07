@@ -4,13 +4,13 @@ import {
   interpolateRoutePath,
   withQueryParameters,
 } from "../shared/constants/routes.ts";
-import type { Messages } from "../shared/i18n/messages.ts";
-import { getMessages } from "../shared/i18n/translator.ts";
-import { escapeHtml, type LayoutContext, renderDocument } from "./layout.ts";
 import type {
   GameSessionParticipant,
   GameSessionParticipantRole,
 } from "../shared/contracts/game.ts";
+import type { Messages } from "../shared/i18n/messages.ts";
+import { getMessages } from "../shared/i18n/translator.ts";
+import { escapeHtml, type LayoutContext, renderDocument } from "./layout.ts";
 
 /**
  * Props for the playable runtime page.

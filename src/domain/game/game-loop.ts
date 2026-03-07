@@ -11,6 +11,7 @@ import type {
   GameFlagDefinition,
   GameHudState,
   GameLocale,
+  GameParticipantPresence,
   GameSceneState,
   GameSession,
   GameSessionParticipant,
@@ -40,6 +41,23 @@ import { buildSessionSceneState } from "./utils/session-state.ts";
 
 // Wrap worldTimeMs at ~1 day to prevent float precision loss in NPC PRNG
 const WORLD_TIME_WRAP_MS = 86_400_007;
+const MULTIPLAYER_PRESENCE_OFFSETS: readonly Readonly<{
+  readonly x: number;
+  readonly y: number;
+}>[] = [
+  { x: 56, y: 0 },
+  { x: -56, y: 0 },
+  { x: 0, y: 56 },
+  { x: 0, y: -56 },
+  { x: 40, y: 40 },
+  { x: -40, y: 40 },
+];
+const PRESENCE_CHARACTER_BY_ROLE: Readonly<
+  Record<Exclude<GameSessionParticipantRole, "owner">, string>
+> = {
+  controller: "riverPilot",
+  spectator: "merchant",
+};
 const logger = createLogger("game.loop");
 const resumeTokenSecretMaterial = [
   appConfig.applicationName,
@@ -241,7 +259,54 @@ export class GameLoopService {
     session: Mutable<GameSession>,
   ): Promise<Mutable<GameSession>> {
     session.participants = [...(await this.listSessionParticipants(session))];
+    this.syncParticipantPresence(session);
     return session;
+  }
+
+  private buildParticipantPresence(session: GameSession): readonly GameParticipantPresence[] {
+    const ownerPosition = session.scene.player.position;
+    const ownerBounds = session.scene.player.bounds;
+
+    return session.participants
+      .filter(
+        (
+          participant,
+        ): participant is GameSessionParticipant & {
+          readonly role: Exclude<GameSessionParticipantRole, "owner">;
+        } => participant.role !== "owner",
+      )
+      .map((participant, index) => {
+        const offset = MULTIPLAYER_PRESENCE_OFFSETS[
+          index % MULTIPLAYER_PRESENCE_OFFSETS.length
+        ] ?? {
+          x: 0,
+          y: 0,
+        };
+        const characterKey = PRESENCE_CHARACTER_BY_ROLE[participant.role];
+
+        return {
+          sessionId: participant.sessionId,
+          role: participant.role,
+          entity: {
+            id: `participant-${participant.sessionId}`,
+            label: participant.sessionId,
+            characterKey,
+            position: {
+              x: ownerPosition.x + offset.x,
+              y: ownerPosition.y + offset.y,
+            },
+            facing: session.scene.player.facing,
+            animation: `idle-${session.scene.player.facing}`,
+            frame: 0,
+            velocity: { x: 0, y: 0 },
+            bounds: ownerBounds,
+          },
+        };
+      });
+  }
+
+  private syncParticipantPresence(session: Mutable<GameSession>): void {
+    session.scene.coPlayers = [...this.buildParticipantPresence(session)];
   }
 
   private resolveParticipantRole(
@@ -1366,6 +1431,7 @@ export class GameLoopService {
 
     // Advance NPC AI
     npcAiEngine.updateNpcs(state, session.seed, dtMs);
+    this.syncParticipantPresence(session);
 
     await this.persistSessionIfDue(session, false);
     return this.stateStore.toSnapshot(session);

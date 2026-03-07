@@ -578,6 +578,109 @@ describe("API contracts", () => {
     expect(commandPayload.data?.accepted).toBe(true);
   });
 
+  test("multiplayer invite flow admits spectators and blocks spectator commands", async () => {
+    const ownerCreateResponse = await app.handle(
+      new Request(toUrl(appRoutes.gameApiSession), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          locale: "en-US",
+        }),
+      }),
+    );
+    const ownerCreatePayload = (await ownerCreateResponse.json()) as {
+      readonly ok: boolean;
+      readonly data?: {
+        readonly sessionId: string;
+      };
+    };
+    const ownerCookie = readSessionCookieHeader(ownerCreateResponse);
+    const sessionId = ownerCreatePayload.data?.sessionId ?? "";
+    managedSessionIds.add(sessionId);
+
+    const spectatorHomeResponse = await app.handle(new Request(toUrl(appRoutes.home)));
+    const spectatorCookie = readSessionCookieHeader(spectatorHomeResponse);
+
+    const inviteResponse = await app.handle(
+      new Request(toUrl(appRoutes.gameApiSessionInvite.replace(":id", sessionId)), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json",
+          ...(ownerCookie ? { cookie: ownerCookie } : {}),
+        },
+        body: JSON.stringify({
+          role: "spectator",
+          locale: "en-US",
+        }),
+      }),
+    );
+    const invitePayload = (await inviteResponse.json()) as {
+      readonly ok: boolean;
+      readonly data?: {
+        readonly inviteToken: string;
+      };
+    };
+
+    const joinResponse = await app.handle(
+      new Request(toUrl(appRoutes.gameApiSessionJoin.replace(":id", sessionId)), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(spectatorCookie ? { cookie: spectatorCookie } : {}),
+        },
+        body: JSON.stringify({
+          inviteToken: invitePayload.data?.inviteToken ?? "",
+        }),
+      }),
+    );
+    const joinPayload = (await joinResponse.json()) as {
+      readonly ok: boolean;
+      readonly data?: {
+        readonly participantRole?: string;
+        readonly participants?: readonly { readonly role: string }[];
+        readonly state?: {
+          readonly coPlayers?: readonly {
+            readonly sessionId: string;
+            readonly role: string;
+            readonly entity: { readonly id: string };
+          }[];
+        };
+      };
+    };
+
+    const spectatorCommandResponse = await app.handle(
+      new Request(toUrl(appRoutes.gameApiSessionCommand.replace(":id", sessionId)), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(spectatorCookie ? { cookie: spectatorCookie } : {}),
+        },
+        body: JSON.stringify({
+          type: "move",
+          direction: "up",
+          durationMs: 120,
+        }),
+      }),
+    );
+
+    expect(inviteResponse.status).toBe(httpStatus.ok);
+    expect(joinResponse.status).toBe(httpStatus.ok);
+    expect(joinPayload.ok).toBe(true);
+    expect(joinPayload.data?.participantRole).toBe("spectator");
+    expect(
+      joinPayload.data?.participants?.some((participant) => participant.role === "spectator"),
+    ).toBe(true);
+    expect(
+      joinPayload.data?.state?.coPlayers?.some(
+        (presence) => presence.role === "spectator" && presence.sessionId.length > 0,
+      ),
+    ).toBe(true);
+    expect(spectatorCommandResponse.status).toBe(httpStatus.unauthorized);
+  });
+
   test("game session state endpoint repairs malformed persisted scene payloads", async () => {
     if (appConfig.game.sessionStore !== "prisma") {
       expect(true).toBe(true);
@@ -1893,6 +1996,62 @@ describe("HTMX partial rendering", () => {
     expect(html.includes("Sprite pipeline")).toBe(true);
     expect(html.includes("Animation pipeline")).toBe(true);
     expect(html.includes("Platform readiness")).toBe(true);
+  });
+
+  test("builder asset creation preserves OpenUSD source metadata and runtime variant policy", async () => {
+    const projectId = `usd-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+
+    const usdzAssetId = `asset-${crypto.randomUUID().slice(0, 8)}`;
+    const usdzResponse = await app.handle(
+      new Request(toUrl("/api/builder/assets/create/form"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+        },
+        body: new URLSearchParams({
+          projectId,
+          locale: "en-US",
+          id: usdzAssetId,
+          label: "Tea House USDZ",
+          kind: "model",
+          sceneMode: "3d",
+          source: "/assets/models/tea-house.usdz",
+        }).toString(),
+      }),
+    );
+
+    const usdAssetId = `asset-${crypto.randomUUID().slice(0, 8)}`;
+    const usdResponse = await app.handle(
+      new Request(toUrl("/api/builder/assets/create/form"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+        },
+        body: new URLSearchParams({
+          projectId,
+          locale: "en-US",
+          id: usdAssetId,
+          label: "Tea House USDA",
+          kind: "model",
+          sceneMode: "3d",
+          source: "/assets/models/tea-house.usda",
+        }).toString(),
+      }),
+    );
+
+    const project = await builderService.getProject(projectId);
+    const usdzAsset = project?.assets.get(usdzAssetId);
+    const usdAsset = project?.assets.get(usdAssetId);
+
+    expect(usdzResponse.status).toBe(httpStatus.ok);
+    expect(usdResponse.status).toBe(httpStatus.ok);
+    expect(usdzAsset?.sourceFormat).toBe("usdz");
+    expect(usdzAsset?.variants.some((variant) => variant.usage === "runtime")).toBe(true);
+    expect(usdAsset?.sourceFormat).toBe("usda");
+    expect(usdAsset?.variants.every((variant) => variant.usage === "source")).toBe(true);
   });
 
   test("builder AI page exposes AI authoring and automation readiness", async () => {

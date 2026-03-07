@@ -29,6 +29,29 @@ describe("game shared contracts", () => {
     expect(validation.data.sceneId).toBe(state.sceneId);
   });
 
+  test("scene-state validator accepts projected multiplayer presence", () => {
+    const state = createBaselineSceneState();
+    const projectedState = {
+      ...state,
+      coPlayers: [
+        {
+          sessionId: "participant-1",
+          role: "controller" as const,
+          entity: {
+            ...state.player,
+            id: "participant-participant-1",
+            label: "participant-1",
+            characterKey: "riverPilot",
+          },
+        },
+      ],
+    };
+
+    const validation = validateGameSceneState(projectedState);
+
+    expect(validation.ok).toBe(true);
+  });
+
   test("scene-state validator rejects malformed NPC runtime state", () => {
     const state = createBaselineSceneState();
     const malformedState = {

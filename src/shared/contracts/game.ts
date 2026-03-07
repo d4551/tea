@@ -650,6 +650,18 @@ export interface EntityState {
 }
 
 /**
+ * Runtime-visible participant presence projected into the playable scene.
+ */
+export interface GameParticipantPresence {
+  /** Authenticated room participant backing this presence. */
+  readonly sessionId: string;
+  /** Granted room role for diagnostics and UI affordances. */
+  readonly role: GameSessionParticipantRole;
+  /** Renderable entity state used by the playable client. */
+  readonly entity: EntityState;
+}
+
+/**
  * Resolved dialogue entry persisted inside a session snapshot.
  */
 export interface GameDialogueEntry {
@@ -704,6 +716,8 @@ export interface GameSceneState {
   readonly geometry: SceneGeometry;
   /** Player snapshot. */
   readonly player: EntityState;
+  /** Additional room participants rendered as live presence in the scene. */
+  readonly coPlayers?: readonly GameParticipantPresence[];
   /** NPC snapshots. */
   readonly npcs: readonly NpcState[];
   /** Collision zones for HUD/debug overlays. */
@@ -907,6 +921,8 @@ export interface GameRealtimeFrame {
   readonly participants?: readonly GameSessionParticipant[];
   /** The caller role resolved for this frame. */
   readonly participantRole?: GameSessionParticipantRole;
+  /** Runtime-visible participant presence projected for the scene. */
+  readonly coPlayers?: readonly GameParticipantPresence[];
 }
 
 /**
@@ -1086,6 +1102,12 @@ const isNpcState = (value: unknown): value is NpcState => {
   );
 };
 
+const isGameParticipantPresence = (value: unknown): value is GameParticipantPresence =>
+  isRecord(value) &&
+  typeof value.sessionId === "string" &&
+  isGameSessionParticipantRole(value.role) &&
+  isEntityState(value.entity);
+
 const isGameDialogue = (value: unknown): value is GameDialogue =>
   isRecord(value) &&
   typeof value.npcId === "string" &&
@@ -1145,6 +1167,8 @@ const isGameSceneStateValue = (value: unknown): value is GameSceneState =>
   typeof value.background === "string" &&
   isSceneGeometry(value.geometry) &&
   isEntityState(value.player) &&
+  (value.coPlayers === undefined ||
+    (Array.isArray(value.coPlayers) && value.coPlayers.every(isGameParticipantPresence))) &&
   Array.isArray(value.npcs) &&
   value.npcs.every(isNpcState) &&
   Array.isArray(value.collisions) &&
@@ -1267,6 +1291,13 @@ export const validateGameRealtimeFrame = (
     return { ok: false, message: "Invalid realtime frame participant role." };
   }
 
+  if (
+    payload.coPlayers !== undefined &&
+    (!Array.isArray(payload.coPlayers) || !payload.coPlayers.every(isGameParticipantPresence))
+  ) {
+    return { ok: false, message: "Invalid realtime frame co-players." };
+  }
+
   const commandQueueDepth =
     payload.commandQueueDepth === undefined ? undefined : payload.commandQueueDepth;
   const resumeToken = payload.resumeToken === undefined ? undefined : payload.resumeToken;
@@ -1275,6 +1306,7 @@ export const validateGameRealtimeFrame = (
   const participants = payload.participants === undefined ? undefined : payload.participants;
   const participantRole =
     payload.participantRole === undefined ? undefined : payload.participantRole;
+  const coPlayers = payload.coPlayers === undefined ? undefined : payload.coPlayers;
 
   return {
     ok: true,
@@ -1285,6 +1317,7 @@ export const validateGameRealtimeFrame = (
       resumeTokenExpiresAtMs,
       participants,
       participantRole,
+      coPlayers,
     },
   };
 };

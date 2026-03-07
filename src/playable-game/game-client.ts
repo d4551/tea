@@ -14,6 +14,7 @@ import { appRoutes, interpolateRoutePath } from "../shared/constants/routes.ts";
 import type {
   EntityState,
   GameCommand,
+  GameParticipantPresence,
   GameRealtimeFrame,
   GameSceneState,
   NpcState,
@@ -97,6 +98,25 @@ const resolveDocumentLocale = (): string => {
 
 const resolveSpriteManifest = (characterKey: string): SpriteManifest | null =>
   gameSpriteManifests[characterKey] ?? null;
+
+const getSceneEntities = (
+  state: GameSceneState,
+): readonly (EntityState | NpcState | GameParticipantPresence["entity"])[] => [
+  state.player,
+  ...(state.coPlayers?.map((presence) => presence.entity) ?? []),
+  ...state.npcs,
+];
+
+const findPreviousEntity = (
+  state: GameSceneState | null,
+  entityId: string,
+): EntityState | NpcState | GameParticipantPresence["entity"] | null => {
+  if (!state) {
+    return null;
+  }
+
+  return getSceneEntities(state).find((entity) => entity.id === entityId) ?? null;
+};
 
 const parsePositiveInteger = (rawValue: string | undefined): number | null => {
   const value = Number.parseInt(rawValue ?? "", 10);
@@ -585,7 +605,7 @@ const initGameClient = async (): Promise<void> => {
 
   const ensureSceneAssetsLoaded = async (state: GameSceneState): Promise<LoadedSceneAssets> => {
     const uniqueSheetUrls = new Set<string>([state.background]);
-    const entities: readonly (EntityState | NpcState)[] = [state.player, ...state.npcs];
+    const entities = getSceneEntities(state);
 
     for (const entity of entities) {
       const manifest = resolveSpriteManifest(entity.characterKey);
@@ -1098,7 +1118,7 @@ const renderState = (
   world: Container,
   resolveEntityTexture: (state: GameSceneState, entity: EntityState | NpcState) => Texture,
 ): void => {
-  const entities: readonly (EntityState | NpcState)[] = [current.player, ...current.npcs];
+  const entities = getSceneEntities(current);
   const activeNodeIds = new Set<string>();
 
   for (const entity of entities) {
@@ -1113,10 +1133,7 @@ const renderState = (
         return created;
       })();
 
-    const previousEntity =
-      previous?.player.id === entity.id
-        ? previous.player
-        : previous?.npcs.find((npc) => npc.id === entity.id);
+    const previousEntity = findPreviousEntity(previous, entity.id);
     const previousX = previousEntity?.position.x ?? entity.position.x;
     const previousY = previousEntity?.position.y ?? entity.position.y;
 

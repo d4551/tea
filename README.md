@@ -75,9 +75,11 @@ The product centers on a **builder/player loop**: author content in the builder,
 ### Key Capabilities
 
 - **Builder/Player Loop** — project-scoped authoring, publish/unpublish, immutable releases, and playable validation
+- **Shared-Session Multiplayer** — owners can issue invite tokens for controller and spectator roles inside the same published runtime session
 - **Server-Side Rendering** — all pages render on the server via Elysia; HTMX provides progressive enhancement with `hx-indicator` and `hx-disabled-elt` for loading feedback
 - **AI Narrative Engine** — on-device inference via 🤗 Transformers with ONNX/WebGPU acceleration; patch preview/apply for reviewable co-author flow
 - **Playable Game Client** — PixiJS 8 canvas with Three.js 3D layer, bundled and hot-reloaded during development
+- **OpenUSD-Aware Asset Ingestion** — builder uploads accept `.usd`, `.usda`, `.usdc`, and `.usdz`, and the published Three.js runtime can load `usdz` assets directly
 - **Type-Safe Stack** — end-to-end types from Prisma schema through Elysia route contracts and SSR views
 - **Internationalization** — `Accept-Language` q-weight parsing with deterministic locale persistence
 - **Structured Observability** — correlation ID propagation, levelled JSON logging, typed error envelopes
@@ -92,12 +94,14 @@ The builder exposes a capability matrix that reflects current implementation sta
 |---|---|---|
 | Release flow | Implemented | Publish/unpublish, immutable releases |
 | 2D runtime | Partial | PixiJS; scene from authored data |
-| 3D runtime | Partial | Three.js atmosphere; no full scene graph from builder |
+| 3D runtime | Partial | Three.js runtime supports authored model assets, but builder viewport authoring is still limited |
 | Sprite pipeline | Partial | Manifest-based; asset upload implemented |
 | Animation pipeline | Partial | Clip definitions; no frame editor |
 | Mechanics | Partial | Quests, triggers, dialogue graphs; quest edit/delete implemented |
 | AI authoring | Partial | Patch preview/apply; dialogue generate |
 | Automation / RPA | Partial | Lifecycle-managed worker, auditable steps, Playwright-backed evidence capture |
+| Multiplayer | Partial | Shared-session owner/controller/spectator flow with visible co-player presence; not yet multi-avatar co-op |
+| OpenUSD | Partial | `.usd/.usda/.usdc/.usdz` ingest supported; `usdz` playable in Three.js runtime |
 
 ---
 
@@ -166,6 +170,7 @@ graph TB
     AR["api-routes"]
     AIR["ai-routes"]
     AIP["ai-provider-plugin"]
+    GRC["game-request-context"]
     GP["game-plugin"]
     BR["builder-routes"]
     BA["builder-api-routes"]
@@ -182,14 +187,14 @@ graph TB
   end
 
   subgraph Storage["Persistence - Prisma"]
-    DB["GameSession, PlayerProgress, BuilderProject, BuilderProjectRelease"]
+    DB["GameSession, GameSessionParticipant, PlayerProgress, BuilderProject, BuilderProjectRelease"]
   end
 
   SSR -->|HTTP / HTMX| RC
   CLIENT -->|REST create/state/restore/save/command| GP
   CLIENT -->|WebSocket| GP
   CLIENT -->|SSE HUD stream| GP
-  RC --> EH --> CT --> SW --> SA --> PR --> GR --> AR --> AIR --> AIP --> GP --> BR --> BA --> SP --> CW
+  RC --> EH --> CT --> SW --> SA --> PR --> GR --> AR --> AIR --> AIP --> GRC --> GP --> BR --> BA --> SP --> CW
   GP --> LOOP
   LOOP --> STORE
   LOOP --> SCENE
@@ -226,7 +231,7 @@ sequenceDiagram
 
 ### Plugin Pipeline
 
-Plugins are composed in strict order. Each plugin decorates the request context for downstream consumers. Infrastructure plugins (request-context, onError, content-type, swagger, static-assets) run first; then page, game, API, and AI routes; then the AI provider lifecycle plugin; then game-plugin; then builder routes; finally session-purge and creator-worker for lifecycle-owned background execution. Builder locale, project id, and current-path resolution are now attached once through the scoped `builder-request-context` derive plugin in `src/plugins/builder-request-context.ts`, full-page SSR shells consume a shared `LayoutContext` from `src/views/layout.ts`, builder JSON draft-state decode/versioned-save/snapshot projection now live behind `src/domain/builder/builder-project-state-store.ts`, `src/shared/contracts/game.ts` now owns persisted scene-state / realtime-frame validation, `game-plugin` now owns session-scoped websocket tick cleanup plus transport teardown when a session closes or is deleted, and `game-loop` owns canonical session resolution, dashboard/session metrics, expired-session purging, and the HUD state read path consumed by SSE transport rendering.
+Plugins are composed in strict order. Each plugin decorates the request context for downstream consumers. Infrastructure plugins (request-context, onError, content-type, swagger, static-assets) run first; then page, game, API, and AI routes; then the AI provider lifecycle plugin; then the scoped `game-request-context` derive plugin; then `game-plugin`; then builder routes; finally session-purge and creator-worker for lifecycle-owned background execution. Builder locale, project id, and current-path resolution are attached once through `src/plugins/builder-request-context.ts`, game HTTP participant identity/locale are attached once through `src/plugins/game-request-context.ts`, full-page SSR shells consume a shared `LayoutContext` from `src/views/layout.ts`, builder JSON draft-state decode/versioned-save/snapshot projection now live behind `src/domain/builder/builder-project-state-store.ts`, `src/shared/contracts/game.ts` owns persisted scene-state / realtime-frame validation, `game-plugin` owns session-scoped websocket tick cleanup plus transport teardown when a session closes or is deleted, and `game-loop` owns canonical session resolution, dashboard/session metrics, expired-session purging, and the HUD state read path consumed by SSE transport rendering.
 
 ```mermaid
 flowchart LR
@@ -239,16 +244,17 @@ flowchart LR
   G --> H["api-routes"]
   H --> I["ai-routes"]
   I --> J["ai-provider-plugin"]
-  J --> K["game-plugin"]
-  K --> L["builder-routes"]
-  L --> M["builder-api-routes"]
-  M --> N["session-purge"]
-  N --> O["creator-worker"]
+  J --> K["game-request-context"]
+  K --> L["game-plugin"]
+  L --> M["builder-routes"]
+  M --> N["builder-api-routes"]
+  N --> O["session-purge"]
+  O --> P["creator-worker"]
 ```
 
 ### Domain Model
 
-Core entities: GameSession (authoritative runtime state), PlayerProgress (XP and level), BuilderProject (draft state/versioning), BuilderProjectScene / BuilderProjectDialogueEntry (relational draft world-content registries), BuilderProjectAsset / BuilderProjectAnimationClip (relational draft media registries), BuilderProjectDialogueGraph / BuilderProjectQuest / BuilderProjectTrigger / BuilderProjectFlag (relational draft mechanics registries), BuilderProjectGenerationJob / BuilderProjectArtifact / BuilderProjectAutomationRun (relational draft worker state), and BuilderProjectRelease (immutable published snapshots).
+Core entities: GameSession (authoritative runtime state), GameSessionParticipant (shared-session multiplayer membership), PlayerProgress (XP and level), BuilderProject (draft state/versioning), BuilderProjectScene / BuilderProjectDialogueEntry (relational draft world-content registries), BuilderProjectAsset / BuilderProjectAnimationClip (relational draft media registries), BuilderProjectDialogueGraph / BuilderProjectQuest / BuilderProjectTrigger / BuilderProjectFlag (relational draft mechanics registries), BuilderProjectGenerationJob / BuilderProjectArtifact / BuilderProjectAutomationRun (relational draft worker state), and BuilderProjectRelease (immutable published snapshots).
 
 ```mermaid
 erDiagram
@@ -259,6 +265,11 @@ erDiagram
     datetime expiresAt
     json scene
     string projectId
+  }
+  GAME_SESSION_PARTICIPANT {
+    string sessionId PK
+    string participantSessionId PK
+    string role
   }
   PLAYER_PROGRESS {
     string sessionId PK
@@ -338,6 +349,7 @@ erDiagram
     string checksum
     json state
   }
+  GAME_SESSION ||--o{ GAME_SESSION_PARTICIPANT : admits
   GAME_SESSION ||--|| PLAYER_PROGRESS : has
   BUILDER_PROJECT ||--o{ BUILDER_PROJECT_SCENE : owns
   BUILDER_PROJECT ||--o{ BUILDER_PROJECT_DIALOGUE_ENTRY : owns
@@ -357,7 +369,7 @@ erDiagram
 
 ### Session Transport Contract
 
-Client creates session via REST, connects WebSocket with resume token, sends commands via REST, and subscribes to HUD events via SSE. On token expiry, client calls POST restore with resume token in body.
+Client creates or joins a session via REST, connects WebSocket with a participant-scoped resume token, sends commands via REST when the role permits control, and subscribes to HUD events via SSE. On token expiry, client calls POST restore with the resume token in the request body.
 
 ```mermaid
 sequenceDiagram
@@ -369,6 +381,9 @@ sequenceDiagram
 
   Client->>REST: POST create
   REST-->>Client: sessionId, resumeToken, resumeTokenExpiresAtMs
+  Client->>REST: POST invite or join
+  REST->>GL: createInviteToken or joinSession
+  GL-->>REST: invite token or joined participant session
   Client->>WS: connect with resumeToken query
   WS->>GL: restoreSession
   GL-->>WS: accepted
@@ -376,9 +391,15 @@ sequenceDiagram
   REST->>GL: queue validated command
   GL-->>WS: publish state and rotated resume token
   Client->>HUD: SSE subscribe
-  HUD-->>Client: scene-title, xp, dialogue events
+  HUD-->>Client: scene-title, xp, dialogue, participants events
   Note over Client,REST: Token expiry: POST restore with resumeToken in body
 ```
+
+Session roles:
+
+- `owner`: full lifecycle control, save/close/delete/invite
+- `controller`: can restore, observe, and issue gameplay commands
+- `spectator`: can restore and observe, but command enqueue is rejected server-side
 
 ### Builder/Player Flow
 
@@ -413,6 +434,12 @@ flowchart TB
 ### Builder Publish Contract
 
 Draft mutations update `builderProject.state` only for residual draft metadata, while scenes, localized dialogue catalogs, media, mechanics, and worker state live in relational draft tables. Publish creates an immutable release snapshot with the full materialized project. Runtime sessions load only published release data.
+
+OpenUSD asset policy:
+
+- Builder ingestion accepts `.usd`, `.usda`, `.usdc`, and `.usdz`.
+- Published runtime currently treats `usdz` as the directly loadable OpenUSD variant in Three.js.
+- `.usd`, `.usda`, and `.usdc` remain authoritative source variants for later import or conversion workflows rather than being silently rewritten.
 
 ```mermaid
 flowchart TD
@@ -681,6 +708,7 @@ graph TB
     AR["API 路由"]
     AIR["AI 路由"]
     AIP["AI 提供商插件"]
+    GRC["游戏请求上下文"]
     GP["游戏核心插件"]
     BR["构建器路由"]
     BA["构建器 API 路由"]
@@ -697,14 +725,14 @@ graph TB
   end
 
   subgraph Storage["持久化 - Prisma"]
-    DB["GameSession, PlayerProgress, BuilderProject, BuilderProjectRelease"]
+    DB["GameSession, GameSessionParticipant, PlayerProgress, BuilderProject, BuilderProjectRelease"]
   end
 
   SSR -->|HTTP / HTMX| RC
   CLIENT -->|REST create/state/restore/save/command| GP
   CLIENT -->|WebSocket| GP
   CLIENT -->|SSE HUD 流| GP
-  RC --> EH --> CT --> SW --> SA --> PR --> GR --> AR --> AIR --> AIP --> GP --> BR --> BA --> SP --> CW
+  RC --> EH --> CT --> SW --> SA --> PR --> GR --> AR --> AIR --> AIP --> GRC --> GP --> BR --> BA --> SP --> CW
   GP --> LOOP
   LOOP --> STORE
   LOOP --> SCENE
@@ -738,7 +766,7 @@ sequenceDiagram
 
 #### 插件流水线
 
-插件按严格顺序组合，每个插件为下游消费者装饰请求上下文。基础设施插件先执行，然后是页面、游戏、API 与 AI 路由，接着是 AI provider 生命周期插件、game-plugin，再到 builder 路由，最后由 session-purge 与 creator-worker 生命周期插件托管后台轮询任务。Builder 的 locale、project id 与 current-path 解析统一收敛到 `src/plugins/builder-request-context.ts`，完整页面 SSR 壳层统一消费 `src/views/layout.ts` 中的 `LayoutContext`，builder JSON 草稿状态的 decode / versioned-save / snapshot projection 统一收敛到 `src/domain/builder/builder-project-state-store.ts`，`src/shared/contracts/game.ts` 统一负责持久化 scene state、trigger definitions 与 realtime websocket frame 的边界校验，`game-plugin` 统一负责 session 级别的 websocket tick 清理，以及 session close/delete 时的 transport teardown，而 `game-loop` 统一负责会话解析、仪表盘/会话指标以及 HUD 状态读取。
+插件按严格顺序组合，每个插件为下游消费者装饰请求上下文。基础设施插件先执行，然后是页面、游戏、API 与 AI 路由，接着是 AI provider 生命周期插件、作用域化的 `game-request-context` derive 插件、`game-plugin`，再到 builder 路由，最后由 session-purge 与 creator-worker 生命周期插件托管后台轮询任务。Builder 的 locale、project id 与 current-path 解析统一收敛到 `src/plugins/builder-request-context.ts`，游戏 HTTP 的 participant identity 与 locale 解析统一收敛到 `src/plugins/game-request-context.ts`，完整页面 SSR 壳层统一消费 `src/views/layout.ts` 中的 `LayoutContext`，builder JSON 草稿状态的 decode / versioned-save / snapshot projection 统一收敛到 `src/domain/builder/builder-project-state-store.ts`，`src/shared/contracts/game.ts` 统一负责持久化 scene state、trigger definitions 与 realtime websocket frame 的边界校验，`game-plugin` 统一负责 session 级别的 websocket tick 清理，以及 session close/delete 时的 transport teardown，而 `game-loop` 统一负责会话解析、仪表盘/会话指标以及 HUD 状态读取。
 
 ```mermaid
 flowchart LR
@@ -751,16 +779,17 @@ flowchart LR
   G --> H["API 路由"]
   H --> I["AI 路由"]
   I --> J["AI 提供商插件"]
-  J --> K["游戏插件"]
-  K --> L["构建器路由"]
-  L --> M["构建器 API 路由"]
-  M --> N["会话清理"]
-  N --> O["创建者工作者"]
+  J --> K["游戏请求上下文"]
+  K --> L["游戏插件"]
+  L --> M["构建器路由"]
+  M --> N["构建器 API 路由"]
+  N --> O["会话清理"]
+  O --> P["创建者工作者"]
 ```
 
 #### 领域模型
 
-核心实体：GameSession（服务端权威运行时状态）、PlayerProgress（经验值与等级）、BuilderProject（草稿状态/版本控制）、BuilderProjectScene / BuilderProjectDialogueEntry（关系型草稿世界内容注册表）、BuilderProjectAsset / BuilderProjectAnimationClip（关系型草稿媒体注册表）、BuilderProjectDialogueGraph / BuilderProjectQuest / BuilderProjectTrigger / BuilderProjectFlag（关系型草稿机制注册表）、BuilderProjectGenerationJob / BuilderProjectArtifact / BuilderProjectAutomationRun（关系型草稿工作进程状态），以及 BuilderProjectRelease（不可变的发布快照）。
+核心实体：GameSession（服务端权威运行时状态）、GameSessionParticipant（共享会话多人参与关系）、PlayerProgress（经验值与等级）、BuilderProject（草稿状态/版本控制）、BuilderProjectScene / BuilderProjectDialogueEntry（关系型草稿世界内容注册表）、BuilderProjectAsset / BuilderProjectAnimationClip（关系型草稿媒体注册表）、BuilderProjectDialogueGraph / BuilderProjectQuest / BuilderProjectTrigger / BuilderProjectFlag（关系型草稿机制注册表）、BuilderProjectGenerationJob / BuilderProjectArtifact / BuilderProjectAutomationRun（关系型草稿工作进程状态），以及 BuilderProjectRelease（不可变的发布快照）。
 
 ```mermaid
 erDiagram
@@ -771,6 +800,11 @@ erDiagram
     datetime expiresAt
     json scene
     string projectId
+  }
+  GAME_SESSION_PARTICIPANT {
+    string sessionId PK
+    string participantSessionId PK
+    string role
   }
   PLAYER_PROGRESS {
     string sessionId PK
@@ -850,6 +884,7 @@ erDiagram
     string checksum
     json state
   }
+  GAME_SESSION ||--o{ GAME_SESSION_PARTICIPANT : 准入
   GAME_SESSION ||--|| PLAYER_PROGRESS : 包含
   BUILDER_PROJECT ||--o{ BUILDER_PROJECT_SCENE : 拥有
   BUILDER_PROJECT ||--o{ BUILDER_PROJECT_DIALOGUE_ENTRY : 拥有
