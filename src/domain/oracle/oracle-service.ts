@@ -94,6 +94,14 @@ const buildAnswer = async (
   oracleMessages: ReturnType<typeof getMessages>["oracle"],
 ): Promise<OracleAnswer> => {
   const registry = await ProviderRegistry.getInstance();
+  const provider = registry.selectProvider("chat");
+  if (!provider || provider.name === "transformers") {
+    return {
+      text: buildDeterministicAnswer(question, oracleMessages),
+      source: "fallback",
+    };
+  }
+
   const generation = await registry.chat({
     messages: [
       {

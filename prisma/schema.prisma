@@ -27,6 +27,19 @@ model GameSession {
   updatedAt   DateTime @updatedAt
   expiresAt   DateTime
   progress    PlayerProgress?
+  participants GameSessionParticipant[]
+}
+
+model GameSessionParticipant {
+  sessionId            String
+  participantSessionId String
+  session              GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role                 String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@id([sessionId, participantSessionId])
+  @@index([sessionId])
 }
 
 model BuilderProject {
@@ -104,6 +117,8 @@ model BuilderProjectAsset {
   label       String
   sceneMode   String
   source      String
+  sourceFormat String
+  sourceMimeType String?
   tags        Json
   variants    Json
   approved    Boolean @default(false)

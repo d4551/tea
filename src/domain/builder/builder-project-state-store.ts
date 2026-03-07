@@ -178,6 +178,7 @@ const buildBaselineAssets = (): Record<string, BuilderAsset> => {
     label: scene.id,
     sceneMode: scene.sceneMode,
     source: scene.background,
+    sourceFormat: "png",
     tags: ["baseline", scene.id],
     variants: [
       {
@@ -185,6 +186,7 @@ const buildBaselineAssets = (): Record<string, BuilderAsset> => {
         format: "png",
         source: scene.background,
         usage: "runtime",
+        mimeType: "image/png",
       },
     ],
     approved: true,
@@ -198,6 +200,7 @@ const buildBaselineAssets = (): Record<string, BuilderAsset> => {
     label: characterKey,
     sceneMode: "2d" as const,
     source: manifest.sheet,
+    sourceFormat: "png",
     tags: ["baseline", "sprite", characterKey],
     variants: [
       {
@@ -205,6 +208,7 @@ const buildBaselineAssets = (): Record<string, BuilderAsset> => {
         format: "png",
         source: manifest.sheet,
         usage: "runtime",
+        mimeType: "image/png",
       },
     ],
     approved: true,
@@ -676,6 +680,8 @@ const toBuilderAssetsFromRows = (
         label: row.label,
         sceneMode: row.sceneMode as BuilderAsset["sceneMode"],
         source: row.source,
+        sourceFormat: row.sourceFormat,
+        sourceMimeType: row.sourceMimeType ?? undefined,
         tags:
           Array.isArray(row.tags) && row.tags.every((tag): tag is string => typeof tag === "string")
             ? [...row.tags]

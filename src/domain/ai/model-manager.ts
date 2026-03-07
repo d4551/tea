@@ -373,10 +373,14 @@ export class ModelManager {
   }
 
   /**
-   * Releases model pipelines.
+   * Releases the singleton manager and forgets loaded pipeline references.
+   *
+   * Transformers.js documents long-lived singleton reuse for server runtimes and does not
+   * require explicit pipeline disposal. Under Bun 1.3.x, calling native pipeline disposers after
+   * failed ONNX text-generation loads can terminate the process during shutdown, so teardown here
+   * resets JS ownership and lets process exit reclaim the underlying resources safely.
    */
   async dispose(): Promise<void> {
-    const pipelines = [...this._pipelines.values()];
     this._pipelines.clear();
     this._ready = false;
     this._warmupPromise = null;
@@ -384,10 +388,6 @@ export class ModelManager {
     this._circuitOpenUntilMs = 0;
     ModelManager._instance = null;
     ModelManager._instancePromise = null;
-
-    for (const pipelineInstance of pipelines) {
-      await pipelineInstance.dispose?.();
-    }
 
     logger.info("model.manager.disposed");
   }

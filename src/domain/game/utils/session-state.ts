@@ -1,5 +1,6 @@
 import { resolveSpriteManifest } from "../../../shared/config/game-config.ts";
 import type {
+  BuilderAsset,
   Direction,
   GameDialogueEntry,
   GameFlagDefinition,
@@ -68,6 +69,7 @@ export const buildSessionSceneState = (
   dialogues: Readonly<Record<string, string>> = {},
   flags: readonly GameFlagDefinition[] = [],
   quests: readonly QuestDefinition[] = [],
+  assets: readonly BuilderAsset[] = [],
 ): GameSceneState => {
   const playerManifest = resolveSpriteManifest("chaJiang");
   const playerBounds = playerManifest
@@ -132,6 +134,7 @@ export const buildSessionSceneState = (
     npcs,
     collisions: sceneDefinition.collisions,
     nodes: sceneDefinition.nodes ?? [],
+    assets,
     camera: { x: 0, y: 0 },
     uiState: "playing",
     actionState: "actionQueued",

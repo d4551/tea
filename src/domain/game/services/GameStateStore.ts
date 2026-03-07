@@ -7,6 +7,8 @@ import type {
   GameLocale,
   GameSceneState,
   GameSession,
+  GameSessionParticipant,
+  GameSessionParticipantRole,
   GameSessionSnapshot,
   SceneDefinition,
   TriggerDefinition,
@@ -38,6 +40,14 @@ export interface GameStateStore {
   toSnapshot(session: GameSession): GameSessionSnapshot;
   /** Removes all expired sessions and returns count removed. */
   purgeExpiredSessions(nowMs?: number): Promise<number>;
+  /** Lists non-owner participants admitted to a session. */
+  listParticipants(sessionId: string): Promise<readonly GameSessionParticipant[]>;
+  /** Creates or updates one participant room membership. */
+  saveParticipant(
+    sessionId: string,
+    participantSessionId: string,
+    role: Exclude<GameSessionParticipantRole, "owner">,
+  ): Promise<GameSessionParticipant>;
 }
 
 /**
@@ -82,6 +92,12 @@ interface StoredSession {
   readonly id: string;
   readonly session: GameSession;
   readonly expiresAtMs: number;
+}
+
+interface StoredParticipantEntry {
+  readonly role: Exclude<GameSessionParticipantRole, "owner">;
+  readonly joinedAtMs: number;
+  readonly updatedAtMs: number;
 }
 
 interface GameSessionRow {

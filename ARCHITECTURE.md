@@ -60,7 +60,8 @@ graph TB
 ## Ownership Boundaries
 
 - `request-context` owns correlation-id creation and per-request completion logs.
-- `builder-request-context` owns canonical builder locale, project id, and current-path resolution from request URL, query/body overrides, and route params.
+- `builder-request-context` owns canonical builder locale, project id, and current-path resolution from request URL, query/body overrides, and route params, and exposes that context through a scoped Elysia derive plugin so builder page/API handlers do not reparsing request URLs independently.
+- `oracle-service` owns stable oracle answer composition. It uses provider-routed chat only when a non-Transformers chat backend is available; otherwise it falls back to deterministic SSR-safe oracle copy while still routing sentiment persistence through the shared provider registry.
 - `layout.ts` owns the shared SSR `LayoutContext` and document renderer, so page, builder, and game shells consume one route-derived layout contract instead of rebuilding nav/path state independently.
 - `auth-session` owns anonymous cookie identity, and that cookie identity is now the ownership boundary for game sessions.
 - `game-plugin` owns game transport contracts:

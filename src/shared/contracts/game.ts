@@ -108,6 +108,8 @@ export interface AssetVariant {
   readonly source: string;
   /** Short usage label such as preview, runtime, or thumbnail. */
   readonly usage: string;
+  /** Optional MIME type used for transport/runtime loader selection. */
+  readonly mimeType?: string;
 }
 
 /**
@@ -124,6 +126,10 @@ export interface BuilderAsset {
   readonly sceneMode: SceneMode;
   /** Canonical source path or URL. */
   readonly source: string;
+  /** Canonical source format such as png, glb, usdz, or usda. */
+  readonly sourceFormat: string;
+  /** Optional source MIME type when known. */
+  readonly sourceMimeType?: string;
   /** Optional tag list for filtering and grouping. */
   readonly tags: readonly string[];
   /** Available derived variants for this asset. */
@@ -704,6 +710,8 @@ export interface GameSceneState {
   readonly collisions: readonly CollisionMask[];
   /** Authored scene nodes active in this scene. */
   readonly nodes?: readonly SceneNodeDefinition[];
+  /** Runtime-visible authored assets needed for node resolution. */
+  readonly assets?: readonly BuilderAsset[];
   /** Current viewport offset for rendering/scrolling. */
   readonly camera: Readonly<{ readonly x: number; readonly y: number }>;
   /** UI-level route state (idle/loading/playing/error...). */
@@ -740,6 +748,8 @@ export interface GameSession {
   readonly releaseVersion?: number;
   /** Published trigger definitions captured when the session was created. */
   readonly triggerDefinitions?: readonly TriggerDefinition[];
+  /** Connected room participants authorized to observe or control the session. */
+  readonly participants: readonly GameSessionParticipant[];
   /** Monotonic scene-state version used for optimistic persistence. */
   readonly stateVersion: number;
   /** Last persisted tick marker. */
@@ -752,6 +762,25 @@ export interface GameSession {
  * Runtime UI route state for rendering and accessibility status mapping.
  */
 export type GameUiState = "idle" | "loading" | "playing" | "empty" | "error" | "unauthorized";
+
+/**
+ * Multiplayer room role granted to one authenticated participant.
+ */
+export type GameSessionParticipantRole = "owner" | "controller" | "spectator";
+
+/**
+ * Authenticated participant admitted to a shared gameplay session.
+ */
+export interface GameSessionParticipant {
+  /** Session-cookie identity for the connected player/browser. */
+  readonly sessionId: string;
+  /** Granted room role. */
+  readonly role: GameSessionParticipantRole;
+  /** Join timestamp in ms since epoch. */
+  readonly joinedAtMs: number;
+  /** Last activity timestamp in ms since epoch. */
+  readonly updatedAtMs: number;
+}
 
 /**
  * Canonical HUD stream event names emitted by server sent events.
@@ -868,6 +897,10 @@ export interface GameRealtimeFrame {
   readonly resumeToken?: string;
   /** Optional refreshed resume-token expiry timestamp. */
   readonly resumeTokenExpiresAtMs?: number;
+  /** Current room participants for multiplayer presence. */
+  readonly participants?: readonly GameSessionParticipant[];
+  /** The caller role resolved for this frame. */
+  readonly participantRole?: GameSessionParticipantRole;
 }
 
 /**
@@ -930,6 +963,31 @@ const isSceneGeometry = (value: unknown): value is SceneGeometry =>
   isFiniteNumber(value.height) &&
   value.width > 0 &&
   value.height > 0;
+
+const isAssetVariant = (value: unknown): value is AssetVariant =>
+  isRecord(value) &&
+  typeof value.id === "string" &&
+  typeof value.format === "string" &&
+  typeof value.source === "string" &&
+  typeof value.usage === "string" &&
+  (value.mimeType === undefined || typeof value.mimeType === "string");
+
+const isBuilderAsset = (value: unknown): value is BuilderAsset =>
+  isRecord(value) &&
+  typeof value.id === "string" &&
+  typeof value.kind === "string" &&
+  typeof value.label === "string" &&
+  (value.sceneMode === "2d" || value.sceneMode === "3d") &&
+  typeof value.source === "string" &&
+  typeof value.sourceFormat === "string" &&
+  (value.sourceMimeType === undefined || typeof value.sourceMimeType === "string") &&
+  Array.isArray(value.tags) &&
+  value.tags.every((tag): tag is string => typeof tag === "string") &&
+  Array.isArray(value.variants) &&
+  value.variants.every(isAssetVariant) &&
+  typeof value.approved === "boolean" &&
+  isFiniteNumber(value.createdAtMs) &&
+  isFiniteNumber(value.updatedAtMs);
 
 const isCollisionMask = (value: unknown): value is CollisionMask =>
   isRecord(value) &&
@@ -1063,6 +1121,16 @@ const isTriggerDefinition = (value: unknown): value is TriggerDefinition =>
   (value.questId === undefined || typeof value.questId === "string") &&
   (value.questStepId === undefined || typeof value.questStepId === "string");
 
+const isGameSessionParticipantRole = (value: unknown): value is GameSessionParticipantRole =>
+  value === "owner" || value === "controller" || value === "spectator";
+
+const isGameSessionParticipant = (value: unknown): value is GameSessionParticipant =>
+  isRecord(value) &&
+  typeof value.sessionId === "string" &&
+  isGameSessionParticipantRole(value.role) &&
+  isFiniteNumber(value.joinedAtMs) &&
+  isFiniteNumber(value.updatedAtMs);
+
 const isGameSceneStateValue = (value: unknown): value is GameSceneState =>
   isRecord(value) &&
   typeof value.sceneId === "string" &&
@@ -1077,6 +1145,8 @@ const isGameSceneStateValue = (value: unknown): value is GameSceneState =>
   value.collisions.every(isCollisionMask) &&
   (value.nodes === undefined ||
     (Array.isArray(value.nodes) && value.nodes.every(isSceneNodeDefinition))) &&
+  (value.assets === undefined ||
+    (Array.isArray(value.assets) && value.assets.every(isBuilderAsset))) &&
   isVector2(value.camera) &&
   isGameUiStateValue(value.uiState) &&
   isGameActionStateValue(value.actionState) &&
@@ -1177,11 +1247,28 @@ export const validateGameRealtimeFrame = (
     return { ok: false, message: "Invalid realtime frame resume expiry." };
   }
 
+  if (
+    payload.participants !== undefined &&
+    (!Array.isArray(payload.participants) || !payload.participants.every(isGameSessionParticipant))
+  ) {
+    return { ok: false, message: "Invalid realtime frame participants." };
+  }
+
+  if (
+    payload.participantRole !== undefined &&
+    !isGameSessionParticipantRole(payload.participantRole)
+  ) {
+    return { ok: false, message: "Invalid realtime frame participant role." };
+  }
+
   const commandQueueDepth =
     payload.commandQueueDepth === undefined ? undefined : payload.commandQueueDepth;
   const resumeToken = payload.resumeToken === undefined ? undefined : payload.resumeToken;
   const resumeTokenExpiresAtMs =
     payload.resumeTokenExpiresAtMs === undefined ? undefined : payload.resumeTokenExpiresAtMs;
+  const participants = payload.participants === undefined ? undefined : payload.participants;
+  const participantRole =
+    payload.participantRole === undefined ? undefined : payload.participantRole;
 
   return {
     ok: true,
@@ -1190,6 +1277,8 @@ export const validateGameRealtimeFrame = (
       commandQueueDepth,
       resumeToken,
       resumeTokenExpiresAtMs,
+      participants,
+      participantRole,
     },
   };
 };
@@ -1619,6 +1708,10 @@ export interface GameSessionLifecycleResult {
   readonly resumeTokenVersion: number;
   /** Monotonic scene-state version at the time of the snapshot. */
   readonly stateVersion: number;
+  /** Role granted to the authenticated participant. */
+  readonly participantRole: GameSessionParticipantRole;
+  /** Current room participant list. */
+  readonly participants: readonly GameSessionParticipant[];
 }
 
 /**
@@ -1667,6 +1760,10 @@ export interface GameHudState {
   readonly activeQuestTitle?: string;
   /** Active locale for runtime copy. */
   readonly locale: GameLocale;
+  /** Role granted to the active participant. */
+  readonly participantRole: GameSessionParticipantRole;
+  /** Current room participant list. */
+  readonly participants: readonly GameSessionParticipant[];
   /** Current player XP total. */
   readonly xp: number;
   /** Current progression level. */
