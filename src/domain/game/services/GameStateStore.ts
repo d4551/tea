@@ -272,6 +272,20 @@ const toSnapshotSession = (session: GameSession): GameSessionSnapshot => ({
 });
 
 /**
+ * Builds the canonical owner participant record for a session.
+ */
+const toOwnerParticipant = (session: {
+  readonly ownerSessionId: string;
+  readonly createdAtMs: number;
+  readonly updatedAtMs: number;
+}): GameSessionParticipant => ({
+  sessionId: session.ownerSessionId,
+  role: "owner",
+  joinedAtMs: session.createdAtMs,
+  updatedAtMs: session.updatedAtMs,
+});
+
+/**
  * Builds an in-memory store entry with TTL.
  */
 const toStoredSession = (session: GameSession): StoredSession => ({
@@ -290,6 +304,11 @@ const toGameSessionFromRow = (
   row: GameSessionRow,
 ): { readonly session: GameSession; readonly repaired: boolean } => {
   const restored = restoreSceneState(row);
+  const ownerParticipant = toOwnerParticipant({
+    ownerSessionId: row.ownerSessionId,
+    createdAtMs: row.createdAt.getTime(),
+    updatedAtMs: row.updatedAt.getTime(),
+  });
   return {
     session: {
       id: row.id,
@@ -300,6 +319,7 @@ const toGameSessionFromRow = (
       projectId: restored.projectId,
       releaseVersion: restored.releaseVersion,
       triggerDefinitions: restored.triggerDefinitions,
+      participants: [ownerParticipant],
       stateVersion: row.stateVersion,
       updatedAtMs: row.updatedAt.getTime(),
       createdAtMs: row.createdAt.getTime(),
@@ -313,9 +333,11 @@ const toGameSessionFromRow = (
  */
 class InMemoryGameStateStore implements GameStateStore {
   private readonly sessions: Map<string, StoredSession>;
+  private readonly participants: Map<string, Map<string, StoredParticipantEntry>>;
 
   public constructor() {
     this.sessions = new Map<string, StoredSession>();
+    this.participants = new Map<string, Map<string, StoredParticipantEntry>>();
   }
 
   public async createSession(seed: GameSessionSeed): Promise<GameSession> {
@@ -329,6 +351,14 @@ class InMemoryGameStateStore implements GameStateStore {
       projectId: seed.projectId,
       releaseVersion: seed.releaseVersion,
       triggerDefinitions: seed.triggerDefinitions,
+      participants: [
+        {
+          sessionId: seed.ownerSessionId,
+          role: "owner",
+          joinedAtMs: createdAtMs,
+          updatedAtMs: createdAtMs,
+        },
+      ],
       stateVersion: 1,
       createdAtMs,
       updatedAtMs: createdAtMs,
@@ -349,6 +379,7 @@ class InMemoryGameStateStore implements GameStateStore {
 
     if (nowMs() > entry.expiresAtMs) {
       this.sessions.delete(sessionId);
+      this.participants.delete(sessionId);
       return { ok: false, error: "SESSION_EXPIRED" };
     }
 
@@ -356,6 +387,10 @@ class InMemoryGameStateStore implements GameStateStore {
       ok: true,
       payload: {
         ...entry.session,
+        participants: [
+          toOwnerParticipant(entry.session),
+          ...(await this.listParticipants(sessionId)),
+        ],
       },
     };
   }
@@ -382,6 +417,7 @@ class InMemoryGameStateStore implements GameStateStore {
 
   public async deleteSession(sessionId: string): Promise<void> {
     this.sessions.delete(sessionId);
+    this.participants.delete(sessionId);
   }
 
   public toSnapshot(session: GameSession): GameSessionSnapshot {
@@ -394,11 +430,49 @@ class InMemoryGameStateStore implements GameStateStore {
     for (const [id, entry] of this.sessions.entries()) {
       if (now > entry.expiresAtMs) {
         this.sessions.delete(id);
+        this.participants.delete(id);
         purged += 1;
       }
     }
 
     return purged;
+  }
+
+  public async listParticipants(sessionId: string): Promise<readonly GameSessionParticipant[]> {
+    const sessionParticipants = this.participants.get(sessionId);
+    if (!sessionParticipants) {
+      return [];
+    }
+
+    return [...sessionParticipants.entries()].map(([participantSessionId, participant]) => ({
+      sessionId: participantSessionId,
+      role: participant.role,
+      joinedAtMs: participant.joinedAtMs,
+      updatedAtMs: participant.updatedAtMs,
+    }));
+  }
+
+  public async saveParticipant(
+    sessionId: string,
+    participantSessionId: string,
+    role: Exclude<GameSessionParticipantRole, "owner">,
+  ): Promise<GameSessionParticipant> {
+    const createdAtMs = nowMs();
+    const sessionParticipants = this.participants.get(sessionId) ?? new Map<string, StoredParticipantEntry>();
+    const current = sessionParticipants.get(participantSessionId);
+    const nextEntry: StoredParticipantEntry = {
+      role,
+      joinedAtMs: current?.joinedAtMs ?? createdAtMs,
+      updatedAtMs: createdAtMs,
+    };
+    sessionParticipants.set(participantSessionId, nextEntry);
+    this.participants.set(sessionId, sessionParticipants);
+    return {
+      sessionId: participantSessionId,
+      role,
+      joinedAtMs: nextEntry.joinedAtMs,
+      updatedAtMs: nextEntry.updatedAtMs,
+    };
   }
 }
 
@@ -436,6 +510,14 @@ class PrismaGameStateStore implements GameStateStore {
       projectId: seed.projectId,
       releaseVersion: seed.releaseVersion,
       triggerDefinitions: seed.triggerDefinitions,
+      participants: [
+        {
+          sessionId: seed.ownerSessionId,
+          role: "owner",
+          joinedAtMs: createdAt.getTime(),
+          updatedAtMs: createdAt.getTime(),
+        },
+      ],
     };
   }
 
@@ -473,7 +555,13 @@ class PrismaGameStateStore implements GameStateStore {
       });
     }
 
-    return { ok: true, payload: restored.session };
+    return {
+      ok: true,
+      payload: {
+        ...restored.session,
+        participants: [toOwnerParticipant(restored.session), ...(await this.listParticipants(sessionId))],
+      },
+    };
   }
 
   public async countActiveSessions(now: number = nowMs()): Promise<number> {
@@ -532,6 +620,50 @@ class PrismaGameStateStore implements GameStateStore {
 
   public async deleteSession(sessionId: string): Promise<void> {
     await prisma.gameSession.deleteMany({ where: { id: sessionId } });
+  }
+
+  public async listParticipants(sessionId: string): Promise<readonly GameSessionParticipant[]> {
+    const rows = await prisma.gameSessionParticipant.findMany({
+      where: { sessionId },
+      orderBy: { createdAt: "asc" },
+    });
+
+    return rows.map((row) => ({
+      sessionId: row.participantSessionId,
+      role: row.role as Exclude<GameSessionParticipantRole, "owner">,
+      joinedAtMs: row.createdAt.getTime(),
+      updatedAtMs: row.updatedAt.getTime(),
+    }));
+  }
+
+  public async saveParticipant(
+    sessionId: string,
+    participantSessionId: string,
+    role: Exclude<GameSessionParticipantRole, "owner">,
+  ): Promise<GameSessionParticipant> {
+    const row = await prisma.gameSessionParticipant.upsert({
+      where: {
+        sessionId_participantSessionId: {
+          sessionId,
+          participantSessionId,
+        },
+      },
+      create: {
+        sessionId,
+        participantSessionId,
+        role,
+      },
+      update: {
+        role,
+      },
+    });
+
+    return {
+      sessionId: row.participantSessionId,
+      role: row.role as Exclude<GameSessionParticipantRole, "owner">,
+      joinedAtMs: row.createdAt.getTime(),
+      updatedAtMs: row.updatedAt.getTime(),
+    };
   }
 
   public toSnapshot(session: GameSession): GameSessionSnapshot {
