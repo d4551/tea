@@ -14,11 +14,13 @@ import { appRoutes, interpolateRoutePath } from "../shared/constants/routes.ts";
 import type {
   EntityState,
   GameCommand,
+  GameRealtimeFrame,
   GameSceneState,
   NpcState,
   SpriteAnimationConfig,
   SpriteManifest,
 } from "../shared/contracts/game.ts";
+import { validateGameRealtimeFrame } from "../shared/contracts/game.ts";
 import { readLocalStorage, writeLocalStorage } from "../shared/utils/browser-storage.ts";
 import { safeJsonParse } from "../shared/utils/safe-json.ts";
 import { ThreeLayer } from "./three-layer.ts";
@@ -30,15 +32,6 @@ type PersistedSessionMeta = {
   readonly commandQueueDepth: number;
   readonly version: number;
   readonly expiresAtMs: number;
-};
-
-type WsGameFrame = {
-  readonly state?: GameSceneState;
-  readonly player?: EntityState;
-  readonly npcs?: readonly NpcState[];
-  readonly commandQueueDepth?: number;
-  readonly resumeToken?: string;
-  readonly resumeTokenExpiresAtMs?: number;
 };
 
 type LoadedSceneAssets = {
@@ -68,11 +61,38 @@ type GameClientRuntimeConfig = {
   readonly rendererPreference: "webgpu" | "webgl";
 };
 
+type GameConnectionState =
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "reconnecting"
+  | "expired"
+  | "missing";
+
+type GameClientLabels = {
+  readonly queueLabel: string;
+  readonly connection: Readonly<Record<GameConnectionState, string>>;
+  readonly reconnectAction: string;
+  readonly runtimeFocusActive: string;
+  readonly runtimeFocusInactive: string;
+};
+
 const SESSION_META_KEY = "lotfk:game:session-meta";
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 const readMeta = (selector: string): HTMLMetaElement | null =>
   document.querySelector<HTMLMetaElement>(selector);
+
+const resolveDocumentLocale = (): string => {
+  const documentLocale = document.documentElement.lang.trim();
+  if (documentLocale.length > 0) {
+    return documentLocale;
+  }
+
+  const browserLocale =
+    navigator.languages.find((locale) => locale.trim().length > 0) ?? navigator.language;
+  return browserLocale.trim();
+};
 
 const resolveSpriteManifest = (characterKey: string): SpriteManifest | null =>
   gameSpriteManifests[characterKey] ?? null;
@@ -129,6 +149,74 @@ const readClientRuntimeConfig = (): GameClientRuntimeConfig | null => {
   };
 };
 
+const readNonEmptyDatasetValue = (
+  element: HTMLElement | null,
+  attributeName: string,
+): string | null => {
+  const value = element?.dataset[attributeName];
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const readGameClientLabels = (
+  wrapper: HTMLElement,
+  statusBadge: HTMLElement | null,
+  queueBadge: HTMLElement | null,
+  reconnectButton: HTMLButtonElement | null,
+): GameClientLabels | null => {
+  const queueLabel = readNonEmptyDatasetValue(queueBadge, "queueLabel");
+  const connectionConnecting = readNonEmptyDatasetValue(statusBadge, "connectingLabel");
+  const connectionConnected = readNonEmptyDatasetValue(statusBadge, "connectedLabel");
+  const connectionDisconnected = readNonEmptyDatasetValue(statusBadge, "disconnectedPrefix");
+  const connectionReconnecting = readNonEmptyDatasetValue(statusBadge, "reconnectingLabel");
+  const connectionExpired = readNonEmptyDatasetValue(statusBadge, "expiredLabel");
+  const connectionMissing = readNonEmptyDatasetValue(statusBadge, "missingLabel");
+  const reconnectAction = readNonEmptyDatasetValue(reconnectButton, "reconnectLabel");
+  const runtimeFocusActive = readNonEmptyDatasetValue(wrapper, "runtimeFocusActiveLabel");
+  const runtimeFocusInactive = readNonEmptyDatasetValue(wrapper, "runtimeFocusInactiveLabel");
+
+  if (
+    !queueLabel ||
+    !connectionConnecting ||
+    !connectionConnected ||
+    !connectionDisconnected ||
+    !connectionReconnecting ||
+    !connectionExpired ||
+    !connectionMissing ||
+    !reconnectAction ||
+    !runtimeFocusActive ||
+    !runtimeFocusInactive
+  ) {
+    return null;
+  }
+
+  return {
+    queueLabel,
+    connection: {
+      connecting: connectionConnecting,
+      connected: connectionConnected,
+      disconnected: connectionDisconnected,
+      reconnecting: connectionReconnecting,
+      expired: connectionExpired,
+      missing: connectionMissing,
+    },
+    reconnectAction,
+    runtimeFocusActive,
+    runtimeFocusInactive,
+  };
+};
+
+const isInteractiveElement = (element: Element | null): boolean =>
+  Boolean(
+    element?.closest(
+      'a, button, input, select, textarea, summary, [contenteditable=""], [contenteditable="true"], [role="button"]',
+    ),
+  );
+
 const readSessionMeta = (runtimeConfig: GameClientRuntimeConfig): PersistedSessionMeta | null => {
   const sessionMeta = readMeta('meta[name="game-session-id"]');
   if (!sessionMeta) {
@@ -140,7 +228,9 @@ const readSessionMeta = (runtimeConfig: GameClientRuntimeConfig): PersistedSessi
     return null;
   }
 
-  const locale = readMeta('meta[name="game-session-locale"]')?.dataset.gameSessionLocale ?? "en-US";
+  const locale =
+    readMeta('meta[name="game-session-locale"]')?.dataset.gameSessionLocale ??
+    resolveDocumentLocale();
   const resumeToken =
     readMeta('meta[name="game-session-resume-token"]')?.dataset.sessionResumeToken ?? "";
   const commandQueueDepth =
@@ -226,7 +316,7 @@ const buildSessionRestoreUrl = (sessionId: string): string => {
   return target.toString();
 };
 
-const parseGameFrameFromMessage = (incoming: unknown): WsGameFrame | null => {
+const parseGameFrameFromMessage = (incoming: unknown): GameRealtimeFrame | null => {
   if (typeof incoming !== "string" && typeof incoming !== "object") {
     return null;
   }
@@ -235,35 +325,26 @@ const parseGameFrameFromMessage = (incoming: unknown): WsGameFrame | null => {
     return null;
   }
 
-  const payload = typeof incoming === "string" ? safeJsonParse<unknown>(incoming, null) : incoming;
+  const payload = typeof incoming === "string" ? safeJsonParse(incoming, null) : incoming;
 
-  if (!payload || typeof payload !== "object") {
+  const validation = validateGameRealtimeFrame(payload);
+  if (!validation.ok) {
     return null;
   }
 
-  return payload as WsGameFrame;
+  return validation.data;
 };
 
-const resolveFrameState = (frame: WsGameFrame): GameSceneState | null => {
-  if (frame.state && typeof frame.state === "object") {
-    return frame.state as GameSceneState;
-  }
-
-  if (frame.player && frame.npcs) {
-    return frame as GameSceneState;
-  }
-
-  return null;
-};
-
-const setQueueDepth = (queueBadge: HTMLElement | null, depth: number): void => {
-  const queueLabel = queueBadge?.dataset.queueLabel ?? "queue";
+const setQueueDepth = (
+  queueBadge: HTMLElement | null,
+  statusTarget: HTMLElement | null,
+  labels: GameClientLabels,
+  depth: number,
+): void => {
   if (queueBadge) {
-    queueBadge.textContent = `${queueLabel}: ${depth}`;
-    return;
+    queueBadge.textContent = `${labels.queueLabel}: ${depth}`;
   }
 
-  const statusTarget = document.getElementById("game-session-meta");
   if (statusTarget) {
     statusTarget.dataset.commandQueueDepth = String(depth);
   }
@@ -271,39 +352,25 @@ const setQueueDepth = (queueBadge: HTMLElement | null, depth: number): void => {
 
 const setConnectionStatus = (
   statusBadge: HTMLElement | null,
-  state: "connecting" | "connected" | "disconnected" | "reconnecting" | "expired" | "missing",
+  labels: GameClientLabels,
+  state: GameConnectionState,
   closeCode?: number,
 ): void => {
   if (!statusBadge) {
     return;
   }
 
-  if (state === "connecting") {
-    statusBadge.textContent = statusBadge.dataset.connectingLabel ?? statusBadge.textContent ?? "";
+  if (state === "connecting" || state === "connected" || state === "reconnecting") {
+    statusBadge.textContent = labels.connection[state];
     return;
   }
 
-  if (state === "connected") {
-    statusBadge.textContent = statusBadge.dataset.connectedLabel ?? statusBadge.textContent ?? "";
+  if (state === "expired" || state === "missing") {
+    statusBadge.textContent = labels.connection[state];
     return;
   }
 
-  if (state === "reconnecting") {
-    statusBadge.textContent = statusBadge.dataset.reconnectingLabel ?? "reconnecting";
-    return;
-  }
-
-  if (state === "expired") {
-    statusBadge.textContent = statusBadge.dataset.expiredLabel ?? "session expired";
-    return;
-  }
-
-  if (state === "missing") {
-    statusBadge.textContent = statusBadge.dataset.missingLabel ?? "session missing";
-    return;
-  }
-
-  const prefix = statusBadge.dataset.disconnectedPrefix ?? statusBadge.textContent ?? "";
+  const prefix = labels.connection.disconnected;
   statusBadge.textContent = typeof closeCode === "number" ? `${prefix} (${closeCode})` : prefix;
 };
 
@@ -343,6 +410,18 @@ const initGameClient = async (): Promise<void> => {
 
   const runtimeConfig = readClientRuntimeConfig();
   if (!runtimeConfig) {
+    return;
+  }
+
+  const queueBadge = document.getElementById("game-command-queue");
+  const statusBadge = document.getElementById("game-connection-status");
+  const statusTarget = document.getElementById("game-session-meta");
+  const reconnectButton = document.getElementById("game-reconnect") as HTMLButtonElement | null;
+  const connectionAlert = document.getElementById("game-connection-alert");
+  const connectionAlertText = document.getElementById("game-connection-alert-text");
+  const focusStatus = document.getElementById("game-runtime-focus-status");
+  const labels = readGameClientLabels(wrapper, statusBadge, queueBadge, reconnectButton);
+  if (!labels) {
     return;
   }
 
@@ -406,11 +485,7 @@ const initGameClient = async (): Promise<void> => {
 
   const sprites = new Map<string, Sprite>();
   const nodeOverlays = new Map<string, Graphics>();
-  const queueBadge = document.getElementById("game-command-queue");
-  const statusBadge = document.getElementById("game-connection-status");
-  const reconnectButton = document.getElementById("game-reconnect") as HTMLButtonElement | null;
-  const connectionAlert = document.getElementById("game-connection-alert");
-  const connectionAlertText = document.getElementById("game-connection-alert-text");
+  const listenerController = new AbortController();
   const loadedTextures = new Map<string, Texture>();
   const frameTextures = new Map<string, Texture>();
   let backgroundSprite: Sprite | null = null;
@@ -422,6 +497,7 @@ const initGameClient = async (): Promise<void> => {
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let restoreAbortController: AbortController | null = null;
   let isDisposed = false;
+  let runtimeHasFocus = false;
   let connectionMode: "connected" | "reconnecting" | "expired" | "missing" | "disconnected" =
     "disconnected";
 
@@ -429,8 +505,7 @@ const initGameClient = async (): Promise<void> => {
     if (!reconnectButton) {
       return;
     }
-    reconnectButton.textContent =
-      reconnectButton.dataset.reconnectLabel ?? reconnectButton.textContent;
+    reconnectButton.textContent = labels.reconnectAction;
     reconnectButton.classList.toggle("hidden", !visible);
   };
   const setConnectionAlert = (
@@ -447,6 +522,13 @@ const initGameClient = async (): Promise<void> => {
       tone === "error" ? "alert-error" : tone === "info" ? "alert-info" : "alert-warning",
     );
     connectionAlertText.textContent = message ?? "";
+  };
+  const setRuntimeFocusState = (active: boolean): void => {
+    runtimeHasFocus = active;
+    wrapper.dataset.runtimeActive = active ? "true" : "false";
+    if (focusStatus) {
+      focusStatus.textContent = active ? labels.runtimeFocusActive : labels.runtimeFocusInactive;
+    }
   };
   const clearReconnectTimer = (): void => {
     if (!reconnectTimer) {
@@ -472,8 +554,8 @@ const initGameClient = async (): Promise<void> => {
     }, runtimeConfig.socketReconnectDelayMs);
   };
 
-  setQueueDepth(queueBadge, commandQueueDepth);
-  setConnectionStatus(statusBadge, "connecting");
+  setQueueDepth(queueBadge, statusTarget, labels, commandQueueDepth);
+  setConnectionStatus(statusBadge, labels, "connecting");
   setConnectionAlert(null);
 
   const ensureTextureLoaded = async (assetUrl: string): Promise<Texture> => {
@@ -554,7 +636,7 @@ const initGameClient = async (): Promise<void> => {
     return texture;
   };
 
-  const syncRuntimeMeta = (frame: WsGameFrame): void => {
+  const syncRuntimeMeta = (frame: GameRealtimeFrame): void => {
     const nextResumeToken =
       typeof frame.resumeToken === "string" && frame.resumeToken.length > 0
         ? frame.resumeToken
@@ -622,7 +704,7 @@ const initGameClient = async (): Promise<void> => {
         };
         persistSessionMeta(runtimeSessionMeta, runtimeConfig);
         commandQueueDepth = runtimeSessionMeta.commandQueueDepth;
-        setQueueDepth(queueBadge, commandQueueDepth);
+        setQueueDepth(queueBadge, statusTarget, labels, commandQueueDepth);
         return true;
       } catch (error) {
         if (controller.signal.aborted && attempt + 1 < runtimeConfig.restoreMaxAttempts) {
@@ -664,7 +746,7 @@ const initGameClient = async (): Promise<void> => {
         ? connectionMode
         : "reconnecting";
     clearReconnectTimer();
-    setConnectionStatus(statusBadge, "connecting");
+    setConnectionStatus(statusBadge, labels, "connecting");
     setReconnectVisible(false);
     setConnectionAlert(null);
     const socket = new WebSocket(
@@ -677,7 +759,7 @@ const initGameClient = async (): Promise<void> => {
         return;
       }
       connectionMode = "connected";
-      setConnectionStatus(statusBadge, "connected");
+      setConnectionStatus(statusBadge, labels, "connected");
       setReconnectVisible(false);
       setConnectionAlert(null);
       persistSessionMeta(runtimeSessionMeta, runtimeConfig);
@@ -692,7 +774,7 @@ const initGameClient = async (): Promise<void> => {
         return;
       }
 
-      const state = resolveFrameState(frame);
+      const state = frame.state ?? null;
       if (!state) {
         return;
       }
@@ -703,7 +785,7 @@ const initGameClient = async (): Promise<void> => {
       targetState = state;
       commandQueueDepth =
         typeof frame.commandQueueDepth === "number" ? frame.commandQueueDepth : commandQueueDepth;
-      setQueueDepth(queueBadge, commandQueueDepth);
+      setQueueDepth(queueBadge, statusTarget, labels, commandQueueDepth);
     });
 
     socket.addEventListener("close", (event) => {
@@ -717,18 +799,18 @@ const initGameClient = async (): Promise<void> => {
 
       if (event.code === 4404) {
         connectionMode = "missing";
-        setConnectionStatus(statusBadge, "missing", event.code);
+        setConnectionStatus(statusBadge, labels, "missing", event.code);
         setReconnectVisible(true);
-        setConnectionAlert(statusBadge?.dataset.missingLabel ?? "session missing", "warning");
+        setConnectionAlert(labels.connection.missing, "warning");
         return;
       }
 
       const tokenExpired = event.code === 4408 || runtimeSessionMeta.expiresAtMs <= Date.now();
       if (tokenExpired) {
         connectionMode = "reconnecting";
-        setConnectionStatus(statusBadge, "reconnecting", event.code);
+        setConnectionStatus(statusBadge, labels, "reconnecting", event.code);
         setReconnectVisible(false);
-        setConnectionAlert(statusBadge?.dataset.reconnectingLabel ?? "reconnecting", "info");
+        setConnectionAlert(labels.connection.reconnecting, "info");
         void attemptRestoreSession()
           .then((restored) => {
             if (restored) {
@@ -736,22 +818,22 @@ const initGameClient = async (): Promise<void> => {
               return;
             }
             connectionMode = "expired";
-            setConnectionStatus(statusBadge, "expired", event.code);
+            setConnectionStatus(statusBadge, labels, "expired", event.code);
             setReconnectVisible(true);
-            setConnectionAlert(statusBadge?.dataset.expiredLabel ?? "session expired", "error");
+            setConnectionAlert(labels.connection.expired, "error");
           })
           .catch(() => {
             connectionMode = "expired";
-            setConnectionStatus(statusBadge, "expired", event.code);
+            setConnectionStatus(statusBadge, labels, "expired", event.code);
             setReconnectVisible(true);
-            setConnectionAlert(statusBadge?.dataset.expiredLabel ?? "session expired", "error");
+            setConnectionAlert(labels.connection.expired, "error");
           });
         return;
       }
 
       connectionMode = "reconnecting";
-      setConnectionStatus(statusBadge, "reconnecting", event.code);
-      setConnectionAlert(statusBadge?.dataset.reconnectingLabel ?? "reconnecting", "info");
+      setConnectionStatus(statusBadge, labels, "reconnecting", event.code);
+      setConnectionAlert(labels.connection.reconnecting, "info");
       scheduleReconnect();
     });
   };
@@ -783,73 +865,20 @@ const initGameClient = async (): Promise<void> => {
     );
   };
 
-  reconnectButton?.addEventListener("click", () => {
-    if (isDisposed) {
-      return;
-    }
-    setReconnectVisible(false);
-    setConnectionAlert(null);
-    if (connectionMode === "missing") {
-      window.location.reload();
-      return;
+  const shouldCaptureGameInput = (): boolean => {
+    if (!runtimeHasFocus || document.activeElement !== wrapper) {
+      return false;
     }
 
-    connectionMode = "reconnecting";
-    setConnectionStatus(statusBadge, "reconnecting");
-    void attemptRestoreSession()
-      .then((restored) => {
-        if (restored) {
-          connectSocket();
-          return;
-        }
-        connectionMode = "expired";
-        setConnectionStatus(statusBadge, "expired");
-        setReconnectVisible(true);
-        setConnectionAlert(statusBadge?.dataset.expiredLabel ?? "session expired", "error");
-      })
-      .catch(() => {
-        connectionMode = "expired";
-        setConnectionStatus(statusBadge, "expired");
-        setReconnectVisible(true);
-        setConnectionAlert(statusBadge?.dataset.expiredLabel ?? "session expired", "error");
-      });
-  });
-
-  connectSocket();
-
-  window.addEventListener("resize", () => {
-    threeLayer.resize(wrapper.clientWidth, wrapper.clientHeight);
-    pixiRenderer.resize(wrapper.clientWidth, wrapper.clientHeight);
-  });
+    return !isInteractiveElement(document.activeElement);
+  };
 
   const keysHeld = new Set<string>();
-  window.addEventListener("keydown", (event) => {
-    if (event.ctrlKey || event.metaKey || event.altKey || event.repeat) {
-      return;
-    }
-
-    keysHeld.add(event.key);
-
-    if (event.key === "e" || event.key === "Enter" || event.key === " ") {
-      sendEnvelope({ type: "interact" });
-      event.preventDefault();
-      return;
-    }
-
-    if (event.key === "Escape") {
-      sendEnvelope({ type: "confirmDialogue" });
-      event.preventDefault();
-    }
-  });
-  window.addEventListener("keyup", (event) => {
-    keysHeld.delete(event.key);
-  });
-
   let lastMoveSentAt = 0;
   const ticker = new Ticker();
   ticker.add((time) => {
     const now = performance.now();
-    if (now - lastMoveSentAt > runtimeConfig.commandSendIntervalMs) {
+    if (shouldCaptureGameInput() && now - lastMoveSentAt > runtimeConfig.commandSendIntervalMs) {
       if (keysHeld.has("w") || keysHeld.has("ArrowUp")) {
         sendEnvelope({
           type: "move",
@@ -894,16 +923,147 @@ const initGameClient = async (): Promise<void> => {
     threeLayer.tick(time.deltaMS);
     pixiRenderer.render({ container: stage });
   });
-  ticker.start();
 
-  window.addEventListener("beforeunload", () => {
+  const disposeRuntime = (): void => {
+    if (isDisposed) {
+      return;
+    }
+
     isDisposed = true;
+    listenerController.abort();
     clearReconnectTimer();
     cancelRestoreRequest();
     activeSocket?.close();
     activeSocket = null;
+    keysHeld.clear();
     ticker.stop();
+    ticker.destroy();
+    stage.destroy({ children: true });
+    pixiRenderer.destroy();
+    threeLayer.dispose();
+    wrapper.replaceChildren();
+  };
+
+  reconnectButton?.addEventListener(
+    "click",
+    () => {
+      if (isDisposed) {
+        return;
+      }
+      setReconnectVisible(false);
+      setConnectionAlert(null);
+      if (connectionMode === "missing") {
+        window.location.reload();
+        return;
+      }
+
+      connectionMode = "reconnecting";
+      setConnectionStatus(statusBadge, labels, "reconnecting");
+      void attemptRestoreSession()
+        .then((restored) => {
+          if (restored) {
+            connectSocket();
+            return;
+          }
+          connectionMode = "expired";
+          setConnectionStatus(statusBadge, labels, "expired");
+          setReconnectVisible(true);
+          setConnectionAlert(labels.connection.expired, "error");
+        })
+        .catch(() => {
+          connectionMode = "expired";
+          setConnectionStatus(statusBadge, labels, "expired");
+          setReconnectVisible(true);
+          setConnectionAlert(labels.connection.expired, "error");
+        });
+    },
+    { signal: listenerController.signal },
+  );
+
+  window.addEventListener(
+    "resize",
+    () => {
+      threeLayer.resize(wrapper.clientWidth, wrapper.clientHeight);
+      pixiRenderer.resize(wrapper.clientWidth, wrapper.clientHeight);
+    },
+    { signal: listenerController.signal },
+  );
+
+  wrapper.addEventListener(
+    "pointerdown",
+    () => {
+      wrapper.focus({ preventScroll: true });
+    },
+    { signal: listenerController.signal },
+  );
+
+  wrapper.addEventListener(
+    "focus",
+    () => {
+      setRuntimeFocusState(true);
+    },
+    { signal: listenerController.signal },
+  );
+
+  wrapper.addEventListener(
+    "blur",
+    () => {
+      keysHeld.clear();
+      setRuntimeFocusState(false);
+    },
+    { signal: listenerController.signal },
+  );
+
+  wrapper.addEventListener(
+    "keydown",
+    (event) => {
+      if (
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        event.repeat ||
+        !shouldCaptureGameInput()
+      ) {
+        return;
+      }
+
+      keysHeld.add(event.key);
+
+      if (event.key === "e" || event.key === "Enter" || event.key === " ") {
+        sendEnvelope({ type: "interact" });
+        event.preventDefault();
+        return;
+      }
+
+      if (event.key === "Escape") {
+        sendEnvelope({ type: "confirmDialogue" });
+        event.preventDefault();
+      }
+    },
+    { signal: listenerController.signal },
+  );
+
+  wrapper.addEventListener(
+    "keyup",
+    (event) => {
+      keysHeld.delete(event.key);
+    },
+    { signal: listenerController.signal },
+  );
+
+  window.addEventListener("beforeunload", disposeRuntime, {
+    once: true,
+    signal: listenerController.signal,
   });
+  window.addEventListener("pagehide", disposeRuntime, {
+    once: true,
+    signal: listenerController.signal,
+  });
+
+  setRuntimeFocusState(document.activeElement === wrapper);
+
+  connectSocket();
+  ticker.start();
 
   persistSessionMeta(runtimeSessionMeta, runtimeConfig);
 };
@@ -989,5 +1149,18 @@ const renderState = (
 };
 
 void initGameClient().catch(() => {
-  setConnectionStatus(document.getElementById("game-connection-status"), "disconnected");
+  const wrapper = document.getElementById("game-canvas-wrapper");
+  const statusBadge = document.getElementById("game-connection-status");
+  const queueBadge = document.getElementById("game-command-queue");
+  const reconnectButton = document.getElementById("game-reconnect") as HTMLButtonElement | null;
+  if (!(wrapper instanceof HTMLElement)) {
+    return;
+  }
+
+  const labels = readGameClientLabels(wrapper, statusBadge, queueBadge, reconnectButton);
+  if (!labels) {
+    return;
+  }
+
+  setConnectionStatus(statusBadge, labels, "disconnected");
 });

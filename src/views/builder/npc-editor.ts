@@ -12,6 +12,7 @@ import type {
 } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
+import { getBooleanLabel } from "./view-labels.ts";
 
 /**
  * Renders the NPC roster workspace.
@@ -85,7 +86,7 @@ export const renderNpcEditor = (
             hx-target="#npc-detail"
             hx-swap="innerHTML"
             aria-label="${escapeHtml(messages.builder.editNpc)}: ${escapeHtml(npc.characterKey)}"
-          >${escapeHtml(messages.builder.preview)}</button>
+          >${escapeHtml(messages.builder.openDetails)}</button>
         </div>
       </article>`;
     })
@@ -246,7 +247,8 @@ export const renderNpcDetail = (
 
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.wanderSpeed)}</legend>
-            <input name="wanderSpeed" type="number" class="input input-bordered w-full" value="${npc.ai.wanderSpeed}" min="0" step="0.1" required />
+            <label class="label" for="npc-wander-speed">${escapeHtml(messages.builder.wanderSpeed)}</label>
+            <input id="npc-wander-speed" name="wanderSpeed" type="number" class="input input-bordered w-full" value="${npc.ai.wanderSpeed}" min="0" step="0.1" required />
             <label class="label" for="npc-idle-min">${escapeHtml(messages.builder.idlePauseMinMs)}</label>
             <input id="npc-idle-min" name="idlePauseMinMs" type="number" class="input input-bordered w-full" value="${npc.ai.idlePauseMs[0]}" min="0" step="1" required />
             <label class="label" for="npc-idle-max">${escapeHtml(messages.builder.idlePauseMaxMs)}</label>
@@ -265,8 +267,8 @@ export const renderNpcDetail = (
               <div>
                 <label class="label" for="npc-greet-enabled">${escapeHtml(messages.builder.greetOnApproach)}</label>
                 <select id="npc-greet-enabled" name="greetOnApproach" class="select select-bordered w-full">
-                  <option value="true"${npc.ai.greetOnApproach ? " selected" : ""}>true</option>
-                  <option value="false"${npc.ai.greetOnApproach ? "" : " selected"}>false</option>
+                  <option value="true"${npc.ai.greetOnApproach ? " selected" : ""}>${escapeHtml(getBooleanLabel(messages, true))}</option>
+                  <option value="false"${npc.ai.greetOnApproach ? "" : " selected"}>${escapeHtml(getBooleanLabel(messages, false))}</option>
                 </select>
               </div>
             </div>

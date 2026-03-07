@@ -58,7 +58,6 @@ export class ProviderRegistry {
   private _providerAvailability = new Map<string, boolean>();
   private _providerReadiness = new Map<string, ProviderReadiness>();
   private _providerReasons = new Map<string, string>();
-  private _refreshHandle: ReturnType<typeof setInterval> | null = null;
   private _disposed = false;
 
   private constructor(providers: readonly AiProvider[]) {
@@ -79,13 +78,19 @@ export class ProviderRegistry {
 
     const registry = new ProviderRegistry(providers);
     ProviderRegistry._instance = registry;
-    registry
-      ._ensureCapabilitiesReady()
-      .then(() => registry._startPeriodicRefresh())
-      .catch((error: unknown) => {
-        logger.warn("registry.initial-refresh.failed", { error: String(error) });
-      });
+    await registry._ensureCapabilitiesReady().catch((error: unknown) => {
+      logger.warn("registry.initial-refresh.failed", { error: String(error) });
+    });
     return registry;
+  }
+
+  /**
+   * Returns the active singleton instance without creating one.
+   *
+   * @returns Existing registry instance, if any.
+   */
+  static peekInstance(): ProviderRegistry | null {
+    return ProviderRegistry._instance;
   }
 
   /**
@@ -348,11 +353,6 @@ export class ProviderRegistry {
 
     this._disposed = true;
 
-    if (this._refreshHandle !== null) {
-      clearInterval(this._refreshHandle);
-      this._refreshHandle = null;
-    }
-
     for (const provider of this._providers) {
       await provider.dispose();
     }
@@ -363,25 +363,6 @@ export class ProviderRegistry {
     this._providerReasons.clear();
     ProviderRegistry._instance = null;
     logger.info("registry.disposed");
-  }
-
-  /**
-   * Starts periodic capability refresh.
-   */
-  private _startPeriodicRefresh(): void {
-    if (this._refreshHandle !== null) {
-      return;
-    }
-
-    this._refreshHandle = setInterval(() => {
-      if (this._disposed) {
-        return;
-      }
-
-      this.refreshCapabilities().catch((err) => {
-        logger.warn("registry.refresh.failed", { error: String(err) });
-      });
-    }, appConfig.ai.capabilityRefreshIntervalMs);
   }
 
   /**

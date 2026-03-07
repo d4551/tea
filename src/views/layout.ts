@@ -25,17 +25,46 @@ export interface LayoutScript {
 }
 
 /**
- * Shared view layout input.
+ * Shared route-derived layout context for SSR views.
  */
-export interface LayoutInput {
+export interface LayoutContext {
   readonly locale: LocaleCode;
-  readonly title: string;
   readonly messages: Messages;
   readonly activeRoute: keyof typeof appRoutes;
   readonly currentPathWithQuery: string;
+  readonly persistentProjectId?: string;
+}
+
+/**
+ * Shared view layout input.
+ */
+export interface LayoutInput extends LayoutContext {
+  readonly title: string;
   readonly body: string;
   readonly scripts?: readonly LayoutScript[];
 }
+
+/**
+ * Renders the shared application layout from a route-derived context.
+ *
+ * @param context Shared route-derived layout context.
+ * @param title Page title.
+ * @param body Page body markup.
+ * @param scripts Optional page-scoped scripts.
+ * @returns Full HTML document.
+ */
+export const renderDocument = (
+  context: LayoutContext,
+  title: string,
+  body: string,
+  scripts: readonly LayoutScript[] = [],
+): string =>
+  renderLayout({
+    ...context,
+    title,
+    body,
+    scripts,
+  });
 
 /**
  * Renders the shared application layout.
@@ -44,7 +73,16 @@ export interface LayoutInput {
  * @returns Full HTML document.
  */
 export const renderLayout = (input: LayoutInput): string => {
-  const { locale, title, messages, body, activeRoute, currentPathWithQuery, scripts = [] } = input;
+  const {
+    locale,
+    title,
+    messages,
+    body,
+    activeRoute,
+    currentPathWithQuery,
+    persistentProjectId,
+    scripts = [],
+  } = input;
   const languageSwitch = locale === "en-US" ? "zh-CN" : "en-US";
   const containerClass = `mx-auto flex w-full ${appConfig.ui.maxContentWidthClass} flex-col gap-8 px-4 pb-16 pt-8 lg:px-8`;
   const pageScripts = scripts
@@ -54,6 +92,7 @@ export const renderLayout = (input: LayoutInput): string => {
       return `<script src="${escapeHtml(script.src)}"${typeAttribute}${deferAttribute}></script>`;
     })
     .join("");
+  const boostEnabled = activeRoute === "game" ? "false" : "true";
 
   return `<!doctype html>
 <html lang="${escapeHtml(locale)}" data-theme="${escapeHtml(appConfig.ui.defaultTheme)}">
@@ -64,20 +103,27 @@ export const renderLayout = (input: LayoutInput): string => {
     <meta name="description" content="${escapeHtml(messages.metadata.appSubtitle)}" />
     <link rel="stylesheet" href="${escapeHtml(appConfig.stylesheetPath)}" />
     <script src="${escapeHtml(appConfig.htmxScriptPath)}" defer></script>
-    ${pageScripts}
   </head>
-  <body class="min-h-screen bg-base-100 text-base-content" hx-boost="true">
+  <body class="min-h-screen bg-base-100 text-base-content" hx-boost="${boostEnabled}">
     <a
       href="#main-content"
       class="sr-only z-50 m-2 inline-flex rounded-md border border-base-content bg-base-100 px-3 py-2 text-sm font-semibold text-base-content focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
     >
       ${escapeHtml(messages.common.skipToContent)}
     </a>
-    ${renderNavigation(messages, activeRoute, locale, languageSwitch, currentPathWithQuery)}
+    ${renderNavigation(
+      messages,
+      activeRoute,
+      locale,
+      languageSwitch,
+      currentPathWithQuery,
+      persistentProjectId ?? "",
+    )}
     <main id="main-content" class="${escapeHtml(containerClass)}">
       ${body}
     </main>
     ${renderFooter(messages, locale)}
+    ${pageScripts}
   </body>
 </html>`;
 };
@@ -88,9 +134,8 @@ const renderNavigation = (
   locale: LocaleCode,
   languageSwitch: LocaleCode,
   currentPathWithQuery: string,
+  persistentProjectId: string,
 ): string => {
-  const currentUrl = new URL(currentPathWithQuery, "https://app.local");
-  const persistentProjectId = currentUrl.searchParams.get("projectId")?.trim() ?? "";
   const projectScopedRoutes = new Set([appRoutes.builder, appRoutes.game]);
   const navigationItems = [
     {
@@ -120,7 +165,7 @@ const renderNavigation = (
         ? withQueryParameters(localizedHref, { projectId: persistentProjectId })
         : localizedHref;
 
-    return `<li><a class="${classes}" href="${href}" aria-label="${escapeHtml(item.label)}"${ariaCurrent}>${escapeHtml(item.label)}</a></li>`;
+    return `<li><a class="${classes}" href="${escapeHtml(href)}" aria-label="${escapeHtml(item.label)}"${ariaCurrent}>${escapeHtml(item.label)}</a></li>`;
   };
 
   const desktopItems = navigationItems.map((item) => renderNavItem(item)).join("");

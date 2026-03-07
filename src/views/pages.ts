@@ -1,10 +1,8 @@
-import type { LocaleCode } from "../config/environment.ts";
 import { appConfig } from "../config/environment.ts";
 import { getAiRuntimeProfile } from "../domain/ai/local-runtime-profile.ts";
 import { assetRelativePaths, toPublicAssetUrl } from "../shared/constants/assets.ts";
 import { appRoutes, withLocaleQuery } from "../shared/constants/routes.ts";
-import type { Messages } from "../shared/i18n/messages.ts";
-import { escapeHtml, renderLayout } from "./layout.ts";
+import { escapeHtml, type LayoutContext, renderDocument } from "./layout.ts";
 import { type OraclePanelState, renderOracleSection } from "./oracle.ts";
 
 const homePageScripts = [
@@ -26,9 +24,7 @@ const homePageScripts = [
  * Parameters for rendering a full page shell.
  */
 export interface PageRenderInput {
-  readonly locale: LocaleCode;
-  readonly messages: Messages;
-  readonly currentPathWithQuery: string;
+  readonly layout: LayoutContext;
 }
 
 /**
@@ -42,7 +38,8 @@ export const renderHomePage = (
   input: PageRenderInput,
   oraclePanelState: OraclePanelState,
 ): string => {
-  const { locale, messages, currentPathWithQuery } = input;
+  const { layout } = input;
+  const { locale, messages } = layout;
   const runtimeProfile = getAiRuntimeProfile();
   const catalogItems = runtimeProfile.catalog
     .filter((entry) => entry.enabled)
@@ -200,15 +197,7 @@ export const renderHomePage = (
     </a>
   </section>`;
 
-  return renderLayout({
-    locale,
-    title: messages.pages.home.title,
-    messages,
-    activeRoute: "home",
-    currentPathWithQuery,
-    body,
-    scripts: homePageScripts,
-  });
+  return renderDocument(layout, messages.pages.home.title, body, homePageScripts);
 };
 
 /**
@@ -218,7 +207,8 @@ export const renderHomePage = (
  * @returns Complete HTML document.
  */
 export const renderPitchDeckPage = (input: PageRenderInput): string => {
-  const { locale, messages, currentPathWithQuery } = input;
+  const { layout } = input;
+  const { messages } = layout;
   const sections = messages.pages.pitchDeck.sections
     .map((section) => `<li class="list-row">${escapeHtml(section)}</li>`)
     .join("");
@@ -231,14 +221,7 @@ export const renderPitchDeckPage = (input: PageRenderInput): string => {
     </div>
   </section>`;
 
-  return renderLayout({
-    locale,
-    title: messages.pages.pitchDeck.title,
-    messages,
-    activeRoute: "pitchDeck",
-    currentPathWithQuery,
-    body,
-  });
+  return renderDocument(layout, messages.pages.pitchDeck.title, body);
 };
 
 /**
@@ -248,7 +231,8 @@ export const renderPitchDeckPage = (input: PageRenderInput): string => {
  * @returns Complete HTML document.
  */
 export const renderNarrativeBiblePage = (input: PageRenderInput): string => {
-  const { locale, messages, currentPathWithQuery } = input;
+  const { layout } = input;
+  const { messages } = layout;
   const sections = messages.pages.narrativeBible.sections
     .map((section) => `<li class="list-row">${escapeHtml(section)}</li>`)
     .join("");
@@ -261,14 +245,7 @@ export const renderNarrativeBiblePage = (input: PageRenderInput): string => {
     </div>
   </section>`;
 
-  return renderLayout({
-    locale,
-    title: messages.pages.narrativeBible.title,
-    messages,
-    activeRoute: "narrativeBible",
-    currentPathWithQuery,
-    body,
-  });
+  return renderDocument(layout, messages.pages.narrativeBible.title, body);
 };
 
 /**
@@ -278,7 +255,8 @@ export const renderNarrativeBiblePage = (input: PageRenderInput): string => {
  * @returns Complete HTML document.
  */
 export const renderDevelopmentPlanPage = (input: PageRenderInput): string => {
-  const { locale, messages, currentPathWithQuery } = input;
+  const { layout } = input;
+  const { messages } = layout;
   const sections = messages.pages.developmentPlan.sections
     .map((section) => `<li class="list-row">${escapeHtml(section)}</li>`)
     .join("");
@@ -291,12 +269,5 @@ export const renderDevelopmentPlanPage = (input: PageRenderInput): string => {
     </div>
   </section>`;
 
-  return renderLayout({
-    locale,
-    title: messages.pages.developmentPlan.title,
-    messages,
-    activeRoute: "developmentPlan",
-    currentPathWithQuery,
-    body,
-  });
+  return renderDocument(layout, messages.pages.developmentPlan.title, body);
 };

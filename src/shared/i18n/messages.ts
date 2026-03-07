@@ -154,14 +154,23 @@ export interface Messages {
     readonly controlsMove: string;
     readonly controlsInteract: string;
     readonly controlsAdvance: string;
+    readonly runtimeSurfaceLabel: string;
+    readonly runtimeSurfaceHint: string;
+    readonly runtimeSurfaceActive: string;
+    readonly runtimeSurfaceInactive: string;
     readonly objectiveTitle: string;
     readonly objectiveDescription: string;
     readonly sessionContextTitle: string;
     readonly sessionIdLabel: string;
     readonly sceneLabel: string;
+    readonly sceneModeLabel: string;
+    readonly sceneMode2d: string;
+    readonly sceneMode3d: string;
     readonly projectLabel: string;
+    readonly localeLabel: string;
     readonly builderReturn: string;
     readonly publishedProjectLabel: string;
+    readonly projectUnavailableValue: string;
     readonly projectUnavailableTitle: string;
     readonly projectUnavailableDescription: string;
     readonly projectUnpublishedTitle: string;
@@ -205,12 +214,26 @@ export interface Messages {
     readonly aiStatus: string;
     readonly noScenes: string;
     readonly noNpcs: string;
+    readonly noAssets: string;
+    readonly noAnimationClips: string;
+    readonly noGenerationJobs: string;
+    readonly noQuests: string;
+    readonly noTriggers: string;
+    readonly noDialogueGraphs: string;
+    readonly noFlags: string;
+    readonly noCollisions: string;
+    readonly noSceneNodes: string;
+    readonly noAutomationRuns: string;
     readonly save: string;
     readonly cancel: string;
     readonly delete: string;
     readonly preview: string;
     readonly sceneId: string;
+    readonly sceneIdPlaceholder: string;
     readonly sceneTitle: string;
+    readonly sceneBackgroundLabel: string;
+    readonly scenePreviewTitle: string;
+    readonly runtimePreviewTitle: string;
     readonly spawnPoint: string;
     readonly geometry: string;
     readonly sceneModeLabel: string;
@@ -219,6 +242,7 @@ export interface Messages {
     readonly sceneNodes: string;
     readonly collisions: string;
     readonly npcName: string;
+    readonly labelField: string;
     readonly npcLabel: string;
     readonly npcPosition: string;
     readonly interactRadius: string;
@@ -258,6 +282,9 @@ export interface Messages {
     readonly speechToTextLabel: string;
     readonly speechSynthesisLabel: string;
     readonly localInferenceLabel: string;
+    readonly idLabel: string;
+    readonly titleLabel: string;
+    readonly descriptionLabel: string;
     readonly npcIdLabel: string;
     readonly messageLabel: string;
     readonly promptLabel: string;
@@ -265,6 +292,56 @@ export interface Messages {
     readonly heightLabel: string;
     readonly xLabel: string;
     readonly yLabel: string;
+    readonly zLabel: string;
+    readonly yesLabel: string;
+    readonly noLabel: string;
+    readonly filterAction: string;
+    readonly openDetails: string;
+    readonly selectNode: string;
+    readonly selectedNodeLabel: string;
+    readonly noNodeSelected: string;
+    readonly transformModeTranslate: string;
+    readonly transformModeRotate: string;
+    readonly transformModeScale: string;
+    readonly createSceneNode: string;
+    readonly continueAuthoring: string;
+    readonly nodeIdLabel: string;
+    readonly nodeTypeLabel: string;
+    readonly layerLabel: string;
+    readonly assetIdFieldLabel: string;
+    readonly animationClipIdFieldLabel: string;
+    readonly generationTargetLabel: string;
+    readonly operationsJsonLabel: string;
+    readonly rotationLabel: string;
+    readonly scaleLabel: string;
+    readonly sceneNodeTypeSprite: string;
+    readonly sceneNodeTypeTile: string;
+    readonly sceneNodeTypeSpawn: string;
+    readonly sceneNodeTypeTrigger: string;
+    readonly sceneNodeTypeCamera: string;
+    readonly sceneNodeTypeModel: string;
+    readonly sceneNodeTypeLight: string;
+    readonly assetKindPortrait: string;
+    readonly assetKindSpriteSheet: string;
+    readonly assetKindBackground: string;
+    readonly assetKindModel: string;
+    readonly assetKindAudio: string;
+    readonly generationKindPortrait: string;
+    readonly generationKindSpriteSheet: string;
+    readonly generationKindTiles: string;
+    readonly generationKindVoiceLine: string;
+    readonly generationKindAnimationPlan: string;
+    readonly triggerEventLabel: string;
+    readonly triggerEventSceneEnter: string;
+    readonly triggerEventNpcInteract: string;
+    readonly triggerEventChat: string;
+    readonly triggerEventDialogueConfirmed: string;
+    readonly rotationXLabel: string;
+    readonly rotationYLabel: string;
+    readonly rotationZLabel: string;
+    readonly scaleXLabel: string;
+    readonly scaleYLabel: string;
+    readonly scaleZLabel: string;
     readonly sceneWidthDesc: string;
     readonly sceneHeightDesc: string;
     readonly assetPlaceholder: string;
@@ -290,6 +367,8 @@ export interface Messages {
     readonly modelLabel: string;
     readonly configKeyLabel: string;
     readonly docsLabel: string;
+    readonly runtimeStackValue: string;
+    readonly aiConfigPatternValue: string;
     readonly sceneLibraryTitle: string;
     readonly sceneCreateDescription: string;
     readonly sceneCreateTitlePlaceholder: string;
@@ -303,10 +382,12 @@ export interface Messages {
     readonly assetKindLabel: string;
     readonly assetSourceLabel: string;
     readonly animationClipsTitle: string;
+    readonly createAnimationClip: string;
     readonly clipAssetLabel: string;
     readonly clipStateTagLabel: string;
     readonly clipFrameCountLabel: string;
     readonly clipPlaybackLabel: string;
+    readonly clipIdLabel: string;
     readonly generationJobsTitle: string;
     readonly generationJobKindLabel: string;
     readonly generationPromptLabel: string;
@@ -321,17 +402,33 @@ export interface Messages {
     readonly questsTitle: string;
     readonly triggersTitle: string;
     readonly dialogueGraphsTitle: string;
+    readonly flagsTitle: string;
+    readonly mechanicsDetailHint: string;
     readonly createQuest: string;
     readonly editQuest: string;
+    readonly questIdLabel: string;
     readonly questTitlePlaceholder: string;
     readonly questDescriptionPlaceholder: string;
     readonly createTrigger: string;
     readonly editTrigger: string;
+    readonly triggerIdLabel: string;
     readonly triggerLabelPlaceholder: string;
     readonly createDialogueGraph: string;
     readonly editDialogueGraph: string;
+    readonly graphIdLabel: string;
     readonly graphTitlePlaceholder: string;
     readonly assetLabelPlaceholder: string;
+    readonly assetIdPlaceholder: string;
+    readonly clipIdPlaceholder: string;
+    readonly questIdPlaceholder: string;
+    readonly triggerIdPlaceholder: string;
+    readonly graphIdPlaceholder: string;
+    readonly nodeIdPlaceholder: string;
+    readonly layerPlaceholder: string;
+    readonly stateTagPlaceholder: string;
+    readonly sourcePathPlaceholder: string;
+    readonly dialogueNpcIdPlaceholder: string;
+    readonly operationsJsonPlaceholder: string;
     readonly assetStatusApproved: string;
     readonly assetStatusDraft: string;
     readonly generationPromptPlaceholder: string;
@@ -344,6 +441,32 @@ export interface Messages {
     readonly createAutomationRun: string;
     readonly approveAction: string;
     readonly cancelAction: string;
+    readonly jobStatusQueued: string;
+    readonly jobStatusRunning: string;
+    readonly jobStatusBlockedForApproval: string;
+    readonly jobStatusSucceeded: string;
+    readonly jobStatusFailed: string;
+    readonly jobStatusCanceled: string;
+    readonly longRunningStatusProcessing: string;
+    readonly generationStatusDraftReadyForReview: string;
+    readonly generatedLabelPrefix: string;
+    readonly reviewLabelPrefix: string;
+    readonly generatedArtifactSummaryFromPrompt: string;
+    readonly generatedArtifactSummaryTargetPrefix: string;
+    readonly automationEvidenceLabel: string;
+    readonly automationStepBrowser: string;
+    readonly automationStepHttp: string;
+    readonly automationStepBuilder: string;
+    readonly automationStepAttachFile: string;
+    readonly automationSummaryCaptureReviewContext: string;
+    readonly automationSummaryPrepareDraftPlan: string;
+    readonly automationSummaryAttachReviewEvidence: string;
+    readonly automationArtifactSummaryCapturedReviewEvidence: string;
+    readonly automationStatusQueuedForProcessing: string;
+    readonly automationStatusApprovedForApply: string;
+    readonly automationStatusCanceledByReview: string;
+    readonly automationStatusPlanReadyForReview: string;
+    readonly automationStatusCapturingFallbackEvidence: string;
     readonly assistantReviewTitle: string;
     readonly assistantReviewDescription: string;
     readonly previewChanges: string;
@@ -584,15 +707,25 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       controlsMove: "Move: WASD or arrow keys",
       controlsInteract: "Interact: E, Enter, or Space",
       controlsAdvance: "Advance dialogue: Escape",
+      runtimeSurfaceLabel: "Playable runtime surface",
+      runtimeSurfaceHint:
+        "Focus the runtime surface to capture keyboard movement and interaction controls.",
+      runtimeSurfaceActive: "Runtime controls active.",
+      runtimeSurfaceInactive: "Runtime controls inactive.",
       objectiveTitle: "Session objective",
       objectiveDescription:
         "Validate the published scene, dialogue pacing, and runtime stability before returning to the builder.",
       sessionContextTitle: "Current session",
       sessionIdLabel: "Session ID",
       sceneLabel: "Scene",
+      sceneModeLabel: "Scene mode",
+      sceneMode2d: "2D",
+      sceneMode3d: "3D",
       projectLabel: "Project",
+      localeLabel: "Locale",
       builderReturn: "Back to builder",
       publishedProjectLabel: "Published project",
+      projectUnavailableValue: "No project bound",
       projectUnavailableTitle: "Project not found",
       projectUnavailableDescription:
         "The requested project does not exist. Switch back to the builder and select or create a valid project.",
@@ -638,12 +771,26 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       aiStatus: "AI Status",
       noScenes: "No scenes defined yet.",
       noNpcs: "No NPCs defined yet.",
+      noAssets: "No assets created yet.",
+      noAnimationClips: "No animation clips created yet.",
+      noGenerationJobs: "No generation jobs queued yet.",
+      noQuests: "No quests created yet.",
+      noTriggers: "No triggers created yet.",
+      noDialogueGraphs: "No dialogue graphs created yet.",
+      noFlags: "No flags authored yet.",
+      noCollisions: "No collision volumes defined yet.",
+      noSceneNodes: "No scene nodes authored yet.",
+      noAutomationRuns: "No automation runs queued yet.",
       save: "Save",
       cancel: "Cancel",
       delete: "Delete",
       preview: "Preview",
       sceneId: "Scene ID",
+      sceneIdPlaceholder: "scene.teaHouse.annex",
       sceneTitle: "Scene Title",
+      sceneBackgroundLabel: "Background asset",
+      scenePreviewTitle: "Scene preview",
+      runtimePreviewTitle: "Runtime preview",
       spawnPoint: "Spawn Point",
       geometry: "Geometry",
       sceneModeLabel: "Scene mode",
@@ -652,6 +799,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       sceneNodes: "Scene nodes",
       collisions: "Collisions",
       npcName: "NPC Name",
+      labelField: "Label",
       npcLabel: "NPC Label",
       npcPosition: "Position",
       interactRadius: "Interact Radius",
@@ -692,6 +840,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       speechToTextLabel: "Speech to Text",
       speechSynthesisLabel: "Text to Speech",
       localInferenceLabel: "Local Inference",
+      idLabel: "ID",
+      titleLabel: "Title",
+      descriptionLabel: "Description",
       npcIdLabel: "NPC ID",
       messageLabel: "Message",
       promptLabel: "Prompt",
@@ -699,6 +850,56 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       heightLabel: "Height",
       xLabel: "X",
       yLabel: "Y",
+      zLabel: "Z",
+      yesLabel: "Yes",
+      noLabel: "No",
+      filterAction: "Filter results",
+      openDetails: "Open details",
+      selectNode: "Select node",
+      selectedNodeLabel: "Selected node",
+      noNodeSelected: "No node selected",
+      transformModeTranslate: "Translate",
+      transformModeRotate: "Rotate",
+      transformModeScale: "Scale",
+      createSceneNode: "Create scene node",
+      continueAuthoring: "Continue authoring",
+      nodeIdLabel: "Node ID",
+      nodeTypeLabel: "Node type",
+      layerLabel: "Layer",
+      assetIdFieldLabel: "Asset ID",
+      animationClipIdFieldLabel: "Animation clip ID",
+      generationTargetLabel: "Target ID",
+      operationsJsonLabel: "Patch operations JSON",
+      rotationLabel: "Rotation",
+      scaleLabel: "Scale",
+      sceneNodeTypeSprite: "Sprite",
+      sceneNodeTypeTile: "Tile",
+      sceneNodeTypeSpawn: "Spawn marker",
+      sceneNodeTypeTrigger: "Trigger volume",
+      sceneNodeTypeCamera: "Camera",
+      sceneNodeTypeModel: "Model",
+      sceneNodeTypeLight: "Light",
+      assetKindPortrait: "Portrait",
+      assetKindSpriteSheet: "Sprite sheet",
+      assetKindBackground: "Background",
+      assetKindModel: "3D model",
+      assetKindAudio: "Audio",
+      generationKindPortrait: "Portrait",
+      generationKindSpriteSheet: "Sprite sheet",
+      generationKindTiles: "Tiles",
+      generationKindVoiceLine: "Voice line",
+      generationKindAnimationPlan: "Animation plan",
+      triggerEventLabel: "Trigger event",
+      triggerEventSceneEnter: "Scene enter",
+      triggerEventNpcInteract: "NPC interact",
+      triggerEventChat: "Chat",
+      triggerEventDialogueConfirmed: "Dialogue confirmed",
+      rotationXLabel: "Rotation X",
+      rotationYLabel: "Rotation Y",
+      rotationZLabel: "Rotation Z",
+      scaleXLabel: "Scale X",
+      scaleYLabel: "Scale Y",
+      scaleZLabel: "Scale Z",
       sceneWidthDesc: "Scene width in pixels",
       sceneHeightDesc: "Scene height in pixels",
       assetPlaceholder: "Runtime-mounted asset inventory for scenes and sprites.",
@@ -737,6 +938,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       modelLabel: "Model",
       configKeyLabel: "Config Key",
       docsLabel: "Docs",
+      runtimeStackValue: "Bun + Elysia + HTMX",
+      aiConfigPatternValue: "AI_LOCAL_* / OLLAMA_*",
       sceneLibraryTitle: "Scene library",
       sceneCreateDescription:
         "Create or select a scene, then refine its layout and runtime preview.",
@@ -752,10 +955,12 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       assetKindLabel: "Asset kind",
       assetSourceLabel: "Asset source",
       animationClipsTitle: "Animation clips",
+      createAnimationClip: "Create animation clip",
       clipAssetLabel: "Asset",
       clipStateTagLabel: "State tag",
       clipFrameCountLabel: "Frame count",
       clipPlaybackLabel: "Playback FPS",
+      clipIdLabel: "Clip ID",
       generationJobsTitle: "Generation jobs",
       generationJobKindLabel: "Job kind",
       generationPromptLabel: "Prompt",
@@ -771,17 +976,34 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       questsTitle: "Quests",
       triggersTitle: "Triggers",
       dialogueGraphsTitle: "Dialogue graphs",
+      flagsTitle: "Flags",
+      mechanicsDetailHint: "Select a quest, trigger, or dialogue graph to edit.",
       createQuest: "Create quest",
       editQuest: "Edit quest",
+      questIdLabel: "Quest ID",
       questTitlePlaceholder: "Meet the guide",
       questDescriptionPlaceholder: "Guide the player through the authored intro.",
       createTrigger: "Create trigger",
       editTrigger: "Edit trigger",
+      triggerIdLabel: "Trigger ID",
       triggerLabelPlaceholder: "Talk to the guide",
       createDialogueGraph: "Create graph",
       editDialogueGraph: "Edit dialogue graph",
+      graphIdLabel: "Graph ID",
       graphTitlePlaceholder: "Guide intro graph",
       assetLabelPlaceholder: "Hero Portrait",
+      assetIdPlaceholder: "asset.custom.hero",
+      clipIdPlaceholder: "clip.hero.idle",
+      questIdPlaceholder: "quest.new",
+      triggerIdPlaceholder: "trigger.new",
+      graphIdPlaceholder: "graph.npc.guide",
+      nodeIdPlaceholder: "node.hero.spawn",
+      layerPlaceholder: "foreground",
+      stateTagPlaceholder: "idle-down",
+      sourcePathPlaceholder: "/assets/images/custom.png",
+      dialogueNpcIdPlaceholder: "teaMonk",
+      operationsJsonPlaceholder:
+        '[{"op":"replace","path":"/dialogues/en-US/npc.guide.greet","value":"..."}]',
       assetStatusApproved: "approved",
       assetStatusDraft: "draft",
       generationPromptPlaceholder: "Generate an autumn river trader portrait with warm tones.",
@@ -795,6 +1017,32 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       createAutomationRun: "Queue automation run",
       approveAction: "Approve",
       cancelAction: "Cancel",
+      jobStatusQueued: "Queued",
+      jobStatusRunning: "Running",
+      jobStatusBlockedForApproval: "Awaiting approval",
+      jobStatusSucceeded: "Succeeded",
+      jobStatusFailed: "Failed",
+      jobStatusCanceled: "Canceled",
+      longRunningStatusProcessing: "Processing",
+      generationStatusDraftReadyForReview: "Draft ready for review",
+      generatedLabelPrefix: "Generated",
+      reviewLabelPrefix: "Review",
+      generatedArtifactSummaryFromPrompt: "Generated draft from builder prompt",
+      generatedArtifactSummaryTargetPrefix: "Generated draft for",
+      automationEvidenceLabel: "Automation evidence",
+      automationStepBrowser: "Browser",
+      automationStepHttp: "HTTP",
+      automationStepBuilder: "Builder",
+      automationStepAttachFile: "Attach file",
+      automationSummaryCaptureReviewContext: "Capture builder review context",
+      automationSummaryPrepareDraftPlan: "Prepare draft mutation plan",
+      automationSummaryAttachReviewEvidence: "Attach evidence to the draft review",
+      automationArtifactSummaryCapturedReviewEvidence: "Captured builder review evidence",
+      automationStatusQueuedForProcessing: "Queued for processing",
+      automationStatusApprovedForApply: "Approved for apply",
+      automationStatusCanceledByReview: "Canceled by review",
+      automationStatusPlanReadyForReview: "Automation plan ready for review",
+      automationStatusCapturingFallbackEvidence: "Capturing fallback review evidence",
       assistantReviewTitle: "Review AI changes",
       assistantReviewDescription:
         "Generate structured operations, preview them against the active project, then apply only the valid changes.",
@@ -830,19 +1078,19 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         "Three.js is only used for atmosphere and lighting under the sprite scene. There is no 3D scene graph, asset pipeline, or builder workflow.",
       capabilitySpritePipelineTitle: "Sprite pipeline",
       capabilitySpritePipelineDescription:
-        "Mounted sprite manifests exist for the current baseline assets, but import, upload, generation, and sprite-pack management are not wired into the builder.",
+        "The builder now supports upload, manual registration, and reviewable generated artifacts, but spritesheet parsing, packing, and reusable asset management are still incomplete.",
       capabilityAnimationPipelineTitle: "Animation pipeline",
       capabilityAnimationPipelineDescription:
         "Runtime animation manifests are supported, but there is no animation timeline, state editor, retargeting flow, or generator for new motion sets.",
       capabilityMechanicsTitle: "Mechanics systems",
       capabilityMechanicsDescription:
-        "Movement, collisions, and NPC interaction exist, but authored quests, combat, inventory, cutscenes, and trigger-based mechanics are still absent.",
+        "Movement, collisions, authored quests, dialogue graphs, and trigger evaluation exist, but combat, inventory, cutscenes, and richer event orchestration are still partial.",
       capabilityAiAuthoringTitle: "AI authoring",
       capabilityAiAuthoringDescription:
         "Dialogue, scene description, critique, and patch review are wired, but AI-driven asset generation and mechanics authoring are only partial today.",
       capabilityAutomationTitle: "Automation / RPA",
       capabilityAutomationDescription:
-        "There is no background worker, browser automation runner, or tool-orchestrated production pipeline connected to the builder yet.",
+        "A lifecycle-managed worker now drains queued automation runs and can capture Playwright review evidence, but multi-step tool orchestration and production-grade RPA are still partial.",
       capabilityWebgpuRendererTitle: "WebGPU Renderer",
       capabilityWebgpuRendererDescription:
         "PixiJS can auto-detect and prefer WebGPU for 2D rendering when supported, falling back to WebGL seamlessly.",
@@ -1028,14 +1276,23 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       controlsMove: "移动：WASD 或方向键",
       controlsInteract: "交互：E、回车或空格",
       controlsAdvance: "推进对话：Escape",
+      runtimeSurfaceLabel: "可游玩运行时区域",
+      runtimeSurfaceHint: "请先聚焦运行时区域，再使用键盘移动与交互。",
+      runtimeSurfaceActive: "运行时控制已激活。",
+      runtimeSurfaceInactive: "运行时控制未激活。",
       objectiveTitle: "本次验证目标",
       objectiveDescription: "确认已发布场景、对话节奏与运行时稳定性后，再返回构建器继续迭代。",
       sessionContextTitle: "当前会话",
       sessionIdLabel: "会话 ID",
       sceneLabel: "场景",
+      sceneModeLabel: "场景模式",
+      sceneMode2d: "2D",
+      sceneMode3d: "3D",
       projectLabel: "项目",
+      localeLabel: "语言",
       builderReturn: "返回构建器",
       publishedProjectLabel: "已发布项目",
+      projectUnavailableValue: "未绑定项目",
       projectUnavailableTitle: "项目不存在",
       projectUnavailableDescription: "请求的项目不存在。请返回构建器，切换到有效项目或创建新项目。",
       projectUnpublishedTitle: "项目尚未发布",
@@ -1079,12 +1336,26 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       aiStatus: "AI 状态",
       noScenes: "尚未定义场景。",
       noNpcs: "尚未定义 NPC。",
+      noAssets: "尚未创建资源。",
+      noAnimationClips: "尚未创建动画片段。",
+      noGenerationJobs: "尚未加入生成任务。",
+      noQuests: "尚未创建任务。",
+      noTriggers: "尚未创建触发器。",
+      noDialogueGraphs: "尚未创建对话图。",
+      noFlags: "尚未编写标记。",
+      noCollisions: "尚未定义碰撞区域。",
+      noSceneNodes: "尚未编写场景节点。",
+      noAutomationRuns: "尚未加入自动化运行。",
       save: "保存",
       cancel: "取消",
       delete: "删除",
       preview: "预览",
       sceneId: "场景 ID",
+      sceneIdPlaceholder: "scene.teaHouse.annex",
       sceneTitle: "场景标题",
+      sceneBackgroundLabel: "背景资源",
+      scenePreviewTitle: "场景预览",
+      runtimePreviewTitle: "运行时预览",
       spawnPoint: "出生点",
       geometry: "几何尺寸",
       sceneModeLabel: "场景模式",
@@ -1093,6 +1364,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       sceneNodes: "场景节点",
       collisions: "碰撞区域",
       npcName: "NPC 名称",
+      labelField: "标签",
       npcLabel: "NPC 标签",
       npcPosition: "位置",
       interactRadius: "交互半径",
@@ -1132,6 +1404,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       speechToTextLabel: "语音转文本",
       speechSynthesisLabel: "文本转语音",
       localInferenceLabel: "本地推理",
+      idLabel: "ID",
+      titleLabel: "标题",
+      descriptionLabel: "说明",
       npcIdLabel: "NPC ID",
       messageLabel: "消息",
       promptLabel: "提示词",
@@ -1139,6 +1414,56 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       heightLabel: "高度",
       xLabel: "X",
       yLabel: "Y",
+      zLabel: "Z",
+      yesLabel: "是",
+      noLabel: "否",
+      filterAction: "筛选结果",
+      openDetails: "打开详情",
+      selectNode: "选择节点",
+      selectedNodeLabel: "当前选中节点",
+      noNodeSelected: "尚未选择节点",
+      transformModeTranslate: "平移",
+      transformModeRotate: "旋转",
+      transformModeScale: "缩放",
+      createSceneNode: "创建场景节点",
+      continueAuthoring: "继续创作",
+      nodeIdLabel: "节点 ID",
+      nodeTypeLabel: "节点类型",
+      layerLabel: "图层",
+      assetIdFieldLabel: "资源 ID",
+      animationClipIdFieldLabel: "动画片段 ID",
+      generationTargetLabel: "目标 ID",
+      operationsJsonLabel: "补丁操作 JSON",
+      rotationLabel: "旋转",
+      scaleLabel: "缩放",
+      sceneNodeTypeSprite: "精灵",
+      sceneNodeTypeTile: "地块",
+      sceneNodeTypeSpawn: "出生点",
+      sceneNodeTypeTrigger: "触发区域",
+      sceneNodeTypeCamera: "镜头",
+      sceneNodeTypeModel: "模型",
+      sceneNodeTypeLight: "灯光",
+      assetKindPortrait: "立绘",
+      assetKindSpriteSheet: "精灵表",
+      assetKindBackground: "背景",
+      assetKindModel: "3D 模型",
+      assetKindAudio: "音频",
+      generationKindPortrait: "立绘",
+      generationKindSpriteSheet: "精灵表",
+      generationKindTiles: "地块",
+      generationKindVoiceLine: "语音台词",
+      generationKindAnimationPlan: "动画方案",
+      triggerEventLabel: "触发事件",
+      triggerEventSceneEnter: "进入场景",
+      triggerEventNpcInteract: "与 NPC 互动",
+      triggerEventChat: "聊天",
+      triggerEventDialogueConfirmed: "确认对话",
+      rotationXLabel: "旋转 X",
+      rotationYLabel: "旋转 Y",
+      rotationZLabel: "旋转 Z",
+      scaleXLabel: "缩放 X",
+      scaleYLabel: "缩放 Y",
+      scaleZLabel: "缩放 Z",
       sceneWidthDesc: "场景宽度（像素）",
       sceneHeightDesc: "场景高度（像素）",
       assetPlaceholder: "场景与精灵的运行时资源清单。",
@@ -1172,6 +1497,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       modelLabel: "模型",
       configKeyLabel: "配置键",
       docsLabel: "文档",
+      runtimeStackValue: "Bun + Elysia + HTMX",
+      aiConfigPatternValue: "AI_LOCAL_* / OLLAMA_*",
       sceneLibraryTitle: "场景库",
       sceneCreateDescription: "先创建或选择场景，再细化布局与运行时预览。",
       sceneCreateTitlePlaceholder: "teaHouseAnnex",
@@ -1185,10 +1512,12 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       assetKindLabel: "资源类型",
       assetSourceLabel: "资源来源",
       animationClipsTitle: "动画片段",
+      createAnimationClip: "创建动画片段",
       clipAssetLabel: "所属资源",
       clipStateTagLabel: "状态标签",
       clipFrameCountLabel: "帧数",
       clipPlaybackLabel: "播放 FPS",
+      clipIdLabel: "片段 ID",
       generationJobsTitle: "生成任务",
       generationJobKindLabel: "任务类型",
       generationPromptLabel: "提示词",
@@ -1203,17 +1532,34 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       questsTitle: "任务",
       triggersTitle: "触发器",
       dialogueGraphsTitle: "对话图",
+      flagsTitle: "标记",
+      mechanicsDetailHint: "选择一个任务、触发器或对话图进行编辑。",
       createQuest: "创建任务",
       editQuest: "编辑任务",
+      questIdLabel: "任务 ID",
       questTitlePlaceholder: "遇见向导",
       questDescriptionPlaceholder: "引导玩家完成已创作的介绍流程。",
       createTrigger: "创建触发器",
       editTrigger: "编辑触发器",
+      triggerIdLabel: "触发器 ID",
       triggerLabelPlaceholder: "与向导交谈",
       createDialogueGraph: "创建对话图",
       editDialogueGraph: "编辑对话图",
+      graphIdLabel: "对话图 ID",
       graphTitlePlaceholder: "向导介绍对话图",
       assetLabelPlaceholder: "英雄肖像",
+      assetIdPlaceholder: "asset.custom.hero",
+      clipIdPlaceholder: "clip.hero.idle",
+      questIdPlaceholder: "quest.new",
+      triggerIdPlaceholder: "trigger.new",
+      graphIdPlaceholder: "graph.npc.guide",
+      nodeIdPlaceholder: "node.hero.spawn",
+      layerPlaceholder: "foreground",
+      stateTagPlaceholder: "idle-down",
+      sourcePathPlaceholder: "/assets/images/custom.png",
+      dialogueNpcIdPlaceholder: "teaMonk",
+      operationsJsonPlaceholder:
+        '[{"op":"replace","path":"/dialogues/zh-CN/npc.guide.greet","value":"..."}]',
       assetStatusApproved: "已批准",
       assetStatusDraft: "草稿",
       generationPromptPlaceholder: "生成一幅秋日河畔商人的暖色调肖像。",
@@ -1226,6 +1572,32 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       createAutomationRun: "加入自动化队列",
       approveAction: "批准",
       cancelAction: "取消",
+      jobStatusQueued: "已排队",
+      jobStatusRunning: "运行中",
+      jobStatusBlockedForApproval: "等待批准",
+      jobStatusSucceeded: "已成功",
+      jobStatusFailed: "失败",
+      jobStatusCanceled: "已取消",
+      longRunningStatusProcessing: "处理中",
+      generationStatusDraftReadyForReview: "草稿已准备好供审查",
+      generatedLabelPrefix: "已生成",
+      reviewLabelPrefix: "审查",
+      generatedArtifactSummaryFromPrompt: "已根据构建器提示生成草稿",
+      generatedArtifactSummaryTargetPrefix: "已为以下目标生成草稿：",
+      automationEvidenceLabel: "自动化证据",
+      automationStepBrowser: "浏览器",
+      automationStepHttp: "HTTP",
+      automationStepBuilder: "构建器",
+      automationStepAttachFile: "附加文件",
+      automationSummaryCaptureReviewContext: "采集构建器审查上下文",
+      automationSummaryPrepareDraftPlan: "准备草稿变更方案",
+      automationSummaryAttachReviewEvidence: "将证据附加到草稿审查",
+      automationArtifactSummaryCapturedReviewEvidence: "已采集构建器审查证据",
+      automationStatusQueuedForProcessing: "已加入处理队列",
+      automationStatusApprovedForApply: "已批准应用",
+      automationStatusCanceledByReview: "已在审查中取消",
+      automationStatusPlanReadyForReview: "自动化方案已准备好供审查",
+      automationStatusCapturingFallbackEvidence: "正在采集回退审查证据",
       assistantReviewTitle: "审查 AI 修改",
       assistantReviewDescription: "先生成结构化操作，再对当前项目预览，仅在有效时应用。",
       previewChanges: "预览修改",
@@ -1259,19 +1631,19 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         "Three.js 目前只承担精灵场景下方的氛围与光照效果，并没有 3D 场景图、资源管线或对应的构建流程。",
       capabilitySpritePipelineTitle: "精灵资源管线",
       capabilitySpritePipelineDescription:
-        "当前基线资源已有挂载好的精灵清单，但导入、上传、生成与精灵包管理还没有接入构建器。",
+        "构建器现在已经支持上传、手动登记以及可审查的生成产物，但精灵表解析、打包与可复用资源管理仍未完整实现。",
       capabilityAnimationPipelineTitle: "动画管线",
       capabilityAnimationPipelineDescription:
         "运行时已经支持动画清单，但没有动画时间轴、状态编辑器、重定向流程或新动作生成能力。",
       capabilityMechanicsTitle: "机制系统",
       capabilityMechanicsDescription:
-        "移动、碰撞与 NPC 交互已经存在，但任务、战斗、背包、过场与触发式机制仍未建成。",
+        "移动、碰撞、任务、对话图与触发器求值已经接通，但战斗、背包、过场与更丰富的事件编排仍只是部分实现。",
       capabilityAiAuthoringTitle: "AI 创作",
       capabilityAiAuthoringDescription:
         "对话、场景描述、资源评审与补丁审查已经接通，但 AI 驱动的资源生成与机制创作目前仍只是部分实现。",
       capabilityAutomationTitle: "自动化 / RPA",
       capabilityAutomationDescription:
-        "构建器尚未接入后台 worker、浏览器自动化执行器或面向生产流程的工具编排系统。",
+        "系统现在已有生命周期托管的后台 worker，并可抓取 Playwright 审查证据，但多步骤工具编排与生产级 RPA 仍只是部分实现。",
       capabilityWebgpuRendererTitle: "WebGPU 渲染器",
       capabilityWebgpuRendererDescription:
         "PixiJS 可在支持 WebGPU 时自动检测并优先使用 WebGPU 进行 2D 渲染，否则无缝回退至 WebGL。",

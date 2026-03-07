@@ -1,4 +1,5 @@
 import { createApp } from "./app.ts";
+import { assertStartupReadiness } from "./bootstrap/preflight.ts";
 import { appConfig } from "./config/environment.ts";
 import { ModelManager } from "./domain/ai/model-manager.ts";
 import { createLogger } from "./lib/logger.ts";
@@ -11,6 +12,7 @@ const bootstrapLogger = createLogger("bootstrap");
  * live request handling on Bun's main server process.
  */
 export const startServer = async (): Promise<void> => {
+  await assertStartupReadiness();
   const app = await createApp();
   app.listen({
     hostname: appConfig.host,
@@ -21,21 +23,6 @@ export const startServer = async (): Promise<void> => {
     host: appConfig.host,
     port: appConfig.port,
   });
-
-  // #region agent log
-  const serverPort = (app as { server?: { port?: number } }).server?.port;
-  fetch("http://127.0.0.1:7824/ingest/2a1ebe22-3205-47a7-ac66-14b2478b8cbc", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f14b60" },
-    body: JSON.stringify({
-      sessionId: "f14b60",
-      location: "server.ts:startServer",
-      message: "server.listen.completed",
-      data: { host: appConfig.host, port: appConfig.port, serverPort, hypothesisId: "H2,H4" },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
 
   if (!appConfig.ai.warmupOnBoot) {
     return;

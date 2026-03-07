@@ -1,15 +1,14 @@
-import type { Prisma } from "@prisma/client";
 import type { LocaleCode } from "../../config/environment.ts";
 import type {
   AnimationClip,
   AutomationRun,
   BuilderAnimationClipPayload,
+  BuilderArtifactPatch,
   BuilderAsset,
   BuilderAssetPayload,
-  BuilderArtifactPatch,
   BuilderAutomationRunPayload,
-  BuilderDialoguePayload,
   BuilderDialogueGraphPayload,
+  BuilderDialoguePayload,
   BuilderGenerationJobPayload,
   BuilderMutationResult,
   BuilderNpcPayload,
@@ -22,62 +21,21 @@ import type {
   GenerationJob,
   QuestDefinition,
   SceneDefinition,
+  SceneNodeDefinition,
   SceneNpcDefinition,
   TriggerDefinition,
 } from "../../shared/contracts/game.ts";
-import { prisma } from "../../shared/services/db.ts";
 import { safeJsonParse } from "../../shared/utils/safe-json.ts";
+import {
+  type BuilderProjectSnapshot,
+  type BuilderProjectState,
+  type BuilderProjectStateEntry,
+  type BuilderProjectStateMutation,
+  createBuilderProjectStateStore,
+  defaultBuilderProjectId,
+  normalizeBuilderLocale,
+} from "./builder-project-state-store.ts";
 import { executeAutomationRun, executeGenerationJob } from "./creator-worker.ts";
-import { gameTextByLocale } from "../game/data/game-text.ts";
-import { gameScenes, gameSpriteManifests } from "../game/data/sprite-data.ts";
-
-/**
- * Builder-side mutable assets for a single project.
- */
-interface BuilderProjectSnapshot {
-  /** Logical project identifier. */
-  readonly id: string;
-  /** Scene registry by stable scene id. */
-  readonly scenes: Map<string, SceneDefinition>;
-  /** Dialogue registry by locale -> key -> value. */
-  readonly dialogues: Map<LocaleCode, Map<string, string>>;
-  /** Authored asset registry. */
-  readonly assets: Map<string, BuilderAsset>;
-  /** Authored animation clips. */
-  readonly animationClips: Map<string, AnimationClip>;
-  /** Authored dialogue graphs. */
-  readonly dialogueGraphs: Map<string, DialogueGraph>;
-  /** Authored quest definitions. */
-  readonly quests: Map<string, QuestDefinition>;
-  /** Authored trigger definitions. */
-  readonly triggers: Map<string, TriggerDefinition>;
-  /** Authored flag definitions. */
-  readonly flags: Map<string, GameFlagDefinition>;
-  /** Queued and completed generation jobs. */
-  readonly generationJobs: Map<string, GenerationJob>;
-  /** Reviewable generated artifacts. */
-  readonly artifacts: Map<string, GenerationArtifact>;
-  /** Approval-gated automation runs. */
-  readonly automationRuns: Map<string, AutomationRun>;
-  /** Project publish status. */
-  readonly published: boolean;
-  /** Creation owner marker for audit trail compatibility. */
-  readonly createdBy: string;
-  /** Last update owner marker. */
-  readonly updatedBy: string;
-  /** Immutable source provenance marker. */
-  readonly source: string;
-  /** Stable project checksum. */
-  readonly checksum: string;
-  /** Last mutation version. */
-  readonly version: number;
-  /** Optional resume timestamp marker (ms since epoch). */
-  readonly lastUpdatedAtMs: number;
-  /** Latest immutable release version published from this project. */
-  readonly latestReleaseVersion: number;
-  /** Currently published release version, if any. */
-  readonly publishedReleaseVersion: number | null;
-}
 
 /**
  * Result wrapper for write operations.
@@ -138,6 +96,180 @@ export interface BuilderPatchApplyResult {
 }
 
 /**
+ * Form-style payload used to create or update one scene node.
+ */
+export interface BuilderSceneNodePayload {
+  /** Stable scene identifier. */
+  readonly sceneId: string;
+  /** Stable node identifier. */
+  readonly id: string;
+  /** Optional explicit node-mode override for mixed editors. */
+  readonly nodeKind?: string;
+  /** Optional node-type update. */
+  readonly nodeType?: string;
+  /** Optional attached asset identifier. */
+  readonly assetId?: string;
+  /** Optional attached animation clip identifier. */
+  readonly animationClipId?: string;
+  /** Optional layer key for 2D nodes. */
+  readonly layer?: string;
+  /** Optional X position update. */
+  readonly positionX?: string;
+  /** Optional Y position update. */
+  readonly positionY?: string;
+  /** Optional Z position update. */
+  readonly positionZ?: string;
+  /** Optional X rotation update. */
+  readonly rotationX?: string;
+  /** Optional Y rotation update. */
+  readonly rotationY?: string;
+  /** Optional Z rotation update. */
+  readonly rotationZ?: string;
+  /** Optional X scale update. */
+  readonly scaleX?: string;
+  /** Optional Y scale update. */
+  readonly scaleY?: string;
+  /** Optional Z scale update. */
+  readonly scaleZ?: string;
+  /** Optional width update for 2D nodes. */
+  readonly sizeWidth?: string;
+  /** Optional height update for 2D nodes. */
+  readonly sizeHeight?: string;
+}
+
+/**
+ * Form-style payload used to update one authored scene without replacing nested state.
+ */
+export interface BuilderSceneFormPayload {
+  /** Stable scene identifier. */
+  readonly sceneId: string;
+  /** Optional localized title key. */
+  readonly titleKey?: string;
+  /** Optional background asset path. */
+  readonly background?: string;
+  /** Optional scene mode override. */
+  readonly sceneMode?: string;
+  /** Optional geometry width update. */
+  readonly geometryWidth?: string;
+  /** Optional geometry height update. */
+  readonly geometryHeight?: string;
+  /** Optional spawn X update. */
+  readonly spawnX?: string;
+  /** Optional spawn Y update. */
+  readonly spawnY?: string;
+}
+
+/**
+ * Form-style payload used to update one authored NPC without replacing unspecified fields.
+ */
+export interface BuilderNpcFormPayload {
+  /** Stable owning scene identifier. */
+  readonly sceneId: string;
+  /** Stable NPC identifier. */
+  readonly npcId: string;
+  /** Optional label-key update. */
+  readonly labelKey?: string;
+  /** Optional X coordinate update. */
+  readonly x?: string;
+  /** Optional Y coordinate update. */
+  readonly y?: string;
+  /** Optional interaction radius update. */
+  readonly interactRadius?: string;
+  /** Optional comma-separated dialogue key list. */
+  readonly dialogueKeys?: string;
+  /** Optional wander radius update. */
+  readonly wanderRadius?: string;
+  /** Optional wander speed update. */
+  readonly wanderSpeed?: string;
+  /** Optional minimum idle pause update. */
+  readonly idlePauseMinMs?: string;
+  /** Optional maximum idle pause update. */
+  readonly idlePauseMaxMs?: string;
+  /** Optional greet toggle update. */
+  readonly greetOnApproach?: string;
+  /** Optional greeting line update. */
+  readonly greetLineKey?: string;
+}
+
+/**
+ * Form-style payload used to update one quest without clobbering authored step graphs.
+ */
+export interface BuilderQuestFormPayload {
+  /** Stable quest identifier. */
+  readonly questId: string;
+  /** Updated quest title. */
+  readonly title: string;
+  /** Updated quest description. */
+  readonly description: string;
+  /** Trigger for the editable primary step. */
+  readonly triggerId: string;
+}
+
+/**
+ * Form-style payload used to queue a generation job with canonical defaults.
+ */
+export interface BuilderGenerationJobCreatePayload {
+  /** Requested output kind. */
+  readonly kind: GenerationJob["kind"];
+  /** User-authored generation prompt. */
+  readonly prompt: string;
+  /** Optional target asset/entity identifier. */
+  readonly targetId?: string;
+}
+
+/**
+ * Form-style payload used to queue an automation run with canonical steps.
+ */
+export interface BuilderAutomationRunCreatePayload {
+  /** Human-readable automation goal. */
+  readonly goal: string;
+}
+
+/**
+ * Form-style payload used to create a quest with canonical initial step defaults.
+ */
+export interface BuilderQuestCreatePayload {
+  /** Stable quest identifier. */
+  readonly id: string;
+  /** Initial authored quest title. */
+  readonly title: string;
+  /** Initial authored quest description. */
+  readonly description: string;
+  /** Trigger for the initial authored quest step. */
+  readonly triggerId: string;
+}
+
+/**
+ * Form-style payload used to create a trigger with canonical optional scope fields.
+ */
+export interface BuilderTriggerCreatePayload {
+  /** Stable trigger identifier. */
+  readonly id: string;
+  /** Human-readable trigger label. */
+  readonly label: string;
+  /** Trigger event type. */
+  readonly event: TriggerDefinition["event"];
+  /** Optional scene scope. */
+  readonly sceneId?: string;
+  /** Optional NPC scope. */
+  readonly npcId?: string;
+}
+
+/**
+ * Form-style payload used to create a dialogue graph with canonical root-node defaults.
+ */
+export interface BuilderDialogueGraphCreatePayload {
+  /** Stable dialogue graph identifier. */
+  readonly id: string;
+  /** Human-readable graph title. */
+  readonly title: string;
+  /** Optional owning NPC identifier. */
+  readonly npcId?: string;
+  /** Root authored line key or inline draft line. */
+  readonly line: string;
+}
+
+/**
  * Service contract for builder persistence operations.
  */
 export interface BuilderService {
@@ -154,12 +286,33 @@ export interface BuilderService {
     projectId: string,
     payload: BuilderScenePayload,
   ): Promise<BuilderMutation<SceneDefinition> | null>;
+  /** Applies a partial scene form update without replacing nested authored state. */
+  saveSceneForm(
+    projectId: string,
+    payload: BuilderSceneFormPayload,
+  ): Promise<BuilderMutation<SceneDefinition> | null>;
+  /** Persists or updates one authored scene node without clobbering unspecified fields. */
+  saveSceneNode(
+    projectId: string,
+    payload: BuilderSceneNodePayload,
+  ): Promise<BuilderMutation<SceneDefinition> | null>;
+  /** Removes one authored scene node from a scene. */
+  removeSceneNode(
+    projectId: string,
+    sceneId: string,
+    nodeId: string,
+  ): Promise<BuilderMutation<SceneDefinition> | null>;
   /** Removes a scene from a project. */
   removeScene(projectId: string, sceneId: string): Promise<BuilderMutation<null> | null>;
   /** Persists an NPC payload into a scene. */
   saveNpc(
     projectId: string,
     payload: BuilderNpcPayload,
+  ): Promise<BuilderMutation<SceneNpcDefinition | null> | null>;
+  /** Applies a partial NPC form update without replacing authored AI/dialogue defaults. */
+  saveNpcForm(
+    projectId: string,
+    payload: BuilderNpcFormPayload,
   ): Promise<BuilderMutation<SceneNpcDefinition | null> | null>;
   /** Removes an NPC from a project. */
   removeNpc(
@@ -191,7 +344,10 @@ export interface BuilderService {
   /** Lists authored assets. */
   listAssets(projectId: string): Promise<readonly BuilderAsset[]>;
   /** Persists authored asset metadata. */
-  saveAsset(projectId: string, payload: BuilderAssetPayload): Promise<BuilderMutation<BuilderAsset> | null>;
+  saveAsset(
+    projectId: string,
+    payload: BuilderAssetPayload,
+  ): Promise<BuilderMutation<BuilderAsset> | null>;
   /** Removes one asset. */
   removeAsset(projectId: string, assetId: string): Promise<BuilderMutation<null> | null>;
   /** Lists authored animation clips. */
@@ -210,12 +366,30 @@ export interface BuilderService {
     projectId: string,
     payload: BuilderDialogueGraphPayload,
   ): Promise<BuilderMutation<DialogueGraph> | null>;
+  /** Creates a dialogue graph using canonical domain-owned root-node defaults. */
+  createDialogueGraph(
+    projectId: string,
+    payload: BuilderDialogueGraphCreatePayload,
+  ): Promise<BuilderMutation<DialogueGraph> | null>;
   /** Removes a dialogue graph. */
   removeDialogueGraph(projectId: string, graphId: string): Promise<BuilderMutation<null> | null>;
   /** Lists authored quests. */
   listQuests(projectId: string): Promise<readonly QuestDefinition[]>;
   /** Persists a quest. */
-  saveQuest(projectId: string, payload: BuilderQuestPayload): Promise<BuilderMutation<QuestDefinition> | null>;
+  saveQuest(
+    projectId: string,
+    payload: BuilderQuestPayload,
+  ): Promise<BuilderMutation<QuestDefinition> | null>;
+  /** Creates a quest using canonical domain-owned initial-step defaults. */
+  createQuest(
+    projectId: string,
+    payload: BuilderQuestCreatePayload,
+  ): Promise<BuilderMutation<QuestDefinition> | null>;
+  /** Applies a partial quest form update without replacing authored branching steps. */
+  saveQuestForm(
+    projectId: string,
+    payload: BuilderQuestFormPayload,
+  ): Promise<BuilderMutation<QuestDefinition> | null>;
   /** Removes a quest. */
   removeQuest(projectId: string, questId: string): Promise<BuilderMutation<null> | null>;
   /** Lists authored triggers. */
@@ -224,6 +398,11 @@ export interface BuilderService {
   saveTrigger(
     projectId: string,
     payload: BuilderTriggerPayload,
+  ): Promise<BuilderMutation<TriggerDefinition> | null>;
+  /** Creates a trigger using canonical domain-owned scope defaults. */
+  createTrigger(
+    projectId: string,
+    payload: BuilderTriggerCreatePayload,
   ): Promise<BuilderMutation<TriggerDefinition> | null>;
   /** Removes a trigger. */
   removeTrigger(projectId: string, triggerId: string): Promise<BuilderMutation<null> | null>;
@@ -235,6 +414,11 @@ export interface BuilderService {
   saveGenerationJob(
     projectId: string,
     payload: BuilderGenerationJobPayload,
+  ): Promise<BuilderMutation<GenerationJob> | null>;
+  /** Queues a generation job using canonical domain-owned defaults. */
+  createGenerationJob(
+    projectId: string,
+    payload: BuilderGenerationJobCreatePayload,
   ): Promise<BuilderMutation<GenerationJob> | null>;
   /** Updates a generation job review status. */
   approveGenerationJob(
@@ -250,6 +434,11 @@ export interface BuilderService {
   saveAutomationRun(
     projectId: string,
     payload: BuilderAutomationRunPayload,
+  ): Promise<BuilderMutation<AutomationRun> | null>;
+  /** Queues an automation run using canonical domain-owned workflow steps. */
+  createAutomationRun(
+    projectId: string,
+    payload: BuilderAutomationRunCreatePayload,
   ): Promise<BuilderMutation<AutomationRun> | null>;
   /** Updates automation review status. */
   approveAutomationRun(
@@ -272,366 +461,155 @@ export interface BuilderService {
   ): Promise<BuilderPatchApplyResult | null>;
 }
 
-interface BuilderProjectState {
-  readonly scenes: Record<string, SceneDefinition>;
-  readonly dialogues: Record<LocaleCode, Record<string, string>>;
-  readonly assets: Record<string, BuilderAsset>;
-  readonly animationClips: Record<string, AnimationClip>;
-  readonly dialogueGraphs: Record<string, DialogueGraph>;
-  readonly quests: Record<string, QuestDefinition>;
-  readonly triggers: Record<string, TriggerDefinition>;
-  readonly flags: Record<string, GameFlagDefinition>;
-  readonly generationJobs: Record<string, GenerationJob>;
-  readonly artifacts: Record<string, GenerationArtifact>;
-  readonly automationRuns: Record<string, AutomationRun>;
-}
-
-type BuilderProjectRow = {
-  readonly id: string;
-  readonly state: Prisma.JsonValue;
-  readonly checksum: string;
-  readonly version: number;
-  readonly createdBy: string;
-  readonly updatedBy: string;
-  readonly source: string;
-  readonly latestReleaseVersion: number;
-  readonly publishedReleaseVersion: number | null;
-  readonly updatedAt: Date;
-};
-
-const DEFAULT_PROJECT_ID = "default";
-const SUPPORTED_LOCALES = ["en-US", "zh-CN"] as const satisfies readonly LocaleCode[];
-const BASELINE_CREATED_AT_MS = 0;
-
-/**
- * Returns a deterministic checksum for JSON payloads.
- */
-const checksumOf = (value: unknown): string => {
-  const payload = JSON.stringify(value);
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < payload.length; index += 1) {
-    hash ^= payload.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-  return `checksum-${hash.toString(16).padStart(8, "0")}`;
-};
-
-/**
- * Type-safe record narrowing helper.
- */
-const asRecord = (value: unknown): Record<string, unknown> =>
-  value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-
-const cloneRecord = <T>(input: Record<string, T>): Record<string, T> =>
-  structuredClone(input) as Record<string, T>;
-
-const buildBaselineAssets = (): Record<string, BuilderAsset> => {
-  const backgroundAssets = Object.values(gameScenes).map((scene) => ({
-    id: `asset.background.${scene.id}`,
-    kind: "background" as const,
-    label: scene.id,
-    sceneMode: scene.sceneMode,
-    source: scene.background,
-    tags: ["baseline", scene.id],
-    variants: [
-      {
-        id: `variant.background.${scene.id}.runtime`,
-        format: "png",
-        source: scene.background,
-        usage: "runtime",
-      },
-    ],
-    approved: true,
-    createdAtMs: BASELINE_CREATED_AT_MS,
-    updatedAtMs: BASELINE_CREATED_AT_MS,
-  }));
-
-  const spriteAssets = Object.entries(gameSpriteManifests).map(([characterKey, manifest]) => ({
-    id: `asset.sprite.${characterKey}`,
-    kind: "sprite-sheet" as const,
-    label: characterKey,
-    sceneMode: "2d" as const,
-    source: manifest.sheet,
-    tags: ["baseline", "sprite", characterKey],
-    variants: [
-      {
-        id: `variant.sprite.${characterKey}.runtime`,
-        format: "png",
-        source: manifest.sheet,
-        usage: "runtime",
-      },
-    ],
-    approved: true,
-    createdAtMs: BASELINE_CREATED_AT_MS,
-    updatedAtMs: BASELINE_CREATED_AT_MS,
-  }));
-
-  return Object.fromEntries(
-    [...backgroundAssets, ...spriteAssets].map((asset) => [asset.id, asset]),
-  ) as Record<string, BuilderAsset>;
-};
-
-const buildBaselineAnimationClips = (): Record<string, AnimationClip> =>
-  Object.fromEntries(
-    Object.entries(gameSpriteManifests).flatMap(([characterKey, manifest]) =>
-      Object.entries(manifest.animations).map(([animationKey, animation]) => {
-        const clip: AnimationClip = {
-          id: `clip.${characterKey}.${animationKey}`,
-          assetId: `asset.sprite.${characterKey}`,
-          label: `${characterKey}:${animationKey}`,
-          sceneMode: "2d",
-          stateTag: animationKey,
-          playbackFps: animation.speed,
-          startFrame: animation.startCol,
-          frameCount: animation.frames,
-          loop: true,
-          direction: animationKey.endsWith("-up")
-            ? "up"
-            : animationKey.endsWith("-down")
-              ? "down"
-              : animationKey.endsWith("-left")
-                ? "left"
-                : animationKey.endsWith("-right")
-                  ? "right"
-                  : undefined,
-          createdAtMs: BASELINE_CREATED_AT_MS,
-          updatedAtMs: BASELINE_CREATED_AT_MS,
-        };
-        return [clip.id, clip];
-      }),
-    ),
-  ) as Record<string, AnimationClip>;
-
-const buildBaselineDialogueGraphs = (): Record<string, DialogueGraph> => ({
-  "graph.teaMonk.intro": {
-    id: "graph.teaMonk.intro",
-    title: "Tea Monk Intro",
-    npcId: "teaMonk",
-    rootNodeId: "root",
-    nodes: [
-      {
-        id: "root",
-        line: "npc.teaMonk.greet",
-        edges: [
-          {
-            to: "wisdom",
-            advanceQuestStepId: "step.meet-teaMonk",
-          },
-        ],
-      },
-      {
-        id: "wisdom",
-        line: "npc.teaMonk.lines.wood-cycle",
-        edges: [],
-      },
-    ],
-    createdAtMs: BASELINE_CREATED_AT_MS,
-    updatedAtMs: BASELINE_CREATED_AT_MS,
-  },
-});
-
-const buildBaselineFlags = (): Record<string, GameFlagDefinition> => ({
-  teaHouseVisited: {
-    key: "teaHouseVisited",
-    label: "Tea house visited",
-    initialValue: false,
-  },
-  teaMonkMet: {
-    key: "teaMonkMet",
-    label: "Tea monk met",
-    initialValue: false,
-  },
-});
-
-const buildBaselineTriggers = (): Record<string, TriggerDefinition> => ({
-  "trigger.enter-teaHouse": {
-    id: "trigger.enter-teaHouse",
-    label: "Enter tea house",
-    event: "scene-enter",
-    sceneId: "teaHouse",
-    setFlags: {
-      teaHouseVisited: true,
-    },
-  },
-  "trigger.meet-teaMonk": {
-    id: "trigger.meet-teaMonk",
-    label: "Meet the tea monk",
-    event: "npc-interact",
-    sceneId: "teaHouse",
-    npcId: "teaMonk",
-    setFlags: {
-      teaMonkMet: true,
-    },
-    questId: "quest.teaHouse.welcome",
-    questStepId: "step.meet-teaMonk",
-  },
-});
-
-const buildBaselineQuests = (): Record<string, QuestDefinition> => ({
-  "quest.teaHouse.welcome": {
-    id: "quest.teaHouse.welcome",
-    title: "Meet the Tea Monk",
-    description: "Find the tea monk and start the authored introduction flow.",
-    steps: [
-      {
-        id: "step.meet-teaMonk",
-        title: "Speak with the tea monk",
-        description: "Approach the tea monk and interact to unlock the first authored flag.",
-        triggerId: "trigger.meet-teaMonk",
-      },
-    ],
-  },
-});
-
-/**
- * Creates baseline builder state from the canonical game assets.
- */
-const createBaselineState = (): BuilderProjectState => {
-  const scenes = Object.fromEntries(
-    Object.entries(gameScenes).map(([sceneId, scene]) => [sceneId, structuredClone(scene)]),
-  ) as Record<string, SceneDefinition>;
-  const dialogues: BuilderProjectState["dialogues"] = {
-    "en-US": Object.fromEntries(Object.entries(gameTextByLocale["en-US"].npcs)),
-    "zh-CN": Object.fromEntries(Object.entries(gameTextByLocale["zh-CN"].npcs)),
-  };
-  return {
-    scenes,
-    dialogues,
-    assets: buildBaselineAssets(),
-    animationClips: buildBaselineAnimationClips(),
-    dialogueGraphs: buildBaselineDialogueGraphs(),
-    quests: buildBaselineQuests(),
-    triggers: buildBaselineTriggers(),
-    flags: buildBaselineFlags(),
-    generationJobs: {},
-    artifacts: {},
-    automationRuns: {},
-  };
-};
-
-/**
- * Converts BuilderProjectState to Prisma JSON payload.
- */
-const toInputState = (state: BuilderProjectState): Prisma.InputJsonValue =>
-  JSON.parse(JSON.stringify(state)) as Prisma.InputJsonValue;
-
-/**
- * Parses persisted JSON into normalized BuilderProjectState.
- */
-const parseProjectState = (state: Prisma.JsonValue): BuilderProjectState => {
-  const parsed = safeJsonParse<unknown>(JSON.stringify(state), {});
-  const record = asRecord(parsed);
-  const scenesRecord = asRecord(record.scenes);
-  const dialoguesRecord = asRecord(record.dialogues);
-  const assetsRecord = asRecord(record.assets);
-  const animationClipsRecord = asRecord(record.animationClips);
-  const dialogueGraphsRecord = asRecord(record.dialogueGraphs);
-  const questsRecord = asRecord(record.quests);
-  const triggersRecord = asRecord(record.triggers);
-  const flagsRecord = asRecord(record.flags);
-  const generationJobsRecord = asRecord(record.generationJobs);
-  const artifactsRecord = asRecord(record.artifacts);
-  const automationRunsRecord = asRecord(record.automationRuns);
-
-  const scenes = Object.fromEntries(
-    Object.entries(scenesRecord)
-      .filter((entry): entry is [string, SceneDefinition] => entry[0].length > 0)
-      .map(([sceneId, scene]) => [sceneId, structuredClone(scene as SceneDefinition)]),
-  ) as Record<string, SceneDefinition>;
-
-  const dialogues: BuilderProjectState["dialogues"] = {
-    "en-US": {},
-    "zh-CN": {},
-  };
-  for (const locale of SUPPORTED_LOCALES) {
-    const localeCatalog = asRecord(dialoguesRecord[locale]);
-    dialogues[locale] = Object.fromEntries(
-      Object.entries(localeCatalog).filter(
-        (entry): entry is [string, string] => entry[0].length > 0 && typeof entry[1] === "string",
-      ),
-    );
-  }
-
-  if (Object.keys(scenes).length === 0) {
-    const baseline = createBaselineState();
-    return baseline;
-  }
-
-  return {
-    scenes,
-    dialogues,
-    assets: cloneRecord(assetsRecord as Record<string, BuilderAsset>),
-    animationClips: cloneRecord(animationClipsRecord as Record<string, AnimationClip>),
-    dialogueGraphs: cloneRecord(dialogueGraphsRecord as Record<string, DialogueGraph>),
-    quests: cloneRecord(questsRecord as Record<string, QuestDefinition>),
-    triggers: cloneRecord(triggersRecord as Record<string, TriggerDefinition>),
-    flags: cloneRecord(flagsRecord as Record<string, GameFlagDefinition>),
-    generationJobs: cloneRecord(generationJobsRecord as Record<string, GenerationJob>),
-    artifacts: cloneRecord(artifactsRecord as Record<string, GenerationArtifact>),
-    automationRuns: cloneRecord(automationRunsRecord as Record<string, AutomationRun>),
-  };
-};
-
-/**
- * Converts normalized state to map-based snapshot payload.
- */
-const toProjectSnapshot = (
-  row: BuilderProjectRow,
-  state: BuilderProjectState,
-  published: boolean,
-): BuilderProjectSnapshot => ({
-  id: row.id,
-  scenes: new Map(
-    Object.entries(state.scenes).map(([sceneId, scene]) => [sceneId, structuredClone(scene)]),
-  ),
-  dialogues: new Map(
-    SUPPORTED_LOCALES.map((locale) => [locale, new Map(Object.entries(state.dialogues[locale]))]),
-  ),
-  assets: new Map(Object.entries(state.assets).map(([id, asset]) => [id, structuredClone(asset)])),
-  animationClips: new Map(
-    Object.entries(state.animationClips).map(([id, clip]) => [id, structuredClone(clip)]),
-  ),
-  dialogueGraphs: new Map(
-    Object.entries(state.dialogueGraphs).map(([id, graph]) => [id, structuredClone(graph)]),
-  ),
-  quests: new Map(Object.entries(state.quests).map(([id, quest]) => [id, structuredClone(quest)])),
-  triggers: new Map(
-    Object.entries(state.triggers).map(([id, trigger]) => [id, structuredClone(trigger)]),
-  ),
-  flags: new Map(Object.entries(state.flags).map(([id, flag]) => [id, structuredClone(flag)])),
-  generationJobs: new Map(
-    Object.entries(state.generationJobs).map(([id, job]) => [id, structuredClone(job)]),
-  ),
-  artifacts: new Map(
-    Object.entries(state.artifacts).map(([id, artifact]) => [id, structuredClone(artifact)]),
-  ),
-  automationRuns: new Map(
-    Object.entries(state.automationRuns).map(([id, run]) => [id, structuredClone(run)]),
-  ),
-  published,
-  createdBy: row.createdBy,
-  updatedBy: row.updatedBy,
-  source: row.source,
-  checksum: row.checksum,
-  version: row.version,
-  lastUpdatedAtMs: row.updatedAt.getTime(),
-  latestReleaseVersion: row.latestReleaseVersion,
-  publishedReleaseVersion: row.publishedReleaseVersion,
-});
-
-/**
- * Converts optional locale strings to canonical supported locales.
- */
-const normalizeLocale = (value: string | undefined): LocaleCode =>
-  value === "zh-CN" || value === "en-US" ? value : "en-US";
-
 /**
  * Clones scene definitions while preserving compile-time shape.
  */
 const cloneScene = (scene: SceneDefinition): SceneDefinition =>
   structuredClone(scene) as SceneDefinition;
+
+const parseBuilderInteger = (value: string | undefined, fallback: number): number => {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const parseNodeFloat = (value: string | undefined, fallback: number): number => {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const parseBuilderBoolean = (value: string | undefined, fallback: boolean): boolean => {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  if (value === "true" || value === "on" || value === "1") {
+    return true;
+  }
+
+  if (value === "false" || value === "off" || value === "0") {
+    return false;
+  }
+
+  return fallback;
+};
+
+const trimOptionalField = (value: string | undefined, fallback?: string): string | undefined => {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const trimOrFallback = (value: string | undefined, fallback: string): string => {
+  const trimmed = trimOptionalField(value);
+  return trimmed ?? fallback;
+};
+
+const isSceneNode3d = (
+  node: SceneNodeDefinition | undefined,
+): node is Extract<SceneNodeDefinition, { readonly rotation: { readonly x: number } }> =>
+  Boolean(node && "rotation" in node && "scale" in node);
+
+const buildSceneNodeDefinition = (
+  scene: SceneDefinition,
+  payload: BuilderSceneNodePayload,
+  existingNode: SceneNodeDefinition | undefined,
+): SceneNodeDefinition | null => {
+  const nodeId = payload.id.trim();
+  if (nodeId.length === 0) {
+    return null;
+  }
+
+  const use3d =
+    payload.nodeKind === "3d" || scene.sceneMode === "3d" || isSceneNode3d(existingNode);
+
+  if (use3d) {
+    const current = isSceneNode3d(existingNode)
+      ? existingNode
+      : {
+          position: { x: 0, y: 0, z: 0 },
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+        };
+    const nextNodeType =
+      payload.nodeType === "light" ||
+      payload.nodeType === "camera" ||
+      payload.nodeType === "spawn" ||
+      payload.nodeType === "trigger" ||
+      payload.nodeType === "model"
+        ? payload.nodeType
+        : isSceneNode3d(existingNode)
+          ? existingNode.nodeType
+          : "model";
+
+    return {
+      id: nodeId,
+      nodeType: nextNodeType,
+      assetId: trimOptionalField(payload.assetId, existingNode?.assetId),
+      animationClipId: trimOptionalField(payload.animationClipId, existingNode?.animationClipId),
+      position: {
+        x: parseNodeFloat(payload.positionX, current.position.x),
+        y: parseNodeFloat(payload.positionY, current.position.y),
+        z: parseNodeFloat(payload.positionZ, current.position.z),
+      },
+      rotation: {
+        x: parseNodeFloat(payload.rotationX, current.rotation.x),
+        y: parseNodeFloat(payload.rotationY, current.rotation.y),
+        z: parseNodeFloat(payload.rotationZ, current.rotation.z),
+      },
+      scale: {
+        x: Math.max(0.1, parseNodeFloat(payload.scaleX, current.scale.x)),
+        y: Math.max(0.1, parseNodeFloat(payload.scaleY, current.scale.y)),
+        z: Math.max(0.1, parseNodeFloat(payload.scaleZ, current.scale.z)),
+      },
+    };
+  }
+
+  const current =
+    existingNode && !isSceneNode3d(existingNode)
+      ? existingNode
+      : {
+          position: { x: 0, y: 0 },
+          size: { width: 64, height: 64 },
+          layer: "foreground",
+        };
+  const nextNodeType =
+    payload.nodeType === "tile" ||
+    payload.nodeType === "spawn" ||
+    payload.nodeType === "trigger" ||
+    payload.nodeType === "camera" ||
+    payload.nodeType === "sprite"
+      ? payload.nodeType
+      : existingNode && !isSceneNode3d(existingNode)
+        ? existingNode.nodeType
+        : "sprite";
+
+  return {
+    id: nodeId,
+    nodeType: nextNodeType,
+    assetId: trimOptionalField(payload.assetId, existingNode?.assetId),
+    animationClipId: trimOptionalField(payload.animationClipId, existingNode?.animationClipId),
+    position: {
+      x: parseNodeFloat(payload.positionX, current.position.x),
+      y: parseNodeFloat(payload.positionY, current.position.y),
+    },
+    size: {
+      width: Math.max(1, parseNodeFloat(payload.sizeWidth, current.size.width)),
+      height: Math.max(1, parseNodeFloat(payload.sizeHeight, current.size.height)),
+    },
+    layer: trimOptionalField(payload.layer, current.layer) ?? current.layer,
+  };
+};
 
 /**
  * Converts a scene mutation into a stable mutation result payload.
@@ -778,7 +756,7 @@ const parsePatchTarget = (path: string): PatchTarget | null => {
     .map((part) => decodeURIComponent(part));
 
   if (parts[0] === "dialogues" && parts.length >= 3) {
-    const locale = normalizeLocale(parts[1]);
+    const locale = normalizeBuilderLocale(parts[1]);
     const key = parts.slice(2).join("/");
     if (key.length === 0) {
       return null;
@@ -798,125 +776,28 @@ const parsePatchTarget = (path: string): PatchTarget | null => {
  * Prisma-backed builder store with immutable release snapshots.
  */
 class PrismaBuilderService implements BuilderService {
-  private readonly initPromise = this.ensureDefaultProject();
+  private readonly stateStore = createBuilderProjectStateStore();
 
-  private async ensureDefaultProject(): Promise<void> {
-    const existing = await prisma.builderProject.findUnique({
-      where: { id: DEFAULT_PROJECT_ID },
-      select: { id: true },
-    });
-    if (existing) {
-      return;
-    }
-
-    const baseline = createBaselineState();
-    await prisma.builderProject.create({
-      data: {
-        id: DEFAULT_PROJECT_ID,
-        state: toInputState(baseline),
-        checksum: checksumOf(baseline),
-      },
-    });
+  private async readProjectEntry(projectId: string): Promise<BuilderProjectStateEntry | null> {
+    return this.stateStore.readProjectEntry(projectId);
   }
 
-  private async readProjectRow(projectId: string): Promise<BuilderProjectRow | null> {
-    await this.initPromise;
-    if (projectId.trim().length === 0) {
-      return null;
-    }
-
-    return prisma.builderProject.findUnique({
-      where: { id: projectId },
-      select: {
-        id: true,
-        state: true,
-        checksum: true,
-        version: true,
-        createdBy: true,
-        updatedBy: true,
-        source: true,
-        latestReleaseVersion: true,
-        publishedReleaseVersion: true,
-        updatedAt: true,
-      },
-    });
-  }
-
-  private async writeProjectState(
-    row: BuilderProjectRow,
-    state: BuilderProjectState,
+  private async mutateProject<T>(
+    projectId: string,
     updatedBy: string,
-  ): Promise<BuilderProjectRow | null> {
-    const checksum = checksumOf(state);
-    const updated = await prisma.builderProject.updateMany({
-      where: { id: row.id, version: row.version },
-      data: {
-        state: toInputState(state),
-        checksum,
-        updatedBy,
-        version: {
-          increment: 1,
-        },
-      },
-    });
-    if (updated.count === 0) {
-      return null;
-    }
-
-    return this.readProjectRow(row.id);
+    mutate: (
+      state: BuilderProjectState,
+    ) => { readonly ok: true; readonly payload: T } | { readonly ok: false },
+  ): Promise<BuilderProjectStateMutation<T> | null> {
+    return this.stateStore.updateProject(projectId, updatedBy, mutate);
   }
 
   public async createProject(projectId: string): Promise<BuilderProjectSnapshot | null> {
-    await this.initPromise;
-    const sanitized = projectId.trim();
-    if (sanitized.length === 0) {
-      return null;
-    }
-
-    const existing = await this.readProjectRow(sanitized);
-    if (existing) {
-      return toProjectSnapshot(
-        existing,
-        parseProjectState(existing.state),
-        existing.publishedReleaseVersion !== null,
-      );
-    }
-
-    const baseline = createBaselineState();
-    const created = await prisma.builderProject.create({
-      data: {
-        id: sanitized,
-        state: toInputState(baseline),
-        checksum: checksumOf(baseline),
-      },
-      select: {
-        id: true,
-        state: true,
-        checksum: true,
-        version: true,
-        createdBy: true,
-        updatedBy: true,
-        source: true,
-        latestReleaseVersion: true,
-        publishedReleaseVersion: true,
-        updatedAt: true,
-      },
-    });
-
-    return toProjectSnapshot(created, baseline, false);
+    return this.stateStore.createProject(projectId);
   }
 
   public async getProject(projectId: string): Promise<BuilderProjectSnapshot | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
-      return null;
-    }
-
-    return toProjectSnapshot(
-      row,
-      parseProjectState(row.state),
-      row.publishedReleaseVersion !== null,
-    );
+    return this.stateStore.readProjectSnapshot(projectId);
   }
 
   public async peekProject(projectId: string): Promise<BuilderProjectSnapshot | null> {
@@ -924,52 +805,182 @@ class PrismaBuilderService implements BuilderService {
   }
 
   public async getPublishedProject(projectId: string): Promise<BuilderProjectSnapshot | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row || row.publishedReleaseVersion === null) {
-      return null;
-    }
-
-    const release = await prisma.builderProjectRelease.findUnique({
-      where: {
-        projectId_releaseVersion: {
-          projectId: row.id,
-          releaseVersion: row.publishedReleaseVersion,
-        },
-      },
-      select: {
-        state: true,
-      },
-    });
-    if (!release) {
-      return null;
-    }
-
-    const publishedState = parseProjectState(release.state);
-    return toProjectSnapshot(row, publishedState, true);
+    return this.stateStore.readPublishedProjectSnapshot(projectId);
   }
 
   public async saveScene(
     projectId: string,
     payload: BuilderScenePayload,
   ): Promise<BuilderMutation<SceneDefinition> | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
-      return null;
-    }
-
-    const state = parseProjectState(row.state);
-    const exists = Object.hasOwn(state.scenes, payload.id);
-    state.scenes[payload.id] = cloneScene(payload.scene);
-
-    const saved = await this.writeProjectState(row, state, "builder-editor");
-    if (!saved) {
+    const mutation = await this.mutateProject(projectId, "builder-editor", (state) => {
+      const action: BuilderMutationResult["action"] = Object.hasOwn(state.scenes, payload.id)
+        ? "updated"
+        : "created";
+      state.scenes[payload.id] = cloneScene(payload.scene);
+      return {
+        ok: true,
+        payload: {
+          action,
+          scene: cloneScene(state.scenes[payload.id] as SceneDefinition),
+        },
+      };
+    });
+    if (!mutation) {
       return null;
     }
 
     return {
-      result: sceneMutationResult(projectId, payload.id, exists ? "updated" : "created"),
-      payload: cloneScene(state.scenes[payload.id] as SceneDefinition),
-      checksum: saved.checksum,
+      result: sceneMutationResult(projectId, payload.id, mutation.payload.action),
+      payload: mutation.payload.scene,
+      checksum: mutation.entry.row.checksum,
+    };
+  }
+
+  public async saveSceneForm(
+    projectId: string,
+    payload: BuilderSceneFormPayload,
+  ): Promise<BuilderMutation<SceneDefinition> | null> {
+    const mutation = await this.mutateProject<SceneDefinition>(
+      projectId,
+      "builder-editor",
+      (state) => {
+        const current = state.scenes[payload.sceneId];
+        if (!current) {
+          return { ok: false };
+        }
+
+        const updatedScene: SceneDefinition = {
+          ...current,
+          id: payload.sceneId,
+          titleKey: trimOrFallback(payload.titleKey, current.titleKey),
+          background: trimOrFallback(payload.background, current.background),
+          sceneMode:
+            payload.sceneMode === "3d"
+              ? "3d"
+              : payload.sceneMode === "2d"
+                ? "2d"
+                : current.sceneMode,
+          geometry: {
+            width: Math.max(1, parseBuilderInteger(payload.geometryWidth, current.geometry.width)),
+            height: Math.max(
+              1,
+              parseBuilderInteger(payload.geometryHeight, current.geometry.height),
+            ),
+          },
+          spawn: {
+            x: parseBuilderInteger(payload.spawnX, current.spawn.x),
+            y: parseBuilderInteger(payload.spawnY, current.spawn.y),
+          },
+        };
+
+        state.scenes[payload.sceneId] = updatedScene;
+
+        return {
+          ok: true,
+          payload: cloneScene(updatedScene),
+        };
+      },
+    );
+    if (!mutation) {
+      return null;
+    }
+
+    return {
+      result: sceneMutationResult(projectId, payload.sceneId, "updated"),
+      payload: mutation.payload,
+      checksum: mutation.entry.row.checksum,
+    };
+  }
+
+  public async saveSceneNode(
+    projectId: string,
+    payload: BuilderSceneNodePayload,
+  ): Promise<BuilderMutation<SceneDefinition> | null> {
+    const mutation = await this.mutateProject<SceneDefinition>(
+      projectId,
+      "builder-editor",
+      (state) => {
+        const scene = state.scenes[payload.sceneId];
+        if (!scene) {
+          return { ok: false };
+        }
+
+        const existingNodes = [...(scene.nodes ?? [])];
+        const existingIndex = existingNodes.findIndex((node) => node.id === payload.id);
+        const existingNode = existingIndex >= 0 ? existingNodes[existingIndex] : undefined;
+        const nextNode = buildSceneNodeDefinition(scene, payload, existingNode);
+        if (!nextNode) {
+          return { ok: false };
+        }
+
+        if (existingIndex >= 0) {
+          existingNodes[existingIndex] = nextNode;
+        } else {
+          existingNodes.push(nextNode);
+        }
+
+        const nextScene: SceneDefinition = {
+          ...scene,
+          nodes: existingNodes,
+        };
+        state.scenes[payload.sceneId] = nextScene;
+
+        return {
+          ok: true,
+          payload: cloneScene(nextScene),
+        };
+      },
+    );
+    if (!mutation) {
+      return null;
+    }
+
+    return {
+      result: sceneMutationResult(projectId, payload.sceneId, "updated"),
+      payload: mutation.payload,
+      checksum: mutation.entry.row.checksum,
+    };
+  }
+
+  public async removeSceneNode(
+    projectId: string,
+    sceneId: string,
+    nodeId: string,
+  ): Promise<BuilderMutation<SceneDefinition> | null> {
+    const mutation = await this.mutateProject<SceneDefinition>(
+      projectId,
+      "builder-editor",
+      (state) => {
+        const scene = state.scenes[sceneId];
+        if (!scene) {
+          return { ok: false };
+        }
+
+        const nextNodes = (scene.nodes ?? []).filter((node) => node.id !== nodeId);
+        if (nextNodes.length === (scene.nodes ?? []).length) {
+          return { ok: false };
+        }
+
+        const nextScene: SceneDefinition = {
+          ...scene,
+          nodes: nextNodes,
+        };
+        state.scenes[sceneId] = nextScene;
+
+        return {
+          ok: true,
+          payload: cloneScene(nextScene),
+        };
+      },
+    );
+    if (!mutation) {
+      return null;
+    }
+
+    return {
+      result: sceneMutationResult(projectId, sceneId, "updated"),
+      payload: mutation.payload,
+      checksum: mutation.entry.row.checksum,
     };
   }
 
@@ -977,26 +988,24 @@ class PrismaBuilderService implements BuilderService {
     projectId: string,
     sceneId: string,
   ): Promise<BuilderMutation<null> | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
-      return null;
-    }
-
-    const state = parseProjectState(row.state);
-    if (!Object.hasOwn(state.scenes, sceneId)) {
-      return null;
-    }
-    delete state.scenes[sceneId];
-
-    const saved = await this.writeProjectState(row, state, "builder-editor");
-    if (!saved) {
+    const mutation = await this.mutateProject(projectId, "builder-editor", (state) => {
+      if (!Object.hasOwn(state.scenes, sceneId)) {
+        return { ok: false };
+      }
+      delete state.scenes[sceneId];
+      return {
+        ok: true,
+        payload: null,
+      };
+    });
+    if (!mutation) {
       return null;
     }
 
     return {
       result: sceneMutationResult(projectId, sceneId, "deleted"),
       payload: null,
-      checksum: saved.checksum,
+      checksum: mutation.entry.row.checksum,
     };
   }
 
@@ -1004,46 +1013,128 @@ class PrismaBuilderService implements BuilderService {
     projectId: string,
     payload: BuilderNpcPayload,
   ): Promise<BuilderMutation<SceneNpcDefinition | null> | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
-      return null;
-    }
+    const mutation = await this.mutateProject<{
+      readonly action: BuilderMutationResult["action"];
+      readonly npc: SceneNpcDefinition;
+    }>(projectId, "builder-editor", (state) => {
+      const scene = state.scenes[payload.sceneId];
+      if (!scene) {
+        return { ok: false };
+      }
 
-    const state = parseProjectState(row.state);
-    const scene = state.scenes[payload.sceneId];
-    if (!scene) {
-      return null;
-    }
+      const existingIndex = scene.npcs.findIndex(
+        (candidate) => candidate.characterKey === payload.npc.characterKey,
+      );
+      const nextNpc = structuredClone(payload.npc) as SceneNpcDefinition;
+      const nextNpcs = [...scene.npcs];
+      if (existingIndex === -1) {
+        nextNpcs.push(nextNpc);
+      } else {
+        nextNpcs[existingIndex] = nextNpc;
+      }
 
-    const existingIndex = scene.npcs.findIndex(
-      (candidate) => candidate.characterKey === payload.npc.characterKey,
-    );
-    const nextNpc = structuredClone(payload.npc) as SceneNpcDefinition;
-    const nextNpcs = [...scene.npcs];
-    if (existingIndex === -1) {
-      nextNpcs.push(nextNpc);
-    } else {
-      nextNpcs[existingIndex] = nextNpc;
-    }
+      state.scenes[payload.sceneId] = {
+        ...scene,
+        npcs: nextNpcs,
+      };
+      const action: BuilderMutationResult["action"] = existingIndex === -1 ? "created" : "updated";
 
-    state.scenes[payload.sceneId] = {
-      ...scene,
-      npcs: nextNpcs,
-    };
-
-    const saved = await this.writeProjectState(row, state, "builder-editor");
-    if (!saved) {
+      return {
+        ok: true,
+        payload: {
+          action,
+          npc: nextNpc,
+        },
+      };
+    });
+    if (!mutation) {
       return null;
     }
 
     return {
-      result: npcMutationResult(
-        projectId,
-        payload.npc.characterKey,
-        existingIndex === -1 ? "created" : "updated",
-      ),
-      payload: nextNpc,
-      checksum: saved.checksum,
+      result: npcMutationResult(projectId, payload.npc.characterKey, mutation.payload.action),
+      payload: mutation.payload.npc,
+      checksum: mutation.entry.row.checksum,
+    };
+  }
+
+  public async saveNpcForm(
+    projectId: string,
+    payload: BuilderNpcFormPayload,
+  ): Promise<BuilderMutation<SceneNpcDefinition | null> | null> {
+    const mutation = await this.mutateProject<{
+      readonly npc: SceneNpcDefinition;
+    }>(projectId, "builder-editor", (state) => {
+      const scene = state.scenes[payload.sceneId];
+      if (!scene) {
+        return { ok: false };
+      }
+
+      const existingIndex = scene.npcs.findIndex(
+        (candidate) => candidate.characterKey === payload.npcId,
+      );
+      if (existingIndex < 0) {
+        return { ok: false };
+      }
+
+      const currentNpc = scene.npcs[existingIndex] as SceneNpcDefinition;
+      const nextDialogueKeys = (payload.dialogueKeys ?? "")
+        .split(",")
+        .map((key) => key.trim())
+        .filter((key) => key.length > 0);
+
+      const nextNpc: SceneNpcDefinition = {
+        ...currentNpc,
+        characterKey: payload.npcId,
+        labelKey: trimOrFallback(payload.labelKey, currentNpc.labelKey),
+        x: parseBuilderInteger(payload.x, currentNpc.x),
+        y: parseBuilderInteger(payload.y, currentNpc.y),
+        interactRadius: Math.max(
+          1,
+          parseBuilderInteger(payload.interactRadius, currentNpc.interactRadius),
+        ),
+        dialogueKeys: nextDialogueKeys.length > 0 ? nextDialogueKeys : [...currentNpc.dialogueKeys],
+        ai: {
+          ...currentNpc.ai,
+          wanderRadius: Math.max(
+            0,
+            parseBuilderInteger(payload.wanderRadius, currentNpc.ai.wanderRadius),
+          ),
+          wanderSpeed: Math.max(0, parseNodeFloat(payload.wanderSpeed, currentNpc.ai.wanderSpeed)),
+          idlePauseMs: [
+            Math.max(0, parseBuilderInteger(payload.idlePauseMinMs, currentNpc.ai.idlePauseMs[0])),
+            Math.max(0, parseBuilderInteger(payload.idlePauseMaxMs, currentNpc.ai.idlePauseMs[1])),
+          ] as [number, number],
+          greetOnApproach: parseBuilderBoolean(
+            payload.greetOnApproach,
+            currentNpc.ai.greetOnApproach,
+          ),
+          greetLineKey: trimOrFallback(payload.greetLineKey, currentNpc.ai.greetLineKey),
+        },
+      };
+
+      const nextNpcs = [...scene.npcs];
+      nextNpcs[existingIndex] = nextNpc;
+      state.scenes[payload.sceneId] = {
+        ...scene,
+        npcs: nextNpcs,
+      };
+
+      return {
+        ok: true,
+        payload: {
+          npc: structuredClone(nextNpc) as SceneNpcDefinition,
+        },
+      };
+    });
+    if (!mutation) {
+      return null;
+    }
+
+    return {
+      result: npcMutationResult(projectId, payload.npcId, "updated"),
+      payload: mutation.payload.npc,
+      checksum: mutation.entry.row.checksum,
     };
   }
 
@@ -1052,36 +1143,39 @@ class PrismaBuilderService implements BuilderService {
     sceneId: string,
     npcId: string,
   ): Promise<BuilderMutation<SceneNpcDefinition[]> | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
-      return null;
-    }
+    const mutation = await this.mutateProject<SceneNpcDefinition[]>(
+      projectId,
+      "builder-editor",
+      (state) => {
+        const scene = state.scenes[sceneId];
+        if (!scene) {
+          return { ok: false };
+        }
 
-    const state = parseProjectState(row.state);
-    const scene = state.scenes[sceneId];
-    if (!scene) {
-      return null;
-    }
+        const nextNpcs = scene.npcs.filter((candidate) => candidate.characterKey !== npcId);
+        if (nextNpcs.length === scene.npcs.length) {
+          return { ok: false };
+        }
 
-    const nextNpcs = scene.npcs.filter((candidate) => candidate.characterKey !== npcId);
-    if (nextNpcs.length === scene.npcs.length) {
-      return null;
-    }
+        state.scenes[sceneId] = {
+          ...scene,
+          npcs: nextNpcs,
+        };
 
-    state.scenes[sceneId] = {
-      ...scene,
-      npcs: nextNpcs,
-    };
-
-    const saved = await this.writeProjectState(row, state, "builder-editor");
-    if (!saved) {
+        return {
+          ok: true,
+          payload: structuredClone(nextNpcs) as SceneNpcDefinition[],
+        };
+      },
+    );
+    if (!mutation) {
       return null;
     }
 
     return {
       result: npcMutationResult(projectId, npcId, "deleted"),
-      payload: structuredClone(nextNpcs) as SceneNpcDefinition[],
-      checksum: saved.checksum,
+      payload: mutation.payload,
+      checksum: mutation.entry.row.checksum,
     };
   }
 
@@ -1089,28 +1183,29 @@ class PrismaBuilderService implements BuilderService {
     projectId: string,
     payload: BuilderDialoguePayload,
   ): Promise<BuilderMutation<string> | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
-      return null;
-    }
-
-    const state = parseProjectState(row.state);
-    const locale = normalizeLocale(payload.locale);
-    const catalog = state.dialogues[locale];
-    const action: BuilderMutationResult["action"] = Object.hasOwn(catalog, payload.key)
-      ? "updated"
-      : "created";
-    catalog[payload.key] = payload.text;
-
-    const saved = await this.writeProjectState(row, state, "builder-editor");
-    if (!saved) {
+    const locale = normalizeBuilderLocale(payload.locale);
+    const mutation = await this.mutateProject(projectId, "builder-editor", (state) => {
+      const catalog = state.dialogues[locale];
+      const action: BuilderMutationResult["action"] = Object.hasOwn(catalog, payload.key)
+        ? "updated"
+        : "created";
+      catalog[payload.key] = payload.text;
+      return {
+        ok: true,
+        payload: {
+          action,
+          text: payload.text,
+        },
+      };
+    });
+    if (!mutation) {
       return null;
     }
 
     return {
-      result: dialogueMutationResult(projectId, payload.key, action),
-      payload: payload.text,
-      checksum: saved.checksum,
+      result: dialogueMutationResult(projectId, payload.key, mutation.payload.action),
+      payload: mutation.payload.text,
+      checksum: mutation.entry.row.checksum,
     };
   }
 
@@ -1119,27 +1214,27 @@ class PrismaBuilderService implements BuilderService {
     locale: LocaleCode,
     key: string,
   ): Promise<BuilderMutation<string | null> | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
-      return null;
-    }
+    const normalizedLocale = normalizeBuilderLocale(locale);
+    const mutation = await this.mutateProject(projectId, "builder-editor", (state) => {
+      const catalog = state.dialogues[normalizedLocale];
+      if (!Object.hasOwn(catalog, key)) {
+        return { ok: false };
+      }
 
-    const state = parseProjectState(row.state);
-    const catalog = state.dialogues[locale];
-    if (!Object.hasOwn(catalog, key)) {
-      return null;
-    }
-
-    delete catalog[key];
-    const saved = await this.writeProjectState(row, state, "builder-editor");
-    if (!saved) {
+      delete catalog[key];
+      return {
+        ok: true,
+        payload: null,
+      };
+    });
+    if (!mutation) {
       return null;
     }
 
     return {
       result: dialogueMutationResult(projectId, key, "deleted"),
       payload: null,
-      checksum: saved.checksum,
+      checksum: mutation.entry.row.checksum,
     };
   }
 
@@ -1147,96 +1242,26 @@ class PrismaBuilderService implements BuilderService {
     projectId: string,
     published: boolean,
   ): Promise<BuilderProjectSnapshot | null> {
-    await this.initPromise;
-    const sanitized = projectId.trim();
-    if (sanitized.length === 0) {
-      return null;
-    }
-
-    const updated = await prisma.$transaction(async (tx) => {
-      const row = await tx.builderProject.findUnique({
-        where: { id: sanitized },
-      });
-      if (!row) {
-        return null;
-      }
-
-      if (published) {
-        const nextReleaseVersion = row.latestReleaseVersion + 1;
-        await tx.builderProjectRelease.create({
-          data: {
-            projectId: row.id,
-            releaseVersion: nextReleaseVersion,
-            checksum: row.checksum,
-            state: JSON.parse(JSON.stringify(row.state ?? {})) as Prisma.InputJsonValue,
-          },
-        });
-
-        await tx.builderProject.update({
-          where: { id: row.id },
-          data: {
-            latestReleaseVersion: nextReleaseVersion,
-            publishedReleaseVersion: nextReleaseVersion,
-            updatedBy: "builder-publish",
-            version: {
-              increment: 1,
-            },
-          },
-        });
-      } else {
-        await tx.builderProject.update({
-          where: { id: row.id },
-          data: {
-            publishedReleaseVersion: null,
-            updatedBy: "builder-publish",
-            version: {
-              increment: 1,
-            },
-          },
-        });
-      }
-
-      return tx.builderProject.findUnique({
-        where: { id: row.id },
-        select: {
-          id: true,
-          state: true,
-          checksum: true,
-          version: true,
-          createdBy: true,
-          updatedBy: true,
-          source: true,
-          latestReleaseVersion: true,
-          publishedReleaseVersion: true,
-          updatedAt: true,
-        },
-      });
-    });
-    if (!updated) {
-      return null;
-    }
-
-    return toProjectSnapshot(updated, parseProjectState(updated.state), published);
+    return this.stateStore.publishProject(projectId, published);
   }
 
   public async getScene(projectId: string, sceneId: string): Promise<SceneDefinition | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
+    const entry = await this.readProjectEntry(projectId);
+    if (!entry) {
       return null;
     }
 
-    const scene = parseProjectState(row.state).scenes[sceneId];
+    const scene = entry.state.scenes[sceneId];
     return scene ? cloneScene(scene) : null;
   }
 
   public async findNpc(projectId: string, npcId: string): Promise<SceneNpcDefinition | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
+    const entry = await this.readProjectEntry(projectId);
+    if (!entry) {
       return null;
     }
 
-    const state = parseProjectState(row.state);
-    for (const scene of Object.values(state.scenes)) {
+    for (const scene of Object.values(entry.state.scenes)) {
       const npc = scene.npcs.find((candidate) => candidate.characterKey === npcId);
       if (npc) {
         return structuredClone(npc) as SceneNpcDefinition;
@@ -1247,111 +1272,123 @@ class PrismaBuilderService implements BuilderService {
   }
 
   public async listScenes(projectId: string): Promise<readonly SceneDefinition[]> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
+    const entry = await this.readProjectEntry(projectId);
+    if (!entry) {
       return [];
     }
 
-    return Object.values(parseProjectState(row.state).scenes).map((scene) => cloneScene(scene));
+    return Object.values(entry.state.scenes).map((scene) => cloneScene(scene));
   }
 
   public async getDialogues(
     projectId: string,
     locale: LocaleCode,
   ): Promise<Record<string, string>> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
+    const entry = await this.readProjectEntry(projectId);
+    if (!entry) {
       return {};
     }
 
-    const state = parseProjectState(row.state);
-    return { ...(state.dialogues[locale] ?? state.dialogues["en-US"]) };
+    const normalizedLocale = normalizeBuilderLocale(locale);
+    return {
+      ...(entry.state.dialogues[normalizedLocale] ?? entry.state.dialogues["en-US"]),
+    };
   }
 
   public async listAssets(projectId: string): Promise<readonly BuilderAsset[]> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
+    const entry = await this.readProjectEntry(projectId);
+    if (!entry) {
       return [];
     }
-    return Object.values(parseProjectState(row.state).assets).map((asset) => structuredClone(asset));
+    return Object.values(entry.state.assets).map((asset) => structuredClone(asset));
   }
 
   public async saveAsset(
     projectId: string,
     payload: BuilderAssetPayload,
   ): Promise<BuilderMutation<BuilderAsset> | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
-      return null;
-    }
-    const state = parseProjectState(row.state);
-    const action: BuilderMutationResult["action"] = Object.hasOwn(state.assets, payload.id)
-      ? "updated"
-      : "created";
-    state.assets[payload.id] = structuredClone(payload.asset);
-    const saved = await this.writeProjectState(row, state, "builder-assets");
-    if (!saved) {
+    const mutation = await this.mutateProject(projectId, "builder-assets", (state) => {
+      const action: BuilderMutationResult["action"] = Object.hasOwn(state.assets, payload.id)
+        ? "updated"
+        : "created";
+      state.assets[payload.id] = structuredClone(payload.asset);
+      return {
+        ok: true,
+        payload: {
+          action,
+          asset: structuredClone(state.assets[payload.id] as BuilderAsset),
+        },
+      };
+    });
+    if (!mutation) {
       return null;
     }
     return {
-      result: assetMutationResult(projectId, payload.id, action),
-      payload: structuredClone(state.assets[payload.id] as BuilderAsset),
-      checksum: saved.checksum,
+      result: assetMutationResult(projectId, payload.id, mutation.payload.action),
+      payload: mutation.payload.asset,
+      checksum: mutation.entry.row.checksum,
     };
   }
 
-  public async removeAsset(projectId: string, assetId: string): Promise<BuilderMutation<null> | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
-      return null;
-    }
-    const state = parseProjectState(row.state);
-    if (!Object.hasOwn(state.assets, assetId)) {
-      return null;
-    }
-    delete state.assets[assetId];
-    const saved = await this.writeProjectState(row, state, "builder-assets");
-    if (!saved) {
+  public async removeAsset(
+    projectId: string,
+    assetId: string,
+  ): Promise<BuilderMutation<null> | null> {
+    const mutation = await this.mutateProject(projectId, "builder-assets", (state) => {
+      if (!Object.hasOwn(state.assets, assetId)) {
+        return { ok: false };
+      }
+      delete state.assets[assetId];
+      return {
+        ok: true,
+        payload: null,
+      };
+    });
+    if (!mutation) {
       return null;
     }
     return {
       result: assetMutationResult(projectId, assetId, "deleted"),
       payload: null,
-      checksum: saved.checksum,
+      checksum: mutation.entry.row.checksum,
     };
   }
 
   public async listAnimationClips(projectId: string): Promise<readonly AnimationClip[]> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
+    const entry = await this.readProjectEntry(projectId);
+    if (!entry) {
       return [];
     }
-    return Object.values(parseProjectState(row.state).animationClips).map((clip) =>
-      structuredClone(clip),
-    );
+    return Object.values(entry.state.animationClips).map((clip) => structuredClone(clip));
   }
 
   public async saveAnimationClip(
     projectId: string,
     payload: BuilderAnimationClipPayload,
   ): Promise<BuilderMutation<AnimationClip> | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
-      return null;
-    }
-    const state = parseProjectState(row.state);
-    const action: BuilderMutationResult["action"] = Object.hasOwn(state.animationClips, payload.id)
-      ? "updated"
-      : "created";
-    state.animationClips[payload.id] = structuredClone(payload.clip);
-    const saved = await this.writeProjectState(row, state, "builder-assets");
-    if (!saved) {
+    const mutation = await this.mutateProject(projectId, "builder-assets", (state) => {
+      const action: BuilderMutationResult["action"] = Object.hasOwn(
+        state.animationClips,
+        payload.id,
+      )
+        ? "updated"
+        : "created";
+      state.animationClips[payload.id] = structuredClone(payload.clip);
+      return {
+        ok: true,
+        payload: {
+          action,
+          clip: structuredClone(state.animationClips[payload.id] as AnimationClip),
+        },
+      };
+    });
+    if (!mutation) {
       return null;
     }
     return {
-      result: animationClipMutationResult(projectId, payload.id, action),
-      payload: structuredClone(state.animationClips[payload.id] as AnimationClip),
-      checksum: saved.checksum,
+      result: animationClipMutationResult(projectId, payload.id, mutation.payload.action),
+      payload: mutation.payload.clip,
+      checksum: mutation.entry.row.checksum,
     };
   }
 
@@ -1359,233 +1396,402 @@ class PrismaBuilderService implements BuilderService {
     projectId: string,
     clipId: string,
   ): Promise<BuilderMutation<null> | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
-      return null;
-    }
-    const state = parseProjectState(row.state);
-    if (!Object.hasOwn(state.animationClips, clipId)) {
-      return null;
-    }
-    delete state.animationClips[clipId];
-    const saved = await this.writeProjectState(row, state, "builder-assets");
-    if (!saved) {
+    const mutation = await this.mutateProject(projectId, "builder-assets", (state) => {
+      if (!Object.hasOwn(state.animationClips, clipId)) {
+        return { ok: false };
+      }
+      delete state.animationClips[clipId];
+      return {
+        ok: true,
+        payload: null,
+      };
+    });
+    if (!mutation) {
       return null;
     }
     return {
       result: animationClipMutationResult(projectId, clipId, "deleted"),
       payload: null,
-      checksum: saved.checksum,
+      checksum: mutation.entry.row.checksum,
     };
   }
 
   public async listDialogueGraphs(projectId: string): Promise<readonly DialogueGraph[]> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
+    const entry = await this.readProjectEntry(projectId);
+    if (!entry) {
       return [];
     }
-    return Object.values(parseProjectState(row.state).dialogueGraphs).map((graph) =>
-      structuredClone(graph),
-    );
+    return Object.values(entry.state.dialogueGraphs).map((graph) => structuredClone(graph));
   }
 
   public async saveDialogueGraph(
     projectId: string,
     payload: BuilderDialogueGraphPayload,
   ): Promise<BuilderMutation<DialogueGraph> | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
-      return null;
-    }
-    const state = parseProjectState(row.state);
-    const action: BuilderMutationResult["action"] = Object.hasOwn(state.dialogueGraphs, payload.id)
-      ? "updated"
-      : "created";
-    state.dialogueGraphs[payload.id] = structuredClone(payload.graph);
-    const saved = await this.writeProjectState(row, state, "builder-mechanics");
-    if (!saved) {
+    const mutation = await this.mutateProject(projectId, "builder-mechanics", (state) => {
+      const action: BuilderMutationResult["action"] = Object.hasOwn(
+        state.dialogueGraphs,
+        payload.id,
+      )
+        ? "updated"
+        : "created";
+      state.dialogueGraphs[payload.id] = structuredClone(payload.graph);
+      return {
+        ok: true,
+        payload: {
+          action,
+          graph: structuredClone(state.dialogueGraphs[payload.id] as DialogueGraph),
+        },
+      };
+    });
+    if (!mutation) {
       return null;
     }
     return {
-      result: dialogueGraphMutationResult(projectId, payload.id, action),
-      payload: structuredClone(state.dialogueGraphs[payload.id] as DialogueGraph),
-      checksum: saved.checksum,
+      result: dialogueGraphMutationResult(projectId, payload.id, mutation.payload.action),
+      payload: mutation.payload.graph,
+      checksum: mutation.entry.row.checksum,
     };
+  }
+
+  public async createDialogueGraph(
+    projectId: string,
+    payload: BuilderDialogueGraphCreatePayload,
+  ): Promise<BuilderMutation<DialogueGraph> | null> {
+    const graphId = payload.id.trim();
+    const title = payload.title.trim();
+    const line = payload.line.trim();
+    const npcId = trimOptionalField(payload.npcId);
+    const now = Date.now();
+
+    return this.saveDialogueGraph(projectId, {
+      id: graphId,
+      graph: {
+        id: graphId,
+        title,
+        npcId,
+        rootNodeId: "root",
+        nodes: [
+          {
+            id: "root",
+            line,
+            edges: [],
+          },
+        ],
+        createdAtMs: now,
+        updatedAtMs: now,
+      },
+    });
   }
 
   public async removeDialogueGraph(
     projectId: string,
     graphId: string,
   ): Promise<BuilderMutation<null> | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
-      return null;
-    }
-    const state = parseProjectState(row.state);
-    if (!Object.hasOwn(state.dialogueGraphs, graphId)) {
-      return null;
-    }
-    delete state.dialogueGraphs[graphId];
-    const saved = await this.writeProjectState(row, state, "builder-mechanics");
-    if (!saved) {
+    const mutation = await this.mutateProject(projectId, "builder-mechanics", (state) => {
+      if (!Object.hasOwn(state.dialogueGraphs, graphId)) {
+        return { ok: false };
+      }
+      delete state.dialogueGraphs[graphId];
+      return {
+        ok: true,
+        payload: null,
+      };
+    });
+    if (!mutation) {
       return null;
     }
     return {
       result: dialogueGraphMutationResult(projectId, graphId, "deleted"),
       payload: null,
-      checksum: saved.checksum,
+      checksum: mutation.entry.row.checksum,
     };
   }
 
   public async listQuests(projectId: string): Promise<readonly QuestDefinition[]> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
+    const entry = await this.readProjectEntry(projectId);
+    if (!entry) {
       return [];
     }
-    return Object.values(parseProjectState(row.state).quests).map((quest) => structuredClone(quest));
+    return Object.values(entry.state.quests).map((quest) => structuredClone(quest));
   }
 
   public async saveQuest(
     projectId: string,
     payload: BuilderQuestPayload,
   ): Promise<BuilderMutation<QuestDefinition> | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
-      return null;
-    }
-    const state = parseProjectState(row.state);
-    const action: BuilderMutationResult["action"] = Object.hasOwn(state.quests, payload.id)
-      ? "updated"
-      : "created";
-    state.quests[payload.id] = structuredClone(payload.quest);
-    const saved = await this.writeProjectState(row, state, "builder-mechanics");
-    if (!saved) {
+    const mutation = await this.mutateProject(projectId, "builder-mechanics", (state) => {
+      const action: BuilderMutationResult["action"] = Object.hasOwn(state.quests, payload.id)
+        ? "updated"
+        : "created";
+      state.quests[payload.id] = structuredClone(payload.quest);
+      return {
+        ok: true,
+        payload: {
+          action,
+          quest: structuredClone(state.quests[payload.id] as QuestDefinition),
+        },
+      };
+    });
+    if (!mutation) {
       return null;
     }
     return {
-      result: questMutationResult(projectId, payload.id, action),
-      payload: structuredClone(state.quests[payload.id] as QuestDefinition),
-      checksum: saved.checksum,
+      result: questMutationResult(projectId, payload.id, mutation.payload.action),
+      payload: mutation.payload.quest,
+      checksum: mutation.entry.row.checksum,
     };
   }
 
-  public async removeQuest(projectId: string, questId: string): Promise<BuilderMutation<null> | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
+  public async createQuest(
+    projectId: string,
+    payload: BuilderQuestCreatePayload,
+  ): Promise<BuilderMutation<QuestDefinition> | null> {
+    const questId = payload.id.trim();
+    const title = payload.title.trim();
+    const description = payload.description.trim();
+    const triggerId = payload.triggerId.trim();
+
+    return this.saveQuest(projectId, {
+      id: questId,
+      quest: {
+        id: questId,
+        title,
+        description,
+        steps: [
+          {
+            id: `${questId}.step.1`,
+            title,
+            description,
+            triggerId,
+          },
+        ],
+      },
+    });
+  }
+
+  public async saveQuestForm(
+    projectId: string,
+    payload: BuilderQuestFormPayload,
+  ): Promise<BuilderMutation<QuestDefinition> | null> {
+    const mutation = await this.mutateProject<QuestDefinition>(
+      projectId,
+      "builder-mechanics",
+      (state) => {
+        const existing = state.quests[payload.questId];
+        if (!existing) {
+          return { ok: false };
+        }
+
+        const currentPrimaryStep = existing.steps[0];
+        const primaryStepId = currentPrimaryStep?.id ?? `${payload.questId}.step.1`;
+        const nextSteps = existing.steps.length > 0 ? [...existing.steps] : [];
+        const nextPrimaryStep = {
+          id: primaryStepId,
+          title: payload.title.trim(),
+          description: payload.description.trim(),
+          triggerId: payload.triggerId.trim(),
+        };
+
+        if (nextSteps.length > 0) {
+          nextSteps[0] = nextPrimaryStep;
+        } else {
+          nextSteps.push(nextPrimaryStep);
+        }
+
+        const nextQuest: QuestDefinition = {
+          ...existing,
+          id: payload.questId,
+          title: payload.title.trim(),
+          description: payload.description.trim(),
+          steps: nextSteps,
+        };
+        state.quests[payload.questId] = nextQuest;
+
+        return {
+          ok: true,
+          payload: structuredClone(nextQuest) as QuestDefinition,
+        };
+      },
+    );
+    if (!mutation) {
       return null;
     }
-    const state = parseProjectState(row.state);
-    if (!Object.hasOwn(state.quests, questId)) {
-      return null;
-    }
-    delete state.quests[questId];
-    const saved = await this.writeProjectState(row, state, "builder-mechanics");
-    if (!saved) {
+
+    return {
+      result: questMutationResult(projectId, payload.questId, "updated"),
+      payload: mutation.payload,
+      checksum: mutation.entry.row.checksum,
+    };
+  }
+
+  public async removeQuest(
+    projectId: string,
+    questId: string,
+  ): Promise<BuilderMutation<null> | null> {
+    const mutation = await this.mutateProject(projectId, "builder-mechanics", (state) => {
+      if (!Object.hasOwn(state.quests, questId)) {
+        return { ok: false };
+      }
+      delete state.quests[questId];
+      return {
+        ok: true,
+        payload: null,
+      };
+    });
+    if (!mutation) {
       return null;
     }
     return {
       result: questMutationResult(projectId, questId, "deleted"),
       payload: null,
-      checksum: saved.checksum,
+      checksum: mutation.entry.row.checksum,
     };
   }
 
   public async listTriggers(projectId: string): Promise<readonly TriggerDefinition[]> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
+    const entry = await this.readProjectEntry(projectId);
+    if (!entry) {
       return [];
     }
-    return Object.values(parseProjectState(row.state).triggers).map((trigger) =>
-      structuredClone(trigger),
-    );
+    return Object.values(entry.state.triggers).map((trigger) => structuredClone(trigger));
   }
 
   public async saveTrigger(
     projectId: string,
     payload: BuilderTriggerPayload,
   ): Promise<BuilderMutation<TriggerDefinition> | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
-      return null;
-    }
-    const state = parseProjectState(row.state);
-    const action: BuilderMutationResult["action"] = Object.hasOwn(state.triggers, payload.id)
-      ? "updated"
-      : "created";
-    state.triggers[payload.id] = structuredClone(payload.trigger);
-    const saved = await this.writeProjectState(row, state, "builder-mechanics");
-    if (!saved) {
+    const mutation = await this.mutateProject(projectId, "builder-mechanics", (state) => {
+      const action: BuilderMutationResult["action"] = Object.hasOwn(state.triggers, payload.id)
+        ? "updated"
+        : "created";
+      state.triggers[payload.id] = structuredClone(payload.trigger);
+      return {
+        ok: true,
+        payload: {
+          action,
+          trigger: structuredClone(state.triggers[payload.id] as TriggerDefinition),
+        },
+      };
+    });
+    if (!mutation) {
       return null;
     }
     return {
-      result: triggerMutationResult(projectId, payload.id, action),
-      payload: structuredClone(state.triggers[payload.id] as TriggerDefinition),
-      checksum: saved.checksum,
+      result: triggerMutationResult(projectId, payload.id, mutation.payload.action),
+      payload: mutation.payload.trigger,
+      checksum: mutation.entry.row.checksum,
     };
+  }
+
+  public async createTrigger(
+    projectId: string,
+    payload: BuilderTriggerCreatePayload,
+  ): Promise<BuilderMutation<TriggerDefinition> | null> {
+    const triggerId = payload.id.trim();
+
+    return this.saveTrigger(projectId, {
+      id: triggerId,
+      trigger: {
+        id: triggerId,
+        label: payload.label.trim(),
+        event: payload.event,
+        sceneId: trimOptionalField(payload.sceneId),
+        npcId: trimOptionalField(payload.npcId),
+      },
+    });
   }
 
   public async removeTrigger(
     projectId: string,
     triggerId: string,
   ): Promise<BuilderMutation<null> | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
-      return null;
-    }
-    const state = parseProjectState(row.state);
-    if (!Object.hasOwn(state.triggers, triggerId)) {
-      return null;
-    }
-    delete state.triggers[triggerId];
-    const saved = await this.writeProjectState(row, state, "builder-mechanics");
-    if (!saved) {
+    const mutation = await this.mutateProject(projectId, "builder-mechanics", (state) => {
+      if (!Object.hasOwn(state.triggers, triggerId)) {
+        return { ok: false };
+      }
+      delete state.triggers[triggerId];
+      return {
+        ok: true,
+        payload: null,
+      };
+    });
+    if (!mutation) {
       return null;
     }
     return {
       result: triggerMutationResult(projectId, triggerId, "deleted"),
       payload: null,
-      checksum: saved.checksum,
+      checksum: mutation.entry.row.checksum,
     };
   }
 
   public async listFlags(projectId: string): Promise<readonly GameFlagDefinition[]> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
+    const entry = await this.readProjectEntry(projectId);
+    if (!entry) {
       return [];
     }
-    return Object.values(parseProjectState(row.state).flags).map((flag) => structuredClone(flag));
+    return Object.values(entry.state.flags).map((flag) => structuredClone(flag));
   }
 
   public async listGenerationJobs(projectId: string): Promise<readonly GenerationJob[]> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
+    const entry = await this.readProjectEntry(projectId);
+    if (!entry) {
       return [];
     }
-    return Object.values(parseProjectState(row.state).generationJobs).map((job) => structuredClone(job));
+    return Object.values(entry.state.generationJobs).map((job) => structuredClone(job));
   }
 
   public async saveGenerationJob(
     projectId: string,
     payload: BuilderGenerationJobPayload,
   ): Promise<BuilderMutation<GenerationJob> | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
-      return null;
-    }
-    const state = parseProjectState(row.state);
-    const action: BuilderMutationResult["action"] = Object.hasOwn(state.generationJobs, payload.id)
-      ? "updated"
-      : "queued";
-    state.generationJobs[payload.id] = structuredClone(payload.job);
-    const saved = await this.writeProjectState(row, state, "builder-ai");
-    if (!saved) {
+    const mutation = await this.mutateProject(projectId, "builder-ai", (state) => {
+      const action: BuilderMutationResult["action"] = Object.hasOwn(
+        state.generationJobs,
+        payload.id,
+      )
+        ? "updated"
+        : "queued";
+      state.generationJobs[payload.id] = structuredClone(payload.job);
+      return {
+        ok: true,
+        payload: {
+          action,
+          job: structuredClone(state.generationJobs[payload.id] as GenerationJob),
+        },
+      };
+    });
+    if (!mutation) {
       return null;
     }
     return {
-      result: generationJobMutationResult(projectId, payload.id, action),
-      payload: structuredClone(state.generationJobs[payload.id] as GenerationJob),
-      checksum: saved.checksum,
+      result: generationJobMutationResult(projectId, payload.id, mutation.payload.action),
+      payload: mutation.payload.job,
+      checksum: mutation.entry.row.checksum,
     };
+  }
+
+  public async createGenerationJob(
+    projectId: string,
+    payload: BuilderGenerationJobCreatePayload,
+  ): Promise<BuilderMutation<GenerationJob> | null> {
+    const jobId = `job.${crypto.randomUUID()}`;
+    const now = Date.now();
+    return this.saveGenerationJob(projectId, {
+      id: jobId,
+      job: {
+        id: jobId,
+        kind: payload.kind,
+        status: "queued",
+        prompt: payload.prompt.trim(),
+        targetId: trimOptionalField(payload.targetId),
+        artifactIds: [],
+        statusMessage: "job.queued-for-processing",
+        createdAtMs: now,
+        updatedAtMs: now,
+      },
+    });
   }
 
   public async approveGenerationJob(
@@ -1593,116 +1799,157 @@ class PrismaBuilderService implements BuilderService {
     jobId: string,
     approved: boolean,
   ): Promise<BuilderMutation<GenerationJob> | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
-      return null;
-    }
-    const state = parseProjectState(row.state);
-    const job = state.generationJobs[jobId];
-    if (!job) {
-      return null;
-    }
+    const mutation = await this.mutateProject<GenerationJob>(projectId, "builder-ai", (state) => {
+      const job = state.generationJobs[jobId];
+      if (!job) {
+        return { ok: false };
+      }
 
-    if (approved) {
-      const primaryArtifact = job.artifactIds
-        .map((artifactId) => state.artifacts[artifactId])
-        .find((artifact): artifact is GenerationArtifact => artifact !== undefined);
-      for (const artifactId of job.artifactIds) {
-        const artifact = state.artifacts[artifactId];
-        if (artifact) {
-          state.artifacts[artifactId] = {
-            ...artifact,
-            approved: true,
-          };
+      if (approved) {
+        const primaryArtifact = job.artifactIds
+          .map((artifactId) => state.artifacts[artifactId])
+          .find((artifact): artifact is GenerationArtifact => artifact !== undefined);
+        for (const artifactId of job.artifactIds) {
+          const artifact = state.artifacts[artifactId];
+          if (artifact) {
+            state.artifacts[artifactId] = {
+              ...artifact,
+              approved: true,
+            };
+          }
+        }
+        if (job.kind !== "voice-line" && primaryArtifact?.previewSource) {
+          const generatedAssetId = `asset.generated.${job.id}`;
+          if (!state.assets[generatedAssetId]) {
+            state.assets[generatedAssetId] = {
+              id: generatedAssetId,
+              kind: job.kind === "animation-plan" ? "sprite-sheet" : job.kind,
+              label: `generation.asset.label.generated:${job.kind === "animation-plan" ? "sprite-sheet" : job.kind}:${job.id}`,
+              sceneMode: "2d",
+              source: primaryArtifact.previewSource,
+              tags: ["generated", job.kind],
+              variants: [
+                {
+                  id: `${generatedAssetId}.runtime`,
+                  format: primaryArtifact.mimeType?.split("/")[1] ?? "dat",
+                  source: primaryArtifact.previewSource,
+                  usage: "runtime",
+                },
+              ],
+              approved: true,
+              createdAtMs: job.createdAtMs,
+              updatedAtMs: Date.now(),
+            };
+          }
         }
       }
-      if (job.kind !== "voice-line") {
-        const generatedAssetId = `asset.generated.${job.id}`;
-        if (!state.assets[generatedAssetId]) {
-          state.assets[generatedAssetId] = {
-            id: generatedAssetId,
-            kind: job.kind === "animation-plan" ? "sprite-sheet" : job.kind,
-            label: `Generated ${job.kind} ${job.id}`,
-            sceneMode: "2d",
-            source: primaryArtifact?.previewSource ?? `generated://${job.id}`,
-            tags: ["generated", job.kind],
-            variants: primaryArtifact
-              ? [
-                  {
-                    id: `${generatedAssetId}.runtime`,
-                    format: primaryArtifact.mimeType?.split("/")[1] ?? "dat",
-                    source: primaryArtifact.previewSource,
-                    usage: "runtime",
-                  },
-                ]
-              : [],
-            approved: true,
-            createdAtMs: job.createdAtMs,
-            updatedAtMs: Date.now(),
-          };
-        }
-      }
-    }
-    state.generationJobs[jobId] = {
-      ...job,
-      status: approved ? "succeeded" : "canceled",
-      statusMessage: approved ? "approved-and-attached" : "canceled-by-review",
-      updatedAtMs: Date.now(),
-    };
 
-    const saved = await this.writeProjectState(row, state, "builder-ai");
-    if (!saved) {
+      state.generationJobs[jobId] = {
+        ...job,
+        status: approved ? "succeeded" : "canceled",
+        statusMessage: approved ? "job.approved-and-attached" : "job.canceled-by-review",
+        updatedAtMs: Date.now(),
+      };
+
+      return {
+        ok: true,
+        payload: structuredClone(state.generationJobs[jobId] as GenerationJob),
+      };
+    });
+    if (!mutation) {
       return null;
     }
     return {
       result: generationJobMutationResult(projectId, jobId, approved ? "approved" : "canceled"),
-      payload: structuredClone(state.generationJobs[jobId] as GenerationJob),
-      checksum: saved.checksum,
+      payload: mutation.payload,
+      checksum: mutation.entry.row.checksum,
     };
   }
 
   public async listArtifacts(projectId: string): Promise<readonly GenerationArtifact[]> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
+    const entry = await this.readProjectEntry(projectId);
+    if (!entry) {
       return [];
     }
-    return Object.values(parseProjectState(row.state).artifacts).map((artifact) =>
-      structuredClone(artifact),
-    );
+    return Object.values(entry.state.artifacts).map((artifact) => structuredClone(artifact));
   }
 
   public async listAutomationRuns(projectId: string): Promise<readonly AutomationRun[]> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
+    const entry = await this.readProjectEntry(projectId);
+    if (!entry) {
       return [];
     }
-    return Object.values(parseProjectState(row.state).automationRuns).map((run) =>
-      structuredClone(run),
-    );
+    return Object.values(entry.state.automationRuns).map((run) => structuredClone(run));
   }
 
   public async saveAutomationRun(
     projectId: string,
     payload: BuilderAutomationRunPayload,
   ): Promise<BuilderMutation<AutomationRun> | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
-      return null;
-    }
-    const state = parseProjectState(row.state);
-    const action: BuilderMutationResult["action"] = Object.hasOwn(state.automationRuns, payload.id)
-      ? "updated"
-      : "queued";
-    state.automationRuns[payload.id] = structuredClone(payload.run);
-    const saved = await this.writeProjectState(row, state, "builder-automation");
-    if (!saved) {
+    const mutation = await this.mutateProject(projectId, "builder-automation", (state) => {
+      const action: BuilderMutationResult["action"] = Object.hasOwn(
+        state.automationRuns,
+        payload.id,
+      )
+        ? "updated"
+        : "queued";
+      state.automationRuns[payload.id] = structuredClone(payload.run);
+      return {
+        ok: true,
+        payload: {
+          action,
+          run: structuredClone(state.automationRuns[payload.id] as AutomationRun),
+        },
+      };
+    });
+    if (!mutation) {
       return null;
     }
     return {
-      result: automationRunMutationResult(projectId, payload.id, action),
-      payload: structuredClone(state.automationRuns[payload.id] as AutomationRun),
-      checksum: saved.checksum,
+      result: automationRunMutationResult(projectId, payload.id, mutation.payload.action),
+      payload: mutation.payload.run,
+      checksum: mutation.entry.row.checksum,
     };
+  }
+
+  public async createAutomationRun(
+    projectId: string,
+    payload: BuilderAutomationRunCreatePayload,
+  ): Promise<BuilderMutation<AutomationRun> | null> {
+    const runId = `run.${crypto.randomUUID()}`;
+    const now = Date.now();
+    return this.saveAutomationRun(projectId, {
+      id: runId,
+      run: {
+        id: runId,
+        status: "queued",
+        goal: payload.goal.trim(),
+        steps: [
+          {
+            id: `${runId}.browser`,
+            action: "browser",
+            summary: "automation.step.capture-review-context",
+            status: "pending",
+          },
+          {
+            id: `${runId}.builder`,
+            action: "builder",
+            summary: "automation.step.prepare-draft-plan",
+            status: "pending",
+          },
+          {
+            id: `${runId}.attach`,
+            action: "attach-file",
+            summary: "automation.step.attach-review-evidence",
+            status: "pending",
+          },
+        ],
+        artifactIds: [],
+        statusMessage: "automation.queued-for-processing",
+        createdAtMs: now,
+        updatedAtMs: now,
+      },
+    });
   }
 
   public async approveAutomationRun(
@@ -1710,54 +1957,44 @@ class PrismaBuilderService implements BuilderService {
     runId: string,
     approved: boolean,
   ): Promise<BuilderMutation<AutomationRun> | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
-      return null;
-    }
-    const state = parseProjectState(row.state);
-    const run = state.automationRuns[runId];
-    if (!run) {
-      return null;
-    }
-    state.automationRuns[runId] = {
-      ...run,
-      status: approved ? "succeeded" : "canceled",
-      statusMessage: approved ? "approved-for-apply" : "canceled-by-review",
-      updatedAtMs: Date.now(),
-    };
-    const saved = await this.writeProjectState(row, state, "builder-automation");
-    if (!saved) {
+    const mutation = await this.mutateProject<AutomationRun>(
+      projectId,
+      "builder-automation",
+      (state) => {
+        const run = state.automationRuns[runId];
+        if (!run) {
+          return { ok: false };
+        }
+        state.automationRuns[runId] = {
+          ...run,
+          status: approved ? "succeeded" : "canceled",
+          statusMessage: approved
+            ? "automation.approved-for-apply"
+            : "automation.canceled-by-review",
+          updatedAtMs: Date.now(),
+        };
+        return {
+          ok: true,
+          payload: structuredClone(state.automationRuns[runId] as AutomationRun),
+        };
+      },
+    );
+    if (!mutation) {
       return null;
     }
     return {
       result: automationRunMutationResult(projectId, runId, approved ? "approved" : "canceled"),
-      payload: structuredClone(state.automationRuns[runId] as AutomationRun),
-      checksum: saved.checksum,
+      payload: mutation.payload,
+      checksum: mutation.entry.row.checksum,
     };
   }
 
   public async processQueuedWork(projectId?: string): Promise<number> {
-    await this.initPromise;
-    const rows = projectId
-      ? [await this.readProjectRow(projectId)].filter((row): row is BuilderProjectRow => row !== null)
-      : await prisma.builderProject.findMany({
-          select: {
-            id: true,
-            state: true,
-            checksum: true,
-            version: true,
-            createdBy: true,
-            updatedBy: true,
-            source: true,
-            latestReleaseVersion: true,
-            publishedReleaseVersion: true,
-            updatedAt: true,
-          },
-        });
+    const entries = await this.stateStore.listProjectEntries(projectId);
 
     let processedCount = 0;
-    for (const row of rows) {
-      const state = parseProjectState(row.state);
+    for (const entry of entries) {
+      const state = entry.state;
       let changed = false;
       for (const [jobId, job] of Object.entries(state.generationJobs)) {
         if (job.status !== "queued") {
@@ -1769,7 +2006,7 @@ class PrismaBuilderService implements BuilderService {
           statusMessage: "processing",
           updatedAtMs: Date.now(),
         };
-        const result = await executeGenerationJob(row.id, runningJob);
+        const result = await executeGenerationJob(entry.row.id, runningJob);
         if (result.ok) {
           for (const artifact of result.data.artifacts) {
             state.artifacts[artifact.id] = artifact;
@@ -1804,7 +2041,7 @@ class PrismaBuilderService implements BuilderService {
           statusMessage: "processing",
           updatedAtMs: Date.now(),
         };
-        const result = await executeAutomationRun(row.id, runningRun);
+        const result = await executeAutomationRun(entry.row.id, runningRun);
         if (result.ok) {
           for (const artifact of result.data.artifacts) {
             state.artifacts[artifact.id] = artifact;
@@ -1834,7 +2071,13 @@ class PrismaBuilderService implements BuilderService {
       }
 
       if (changed) {
-        await this.writeProjectState(row, state, "builder-worker");
+        await this.stateStore.updateProject(entry.row.id, "builder-worker", (nextState) => {
+          Object.assign(nextState, structuredClone(state));
+          return {
+            ok: true,
+            payload: null,
+          };
+        });
       }
     }
 
@@ -1845,13 +2088,12 @@ class PrismaBuilderService implements BuilderService {
     projectId: string,
     operations: readonly BuilderArtifactPatch[],
   ): Promise<BuilderPatchPreview | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
+    const entry = await this.readProjectEntry(projectId);
+    if (!entry) {
       return null;
     }
 
-    const state = parseProjectState(row.state);
-    const previewState = structuredClone(state) as BuilderProjectState;
+    const previewState = structuredClone(entry.state) as BuilderProjectState;
     const reports: BuilderPatchPreviewOperation[] = [];
 
     for (const operation of operations) {
@@ -1930,9 +2172,9 @@ class PrismaBuilderService implements BuilderService {
     }
 
     return {
-      projectId: row.id,
-      version: row.version,
-      checksum: row.checksum,
+      projectId: entry.row.id,
+      version: entry.row.version,
+      checksum: entry.row.checksum,
       operations: reports,
     };
   }
@@ -1942,74 +2184,78 @@ class PrismaBuilderService implements BuilderService {
     operations: readonly BuilderArtifactPatch[],
     expectedVersion?: number,
   ): Promise<BuilderPatchApplyResult | null> {
-    const row = await this.readProjectRow(projectId);
-    if (!row) {
+    const entry = await this.readProjectEntry(projectId);
+    if (!entry) {
       return null;
     }
-    if (typeof expectedVersion === "number" && expectedVersion !== row.version) {
+    if (typeof expectedVersion === "number" && expectedVersion !== entry.row.version) {
       return null;
     }
 
-    const preview = await this.previewArtifactPatch(projectId, operations);
+    const preview = await this.previewArtifactPatch(entry.row.id, operations);
     if (!preview) {
       return null;
     }
 
     if (preview.operations.some((operation) => !operation.valid)) {
       return {
-        projectId: row.id,
-        version: row.version,
-        checksum: row.checksum,
+        projectId: entry.row.id,
+        version: entry.row.version,
+        checksum: entry.row.checksum,
         applied: 0,
         operations: preview.operations,
       };
     }
 
-    const nextState = parseProjectState(row.state);
-    for (const operation of operations) {
-      const target = parsePatchTarget(operation.path);
-      if (!target) {
-        continue;
-      }
+    const mutation = await this.mutateProject(projectId, "builder-ai", (nextState) => {
+      for (const operation of operations) {
+        const target = parsePatchTarget(operation.path);
+        if (!target) {
+          continue;
+        }
 
-      if (target.kind === "dialogue") {
+        if (target.kind === "dialogue") {
+          if (operation.op === "remove") {
+            delete nextState.dialogues[target.locale][target.key];
+            continue;
+          }
+
+          const parsed = parsePatchValue(operation.value);
+          nextState.dialogues[target.locale][target.key] =
+            typeof parsed === "string" ? parsed : JSON.stringify(parsed);
+          continue;
+        }
+
         if (operation.op === "remove") {
-          delete nextState.dialogues[target.locale][target.key];
+          delete nextState.scenes[target.sceneId];
           continue;
         }
 
         const parsed = parsePatchValue(operation.value);
-        nextState.dialogues[target.locale][target.key] =
-          typeof parsed === "string" ? parsed : JSON.stringify(parsed);
-        continue;
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          continue;
+        }
+
+        nextState.scenes[target.sceneId] = {
+          ...(parsed as SceneDefinition),
+          id: target.sceneId,
+        };
       }
 
-      if (operation.op === "remove") {
-        delete nextState.scenes[target.sceneId];
-        continue;
-      }
-
-      const parsed = parsePatchValue(operation.value);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        continue;
-      }
-
-      nextState.scenes[target.sceneId] = {
-        ...(parsed as SceneDefinition),
-        id: target.sceneId,
+      return {
+        ok: true,
+        payload: operations.length,
       };
-    }
-
-    const saved = await this.writeProjectState(row, nextState, "builder-ai");
-    if (!saved) {
+    });
+    if (!mutation) {
       return null;
     }
 
     return {
-      projectId: saved.id,
-      version: saved.version,
-      checksum: saved.checksum,
-      applied: operations.length,
+      projectId: mutation.entry.row.id,
+      version: mutation.entry.row.version,
+      checksum: mutation.entry.row.checksum,
+      applied: mutation.payload,
       operations: preview.operations,
     };
   }
@@ -2025,5 +2271,5 @@ export const createBuilderService = (): BuilderService => projects;
 /** Shared singleton for builder operations. */
 export const builderService = createBuilderService();
 
-/** Shared default project identifier for dashboard and API defaults. */
-export const defaultBuilderProjectId = DEFAULT_PROJECT_ID;
+/** Re-exported default project id for route and request-context callers. */
+export { defaultBuilderProjectId };

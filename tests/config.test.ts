@@ -16,15 +16,23 @@ import { appRoutes, withLocaleQuery, withQueryParameters } from "../src/shared/c
 
 describe("environment parsing", () => {
   test("boolean parsing respects explicit true values", () => {
-    expect(parseBoolean("true", false)).toBe(true);
-    expect(parseBoolean("false", true)).toBe(false);
-    expect(parseBoolean(undefined, true)).toBe(true);
+    expect(parseBoolean("true", false, "TEST_BOOL")).toBe(true);
+    expect(parseBoolean("false", true, "TEST_BOOL")).toBe(false);
+    expect(parseBoolean(undefined, true, "TEST_BOOL")).toBe(true);
+    expect(() => parseBoolean("yes", false, "TEST_BOOL")).toThrow(
+      "Invalid environment variable TEST_BOOL",
+    );
   });
 
-  test("integer parsing applies fallback and minimum bounds", () => {
-    expect(parseInteger("42", 10, 1)).toBe(42);
-    expect(parseInteger("-8", 10, 1)).toBe(1);
-    expect(parseInteger("not-a-number", 10, 1)).toBe(10);
+  test("integer parsing rejects malformed and out-of-range values", () => {
+    expect(parseInteger("42", 10, 1, "TEST_INT")).toBe(42);
+    expect(parseInteger(undefined, 10, 1, "TEST_INT")).toBe(10);
+    expect(() => parseInteger("-8", 10, 1, "TEST_INT")).toThrow(
+      "Invalid environment variable TEST_INT",
+    );
+    expect(() => parseInteger("not-a-number", 10, 1, "TEST_INT")).toThrow(
+      "Invalid environment variable TEST_INT",
+    );
   });
 
   test("locale normalization maps supported families", () => {
@@ -40,15 +48,21 @@ describe("environment parsing", () => {
   });
 
   test("auth and oracle numeric controls are config-driven", () => {
+    expect(["development", "test", "production"]).toContain(appConfig.runtime.nodeEnv);
     expect(appConfig.auth.sessionCookieName.length).toBeGreaterThan(0);
     expect(appConfig.auth.sessionMaxAgeSeconds).toBeGreaterThan(0);
+    expect(appConfig.auth.resumeTokenSecret.length).toBeGreaterThan(0);
     expect(appConfig.oracle.answerHashMultiplier).toBeGreaterThan(0);
   });
 
   test("static asset directories are config-driven", () => {
+    expect(appConfig.database.url.length).toBeGreaterThan(0);
     expect(appConfig.staticAssets.publicDirectory.length).toBeGreaterThan(0);
     expect(appConfig.staticAssets.assetsDirectory.length).toBeGreaterThan(0);
     expect(appConfig.staticAssets.rmmzPackDirectory.length).toBeGreaterThan(0);
+    expect(appConfig.builder.workerPollIntervalMs).toBeGreaterThanOrEqual(100);
+    expect(appConfig.builder.localAutomationOrigin).toBe("http://127.0.0.1:3000");
+    expect(appConfig.builder.automationProbeTimeoutMs).toBeGreaterThanOrEqual(100);
   });
 
   test("playable game mounts and sprite output are config-driven", () => {

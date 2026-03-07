@@ -8,6 +8,7 @@ import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts
 import type { SceneDefinition, SceneNodeDefinition } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
+import { getSceneNodeTypeLabel } from "./view-labels.ts";
 
 const renderScenePreview = (scene: SceneDefinition, spawnLabel: string): string => {
   const npcMarkers = scene.npcs
@@ -66,13 +67,63 @@ const renderScenePreview = (scene: SceneDefinition, spawnLabel: string): string 
   </div>`;
 };
 
-const renderSceneModeBadge = (messages: Messages, sceneMode: SceneDefinition["sceneMode"]): string =>
-  `<span class="badge badge-outline">${
-    escapeHtml(sceneMode === "3d" ? messages.builder.sceneMode3d : messages.builder.sceneMode2d)
-  }</span>`;
+const renderSceneModeBadge = (
+  messages: Messages,
+  sceneMode: SceneDefinition["sceneMode"],
+): string =>
+  `<span class="badge badge-outline">${escapeHtml(
+    sceneMode === "3d" ? messages.builder.sceneMode3d : messages.builder.sceneMode2d,
+  )}</span>`;
 
-const renderNodeBadge = (node: SceneNodeDefinition): string =>
-  `<span class="badge badge-ghost">${escapeHtml(node.nodeType)}</span>`;
+const renderNodeBadge = (messages: Messages, node: SceneNodeDefinition): string =>
+  `<span class="badge badge-ghost">${escapeHtml(getSceneNodeTypeLabel(messages, node.nodeType))}</span>`;
+
+const renderSceneNodeTypeOptions = (
+  messages: Messages,
+  sceneMode: SceneDefinition["sceneMode"],
+  selectedNodeType?: SceneNodeDefinition["nodeType"],
+): string => {
+  const options =
+    sceneMode === "3d"
+      ? [
+          { value: "model", label: messages.builder.sceneNodeTypeModel },
+          { value: "light", label: messages.builder.sceneNodeTypeLight },
+          { value: "camera", label: messages.builder.sceneNodeTypeCamera },
+          { value: "spawn", label: messages.builder.sceneNodeTypeSpawn },
+          { value: "trigger", label: messages.builder.sceneNodeTypeTrigger },
+        ]
+      : [
+          { value: "sprite", label: messages.builder.sceneNodeTypeSprite },
+          { value: "tile", label: messages.builder.sceneNodeTypeTile },
+          { value: "spawn", label: messages.builder.sceneNodeTypeSpawn },
+          { value: "trigger", label: messages.builder.sceneNodeTypeTrigger },
+          { value: "camera", label: messages.builder.sceneNodeTypeCamera },
+        ];
+
+  return options
+    .map(
+      (option) =>
+        `<option value="${option.value}"${selectedNodeType === option.value ? " selected" : ""}>${escapeHtml(option.label)}</option>`,
+    )
+    .join("");
+};
+
+const renderScenePaletteBadges = (
+  messages: Messages,
+  sceneMode: SceneDefinition["sceneMode"],
+): string => {
+  const paletteNodeTypes: readonly SceneNodeDefinition["nodeType"][] =
+    sceneMode === "3d"
+      ? ["model", "light", "camera", "spawn", "trigger"]
+      : ["sprite", "tile", "camera", "spawn", "trigger"];
+
+  return paletteNodeTypes
+    .map(
+      (nodeType) =>
+        `<span class="badge badge-soft">${escapeHtml(getSceneNodeTypeLabel(messages, nodeType))}</span>`,
+    )
+    .join("");
+};
 
 const renderNodeForm = (
   messages: Messages,
@@ -93,7 +144,7 @@ const renderNodeForm = (
   const nodeSpinnerId = `scene-node-${node.id.replace(/[^a-zA-Z0-9_.-]/g, "-")}-spinner`;
   if ("size" in node) {
     return `<article class="card card-border bg-base-100 shadow-sm">
-      <form class="card-body gap-3" hx-post="${escapeHtml(formAction)}" hx-target="#scene-detail" hx-swap="innerHTML" hx-indicator="#${nodeSpinnerId}" hx-disabled-elt="button, input, select, textarea">
+      <form class="card-body gap-3" data-scene-node-form data-scene-node-id="${escapeHtml(node.id)}" data-scene-node-kind="2d" hx-post="${escapeHtml(formAction)}" hx-target="#scene-detail" hx-swap="innerHTML" hx-indicator="#${nodeSpinnerId}" hx-disabled-elt="button, input, select, textarea">
         <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
         <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
         <input type="hidden" name="id" value="${escapeHtml(node.id)}" />
@@ -103,19 +154,43 @@ const renderNodeForm = (
             <h3 class="card-title text-base">${escapeHtml(node.id)}</h3>
             <p class="text-xs text-base-content/60">${escapeHtml(node.layer)}</p>
           </div>
-          <div class="flex gap-2">${renderNodeBadge(node)}
-            <button type="button" class="btn btn-ghost btn-xs" data-scene-node-select="${escapeHtml(node.id)}">${escapeHtml(messages.builder.preview)}</button>
+          <div class="flex gap-2">${renderNodeBadge(messages, node)}
+            <button type="button" class="btn btn-ghost btn-xs" data-scene-node-select="${escapeHtml(node.id)}" aria-pressed="false">${escapeHtml(messages.builder.selectNode)}</button>
           </div>
         </div>
         <div class="grid gap-3 md:grid-cols-2">
-          <input name="nodeType" type="text" class="input input-bordered w-full" value="${escapeHtml(node.nodeType)}" />
-          <input name="layer" type="text" class="input input-bordered w-full" value="${escapeHtml(node.layer)}" />
-          <input name="assetId" type="text" class="input input-bordered w-full" value="${escapeHtml(node.assetId ?? "")}" placeholder="asset id" />
-          <input name="animationClipId" type="text" class="input input-bordered w-full" value="${escapeHtml(node.animationClipId ?? "")}" placeholder="clip id" />
-          <input name="positionX" type="number" class="input input-bordered w-full" value="${node.position.x}" />
-          <input name="positionY" type="number" class="input input-bordered w-full" value="${node.position.y}" />
-          <input name="sizeWidth" type="number" class="input input-bordered w-full" value="${node.size.width}" min="1" />
-          <input name="sizeHeight" type="number" class="input input-bordered w-full" value="${node.size.height}" min="1" />
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">${escapeHtml(messages.builder.nodeTypeLabel)}</legend>
+            <select name="nodeType" class="select select-bordered w-full">${renderSceneNodeTypeOptions(messages, "2d", node.nodeType)}</select>
+          </fieldset>
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">${escapeHtml(messages.builder.layerLabel)}</legend>
+            <input name="layer" type="text" class="input input-bordered w-full" value="${escapeHtml(node.layer)}" />
+          </fieldset>
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">${escapeHtml(messages.builder.assetIdFieldLabel)}</legend>
+            <input name="assetId" type="text" class="input input-bordered w-full" value="${escapeHtml(node.assetId ?? "")}" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" />
+          </fieldset>
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">${escapeHtml(messages.builder.animationClipIdFieldLabel)}</legend>
+            <input name="animationClipId" type="text" class="input input-bordered w-full" value="${escapeHtml(node.animationClipId ?? "")}" placeholder="${escapeHtml(messages.builder.clipIdPlaceholder)}" />
+          </fieldset>
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">${escapeHtml(messages.builder.xLabel)}</legend>
+            <input name="positionX" type="number" class="input input-bordered w-full" value="${node.position.x}" />
+          </fieldset>
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">${escapeHtml(messages.builder.yLabel)}</legend>
+            <input name="positionY" type="number" class="input input-bordered w-full" value="${node.position.y}" />
+          </fieldset>
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">${escapeHtml(messages.builder.widthLabel)}</legend>
+            <input name="sizeWidth" type="number" class="input input-bordered w-full" value="${node.size.width}" min="1" />
+          </fieldset>
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">${escapeHtml(messages.builder.heightLabel)}</legend>
+            <input name="sizeHeight" type="number" class="input input-bordered w-full" value="${node.size.height}" min="1" />
+          </fieldset>
         </div>
         <div class="card-actions justify-end gap-2">
           <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
@@ -131,30 +206,66 @@ const renderNodeForm = (
   }
 
   return `<article class="card card-border bg-base-100 shadow-sm">
-    <form class="card-body gap-3" hx-post="${escapeHtml(formAction)}" hx-target="#scene-detail" hx-swap="innerHTML" hx-indicator="#${nodeSpinnerId}" hx-disabled-elt="button, input, select, textarea">
+    <form class="card-body gap-3" data-scene-node-form data-scene-node-id="${escapeHtml(node.id)}" data-scene-node-kind="3d" hx-post="${escapeHtml(formAction)}" hx-target="#scene-detail" hx-swap="innerHTML" hx-indicator="#${nodeSpinnerId}" hx-disabled-elt="button, input, select, textarea">
       <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
       <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
       <input type="hidden" name="id" value="${escapeHtml(node.id)}" />
       <input type="hidden" name="nodeKind" value="3d" />
       <div class="flex items-center justify-between gap-3">
         <h3 class="card-title text-base">${escapeHtml(node.id)}</h3>
-        <div class="flex gap-2">${renderNodeBadge(node)}
-          <button type="button" class="btn btn-ghost btn-xs" data-scene-node-select="${escapeHtml(node.id)}">${escapeHtml(messages.builder.preview)}</button>
+        <div class="flex gap-2">${renderNodeBadge(messages, node)}
+          <button type="button" class="btn btn-ghost btn-xs" data-scene-node-select="${escapeHtml(node.id)}" aria-pressed="false">${escapeHtml(messages.builder.selectNode)}</button>
         </div>
       </div>
       <div class="grid gap-3 md:grid-cols-3">
-        <input name="nodeType" type="text" class="input input-bordered w-full" value="${escapeHtml(node.nodeType)}" />
-        <input name="assetId" type="text" class="input input-bordered w-full" value="${escapeHtml(node.assetId ?? "")}" placeholder="asset id" />
-        <input name="animationClipId" type="text" class="input input-bordered w-full" value="${escapeHtml(node.animationClipId ?? "")}" placeholder="clip id" />
-        <input name="positionX" type="number" class="input input-bordered w-full" value="${node.position.x}" step="0.1" />
-        <input name="positionY" type="number" class="input input-bordered w-full" value="${node.position.y}" step="0.1" />
-        <input name="positionZ" type="number" class="input input-bordered w-full" value="${node.position.z}" step="0.1" />
-        <input name="rotationX" type="number" class="input input-bordered w-full" value="${node.rotation.x}" step="0.1" />
-        <input name="rotationY" type="number" class="input input-bordered w-full" value="${node.rotation.y}" step="0.1" />
-        <input name="rotationZ" type="number" class="input input-bordered w-full" value="${node.rotation.z}" step="0.1" />
-        <input name="scaleX" type="number" class="input input-bordered w-full" value="${node.scale.x}" step="0.1" />
-        <input name="scaleY" type="number" class="input input-bordered w-full" value="${node.scale.y}" step="0.1" />
-        <input name="scaleZ" type="number" class="input input-bordered w-full" value="${node.scale.z}" step="0.1" />
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.nodeTypeLabel)}</legend>
+          <select name="nodeType" class="select select-bordered w-full">${renderSceneNodeTypeOptions(messages, "3d", node.nodeType)}</select>
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.assetIdFieldLabel)}</legend>
+          <input name="assetId" type="text" class="input input-bordered w-full" value="${escapeHtml(node.assetId ?? "")}" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" />
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.animationClipIdFieldLabel)}</legend>
+          <input name="animationClipId" type="text" class="input input-bordered w-full" value="${escapeHtml(node.animationClipId ?? "")}" placeholder="${escapeHtml(messages.builder.clipIdPlaceholder)}" />
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.xLabel)}</legend>
+          <input name="positionX" type="number" class="input input-bordered w-full" value="${node.position.x}" step="0.1" />
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.yLabel)}</legend>
+          <input name="positionY" type="number" class="input input-bordered w-full" value="${node.position.y}" step="0.1" />
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.zLabel)}</legend>
+          <input name="positionZ" type="number" class="input input-bordered w-full" value="${node.position.z}" step="0.1" />
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.rotationXLabel)}</legend>
+          <input name="rotationX" type="number" class="input input-bordered w-full" value="${node.rotation.x}" step="0.1" />
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.rotationYLabel)}</legend>
+          <input name="rotationY" type="number" class="input input-bordered w-full" value="${node.rotation.y}" step="0.1" />
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.rotationZLabel)}</legend>
+          <input name="rotationZ" type="number" class="input input-bordered w-full" value="${node.rotation.z}" step="0.1" />
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.scaleXLabel)}</legend>
+          <input name="scaleX" type="number" class="input input-bordered w-full" value="${node.scale.x}" step="0.1" />
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.scaleYLabel)}</legend>
+          <input name="scaleY" type="number" class="input input-bordered w-full" value="${node.scale.y}" step="0.1" />
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.scaleZLabel)}</legend>
+          <input name="scaleZ" type="number" class="input input-bordered w-full" value="${node.scale.z}" step="0.1" />
+        </fieldset>
       </div>
       <div class="card-actions justify-end gap-2">
         <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
@@ -181,7 +292,7 @@ export const renderSceneEditor = (
 ): string => {
   const sceneIds = Object.keys(scenes);
   const selectedSceneId = sceneIds[0] ?? null;
-  const selectedScene = selectedSceneId ? scenes[selectedSceneId] ?? null : null;
+  const selectedScene = selectedSceneId ? (scenes[selectedSceneId] ?? null) : null;
   const sceneCards = sceneIds
     .map((id) => {
       const scene = scenes[id];
@@ -215,7 +326,7 @@ export const renderSceneEditor = (
             hx-target="#scene-detail"
             hx-swap="innerHTML"
             aria-label="${escapeHtml(messages.builder.editScene)}: ${escapeHtml(scene.id)}"
-          >${escapeHtml(messages.builder.preview)}</button>
+          >${escapeHtml(messages.builder.openDetails)}</button>
         </div>
       </article>`;
     })
@@ -243,14 +354,14 @@ export const renderSceneEditor = (
             <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneId)}</legend>
-            <input name="id" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.sceneCreateTitlePlaceholder)}" required />
+            <input name="id" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.sceneIdPlaceholder)}" required />
             </fieldset>
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneTitle)}</legend>
               <input name="titleKey" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.sceneCreateTitlePlaceholder)}" required />
             </fieldset>
             <fieldset class="fieldset">
-              <legend class="fieldset-legend">${escapeHtml(messages.builder.assetPlaceholder)}</legend>
+              <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneBackgroundLabel)}</legend>
               <input name="background" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.sceneBackgroundPlaceholder)}" required />
             </fieldset>
             <fieldset class="fieldset">
@@ -361,7 +472,10 @@ export const renderSceneDetail = (
           </div>
         </div>
 
-        ${renderScenePreview(scene, messages.builder.spawnPoint)}
+        <section class="space-y-2">
+          <h3 class="card-title text-base">${escapeHtml(messages.builder.scenePreviewTitle)}</h3>
+          ${renderScenePreview(scene, messages.builder.spawnPoint)}
+        </section>
 
         <section class="grid gap-4 xl:grid-cols-[0.28fr_0.44fr_0.28fr]">
           <article class="card card-border bg-base-100 shadow-sm">
@@ -369,21 +483,32 @@ export const renderSceneDetail = (
               <h3 class="card-title text-base">${escapeHtml(messages.builder.assets)}</h3>
               <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.assetPlaceholder)}</p>
               <div class="flex flex-wrap gap-2">
-                <span class="badge badge-soft">sprite</span>
-                <span class="badge badge-soft">trigger</span>
-                <span class="badge badge-soft">camera</span>
-                <span class="badge badge-soft">light</span>
-                <span class="badge badge-soft">model</span>
+                ${renderScenePaletteBadges(messages, scene.sceneMode)}
               </div>
             </div>
           </article>
-          <article class="card card-border bg-base-100 shadow-sm" data-scene-editor>
+          <article class="card card-border bg-base-100 shadow-sm" data-scene-editor data-scene-id="${escapeHtml(scene.id)}" data-scene-mode="${escapeHtml(scene.sceneMode ?? "2d")}">
             <div class="card-body gap-3">
               <div class="flex items-center justify-between gap-3">
-                <h3 class="card-title text-base">${escapeHtml(messages.builder.preview)}</h3>
-                ${renderSceneModeBadge(messages, scene.sceneMode)}
+                <h3 class="card-title text-base">${escapeHtml(messages.builder.runtimePreviewTitle)}</h3>
+                <div class="flex flex-wrap items-center gap-2">
+                  ${
+                    scene.sceneMode === "3d"
+                      ? `<div class="join" role="group" aria-label="${escapeHtml(messages.builder.runtimePreviewTitle)}">
+                           <button type="button" class="btn btn-xs join-item btn-active" data-scene-transform-mode="translate" aria-pressed="true">${escapeHtml(messages.builder.transformModeTranslate)}</button>
+                           <button type="button" class="btn btn-xs join-item" data-scene-transform-mode="rotate" aria-pressed="false">${escapeHtml(messages.builder.transformModeRotate)}</button>
+                           <button type="button" class="btn btn-xs join-item" data-scene-transform-mode="scale" aria-pressed="false">${escapeHtml(messages.builder.transformModeScale)}</button>
+                         </div>`
+                      : ""
+                  }
+                  ${renderSceneModeBadge(messages, scene.sceneMode)}
+                </div>
               </div>
-              <div class="aspect-video overflow-hidden rounded-box border border-base-300 bg-base-200" data-scene-viewport></div>
+              <div class="flex flex-wrap items-center gap-2 text-sm text-base-content/70">
+                <span class="font-medium">${escapeHtml(messages.builder.selectedNodeLabel)}:</span>
+                <span class="badge badge-outline" data-scene-selected-node data-empty-label="${escapeHtml(messages.builder.noNodeSelected)}">${escapeHtml(messages.builder.noNodeSelected)}</span>
+              </div>
+              <div class="aspect-video overflow-hidden rounded-box border border-base-300 bg-base-200" data-scene-viewport aria-label="${escapeHtml(messages.builder.runtimePreviewTitle)}"></div>
               <script type="application/json">${scenePayload}</script>
             </div>
           </article>
@@ -392,39 +517,53 @@ export const renderSceneDetail = (
               <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
               <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
               <h3 class="card-title text-base">${escapeHtml(messages.builder.sceneNodes)}</h3>
-              <input name="id" type="text" class="input input-bordered w-full" placeholder="node.id" required />
-              <input name="assetId" type="text" class="input input-bordered w-full" placeholder="asset id" />
-              <input name="animationClipId" type="text" class="input input-bordered w-full" placeholder="clip id" />
-              <input name="layer" type="text" class="input input-bordered w-full" placeholder="foreground" value="foreground" />
-              <select name="nodeType" class="select select-bordered w-full">
-                ${
-                  scene.sceneMode === "3d"
-                    ? `
-                      <option value="model">model</option>
-                      <option value="light">light</option>
-                      <option value="camera">camera</option>
-                      <option value="spawn">spawn</option>
-                      <option value="trigger">trigger</option>`
-                    : `
-                      <option value="sprite">sprite</option>
-                      <option value="tile">tile</option>
-                      <option value="spawn">spawn</option>
-                      <option value="trigger">trigger</option>
-                      <option value="camera">camera</option>`
-                }
-              </select>
+              <fieldset class="fieldset">
+                <legend class="fieldset-legend">${escapeHtml(messages.builder.nodeIdLabel)}</legend>
+                <input name="id" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.nodeIdPlaceholder)}" required />
+              </fieldset>
+              <fieldset class="fieldset">
+                <legend class="fieldset-legend">${escapeHtml(messages.builder.assetIdFieldLabel)}</legend>
+                <input name="assetId" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" />
+              </fieldset>
+              <fieldset class="fieldset">
+                <legend class="fieldset-legend">${escapeHtml(messages.builder.animationClipIdFieldLabel)}</legend>
+                <input name="animationClipId" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.clipIdPlaceholder)}" />
+              </fieldset>
+              <fieldset class="fieldset">
+                <legend class="fieldset-legend">${escapeHtml(messages.builder.layerLabel)}</legend>
+                <input name="layer" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.layerPlaceholder)}" />
+              </fieldset>
+              <fieldset class="fieldset">
+                <legend class="fieldset-legend">${escapeHtml(messages.builder.nodeTypeLabel)}</legend>
+                <select name="nodeType" class="select select-bordered w-full">${renderSceneNodeTypeOptions(messages, scene.sceneMode)}</select>
+              </fieldset>
               <div class="grid gap-2 md:grid-cols-2">
-                <input name="positionX" type="number" class="input input-bordered w-full" value="0" step="0.1" />
-                <input name="positionY" type="number" class="input input-bordered w-full" value="0" step="0.1" />
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">${escapeHtml(messages.builder.xLabel)}</legend>
+                  <input name="positionX" type="number" class="input input-bordered w-full" value="0" step="0.1" />
+                </fieldset>
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">${escapeHtml(messages.builder.yLabel)}</legend>
+                  <input name="positionY" type="number" class="input input-bordered w-full" value="0" step="0.1" />
+                </fieldset>
                 ${
                   scene.sceneMode === "3d"
-                    ? `<input name="positionZ" type="number" class="input input-bordered w-full md:col-span-2" value="0" step="0.1" />`
-                    : `<input name="sizeWidth" type="number" class="input input-bordered w-full" value="64" min="1" />
-                      <input name="sizeHeight" type="number" class="input input-bordered w-full" value="64" min="1" />`
+                    ? `<fieldset class="fieldset md:col-span-2">
+                         <legend class="fieldset-legend">${escapeHtml(messages.builder.zLabel)}</legend>
+                         <input name="positionZ" type="number" class="input input-bordered w-full" value="0" step="0.1" />
+                       </fieldset>`
+                    : `<fieldset class="fieldset">
+                         <legend class="fieldset-legend">${escapeHtml(messages.builder.widthLabel)}</legend>
+                         <input name="sizeWidth" type="number" class="input input-bordered w-full" value="64" min="1" />
+                       </fieldset>
+                       <fieldset class="fieldset">
+                         <legend class="fieldset-legend">${escapeHtml(messages.builder.heightLabel)}</legend>
+                         <input name="sizeHeight" type="number" class="input input-bordered w-full" value="64" min="1" />
+                       </fieldset>`
                 }
               </div>
               <div class="flex items-center gap-2">
-                <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.builder.addScene)}</button>
+                <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.builder.createSceneNode)}</button>
                 <span id="scene-node-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
               </div>
             </form>
@@ -446,7 +585,7 @@ export const renderSceneDetail = (
             </fieldset>
 
             <fieldset class="fieldset">
-              <legend class="fieldset-legend">${escapeHtml(messages.builder.assetPlaceholder)}</legend>
+              <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneBackgroundLabel)}</legend>
               <input id="scene-background" name="background" type="text" class="input input-bordered w-full" value="${escapeHtml(scene.background)}" required />
             </fieldset>
 
@@ -494,7 +633,7 @@ export const renderSceneDetail = (
       <div class="card card-border bg-base-100 shadow-sm">
         <div class="card-body">
           <h3 class="card-title text-base">${escapeHtml(messages.builder.collisions)} (${scene.collisions.length})</h3>
-          <div class="flex flex-wrap gap-2">${collisionBadges || `<span class="text-sm text-base-content/60">0</span>`}</div>
+          <div class="flex flex-wrap gap-2">${collisionBadges || `<span class="text-sm text-base-content/60">${escapeHtml(messages.builder.noCollisions)}</span>`}</div>
         </div>
       </div>
       <div class="card card-border bg-base-100 shadow-sm lg:col-span-2">
@@ -503,9 +642,9 @@ export const renderSceneDetail = (
             <h3 class="card-title text-base">${escapeHtml(messages.builder.sceneNodes)} (${scene.nodes?.length ?? 0})</h3>
             <span class="badge badge-soft">${escapeHtml(scene.sceneMode === "3d" ? messages.builder.sceneMode3d : messages.builder.sceneMode2d)}</span>
           </div>
-          <div class="grid gap-4 xl:grid-cols-2">${nodeCards || `<div role="alert" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.sceneNodes)}</span></div>`}</div>
+          <div class="grid gap-4 xl:grid-cols-2">${nodeCards || `<div role="alert" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noSceneNodes)}</span></div>`}</div>
           <div class="rounded-box border border-dashed border-base-300 bg-base-200/50 p-3 text-sm text-base-content/70">
-            ${escapeHtml(messages.builder.preview)}
+            ${escapeHtml(messages.builder.selectNode)}
           </div>
         </div>
       </div>

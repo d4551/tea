@@ -21,10 +21,12 @@ graph TB
     GR["game-routes (SSR game bootstrap)"]
     AR["api-routes"]
     AIR["ai-routes"]
+    AIP["ai-provider-plugin"]
     GP["game-plugin"]
     BR["builder-routes"]
     BA["builder-api-routes"]
     SP["session-purge"]
+    CW["creator-worker"]
   end
 
   subgraph Domain["Domain Services"]
@@ -46,7 +48,7 @@ graph TB
   GAME --> GP
   GAME --> SSE
   GAME --> WS
-  RC --> EH --> CT --> SW --> SA --> PR --> GR --> AR --> AIR --> GP --> BR --> BA --> SP
+  RC --> EH --> CT --> SW --> SA --> PR --> GR --> AR --> AIR --> AIP --> GP --> BR --> BA --> SP --> CW
   GP --> LOOP --> STORE --> GS
   LOOP --> SCENE
   LOOP --> AI
@@ -58,14 +60,23 @@ graph TB
 ## Ownership Boundaries
 
 - `request-context` owns correlation-id creation and per-request completion logs.
+- `builder-request-context` owns canonical builder locale, project id, and current-path resolution from request URL, query/body overrides, and route params.
+- `layout.ts` owns the shared SSR `LayoutContext` and document renderer, so page, builder, and game shells consume one route-derived layout contract instead of rebuilding nav/path state independently.
 - `auth-session` owns anonymous cookie identity, and that cookie identity is now the ownership boundary for game sessions.
 - `game-plugin` owns game transport contracts:
   - REST lifecycle routes (`create`, `state`, `restore`, `save`, `close`, `delete`)
   - command enqueue route
   - canonical HUD SSE stream
   - command/state websocket endpoint
-- `game-loop` owns authoritative simulation, token verification, tick scheduling, throttled persistence, and chat rate limiting.
-- `builder-service` owns project draft state, release snapshots, publish/unpublish semantics, and AI patch preview/apply flows.
+  - websocket tick registration/cleanup and session-scoped transport teardown
+- `game-loop` owns authoritative simulation, canonical session resolution, dashboard/session metrics, expired-session purging, HUD state projection, token verification, tick scheduling, throttled persistence, and chat rate limiting.
+- `playerProgressStore` owns XP, level, and one-time interaction persistence consumed by the game loop and HUD projection.
+- `shared/contracts/game.ts` owns boundary validation for persisted scene state, trigger definitions, and realtime websocket frames before they reach runtime or client renderers.
+- `GameStateStore` stays the persistence boundary behind `game-loop`.
+- `builder-project-state-store` owns builder project JSON decode/normalize, optimistic versioned saves, snapshot projection, and published-release reads.
+- `builder-service` owns builder domain mutations, canonical create-form defaults for mechanics/generation/automation, publish/unpublish orchestration, and AI patch preview/apply flows.
+- `ai-provider-plugin` owns provider-registry boot, periodic capability refresh, and shutdown disposal.
+- `creator-worker-plugin` owns lifecycle-managed generation-job and automation-run draining.
 
 ## Session Security Contract
 
@@ -117,6 +128,8 @@ Removed legacy transport:
 
 - `/api/game/session/:id/partials/dialogue` is removed.
 - HUD rendering now has one source of truth: the SSE stream.
+- Session close/delete now actively tear down websocket tick owners for that session instead of
+  waiting for the socket to disappear later.
 
 ## Tick and Persistence Model
 
@@ -159,20 +172,27 @@ flowchart TB
 
 ```mermaid
 flowchart TD
-  DRAFT["Draft mutations (scenes, NPCs, dialogue, assets, mechanics)"] --> PROJECT["builderProject.state + version + checksum"]
+  DRAFT["Draft mutations (scenes, NPCs, dialogue, mechanics)"] --> PROJECT["builderProject.state + version + checksum"]
+  DRAFT --> CONTENT["builderProjectScene + builderProjectDialogueEntry"]
+  DRAFT --> MEDIA["builderProjectAsset + builderProjectAnimationClip"]
+  DRAFT --> MECHANICS["builderProjectDialogueGraph + builderProjectQuest + builderProjectTrigger + builderProjectFlag"]
   PROJECT --> PUBLISH["publishProject(true)"]
+  CONTENT --> PUBLISH
+  MEDIA --> PUBLISH
+  MECHANICS --> PUBLISH
   PUBLISH --> SNAPSHOT["Create immutable builderProjectRelease"]
   SNAPSHOT --> POINTER["Update publishedReleaseVersion"]
   POINTER --> RUNTIME["gameLoop.createSession(projectId)"]
   RUNTIME --> RELEASE["load published release state"]
-  RELEASE --> SESSION["seed runtime scene, dialogue from immutable release"]
+  RELEASE --> SESSION["seed runtime scene, dialogue, media from immutable release"]
 ```
 
 Current behavior:
 
-- Draft edits mutate `builderProject.state` (scenes, NPCs, dialogue, assets, mechanics).
+- Draft edits mutate `builderProject.state` only for residual draft metadata, while scenes, dialogue catalogs, assets, animation clips, dialogue graphs, quests, triggers, flags, generation jobs, artifacts, and automation runs live in relational draft tables.
 - Asset upload via `POST /api/builder/assets/upload`; mechanics CRUD via quest/trigger/dialogue-graph routes.
-- Publish creates a new immutable release snapshot.
+- Generation review streams via `GET /api/builder/generation-jobs/:jobId/stream`; automation evidence review via builder automation routes.
+- Publish creates a new immutable release snapshot that materializes residual draft JSON plus relational content, media, mechanics, and worker state.
 - Runtime session seeding consumes the published snapshot, not mutable draft state.
 - Unpublish clears `publishedReleaseVersion` without deleting historical releases.
 
@@ -195,19 +215,20 @@ If these are missing/invalid, the playable client aborts initialization instead 
 | Environment parsing and defaults | `src/config/environment.ts` |
 | i18n message catalogs (en-US, zh-CN) | `src/shared/i18n/messages.ts` |
 | Locale resolution (Accept-Language, ?lang=) | `src/shared/i18n/translator.ts` |
+| Builder request locale/project/path resolution | `src/plugins/builder-request-context.ts` |
+| Shared SSR layout context + document rendering | `src/views/layout.ts` |
 | Runtime game contract | `src/shared/config/game-config.ts` |
 | Public route constants | `src/shared/constants/routes.ts` |
 | Game type contracts | `src/shared/contracts/game.ts` |
 | Session persistence + repair | `src/domain/game/services/GameStateStore.ts` |
 | Authoritative simulation loop | `src/domain/game/game-loop.ts` |
-| Builder draft/release persistence | `src/domain/builder/builder-service.ts` |
+| Builder draft/release domain mutations | `src/domain/builder/builder-service.ts` |
+| Builder project state codec + snapshot persistence | `src/domain/builder/builder-project-state-store.ts` |
+| Builder project/release persistence primitives | `src/shared/services/db.ts` |
 
 ## Verification Gates
 
-- `bun run typecheck`
+- `bun run build:assets`
 - `bun run lint`
+- `bun run typecheck`
 - `bun test`
-
-Note:
-
-- Tests are currently passing, but Bun `1.3.10` may panic after completion. This is a Bun runtime issue observed post-run, not a test assertion failure.

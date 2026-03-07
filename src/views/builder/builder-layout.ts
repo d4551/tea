@@ -172,7 +172,7 @@ export const renderBuilderProjectShell = (
 
   const playButton =
     playHref === null
-      ? `<button type="button" class="btn btn-secondary btn-sm btn-disabled">${escapeHtml(messages.builder.noPublishedRelease)}</button>`
+      ? `<button type="button" class="btn btn-secondary btn-sm btn-disabled" disabled aria-disabled="true">${escapeHtml(messages.builder.noPublishedRelease)}</button>`
       : `<a href="${escapeHtml(playHref)}" class="btn btn-secondary btn-sm">${escapeHtml(messages.builder.playPublishedBuild)}</a>`;
 
   return `<section id="builder-project-shell" class="card card-border bg-base-100/95 shadow-sm">

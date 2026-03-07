@@ -2,7 +2,6 @@ import { Elysia, t } from "elysia";
 import { normalizeLocale } from "../config/environment.ts";
 import { gameTextByLocale } from "../domain/game/data/game-text.ts";
 import { gameLoop } from "../domain/game/game-loop.ts";
-import { gameStateStore } from "../domain/game/services/GameStateStore.ts";
 import { ApplicationError } from "../lib/error-envelope.ts";
 import { createLogger } from "../lib/logger.ts";
 import { authSessionGuard, resolveAuthSession } from "../plugins/auth-session.ts";
@@ -10,13 +9,13 @@ import { defaultGameConfig } from "../shared/config/game-config.ts";
 import { httpStatus } from "../shared/constants/http.ts";
 import { appRoutes } from "../shared/constants/routes.ts";
 import type {
+  GameHudState,
   GameSession,
   GameSessionState,
   GameSseCloseFrame,
   GameSseCloseReason,
 } from "../shared/contracts/game.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
-import { prisma } from "../shared/services/db.ts";
 import { safeJsonParse } from "../shared/utils/safe-json.ts";
 import { escapeHtml } from "../views/layout.ts";
 import { type SseUtils, ssePlugin } from "./sse-plugin.ts";
@@ -220,9 +219,6 @@ const wsCloseCode = {
   sessionExpired: 4408,
 } as const;
 
-const resolveCloseReason = (code: "SESSION_NOT_FOUND" | "SESSION_EXPIRED"): GameSseCloseReason =>
-  code === "SESSION_EXPIRED" ? "session-expired" : "session-missing";
-
 const buildCloseFrame = (
   reason: GameSseCloseReason,
   sessionId: string,
@@ -239,7 +235,7 @@ const asLifecycleState = async (
 ): Promise<GameSessionState | null> => gameLoop.getSessionState(sessionId, ownerSessionId);
 
 const requireGameSession = async (sessionId: string): Promise<GameSession> => {
-  const sessionResult = await gameStateStore.getSession(sessionId);
+  const sessionResult = await gameLoop.getStoredSession(sessionId);
   if (sessionResult.ok) {
     return sessionResult.payload;
   }
@@ -282,9 +278,11 @@ const requireOwnedGameSession = async (
 const createHudStream = async function* ({
   session,
   sse,
+  signal,
 }: {
-  session: Pick<GameSession, "id" | "locale" | "scene">;
+  session: Pick<GameSession, "id" | "locale" | "scene" | "ownerSessionId">;
   sse: SseUtils;
+  signal: AbortSignal;
 }): AsyncGenerator<string> {
   const sessionId = session.id;
   const catalog =
@@ -292,26 +290,71 @@ const createHudStream = async function* ({
   const messages = getMessages(session.locale as "en-US" | "zh-CN");
   const retryMs = defaultGameConfig.hudRetryDelayMs;
   let sequence = 0;
-  const sceneTitle = session.scene.sceneTitle;
+  const renderSceneBadge = (sceneTitle: string): string =>
+    `<div id="hud-scene" sse-swap="scene-badge" hx-swap="outerHTML" aria-live="polite" role="status" class="pointer-events-auto rounded-full border border-base-content/10 bg-base-100/80 px-6 py-2 text-lg font-bold shadow backdrop-blur">${escapeHtml(
+      sceneTitle,
+    )}</div>`;
+  const renderSceneHeading = (sceneTitle: string): string =>
+    `<h1 id="game-scene-title-heading" sse-swap="scene-title-heading" hx-swap="outerHTML" class="text-3xl font-semibold">${escapeHtml(
+      sceneTitle,
+    )}</h1>`;
+  const renderSceneValue = (sceneTitle: string): string =>
+    `<span id="game-scene-title-value" sse-swap="scene-title-value" hx-swap="outerHTML" class="font-medium">${escapeHtml(
+      sceneTitle,
+    )}</span>`;
+  const renderObjectiveSummary = (title: string): string =>
+    `<p id="game-objective-summary" sse-swap="objective-summary" hx-swap="outerHTML" class="text-sm text-base-content/70">${escapeHtml(
+      title,
+    )}</p>`;
+  const renderObjectiveCard = (title: string): string =>
+    `<p id="game-objective-card" sse-swap="objective-card" hx-swap="outerHTML" class="text-sm text-base-content/75">${escapeHtml(
+      title,
+    )}</p>`;
+  const renderSceneMode = (sceneMode: GameHudState["sceneMode"]): string =>
+    `<span id="game-scene-mode-value" sse-swap="scene-mode" hx-swap="outerHTML" class="font-medium">${escapeHtml(
+      sceneMode === "3d" ? messages.game.sceneMode3d : messages.game.sceneMode2d,
+    )}</span>`;
 
-  yield sse.event(
-    "scene-title",
-    `<div id="hud-scene" class="text-xl font-bold">${escapeHtml(sceneTitle)}</div>`,
-    { id: `${sessionId}-scene`, retry: retryMs },
-  );
+  const initialObjectiveTitle = messages.game.objectiveDescription;
+
+  yield sse.event("scene-badge", renderSceneBadge(session.scene.sceneTitle), {
+    id: `${sessionId}-scene-badge`,
+    retry: retryMs,
+  });
+  yield sse.event("scene-title-heading", renderSceneHeading(session.scene.sceneTitle), {
+    id: `${sessionId}-scene-heading`,
+    retry: retryMs,
+  });
+  yield sse.event("scene-title-value", renderSceneValue(session.scene.sceneTitle), {
+    id: `${sessionId}-scene-value`,
+    retry: retryMs,
+  });
+  yield sse.event("objective-summary", renderObjectiveSummary(initialObjectiveTitle), {
+    id: `${sessionId}-objective-summary`,
+    retry: retryMs,
+  });
+  yield sse.event("objective-card", renderObjectiveCard(initialObjectiveTitle), {
+    id: `${sessionId}-objective-card`,
+    retry: retryMs,
+  });
+  yield sse.event("scene-mode", renderSceneMode(session.scene.sceneMode), {
+    id: `${sessionId}-scene-mode`,
+    retry: retryMs,
+  });
 
   let lastXp = -1;
   let lastDialogueKey = "";
+  let lastSceneTitle = "";
+  let lastObjectiveTitle = "";
+  let lastSceneMode: GameHudState["sceneMode"] | "__missing" = "__missing";
 
-  while (true) {
-    const result = await gameStateStore.getSession(sessionId);
-    if (!result.ok) {
+  while (!signal.aborted) {
+    const hudState = await gameLoop.getHudState(sessionId, session.ownerSessionId);
+    if (!hudState) {
       const frame = buildCloseFrame(
-        resolveCloseReason(result.error),
+        "session-missing",
         sessionId,
-        result.error === "SESSION_EXPIRED"
-          ? messages.game.sessionExpiredStream
-          : messages.game.sessionDeletedStream,
+        messages.game.sessionDeletedStream,
       );
       yield sse.event("close", JSON.stringify(frame), {
         id: `${sessionId}-close`,
@@ -320,11 +363,49 @@ const createHudStream = async function* ({
       return;
     }
 
-    const progress = await prisma.playerProgress.findUnique({
-      where: { sessionId },
-    });
-    const xp = progress?.xp ?? 0;
-    const level = progress?.level ?? 1;
+    const sceneTitle = hudState.sceneTitle;
+    if (sceneTitle !== lastSceneTitle) {
+      yield sse.event("scene-badge", renderSceneBadge(sceneTitle), {
+        id: `${sessionId}-scene-badge-${sequence}`,
+        retry: retryMs,
+      });
+      yield sse.event("scene-title-heading", renderSceneHeading(sceneTitle), {
+        id: `${sessionId}-scene-heading-${sequence}`,
+        retry: retryMs,
+      });
+      yield sse.event("scene-title-value", renderSceneValue(sceneTitle), {
+        id: `${sessionId}-scene-value-${sequence}`,
+        retry: retryMs,
+      });
+      lastSceneTitle = sceneTitle;
+      sequence += 1;
+    }
+
+    const objectiveTitle = hudState.activeQuestTitle ?? messages.game.objectiveDescription;
+    if (objectiveTitle !== lastObjectiveTitle) {
+      yield sse.event("objective-summary", renderObjectiveSummary(objectiveTitle), {
+        id: `${sessionId}-objective-summary-${sequence}`,
+        retry: retryMs,
+      });
+      yield sse.event("objective-card", renderObjectiveCard(objectiveTitle), {
+        id: `${sessionId}-objective-card-${sequence}`,
+        retry: retryMs,
+      });
+      lastObjectiveTitle = objectiveTitle;
+      sequence += 1;
+    }
+
+    if (hudState.sceneMode !== lastSceneMode) {
+      yield sse.event("scene-mode", renderSceneMode(hudState.sceneMode), {
+        id: `${sessionId}-scene-mode-${sequence}`,
+        retry: retryMs,
+      });
+      lastSceneMode = hudState.sceneMode;
+      sequence += 1;
+    }
+
+    const xp = hudState.xp;
+    const level = hudState.level;
 
     if (xp !== lastXp) {
       const levelName =
@@ -337,7 +418,7 @@ const createHudStream = async function* ({
       lastXp = xp;
     }
 
-    const dialogue = result.payload.scene.dialogue;
+    const dialogue = hudState.dialogue;
     const dialogueKey = dialogue ? `${dialogue.npcId}:${dialogue.lineKey}:${dialogue.line}` : "";
 
     if (dialogueKey !== lastDialogueKey) {
@@ -366,21 +447,35 @@ const createHudStreamHandler = async function* ({
   params,
   sse,
   cookie,
+  request,
 }: {
   params: { id: string };
   sse: SseUtils;
   cookie: Parameters<typeof resolveAuthSession>[0];
+  request: Request;
 }): AsyncGenerator<string> {
   const ownerSessionId = resolveAuthSession(cookie).sessionId;
   const session = await requireOwnedGameSession(params.id, ownerSessionId);
-  yield* createHudStream({ session, sse });
+  yield* createHudStream({ session, sse, signal: request.signal });
 };
 
 const wsConnKeys = new WeakMap<object, string>();
 const wsCleanups = new Map<string, () => void>();
+const wsConnSessions = new Map<string, string>();
+const wsConnSockets = new Map<
+  string,
+  { close(code?: number): void; unsubscribe(topic: string): void }
+>();
+const wsConnectionKeysBySession = new Map<string, Set<string>>();
 const wsLocales = new Map<string, SupportedLocale>();
 
-type WsQueryBag = Record<string, string | string[] | undefined>;
+const readObjectProperty = (value: unknown, key: string): unknown => {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  return Object.hasOwn(value, key) ? (value as Record<string, unknown>)[key] : undefined;
+};
 
 const normalizeResumeToken = (rawValue: unknown): string | undefined => {
   if (typeof rawValue === "string") {
@@ -398,21 +493,71 @@ const normalizeResumeToken = (rawValue: unknown): string | undefined => {
 };
 
 const readResumeTokenFromWsQuery = (query: unknown): string | undefined => {
-  if (!query || typeof query !== "object") return undefined;
-  const bag = query as WsQueryBag;
-  return normalizeResumeToken(bag.resumeToken);
+  return normalizeResumeToken(readObjectProperty(query, "resumeToken"));
 };
 
-const resolveWsOwnerSessionId = (ws: {
-  readonly data: { readonly cookie?: unknown };
-}): string | null => {
-  const rawCookie = ws.data.cookie;
+const resolveWsOwnerSessionId = (rawCookie: unknown): string | null => {
   if (!rawCookie || typeof rawCookie !== "object") {
     return null;
   }
 
   const auth = resolveAuthSession(rawCookie as Parameters<typeof resolveAuthSession>[0]);
   return auth.sessionId;
+};
+
+const registerWsConnection = (
+  sessionId: string,
+  connKey: string,
+  locale: SupportedLocale,
+  cleanup: () => void,
+  socket: { close(code?: number): void; unsubscribe(topic: string): void },
+): void => {
+  wsCleanups.set(connKey, cleanup);
+  wsLocales.set(connKey, locale);
+  wsConnSessions.set(connKey, sessionId);
+  wsConnSockets.set(connKey, socket);
+
+  const sessionKeys = wsConnectionKeysBySession.get(sessionId) ?? new Set<string>();
+  sessionKeys.add(connKey);
+  wsConnectionKeysBySession.set(sessionId, sessionKeys);
+};
+
+const cleanupWsConnection = (connKey: string): void => {
+  wsCleanups.get(connKey)?.();
+  wsCleanups.delete(connKey);
+  wsLocales.delete(connKey);
+  wsConnSockets.delete(connKey);
+
+  const sessionId = wsConnSessions.get(connKey);
+  wsConnSessions.delete(connKey);
+  if (!sessionId) {
+    return;
+  }
+
+  const sessionKeys = wsConnectionKeysBySession.get(sessionId);
+  sessionKeys?.delete(connKey);
+  if (sessionKeys && sessionKeys.size === 0) {
+    wsConnectionKeysBySession.delete(sessionId);
+  }
+};
+
+const closeWsConnectionsForSession = (
+  sessionId: string,
+  closeCode: number = wsCloseCode.sessionNotFound,
+): void => {
+  const sessionKeys = [...(wsConnectionKeysBySession.get(sessionId) ?? new Set<string>())];
+  for (const connKey of sessionKeys) {
+    const socket = wsConnSockets.get(connKey);
+    socket?.unsubscribe(`game:${sessionId}`);
+    cleanupWsConnection(connKey);
+    socket?.close(closeCode);
+  }
+};
+
+const cleanupAllWsConnections = (): void => {
+  for (const sessionId of [...wsConnectionKeysBySession.keys()]) {
+    closeWsConnectionsForSession(sessionId, wsCloseCode.sessionExpired);
+  }
 };
 
 export const gamePlugin = new Elysia({ prefix: "/api/game" })
@@ -459,7 +604,15 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
           const ownerSessionId = resolveAuthSession(cookie).sessionId;
           const session = await requireOwnedGameSession(params.id, ownerSessionId);
           const state = await asLifecycleState(session.id, ownerSessionId);
-          return { ok: true, data: state ?? gameStateStore.toSnapshot(session) };
+          if (!state) {
+            throw new ApplicationError(
+              "SESSION_NOT_FOUND",
+              "Session not found.",
+              httpStatus.notFound,
+              false,
+            );
+          }
+          return { ok: true, data: state };
         },
         {
           params: t.Object({ id: t.String() }),
@@ -519,6 +672,8 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
             );
           }
 
+          closeWsConnectionsForSession(session.id);
+
           return {
             ok: true,
             data: {
@@ -576,10 +731,20 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .delete(
         "/session/:id",
-        async ({ params, cookie }) => {
+        async ({ params, set, cookie }) => {
           const ownerSessionId = resolveAuthSession(cookie).sessionId;
           const session = await requireOwnedGameSession(params.id, ownerSessionId);
-          await gameStateStore.deleteSession(session.id);
+          const closed = await gameLoop.closeSession(session.id);
+          if (!closed) {
+            set.status = httpStatus.notFound;
+            throw new ApplicationError(
+              "SESSION_NOT_FOUND",
+              "Session not found.",
+              httpStatus.notFound,
+              false,
+            );
+          }
+          closeWsConnectionsForSession(session.id);
           return {
             ok: true,
             data: {
@@ -604,7 +769,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
         async ({ body, params, set, cookie }) => {
           const ownerSessionId = resolveAuthSession(cookie).sessionId;
           const session = await requireOwnedGameSession(params.id, ownerSessionId);
-          const result = gameLoop.processCommand(session.id, body as unknown, session.locale);
+          const result = gameLoop.processCommand(session.id, body, session.locale);
           if (result.state === "rejected") {
             set.status = httpStatus.unprocessableEntity;
             throw new ApplicationError(
@@ -708,9 +873,9 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
           const sessionId = ws.data.params.id;
           ws.subscribe(`game:${sessionId}`);
 
-          const resumeToken = readResumeTokenFromWsQuery((ws.data as { query?: unknown }).query);
-          const ownerSessionId = resolveWsOwnerSessionId(ws as { data: { cookie?: unknown } });
-          const sessionResult = await gameStateStore.getSession(sessionId);
+          const resumeToken = readResumeTokenFromWsQuery(readObjectProperty(ws.data, "query"));
+          const ownerSessionId = resolveWsOwnerSessionId(readObjectProperty(ws.data, "cookie"));
+          const sessionResult = await gameLoop.getStoredSession(sessionId);
           if (!sessionResult.ok) {
             ws.close(
               sessionResult.error === "SESSION_EXPIRED"
@@ -741,23 +906,28 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
 
           const connKey = `${sessionId}:${crypto.randomUUID()}`;
           wsConnKeys.set(ws, connKey);
-          wsLocales.set(connKey, sessionResult.payload.locale as SupportedLocale);
+          const locale = sessionResult.payload.locale as SupportedLocale;
 
           const cleanup = gameLoop.startTick(sessionId, () => {
             void asLifecycleState(sessionId, ownerSessionId).then((state) => {
               if (!state) {
+                ws.unsubscribe(`game:${sessionId}`);
+                cleanupWsConnection(connKey);
+                ws.close(wsCloseCode.sessionNotFound);
                 return;
               }
 
-              ws.publish(`game:${sessionId}`, {
-                state: state.state,
-                commandQueueDepth: state.commandQueueDepth,
-                resumeToken: state.resumeToken,
-                resumeTokenExpiresAtMs: state.resumeTokenExpiresAtMs,
-              });
+              ws.send(
+                JSON.stringify({
+                  state: state.state,
+                  commandQueueDepth: state.commandQueueDepth,
+                  resumeToken: state.resumeToken,
+                  resumeTokenExpiresAtMs: state.resumeTokenExpiresAtMs,
+                }),
+              );
             });
           });
-          wsCleanups.set(connKey, cleanup);
+          registerWsConnection(sessionId, connKey, locale, cleanup, ws);
         },
 
         message(ws, command) {
@@ -765,7 +935,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
           const connKey = wsConnKeys.get(ws);
           const locale = (connKey ? wsLocales.get(connKey) : undefined) ?? "en-US";
           const normalizedCommand =
-            typeof command === "string" ? safeJsonParse<unknown>(command, command) : command;
+            typeof command === "string" ? safeJsonParse(command, null) : command;
           const result = gameLoop.processCommand(sessionId, normalizedCommand, locale);
           if (result.state !== "queued") {
             _logger.info("game.command.rejected", {
@@ -782,13 +952,14 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
 
           const connKey = wsConnKeys.get(ws);
           if (connKey) {
-            wsCleanups.get(connKey)?.();
-            wsCleanups.delete(connKey);
-            wsLocales.delete(connKey);
+            cleanupWsConnection(connKey);
             wsConnKeys.delete(ws);
           }
         },
       }),
-  );
+  )
+  .onStop(() => {
+    cleanupAllWsConnections();
+  });
 
 export type App = typeof gamePlugin;

@@ -1,4 +1,6 @@
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { appConfig } from "../src/config/environment.ts";
 import {
   assetRelativePaths,
@@ -7,6 +9,39 @@ import {
 } from "../src/shared/constants/assets.ts";
 
 type BunBuildOptions = Parameters<typeof Bun.build>[0];
+
+const resolvePackagePath = (specifier: string): string =>
+  fileURLToPath(import.meta.resolve(specifier));
+
+const findPackageRoot = (resolvedModulePath: string, packageName: string): string => {
+  let currentPath = resolvedModulePath;
+
+  while (true) {
+    const nextPath = resolve(currentPath, "..");
+    const packageJsonPath = join(nextPath, "package.json");
+
+    if (existsSync(packageJsonPath)) {
+      const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+        readonly name?: string;
+      };
+      if (packageJson.name === packageName) {
+        return nextPath;
+      }
+    }
+
+    if (nextPath === currentPath) {
+      throw new Error(`Unable to resolve package root for ${packageName}`);
+    }
+
+    currentPath = nextPath;
+  }
+};
+
+const htmxBundlePath = resolvePackagePath("htmx.org/dist/htmx.min.js");
+const transformersPackageRoot = findPackageRoot(
+  resolvePackagePath("@huggingface/transformers"),
+  "@huggingface/transformers",
+);
 
 /**
  * Canonical Bun asset-pipeline paths shared by build and watch scripts.
@@ -42,15 +77,12 @@ export const assetPipelinePaths = {
       assetRelativePaths.htmxExtensionsOutputDirectory,
     ),
   ),
-  htmxSourcePath: resolve(resolve(import.meta.dir, ".."), assetRelativePaths.htmxNodeModuleBundle),
+  htmxSourcePath: htmxBundlePath,
   htmxDestinationPath: resolve(
     resolve(import.meta.dir, ".."),
     joinLocalPath(appConfig.staticAssets.publicDirectory, assetRelativePaths.htmxPublicBundleFile),
   ),
-  onnxWasmSourceDirectory: resolve(
-    resolve(import.meta.dir, ".."),
-    "node_modules/@huggingface/transformers/dist",
-  ),
+  onnxWasmSourceDirectory: join(transformersPackageRoot, "dist"),
   onnxWasmDestinationDirectory: resolve(
     resolve(import.meta.dir, ".."),
     joinLocalPath(appConfig.staticAssets.publicDirectory, assetRelativePaths.onnxPublicDirectory),

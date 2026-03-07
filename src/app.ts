@@ -2,6 +2,8 @@ import { Elysia } from "elysia";
 // Domain services
 import { createOracleService } from "./domain/oracle/oracle-service.ts";
 // Shared middleware & plugins
+import { aiProviderPlugin } from "./plugins/ai-provider-plugin.ts";
+import { creatorWorkerPlugin } from "./plugins/creator-worker-plugin.ts";
 import { createErrorResponse } from "./plugins/error-handler.ts";
 // Game
 import { gamePlugin } from "./plugins/game-plugin.ts";
@@ -33,20 +35,6 @@ export const createApp = async () => {
 
       // Global error handler
       .onError(({ code, error, request, set }) => {
-        // #region agent log
-        const url = new URL(request.url);
-        fetch("http://127.0.0.1:7824/ingest/2a1ebe22-3205-47a7-ac66-14b2478b8cbc", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f14b60" },
-          body: JSON.stringify({
-            sessionId: "f14b60",
-            location: "app.ts:onError",
-            message: "request.error",
-            data: { code, error: String(error), path: url.pathname, hypothesisId: "H3,H5" },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
         const errorResponse = createErrorResponse(
           code,
           error instanceof Error ? error : new Error(String(error)),
@@ -56,8 +44,19 @@ export const createApp = async () => {
         set.status = errorResponse.status;
         return errorResponse.payload;
       })
-      .onAfterHandle(({ responseValue, set }) => {
+      .onAfterHandle(({ responseValue, request, set }) => {
         if (typeof responseValue === "string") {
+          const acceptHeader = request.headers.get("accept");
+          const hasExplicitContentType =
+            typeof set.headers["content-type"] === "string" ||
+            typeof set.headers["Content-Type"] === "string";
+          const wantsHtml =
+            acceptHeader === null ||
+            acceptHeader.includes("text/html") ||
+            acceptHeader.includes("application/xhtml+xml");
+          if (hasExplicitContentType || !wantsHtml) {
+            return;
+          }
           set.headers["content-type"] = contentType.htmlUtf8;
         }
       })
@@ -78,6 +77,9 @@ export const createApp = async () => {
       // AI Provider Management & Generation Routes
       .use(aiRoutes)
 
+      // AI provider lifecycle (boot, periodic refresh, shutdown cleanup)
+      .use(aiProviderPlugin)
+
       // Server-Authoritative Game Engine Routes (WebSocket + SSE + REST)
       .use(gamePlugin)
 
@@ -87,5 +89,8 @@ export const createApp = async () => {
 
       // Session purge lifecycle (onStart/onStop managed)
       .use(sessionPurgePlugin)
+
+      // Builder generation + automation lifecycle (onStart/onStop managed)
+      .use(creatorWorkerPlugin)
   );
 };

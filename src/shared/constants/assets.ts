@@ -4,7 +4,6 @@
 export const assetRelativePaths = {
   sourceStylesheet: "src/styles/app.css",
   stylesheetOutputFile: "app.css",
-  htmxNodeModuleBundle: "node_modules/htmx.org/dist/htmx.min.js",
   htmxPublicBundleFile: "vendor/htmx.min.js",
   htmxExtensionsOutputDirectory: "vendor/htmx-ext",
   htmxExtensionOracleIndicatorFile: "vendor/htmx-ext/oracle-indicator.js",

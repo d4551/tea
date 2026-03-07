@@ -19,6 +19,7 @@ interface AuthSessionCookieOptions {
 }
 
 type AuthCookieBag = Record<string, Cookie<unknown>>;
+const authSessionCache = new WeakMap<AuthCookieBag, AuthSession>();
 
 const authSessionCookieSchema = t.Cookie({
   [appConfig.auth.sessionCookieName]: t.Optional(t.String()),
@@ -47,10 +48,18 @@ const readSessionId = (cookie: AuthCookieBag): string | null => {
  * @returns Anonymous session state derived from the session cookie.
  */
 export const resolveAuthSession = (cookie: AuthCookieBag): AuthSession => {
-  return {
-    sessionId: readSessionId(cookie) ?? createAnonymousSessionId(),
-    hasSession: true,
+  const cachedSession = authSessionCache.get(cookie);
+  if (cachedSession) {
+    return cachedSession;
+  }
+
+  const existingSessionId = readSessionId(cookie);
+  const authSession: AuthSession = {
+    sessionId: existingSessionId ?? createAnonymousSessionId(),
+    hasSession: existingSessionId !== null,
   };
+  authSessionCache.set(cookie, authSession);
+  return authSession;
 };
 
 /**
@@ -61,12 +70,7 @@ export const authSessionGuard = {
   beforeHandle: ({ cookie }: { cookie: AuthCookieBag }) => {
     const authSession = resolveAuthSession(cookie);
     const sessionCookie = cookie[appConfig.auth.sessionCookieName];
-
-    if (!sessionCookie) {
-      return;
-    }
-
-    sessionCookie.set({
+    sessionCookie?.set({
       value: authSession.sessionId,
       ...sessionCookieOptions,
     });

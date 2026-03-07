@@ -13,7 +13,7 @@
     "lint": "biome check .",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "prisma:generate": "prisma generate",
+    "prisma:generate": "bunx --bun prisma generate",
     "verify": "bun run build:assets && bun run lint && bun run typecheck && bun test"
   },
   "dependencies": {
@@ -28,6 +28,7 @@
     "lotfk-game-contracts": "workspace:*",
     "lotfk-seeded-prng": "workspace:*",
     "pixi.js": "8.16.0",
+    "playwright": "1.58.2",
     "sharp": "0.34.5",
     "three": "0.183.2"
   },

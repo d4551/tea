@@ -133,7 +133,7 @@ const renderCapabilityCard = (
       </div>
       <p class="text-sm text-base-content/75">${escapeHtml(copy.description)}</p>
       <div class="card-actions justify-end">
-        <a class="btn btn-ghost btn-sm" href="${escapeHtml(href)}">${escapeHtml(messages.builder.preview)}</a>
+        <a class="btn btn-ghost btn-sm" href="${escapeHtml(href)}">${escapeHtml(messages.builder.openDetails)}</a>
       </div>
     </div>
   </article>`;
@@ -145,11 +145,11 @@ const renderCapabilityCard = (
  * @param options Rendering inputs.
  * @returns HTML fragment for the readiness summary.
  */
-export const renderPlatformReadinessSection = (
-  options: RenderPlatformReadinessOptions,
-): string => {
+export const renderPlatformReadinessSection = (options: RenderPlatformReadinessOptions): string => {
   const { messages, locale, projectId, readiness } = options;
-  const capabilityFilter = new Set(options.keys ?? readiness.capabilities.map((capability) => capability.key));
+  const capabilityFilter = new Set(
+    options.keys ?? readiness.capabilities.map((capability) => capability.key),
+  );
   const cards = readiness.capabilities
     .filter((capability) => capabilityFilter.has(capability.key))
     .map((capability) => renderCapabilityCard(messages, locale, projectId, capability))

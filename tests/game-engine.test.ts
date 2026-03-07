@@ -4,13 +4,15 @@ import { appConfig } from "../src/config/environment.ts";
 import { ProviderRegistry } from "../src/domain/ai/providers/provider-registry.ts";
 import { builderService } from "../src/domain/builder/builder-service.ts";
 import { gameScenes } from "../src/domain/game/data/sprite-data.ts";
-import { gameLoop } from "../src/domain/game/game-loop.ts";
-import { gameStateStore } from "../src/domain/game/services/GameStateStore.ts";
+import { GameLoopService, gameLoop } from "../src/domain/game/game-loop.ts";
+import { type GameStateStore, gameStateStore } from "../src/domain/game/services/GameStateStore.ts";
+import { playerProgressStore } from "../src/domain/game/services/player-progress-store.ts";
 import { buildSessionSceneState } from "../src/domain/game/utils/session-state.ts";
 import { defaultGameConfig } from "../src/shared/config/game-config.ts";
 import { gameAssetUrls } from "../src/shared/constants/game-assets.ts";
 import { httpStatus } from "../src/shared/constants/http.ts";
 import { appRoutes } from "../src/shared/constants/routes.ts";
+import type { SceneDefinition } from "../src/shared/contracts/game.ts";
 import { prisma } from "../src/shared/services/db.ts";
 
 let app: Awaited<ReturnType<typeof createApp>>;
@@ -23,7 +25,7 @@ const withSessionId = (pattern: string, sessionId: string): string =>
 const readSseUntil = async (
   response: Response,
   predicate: (content: string) => boolean,
-  maxChunks = 12,
+  maxChunks = 40,
 ): Promise<string> => {
   const reader = response.body?.getReader();
   if (!reader) {
@@ -42,15 +44,12 @@ const readSseUntil = async (
 
     if (chunk instanceof Uint8Array) {
       collected += decoder.decode(chunk, { stream: true });
-      continue;
-    }
-
-    if (chunk instanceof ArrayBuffer) {
+    } else if (chunk instanceof ArrayBuffer) {
       collected += decoder.decode(new Uint8Array(chunk), { stream: true });
-      continue;
+    } else {
+      collected += String(chunk);
     }
 
-    collected += String(chunk);
     if (predicate(collected)) {
       break;
     }
@@ -74,6 +73,43 @@ const waitUntil = async (
   return false;
 };
 
+const moveNpcToSceneSpawn = (scene: SceneDefinition, characterKey: string): SceneDefinition => ({
+  ...scene,
+  npcs: scene.npcs.map((npc) =>
+    npc.characterKey === characterKey
+      ? {
+          ...npc,
+          x: scene.spawn.x,
+          y: scene.spawn.y,
+        }
+      : npc,
+  ),
+});
+
+const publishProjectWithNpcAtSpawn = async (
+  projectId: string,
+  sceneId: string,
+  characterKey: string,
+): Promise<void> => {
+  const project = await builderService.createProject(projectId);
+  expect(project).not.toBeNull();
+  if (!project) {
+    return;
+  }
+
+  const scene = project.scenes.get(sceneId);
+  expect(scene).toBeDefined();
+  if (!scene) {
+    return;
+  }
+
+  await builderService.saveScene(projectId, {
+    id: scene.id,
+    scene: moveNpcToSceneSpawn(scene, characterKey),
+  });
+  await builderService.publishProject(projectId, true);
+};
+
 beforeAll(async () => {
   app = await createApp();
 });
@@ -86,6 +122,9 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
+  if (app.server) {
+    await app.stop();
+  }
   await (await ProviderRegistry.getInstance()).dispose();
   await prisma.$disconnect();
 });
@@ -146,38 +185,22 @@ describe("game engine runtime", () => {
   });
 
   test("confirmDialogue closes an active NPC conversation", async () => {
-    const session = await gameLoop.createSession("en-US", "teaHouse");
-    managedSessionIds.add(session.sessionId);
-    const runtimeStore = gameLoop as unknown as {
-      readonly liveSessions: Map<
-        string,
-        {
-          scene: {
-            dialogue: {
-              npcId: string;
-              npcLabel: string;
-              line: string;
-              lineKey: string;
-            } | null;
-            npcs: Array<{ id: string; label: string; state: string }>;
-          };
-        }
-      >;
-    };
-    const runtimeSession = runtimeStore.liveSessions.get(session.sessionId);
-    const targetNpc = runtimeSession?.scene.npcs[0];
-    expect(targetNpc).toBeDefined();
-    if (!runtimeSession || !targetNpc) {
-      return;
-    }
+    const projectId = `dialogue-confirm-${crypto.randomUUID()}`;
+    await publishProjectWithNpcAtSpawn(projectId, "teaHouse", "teaMonk");
 
-    runtimeSession.scene.dialogue = {
-      npcId: targetNpc.id,
-      npcLabel: targetNpc.label,
-      line: "Test dialogue line",
-      lineKey: "npc.test.line",
-    };
-    targetNpc.state = "talking";
+    const session = await gameLoop.createSession("en-US", "teaHouse", projectId);
+    managedSessionIds.add(session.sessionId);
+    const interactResult = gameLoop.processCommand(
+      session.sessionId,
+      { type: "interact" },
+      "en-US",
+    );
+    expect(interactResult.state).toBe("queued");
+    await gameLoop.tick(session.sessionId, defaultGameConfig.tickMs);
+
+    const dialogueOpened = await gameLoop.getSessionState(session.sessionId);
+    expect(dialogueOpened?.state.dialogue).not.toBeNull();
+    expect(dialogueOpened?.state.npcs.some((npc) => npc.state === "talking")).toBe(true);
 
     const confirmResult = gameLoop.processCommand(
       session.sessionId,
@@ -264,42 +287,10 @@ describe("game engine runtime", () => {
 
   test("npc interact triggers authored flag mutation and quest completion", async () => {
     const projectId = `mechanics-trigger-${crypto.randomUUID()}`;
-    const project = await builderService.createProject(projectId);
-    expect(project).not.toBeNull();
-    if (!project) {
-      return;
-    }
-
-    await builderService.publishProject(projectId, true);
+    await publishProjectWithNpcAtSpawn(projectId, "teaHouse", "teaMonk");
 
     const session = await gameLoop.createSession("en-US", "teaHouse", projectId);
     managedSessionIds.add(session.sessionId);
-    const runtimeStore = gameLoop as unknown as {
-      readonly liveSessions: Map<
-        string,
-        {
-          scene: {
-            player: {
-              position: { x: number; y: number };
-            };
-            npcs: Array<{
-              id: string;
-              characterKey: string;
-              position: { x: number; y: number };
-            }>;
-          };
-        }
-      >;
-    };
-    const runtimeSession = runtimeStore.liveSessions.get(session.sessionId);
-    const teaMonk = runtimeSession?.scene.npcs.find((npc) => npc.characterKey === "teaMonk");
-    expect(teaMonk).toBeDefined();
-    if (!runtimeSession || !teaMonk) {
-      return;
-    }
-
-    runtimeSession.scene.player.position.x = teaMonk.position.x;
-    runtimeSession.scene.player.position.y = teaMonk.position.y;
 
     const interactResult = gameLoop.processCommand(
       session.sessionId,
@@ -393,37 +384,101 @@ describe("game engine runtime", () => {
   });
 
   test("failed persistence does not mutate in-memory stateVersion", async () => {
-    const session = await gameLoop.createSession("en-US", "teaHouse");
-    managedSessionIds.add(session.sessionId);
-    const runtimeStore = gameLoop as unknown as {
-      readonly liveSessions: Map<string, { stateVersion: number }>;
+    let saveAttempts = 0;
+    const failingStore: GameStateStore = {
+      createSession: async (seed) => gameStateStore.createSession(seed),
+      getSession: async (sessionId) => gameStateStore.getSession(sessionId),
+      countActiveSessions: async (nowMs) => gameStateStore.countActiveSessions(nowMs),
+      saveSession: async () => {
+        saveAttempts += 1;
+        throw new Error("simulated-save-failure");
+      },
+      deleteSession: async (sessionId) => gameStateStore.deleteSession(sessionId),
+      toSnapshot: (session) => gameStateStore.toSnapshot(session),
+      purgeExpiredSessions: async (nowMs) => gameStateStore.purgeExpiredSessions(nowMs),
     };
-    const runtimeSession = runtimeStore.liveSessions.get(session.sessionId);
-    expect(runtimeSession).toBeDefined();
-    if (!runtimeSession) {
+    const isolatedGameLoop = new GameLoopService({ stateStore: failingStore });
+    const session = await isolatedGameLoop.createSession("en-US", "teaHouse");
+    const initialState = await isolatedGameLoop.getSessionState(session.sessionId);
+    expect(initialState).not.toBeNull();
+    if (!initialState) {
+      await gameStateStore.deleteSession(session.sessionId);
       return;
     }
 
-    const initialVersion = runtimeSession.stateVersion;
-    const originalSaveSession = gameStateStore.saveSession.bind(gameStateStore);
-    let saveAttempts = 0;
-    (gameStateStore as unknown as { saveSession: (value: unknown) => Promise<void> }).saveSession =
-      async () => {
-        saveAttempts += 1;
-        throw new Error("simulated-save-failure");
-      };
-
     try {
-      await expect(gameLoop.saveSessionNow(session.sessionId)).rejects.toThrow(
+      await expect(isolatedGameLoop.saveSessionNow(session.sessionId)).rejects.toThrow(
         "simulated-save-failure",
       );
-      expect(runtimeSession.stateVersion).toBe(initialVersion);
+      const nextState = await isolatedGameLoop.getSessionState(session.sessionId);
+      expect(nextState?.stateVersion).toBe(initialState.stateVersion);
       expect(saveAttempts).toBe(1);
     } finally {
-      (
-        gameStateStore as unknown as { saveSession: typeof gameStateStore.saveSession }
-      ).saveSession = originalSaveSession;
+      await gameStateStore.deleteSession(session.sessionId);
     }
+  });
+
+  test("purgeExpiredSessions delegates through the canonical runtime owner", async () => {
+    let purgeCalls = 0;
+    const purgingStore: GameStateStore = {
+      createSession: async (seed) => gameStateStore.createSession(seed),
+      getSession: async (sessionId) => gameStateStore.getSession(sessionId),
+      countActiveSessions: async (nowMs) => gameStateStore.countActiveSessions(nowMs),
+      saveSession: async (session) => gameStateStore.saveSession(session),
+      deleteSession: async (sessionId) => gameStateStore.deleteSession(sessionId),
+      toSnapshot: (session) => gameStateStore.toSnapshot(session),
+      purgeExpiredSessions: async () => {
+        purgeCalls += 1;
+        return 4;
+      },
+    };
+
+    const isolatedGameLoop = new GameLoopService({ stateStore: purgingStore });
+    const purgedCount = await isolatedGameLoop.purgeExpiredSessions();
+
+    expect(purgedCount).toBe(4);
+    expect(purgeCalls).toBe(1);
+  });
+
+  test("player progress awards and interaction markers report deterministic results", async () => {
+    const session = await gameLoop.createSession("en-US", "teaHouse");
+    managedSessionIds.add(session.sessionId);
+
+    const firstInteraction = await playerProgressStore.processInteraction(
+      session.sessionId,
+      "intro-interaction",
+      10,
+    );
+    const repeatedInteraction = await playerProgressStore.processInteraction(
+      session.sessionId,
+      "intro-interaction",
+      10,
+    );
+    const levelUpAward = await playerProgressStore.awardXp(session.sessionId, 25);
+
+    expect(firstInteraction).toEqual({
+      interactionApplied: true,
+      awarded: true,
+      xp: 25,
+      level: 1,
+      previousLevel: 1,
+      leveledUp: false,
+    });
+    expect(repeatedInteraction).toEqual({
+      interactionApplied: false,
+      awarded: false,
+      xp: 25,
+      level: 1,
+      previousLevel: 1,
+      leveledUp: false,
+    });
+    expect(levelUpAward).toEqual({
+      awarded: true,
+      xp: 50,
+      level: 2,
+      previousLevel: 1,
+      leveledUp: true,
+    });
   });
 });
 
@@ -548,7 +603,12 @@ describe("game engine HTTP contracts", () => {
         },
       }),
     );
-    const body = await readSseUntil(response, (content) => content.includes("event: dialogue"));
+    const body = await readSseUntil(
+      response,
+      (content) =>
+        content.includes("&lt;script&gt;alert(&#39;npc&#39;)&lt;/script&gt;") &&
+        content.includes("&lt;img src=x onerror=alert(&#39;line&#39;)&gt;"),
+    );
 
     expect(response.status).toBe(httpStatus.ok);
     expect(body.includes("<script>alert('npc')</script>")).toBe(false);

@@ -2,6 +2,7 @@ import {
   Application,
   Assets,
   Container,
+  type FederatedPointerEvent,
   Graphics,
   Sprite,
   Text,
@@ -16,6 +17,34 @@ import { safeJsonParse } from "../shared/utils/safe-json.ts";
 type SceneEditorPayload = {
   readonly scene: SceneDefinition;
 };
+
+interface SceneEditorController {
+  readonly destroy: () => void;
+}
+
+interface SceneEditorRuntime {
+  readonly controllers: Map<HTMLElement, SceneEditorController>;
+  readonly refresh: () => void;
+}
+
+type SceneNodeFormField =
+  | "positionX"
+  | "positionY"
+  | "positionZ"
+  | "rotationX"
+  | "rotationY"
+  | "rotationZ"
+  | "scaleX"
+  | "scaleY"
+  | "scaleZ";
+
+type SceneNodeNumericValues = Partial<Record<SceneNodeFormField, number>>;
+
+declare global {
+  interface Window {
+    __teaSceneEditorRuntime?: SceneEditorRuntime;
+  }
+}
 
 const readPayload = (element: HTMLElement): SceneEditorPayload | null => {
   const script = element.querySelector<HTMLScriptElement>('script[type="application/json"]');
@@ -49,10 +78,86 @@ const nodeColor = (node: SceneNodeDefinition): number => {
   return 0xf3f4f6;
 };
 
-const render2dScene = async (element: HTMLElement, scene: SceneDefinition): Promise<void> => {
+const formatSceneNumber = (value: number): string => {
+  if (!Number.isFinite(value)) {
+    return "0";
+  }
+
+  if (Number.isInteger(value)) {
+    return String(value);
+  }
+
+  return value.toFixed(3).replace(/(?:\.0+|(\.\d+?)0+)$/u, "$1");
+};
+
+const findSceneNodeForm = (root: HTMLElement, nodeId: string): HTMLFormElement | null =>
+  root.querySelector<HTMLFormElement>(
+    `[data-scene-node-form][data-scene-node-id="${CSS.escape(nodeId)}"]`,
+  );
+
+const updateSceneNodeSelectionUi = (root: HTMLElement, nodeId: string | null): void => {
+  const selectedNodeTarget = root.querySelector<HTMLElement>("[data-scene-selected-node]");
+  const selectedNodeFallback =
+    selectedNodeTarget?.dataset.emptyLabel ?? selectedNodeTarget?.textContent;
+  if (selectedNodeTarget) {
+    selectedNodeTarget.textContent = nodeId ?? selectedNodeFallback ?? "";
+  }
+
+  for (const button of root.querySelectorAll<HTMLElement>("[data-scene-node-select]")) {
+    const active = button.dataset.sceneNodeSelect === nodeId;
+    button.classList.toggle("btn-active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  }
+};
+
+const updateSceneNodeFormValues = (
+  root: HTMLElement,
+  nodeId: string,
+  values: SceneNodeNumericValues,
+): HTMLFormElement | null => {
+  const form = findSceneNodeForm(root, nodeId);
+  if (!form) {
+    return null;
+  }
+
+  for (const [field, rawValue] of Object.entries(values) as Array<[SceneNodeFormField, number]>) {
+    const control = form.elements.namedItem(field);
+    if (
+      control instanceof HTMLInputElement ||
+      control instanceof HTMLTextAreaElement ||
+      control instanceof HTMLSelectElement
+    ) {
+      control.value = formatSceneNumber(rawValue);
+    }
+  }
+
+  return form;
+};
+
+const submitSceneNodeForm = (form: HTMLFormElement | null): void => {
+  if (!form || form.dataset.sceneNodeSubmitting === "true") {
+    return;
+  }
+
+  form.dataset.sceneNodeSubmitting = "true";
+  form.requestSubmit();
+};
+
+const setTransformModeUi = (root: HTMLElement, mode: "translate" | "rotate" | "scale"): void => {
+  for (const button of root.querySelectorAll<HTMLElement>("[data-scene-transform-mode]")) {
+    const active = button.dataset.sceneTransformMode === mode;
+    button.classList.toggle("btn-active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  }
+};
+
+const render2dScene = async (
+  element: HTMLElement,
+  scene: SceneDefinition,
+): Promise<SceneEditorController | null> => {
   const viewport = element.querySelector<HTMLElement>("[data-scene-viewport]");
   if (!viewport) {
-    return;
+    return null;
   }
 
   const app = new Application();
@@ -64,29 +169,64 @@ const render2dScene = async (element: HTMLElement, scene: SceneDefinition): Prom
   viewport.replaceChildren(app.canvas);
 
   const world = new Container();
+  app.stage.eventMode = "static";
   app.stage.addChild(world);
+
+  const updateScale = (): void => {
+    const nextScale = Math.min(
+      viewport.clientWidth / scene.geometry.width,
+      viewport.clientHeight / scene.geometry.height,
+    );
+    world.scale.set(nextScale > 0 ? nextScale : 1);
+  };
 
   if (scene.background.length > 0) {
     const texture = ((await Assets.load(scene.background)) as Texture | undefined) ?? Texture.EMPTY;
-    const background = new Sprite(texture);
-    background.width = scene.geometry.width;
-    background.height = scene.geometry.height;
-    background.alpha = 0.8;
+    const background = new Container();
+    const backgroundImage = new Sprite(texture);
+    backgroundImage.width = scene.geometry.width;
+    backgroundImage.height = scene.geometry.height;
+    backgroundImage.alpha = 0.8;
+    background.addChild(backgroundImage);
+
+    const sceneBackground = new Graphics();
+    sceneBackground.rect(0, 0, scene.geometry.width, scene.geometry.height).fill({
+      color: 0x0f172a,
+      alpha: 0.25,
+    });
+    background.addChild(sceneBackground);
     world.addChild(background);
   }
 
-  const overlay = new Graphics();
-  overlay
-    .rect(0, 0, scene.geometry.width, scene.geometry.height)
-    .fill({ color: 0x0f172a, alpha: 0.2 });
-  world.addChild(overlay);
+  const nodeContainers = new Map<string, Container>();
+  let selectedNodeId: string | null = null;
+  let dragState: {
+    readonly nodeId: string;
+    readonly offsetX: number;
+    readonly offsetY: number;
+  } | null = null;
+
+  const selectNode = (nodeId: string | null): void => {
+    selectedNodeId = nodeId;
+    updateSceneNodeSelectionUi(element, selectedNodeId);
+
+    for (const [currentNodeId, container] of nodeContainers.entries()) {
+      container.alpha = currentNodeId === selectedNodeId ? 1 : 0.78;
+    }
+  };
 
   for (const node of scene.nodes ?? []) {
     if (!isSceneNode2D(node)) {
       continue;
     }
+
+    const nodeContainer = new Container();
+    nodeContainer.position.set(node.position.x, node.position.y);
+    nodeContainer.eventMode = "static";
+    nodeContainer.cursor = "pointer";
+
     const shape = new Graphics();
-    shape.rect(node.position.x, node.position.y, node.size.width, node.size.height).fill({
+    shape.rect(0, 0, node.size.width, node.size.height).fill({
       color: nodeColor(node),
       alpha: node.nodeType === "trigger" ? 0.35 : 0.55,
     });
@@ -95,26 +235,106 @@ const render2dScene = async (element: HTMLElement, scene: SceneDefinition): Prom
       width: 2,
       alpha: 0.95,
     });
-    world.addChild(shape);
+    nodeContainer.addChild(shape);
 
     const label = new Text({
-      text: `${node.id}`,
+      text: node.id,
       style: {
         fill: 0xffffff,
         fontSize: 12,
       },
     });
-    label.x = node.position.x + 4;
-    label.y = node.position.y + 4;
-    world.addChild(label);
+    label.x = 4;
+    label.y = 4;
+    nodeContainer.addChild(label);
+
+    nodeContainer.on("pointerdown", (event: FederatedPointerEvent) => {
+      const localPoint = world.toLocal(event.global);
+      dragState = {
+        nodeId: node.id,
+        offsetX: localPoint.x - nodeContainer.position.x,
+        offsetY: localPoint.y - nodeContainer.position.y,
+      };
+      selectNode(node.id);
+    });
+
+    nodeContainers.set(node.id, nodeContainer);
+    world.addChild(nodeContainer);
   }
 
-  world.scale.set(
-    Math.min(
-      viewport.clientWidth / scene.geometry.width,
-      viewport.clientHeight / scene.geometry.height,
-    ),
-  );
+  const handleGlobalPointerMove = (event: FederatedPointerEvent): void => {
+    if (!dragState) {
+      return;
+    }
+
+    const container = nodeContainers.get(dragState.nodeId);
+    if (!container) {
+      return;
+    }
+
+    const localPoint = world.toLocal(event.global);
+    const nextX = localPoint.x - dragState.offsetX;
+    const nextY = localPoint.y - dragState.offsetY;
+    container.position.set(nextX, nextY);
+    updateSceneNodeFormValues(element, dragState.nodeId, {
+      positionX: nextX,
+      positionY: nextY,
+    });
+  };
+
+  const commitDrag = (): void => {
+    if (!dragState) {
+      return;
+    }
+
+    const form = findSceneNodeForm(element, dragState.nodeId);
+    dragState = null;
+    submitSceneNodeForm(form);
+  };
+
+  app.stage.on("globalpointermove", handleGlobalPointerMove);
+  app.stage.on("pointerup", commitDrag);
+  app.stage.on("pointerupoutside", commitDrag);
+  app.stage.on("pointercancel", commitDrag);
+
+  const handleClick = (event: Event): void => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    const button = target.closest<HTMLElement>("[data-scene-node-select]");
+    if (!button?.dataset.sceneNodeSelect) {
+      return;
+    }
+
+    selectNode(button.dataset.sceneNodeSelect);
+  };
+  element.addEventListener("click", handleClick);
+
+  const resizeObserver = new ResizeObserver(() => {
+    updateScale();
+  });
+  resizeObserver.observe(viewport);
+  updateScale();
+  selectNode(scene.nodes?.[0]?.id ?? null);
+
+  return {
+    destroy: () => {
+      resizeObserver.disconnect();
+      element.removeEventListener("click", handleClick);
+      app.stage.removeAllListeners();
+      app.destroy(
+        { removeView: true },
+        {
+          children: true,
+          texture: false,
+          textureSource: false,
+        },
+      );
+      viewport.replaceChildren();
+    },
+  };
 };
 
 const buildThreeObject = (node: SceneNodeDefinition): THREE.Object3D => {
@@ -144,22 +364,35 @@ const buildThreeObject = (node: SceneNodeDefinition): THREE.Object3D => {
   return mesh;
 };
 
-const render3dScene = (element: HTMLElement, scene: SceneDefinition): void => {
+const disposeThreeObject = (object: THREE.Object3D): void => {
+  if (object instanceof THREE.Mesh) {
+    object.geometry.dispose();
+    if (Array.isArray(object.material)) {
+      for (const material of object.material) {
+        material.dispose();
+      }
+    } else {
+      object.material.dispose();
+    }
+  }
+};
+
+const render3dScene = (
+  element: HTMLElement,
+  scene: SceneDefinition,
+): SceneEditorController | null => {
   const viewport = element.querySelector<HTMLElement>("[data-scene-viewport]");
   if (!viewport) {
-    return;
+    return null;
   }
 
-  const width = Math.max(320, viewport.clientWidth);
-  const height = Math.max(180, viewport.clientHeight);
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(width, height);
   viewport.replaceChildren(renderer.domElement);
 
   const threeScene = new THREE.Scene();
   threeScene.background = new THREE.Color(0x0f172a);
-  const camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 100);
+  const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 100);
   camera.position.set(6, 5, 6);
 
   threeScene.add(new THREE.GridHelper(20, 20, 0x94a3b8, 0x334155));
@@ -172,9 +405,6 @@ const render3dScene = (element: HTMLElement, scene: SceneDefinition): void => {
   orbit.enableDamping = true;
 
   const transform = new TransformControls(camera, renderer.domElement);
-  transform.addEventListener("dragging-changed", (event) => {
-    orbit.enabled = !event.value;
-  });
   threeScene.add(transform.getHelper());
 
   const objectLookup = new Map<string, THREE.Object3D>();
@@ -187,51 +417,219 @@ const render3dScene = (element: HTMLElement, scene: SceneDefinition): void => {
     threeScene.add(object);
   }
 
-  const selectButtons = element.querySelectorAll<HTMLElement>("[data-scene-node-select]");
-  for (const button of selectButtons) {
-    button.addEventListener("click", () => {
-      const nodeId = button.dataset.sceneNodeSelect;
-      if (!nodeId) {
-        return;
-      }
-      const object = objectLookup.get(nodeId);
-      if (!object) {
-        return;
-      }
-      transform.attach(object);
+  const updateSelectedNodeForm = (nodeId: string, object: THREE.Object3D): HTMLFormElement | null =>
+    updateSceneNodeFormValues(element, nodeId, {
+      positionX: object.position.x,
+      positionY: object.position.y,
+      positionZ: object.position.z,
+      rotationX: object.rotation.x,
+      rotationY: object.rotation.y,
+      rotationZ: object.rotation.z,
+      scaleX: object.scale.x,
+      scaleY: object.scale.y,
+      scaleZ: object.scale.z,
     });
-  }
 
-  const onResize = () => {
+  const selectNode = (nodeId: string | null): void => {
+    updateSceneNodeSelectionUi(element, nodeId);
+    if (!nodeId) {
+      transform.detach();
+      return;
+    }
+
+    const object = objectLookup.get(nodeId);
+    if (!object) {
+      transform.detach();
+      return;
+    }
+
+    transform.attach(object);
+    updateSelectedNodeForm(nodeId, object);
+  };
+
+  const persistSelectedNode = (): void => {
+    const object = transform.object;
+    if (!object || object.name.length === 0) {
+      return;
+    }
+
+    const form = updateSelectedNodeForm(object.name, object);
+    submitSceneNodeForm(form);
+  };
+
+  transform.addEventListener("change", () => {
+    renderer.render(threeScene, camera);
+  });
+  transform.addEventListener("objectChange", () => {
+    const object = transform.object;
+    if (!object || object.name.length === 0) {
+      return;
+    }
+    updateSelectedNodeForm(object.name, object);
+  });
+  transform.addEventListener("dragging-changed", (event) => {
+    orbit.enabled = !event.value;
+    if (!event.value) {
+      persistSelectedNode();
+    }
+  });
+
+  const setTransformMode = (mode: "translate" | "rotate" | "scale"): void => {
+    transform.setMode(mode);
+    setTransformModeUi(element, mode);
+  };
+
+  const handleUiClick = (event: Event): void => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    const modeButton = target.closest<HTMLElement>("[data-scene-transform-mode]");
+    if (
+      modeButton?.dataset.sceneTransformMode === "translate" ||
+      modeButton?.dataset.sceneTransformMode === "rotate" ||
+      modeButton?.dataset.sceneTransformMode === "scale"
+    ) {
+      setTransformMode(modeButton.dataset.sceneTransformMode);
+      return;
+    }
+
+    const selectButton = target.closest<HTMLElement>("[data-scene-node-select]");
+    if (selectButton?.dataset.sceneNodeSelect) {
+      selectNode(selectButton.dataset.sceneNodeSelect);
+    }
+  };
+  element.addEventListener("click", handleUiClick);
+
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  const pickableObjects = Array.from(objectLookup.values()).filter(
+    (object): object is THREE.Mesh => object instanceof THREE.Mesh,
+  );
+
+  const handleViewportPointerDown = (event: PointerEvent): void => {
+    if (transform.dragging) {
+      return;
+    }
+
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const match = raycaster.intersectObjects(pickableObjects, false)[0]?.object;
+    if (match?.name) {
+      selectNode(match.name);
+    }
+  };
+  renderer.domElement.addEventListener("pointerdown", handleViewportPointerDown);
+
+  const resize = (): void => {
     const nextWidth = Math.max(320, viewport.clientWidth);
     const nextHeight = Math.max(180, viewport.clientHeight);
     camera.aspect = nextWidth / nextHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(nextWidth, nextHeight);
   };
-  window.addEventListener("resize", onResize);
+  const resizeObserver = new ResizeObserver(() => {
+    resize();
+  });
+  resizeObserver.observe(viewport);
+  resize();
+  setTransformMode("translate");
+  selectNode(scene.nodes?.find((node) => !("size" in node))?.id ?? null);
 
-  const animate = () => {
+  let frameId = 0;
+  const animate = (): void => {
     orbit.update();
     renderer.render(threeScene, camera);
-    requestAnimationFrame(animate);
+    frameId = window.requestAnimationFrame(animate);
   };
   animate();
+
+  return {
+    destroy: () => {
+      window.cancelAnimationFrame(frameId);
+      resizeObserver.disconnect();
+      element.removeEventListener("click", handleUiClick);
+      renderer.domElement.removeEventListener("pointerdown", handleViewportPointerDown);
+      transform.detach();
+      transform.dispose();
+      orbit.dispose();
+      for (const object of objectLookup.values()) {
+        disposeThreeObject(object);
+      }
+      renderer.dispose();
+      viewport.replaceChildren();
+    },
+  };
 };
 
-const init = async (): Promise<void> => {
-  const roots = document.querySelectorAll<HTMLElement>("[data-scene-editor]");
+const mountSceneEditor = async (root: HTMLElement): Promise<SceneEditorController | null> => {
+  const payload = readPayload(root);
+  if (!payload) {
+    return null;
+  }
+
+  if (payload.scene.sceneMode === "3d") {
+    return render3dScene(root, payload.scene);
+  }
+
+  return render2dScene(root, payload.scene);
+};
+
+const getRuntime = (): SceneEditorRuntime => {
+  const existing = window.__teaSceneEditorRuntime;
+  if (existing) {
+    return existing;
+  }
+
+  const runtime: SceneEditorRuntime = {
+    controllers: new Map<HTMLElement, SceneEditorController>(),
+    refresh: () => {
+      void syncSceneEditors(runtime);
+    },
+  };
+  window.__teaSceneEditorRuntime = runtime;
+  return runtime;
+};
+
+const syncSceneEditors = async (runtime: SceneEditorRuntime): Promise<void> => {
+  const roots = Array.from(document.querySelectorAll<HTMLElement>("[data-scene-editor]"));
+  const activeRoots = new Set(roots);
+
+  for (const [root, controller] of runtime.controllers.entries()) {
+    if (activeRoots.has(root)) {
+      continue;
+    }
+    controller.destroy();
+    runtime.controllers.delete(root);
+  }
+
   for (const root of roots) {
-    const payload = readPayload(root);
-    if (!payload) {
+    if (runtime.controllers.has(root)) {
       continue;
     }
-    if (payload.scene.sceneMode === "3d") {
-      render3dScene(root, payload.scene);
+    const controller = await mountSceneEditor(root);
+    if (!controller) {
       continue;
     }
-    await render2dScene(root, payload.scene);
+    runtime.controllers.set(root, controller);
   }
 };
 
-void init();
+const bootSceneEditor = (): void => {
+  const runtime = getRuntime();
+  if (document.body.dataset.sceneEditorBootstrapped === "true") {
+    runtime.refresh();
+    return;
+  }
+
+  document.body.dataset.sceneEditorBootstrapped = "true";
+  document.body.addEventListener("htmx:afterSwap", () => {
+    runtime.refresh();
+  });
+  runtime.refresh();
+};
+
+bootSceneEditor();

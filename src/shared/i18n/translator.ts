@@ -1,4 +1,5 @@
 import { appConfig, type LocaleCode, matchLocale } from "../../config/environment.ts";
+import { resolveRequestQueryParam } from "../constants/routes.ts";
 import { type Messages, messagesByLocale } from "./messages.ts";
 
 interface WeightedLanguage {
@@ -84,8 +85,7 @@ export const resolveLocale = (
  * @returns Supported locale.
  */
 export const resolveRequestLocale = (request: Request): LocaleCode => {
-  const url = new URL(request.url);
-  const queryLocale = url.searchParams.get("lang") ?? undefined;
+  const queryLocale = resolveRequestQueryParam(request, "lang");
   return resolveLocale(queryLocale, request.headers.get("accept-language"));
 };
 

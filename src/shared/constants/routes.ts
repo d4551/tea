@@ -128,6 +128,37 @@ export const withQueryParameters = (
 };
 
 /**
+ * Resolves the request pathname plus serialized query string as a relative path.
+ *
+ * @param request Incoming request.
+ * @returns Relative request path including query parameters.
+ */
+export const resolveRequestPathWithQuery = (request: Request): string => {
+  const url = new URL(request.url);
+  return `${url.pathname}${url.search}`;
+};
+
+/**
+ * Resolves the request pathname without query parameters.
+ *
+ * @param request Incoming request.
+ * @returns Relative request pathname.
+ */
+export const resolveRequestPathname = (request: Request): string => new URL(request.url).pathname;
+
+/**
+ * Resolves a single request query parameter without mutating or trimming it.
+ *
+ * @param request Incoming request.
+ * @param key Query-string key to read.
+ * @returns Query parameter value when present.
+ */
+export const resolveRequestQueryParam = (request: Request, key: string): string | undefined => {
+  const value = new URL(request.url).searchParams.get(key);
+  return value ?? undefined;
+};
+
+/**
  * Replaces `:param` segments in a route pattern with URL-encoded values.
  *
  * @param path Route pattern such as `/api/game/session/:id/hud`.

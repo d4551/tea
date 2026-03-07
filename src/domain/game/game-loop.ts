@@ -9,8 +9,8 @@ import type {
   GameCommandResult,
   GameCommandState,
   GameFlagDefinition,
+  GameHudState,
   GameLocale,
-  GameQuestState,
   GameSceneState,
   GameSession,
   GameSessionSnapshot,
@@ -25,14 +25,14 @@ import { safeJsonParse } from "../../shared/utils/safe-json.ts";
 import { builderService } from "../builder/builder-service.ts";
 import { generateNpcDialogue } from "./ai/game-ai-service.ts";
 import { npcAiEngine } from "./npc-ai.ts";
-import {
-  awardXp,
-  initializeProgress,
-  processInteractionProgress,
-  XP_CONFIG,
-} from "./progression.ts";
+import { XP_CONFIG } from "./progression.ts";
 import { sceneEngine } from "./scene-engine.ts";
-import { gameStateStore } from "./services/GameStateStore.ts";
+import {
+  type GameStateStore,
+  gameStateStore,
+  type StoreResult,
+} from "./services/GameStateStore.ts";
+import { type PlayerProgressStore, playerProgressStore } from "./services/player-progress-store.ts";
 import type { Mutable, MutableGameSceneState } from "./types.ts";
 import { buildSessionSceneState } from "./utils/session-state.ts";
 
@@ -42,11 +42,18 @@ const logger = createLogger("game.loop");
 const resumeTokenSecretMaterial = [
   appConfig.applicationName,
   appConfig.auth.sessionCookieName,
-  Bun.env.DATABASE_URL ?? "",
+  appConfig.auth.resumeTokenSecret,
   defaultGameConfig.defaultSceneId,
 ].join(":");
 
 type SnapshotCallback = (snapshot: GameSessionSnapshot) => void;
+
+interface GameLoopDependencies {
+  /** Canonical session persistence owner. */
+  readonly stateStore?: GameStateStore;
+  /** Canonical player-progress persistence owner. */
+  readonly progressStore?: PlayerProgressStore;
+}
 
 type QueuedCommand = Readonly<{
   /** Envelope accepted by command runtime. */
@@ -133,6 +140,8 @@ const decodeResumeToken = (token: string): ResumeTokenPayload | null => {
  * Returns a cleanup function; call it when the client disconnects.
  */
 export class GameLoopService {
+  private readonly stateStore: GameStateStore;
+  private readonly progressStore: PlayerProgressStore;
   private commandQueue = new Map<string, QueuedCommand[]>();
   private commandSeq = new Map<string, number>();
   private lastManualSaveAtMs = new Map<string, number>();
@@ -143,6 +152,11 @@ export class GameLoopService {
   private lastPersistAtMs = new Map<string, number>();
   private resumeTokenVersion = new Map<string, number>();
   private chatWindow = new Map<string, number[]>();
+
+  public constructor(deps: GameLoopDependencies = {}) {
+    this.stateStore = deps.stateStore ?? gameStateStore;
+    this.progressStore = deps.progressStore ?? playerProgressStore;
+  }
 
   private mapCommandState = (state: GameCommandState): GameActionState | undefined => {
     if (state === "queued") {
@@ -361,7 +375,7 @@ export class GameLoopService {
       });
     }
 
-    await gameStateStore.createSession({
+    await this.stateStore.createSession({
       id: sessionId,
       ownerSessionId,
       seed,
@@ -371,10 +385,14 @@ export class GameLoopService {
       releaseVersion: publishedProject?.publishedReleaseVersion ?? undefined,
       triggerDefinitions: publishedTriggers,
     });
-    await initializeProgress(sessionId);
-    await processInteractionProgress(sessionId, `scene-${resolvedScene.id}`);
+    await this.progressStore.initialize(sessionId);
+    await this.progressStore.processInteraction(
+      sessionId,
+      `scene-${resolvedScene.id}`,
+      XP_CONFIG.sceneDiscovery,
+    );
 
-    const saved = await gameStateStore.getSession(sessionId);
+    const saved = await this.stateStore.getSession(sessionId);
     if (!saved.ok) throw new Error(`Failed to create session: ${sessionId}`);
 
     this.ensureSessionMaps(sessionId);
@@ -385,7 +403,7 @@ export class GameLoopService {
     if (typeof ownerSessionId === "string" && ownerSessionId.length > 0) {
       this.getResumeTokenState(sessionId, ownerSessionId, false);
     }
-    return gameStateStore.toSnapshot(saved.payload);
+    return this.stateStore.toSnapshot(saved.payload);
   }
 
   public async restoreSession(
@@ -407,7 +425,28 @@ export class GameLoopService {
 
     this.ensureSessionMaps(sessionId);
     this.rotateResumeTokenVersion(sessionId);
-    return gameStateStore.toSnapshot(sessionResult.payload);
+    return this.stateStore.toSnapshot(sessionResult.payload);
+  }
+
+  /**
+   * Returns the canonical count of active non-expired gameplay sessions.
+   */
+  public async countActiveSessions(): Promise<number> {
+    return this.stateStore.countActiveSessions();
+  }
+
+  /**
+   * Loads one persisted gameplay session without mutating transport state.
+   */
+  public async getStoredSession(sessionId: string): Promise<StoreResult<GameSession>> {
+    return this.stateStore.getSession(sessionId);
+  }
+
+  /**
+   * Removes expired sessions through the canonical runtime owner.
+   */
+  public async purgeExpiredSessions(): Promise<number> {
+    return this.stateStore.purgeExpiredSessions();
   }
 
   public async closeSession(sessionId: string): Promise<boolean> {
@@ -417,7 +456,7 @@ export class GameLoopService {
     }
 
     await this.persistSessionIfDue(result.payload, true);
-    await gameStateStore.deleteSession(sessionId);
+    await this.stateStore.deleteSession(sessionId);
     this._clearTick(sessionId);
     this.lastManualSaveAtMs.delete(sessionId);
     this.liveSessions.delete(sessionId);
@@ -435,7 +474,7 @@ export class GameLoopService {
     sessionId: string,
     ownerSessionId: string = "anonymous",
   ): Promise<GameSessionState | null> {
-    const sessionResult = await this.getRuntimeSession(sessionId);
+    const sessionResult = await this.getRuntimeSession(sessionId, true);
     if (!sessionResult.ok) {
       return null;
     }
@@ -443,7 +482,7 @@ export class GameLoopService {
       return null;
     }
 
-    const snapshot = gameStateStore.toSnapshot(sessionResult.payload);
+    const snapshot = this.stateStore.toSnapshot(sessionResult.payload);
     const resumeTokenState = this.getResumeTokenState(sessionId, ownerSessionId);
 
     return {
@@ -454,6 +493,38 @@ export class GameLoopService {
       resumeTokenVersion: resumeTokenState.tokenVersion,
       stateVersion: sessionResult.payload.stateVersion,
       version: 1,
+    };
+  }
+
+  /**
+   * Returns a canonical HUD snapshot for the active session owner.
+   */
+  public async getHudState(
+    sessionId: string,
+    ownerSessionId: string = "anonymous",
+  ): Promise<GameHudState | null> {
+    const sessionResult = await this.getRuntimeSession(sessionId, true);
+    if (!sessionResult.ok) {
+      return null;
+    }
+    if (sessionResult.payload.ownerSessionId !== ownerSessionId) {
+      return null;
+    }
+
+    const progress = await this.progressStore.getSnapshot(sessionId);
+    const activeQuest =
+      sessionResult.payload.scene.quests?.find((quest) => !quest.completed) ??
+      sessionResult.payload.scene.quests?.[0];
+
+    return {
+      sessionId,
+      sceneTitle: sessionResult.payload.scene.sceneTitle,
+      sceneMode: sessionResult.payload.scene.sceneMode,
+      activeQuestTitle: activeQuest?.title,
+      locale: sessionResult.payload.locale,
+      xp: progress?.xp ?? 0,
+      level: progress?.level ?? 1,
+      dialogue: sessionResult.payload.scene.dialogue,
     };
   }
 
@@ -606,7 +677,10 @@ export class GameLoopService {
     this.resumeTokenVersion.set(sessionId, (this.resumeTokenVersion.get(sessionId) ?? 1) + 1);
   }
 
-  private async getRuntimeSession(sessionId: string): Promise<
+  private async getRuntimeSession(
+    sessionId: string,
+    refreshPersisted: boolean = false,
+  ): Promise<
     | {
         readonly ok: true;
         readonly payload: Mutable<GameSession>;
@@ -618,10 +692,22 @@ export class GameLoopService {
   > {
     const liveSession = this.liveSessions.get(sessionId);
     if (liveSession) {
+      if (refreshPersisted) {
+        const persisted = await this.stateStore.getSession(sessionId);
+        if (
+          persisted.ok &&
+          (persisted.payload.stateVersion > liveSession.stateVersion ||
+            persisted.payload.updatedAtMs > liveSession.updatedAtMs)
+        ) {
+          const refreshedSession = persisted.payload as Mutable<GameSession>;
+          this.liveSessions.set(sessionId, refreshedSession);
+          return { ok: true, payload: refreshedSession };
+        }
+      }
       return { ok: true, payload: liveSession };
     }
 
-    const sessionResult = await gameStateStore.getSession(sessionId);
+    const sessionResult = await this.stateStore.getSession(sessionId);
     if (!sessionResult.ok) {
       return sessionResult;
     }
@@ -660,7 +746,7 @@ export class GameLoopService {
       stateVersion: nextVersion,
       updatedAtMs: now,
     } satisfies GameSession;
-    await gameStateStore.saveSession(stagedSession);
+    await this.stateStore.saveSession(stagedSession);
     session.stateVersion = nextVersion;
     session.updatedAtMs = now;
     this.lastPersistAtMs.set(session.id, now);
@@ -710,7 +796,7 @@ export class GameLoopService {
           sessionId,
           error: String(error),
         });
-        const restored = await gameStateStore.getSession(sessionId);
+        const restored = await this.stateStore.getSession(sessionId);
         if (restored.ok) {
           this.liveSessions.set(sessionId, restored.payload as Mutable<GameSession>);
         }
@@ -892,7 +978,7 @@ export class GameLoopService {
     if (!sessionResult.ok) return undefined;
     const session = sessionResult.payload;
 
-    const state = session.scene as unknown as MutableGameSceneState;
+    const state = session.scene;
 
     // Wrap to prevent float precision loss after ~24 hours
     state.worldTimeMs = (state.worldTimeMs + dtMs) % WORLD_TIME_WRAP_MS;
@@ -996,8 +1082,12 @@ export class GameLoopService {
             nextActionState = "error.nonRetryable";
           }
 
-          await processInteractionProgress(sessionId, `npc-${interactable.id}`);
-          await awardXp(sessionId, XP_CONFIG.dialogue, "dialogue");
+          await this.progressStore.processInteraction(
+            sessionId,
+            `npc-${interactable.id}`,
+            XP_CONFIG.interaction,
+          );
+          await this.progressStore.awardXp(sessionId, XP_CONFIG.dialogue);
         }
       } else if (commandType === "closeDialogue") {
         commandApplied = true;
@@ -1044,8 +1134,12 @@ export class GameLoopService {
               npcCharacterKey: interactable.characterKey,
             });
 
-            await processInteractionProgress(sessionId, `chat-${interactable.id}`);
-            await awardXp(sessionId, XP_CONFIG.dialogue, "chat");
+            await this.progressStore.processInteraction(
+              sessionId,
+              `chat-${interactable.id}`,
+              XP_CONFIG.interaction,
+            );
+            await this.progressStore.awardXp(sessionId, XP_CONFIG.dialogue);
           } else {
             nextActionState = "error.nonRetryable";
           }
@@ -1106,7 +1200,7 @@ export class GameLoopService {
     npcAiEngine.updateNpcs(state, session.seed, dtMs);
 
     await this.persistSessionIfDue(session, false);
-    return gameStateStore.toSnapshot(session);
+    return this.stateStore.toSnapshot(session);
   }
 }
 

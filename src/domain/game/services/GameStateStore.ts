@@ -11,6 +11,10 @@ import type {
   SceneDefinition,
   TriggerDefinition,
 } from "../../../shared/contracts/game.ts";
+import {
+  validateGameSceneState,
+  validateTriggerDefinitions,
+} from "../../../shared/contracts/game.ts";
 import { prisma } from "../../../shared/services/db.ts";
 import { buildSessionSceneState } from "../utils/session-state.ts";
 
@@ -24,6 +28,8 @@ export interface GameStateStore {
   createSession(seed: GameSessionSeed): Promise<GameSession>;
   /** Loads an active session by id. */
   getSession(sessionId: string): Promise<StoreResult<GameSession>>;
+  /** Counts active non-expired sessions. */
+  countActiveSessions(nowMs?: number): Promise<number>;
   /** Persists an updated session snapshot and extends TTL. */
   saveSession(session: GameSession): Promise<void>;
   /** Deletes a session. */
@@ -166,28 +172,40 @@ const toSceneState = (value: Prisma.JsonValue): PersistedSessionState | null => 
     return null;
   }
 
-  const record = value as Record<string, unknown>;
-  if (
-    "scene" in record &&
-    record.scene !== null &&
-    typeof record.scene === "object" &&
-    !Array.isArray(record.scene)
-  ) {
+  const record = value;
+  if ("scene" in record) {
+    const sceneValidation = validateGameSceneState(record.scene);
+    if (!sceneValidation.ok) {
+      return null;
+    }
+
+    const triggerValidation =
+      record.triggerDefinitions === undefined
+        ? { ok: true as const, data: undefined }
+        : validateTriggerDefinitions(record.triggerDefinitions);
+    if (!triggerValidation.ok) {
+      return null;
+    }
+
     return {
-      scene: JSON.parse(JSON.stringify(record.scene)) as GameSceneState,
+      scene: structuredClone(sceneValidation.data),
       projectId: typeof record.projectId === "string" ? record.projectId : undefined,
       releaseVersion:
         typeof record.releaseVersion === "number" && Number.isFinite(record.releaseVersion)
           ? record.releaseVersion
           : undefined,
-      triggerDefinitions: Array.isArray(record.triggerDefinitions)
-        ? (JSON.parse(JSON.stringify(record.triggerDefinitions)) as readonly TriggerDefinition[])
-        : undefined,
+      triggerDefinitions:
+        triggerValidation.data === undefined ? undefined : structuredClone(triggerValidation.data),
     };
   }
 
+  const sceneValidation = validateGameSceneState(record);
+  if (!sceneValidation.ok) {
+    return null;
+  }
+
   return {
-    scene: JSON.parse(JSON.stringify(value)) as GameSceneState,
+    scene: structuredClone(sceneValidation.data),
     projectId: undefined,
   };
 };
@@ -326,6 +344,21 @@ class InMemoryGameStateStore implements GameStateStore {
     };
   }
 
+  public async countActiveSessions(now: number = nowMs()): Promise<number> {
+    let activeSessions = 0;
+
+    for (const [id, entry] of this.sessions.entries()) {
+      if (now > entry.expiresAtMs) {
+        this.sessions.delete(id);
+        continue;
+      }
+
+      activeSessions += 1;
+    }
+
+    return activeSessions;
+  }
+
   public async saveSession(session: GameSession): Promise<void> {
     const stored = toStoredSession(session);
     this.sessions.set(stored.id, stored);
@@ -425,6 +458,13 @@ class PrismaGameStateStore implements GameStateStore {
     }
 
     return { ok: true, payload: restored.session };
+  }
+
+  public async countActiveSessions(now: number = nowMs()): Promise<number> {
+    const threshold = new Date(now);
+    return prisma.gameSession.count({
+      where: { expiresAt: { gt: threshold } },
+    });
   }
 
   public async saveSession(session: GameSession): Promise<void> {

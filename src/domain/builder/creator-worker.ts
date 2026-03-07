@@ -1,5 +1,7 @@
+import { chromium } from "playwright";
 import sharp from "sharp";
 import { appConfig } from "../../config/environment.ts";
+import { createLogger } from "../../lib/logger.ts";
 import { appRoutes } from "../../shared/constants/routes.ts";
 import type {
   AutomationRun,
@@ -20,6 +22,8 @@ interface WorkerFailure {
 }
 
 type WorkerResult<TPayload> = WorkerSuccess<TPayload> | WorkerFailure;
+
+const workerLogger = createLogger("builder.creator-worker");
 
 /**
  * Output payload returned by generation-job workers.
@@ -126,8 +130,50 @@ const buildVoicePreview = (prompt: string): Uint8Array => {
 
 const toArtifactSummary = (job: GenerationJob): string =>
   job.targetId
-    ? `Generated ${job.kind} draft for ${job.targetId}`
-    : `Generated ${job.kind} draft from builder prompt`;
+    ? `generation.artifact.summary.target:${job.targetId}`
+    : "generation.artifact.summary.prompt";
+
+const toWorkerFailure = (error: unknown): WorkerFailure => ({
+  ok: false,
+  error: error instanceof Error ? error.message : String(error),
+});
+
+const runWorkerStep = async <TPayload>(
+  step: () => Promise<TPayload>,
+): Promise<WorkerResult<TPayload>> => {
+  try {
+    return {
+      ok: true,
+      data: await step(),
+    };
+  } catch (error: unknown) {
+    return toWorkerFailure(error);
+  }
+};
+
+const probeAutomationOrigin = async (targetUrl: URL): Promise<boolean> => {
+  const probeResult = await runWorkerStep(async () => {
+    const response = await fetch(targetUrl, {
+      signal: AbortSignal.timeout(appConfig.builder.automationProbeTimeoutMs),
+    });
+
+    if (response.status >= 400) {
+      throw new Error(`automation-origin-unreachable:${response.status}`);
+    }
+
+    return true;
+  });
+
+  if (!probeResult.ok) {
+    workerLogger.info("automation.playwright.skipped", {
+      reason: probeResult.error,
+      targetUrl: targetUrl.toString(),
+    });
+    return false;
+  }
+
+  return probeResult.data;
+};
 
 const buildGenerationArtifact = async (
   projectId: string,
@@ -151,7 +197,7 @@ const buildGenerationArtifact = async (
       id: artifactId,
       jobId: job.id,
       kind: "audio",
-      label: `Review ${job.kind}`,
+      label: `generation.artifact.label.review:${job.kind}`,
       previewSource: persisted.publicUrl,
       summary: toArtifactSummary(job),
       mimeType: "audio/wav",
@@ -186,7 +232,7 @@ const buildGenerationArtifact = async (
       id: artifactId,
       jobId: job.id,
       kind: "animation-plan",
-      label: `Review ${job.kind}`,
+      label: `generation.artifact.label.review:${job.kind}`,
       previewSource: persisted.publicUrl,
       summary: toArtifactSummary(job),
       mimeType: "application/json",
@@ -219,7 +265,7 @@ const buildGenerationArtifact = async (
     id: artifactId,
     jobId: job.id,
     kind: job.kind,
-    label: `Review ${job.kind}`,
+    label: `generation.artifact.label.review:${job.kind}`,
     previewSource: persisted.publicUrl,
     summary: toArtifactSummary(job),
     mimeType: "image/png",
@@ -232,46 +278,76 @@ const attemptPlaywrightEvidence = async (
   projectId: string,
   runId: string,
 ): Promise<string | null> => {
-  const playwrightModule = await new Function("moduleName", "return import(moduleName)")(
-    "playwright",
-  )
-    .then((module: Record<string, unknown>) => module)
-    .catch(() => null);
-  if (!playwrightModule) {
-    return null;
-  }
-
-  const targetUrl = new URL(appRoutes.builder, `http://${appConfig.host}:${appConfig.port}`);
+  const targetUrl = new URL(appRoutes.builder, appConfig.builder.localAutomationOrigin);
   targetUrl.searchParams.set("projectId", projectId);
 
-  const browser = await playwrightModule.chromium.launch({ headless: true }).catch(() => null);
-  if (!browser) {
+  const originReachable = await probeAutomationOrigin(targetUrl);
+  if (!originReachable) {
     return null;
   }
 
-  const page = await browser.newPage();
-  const screenshotBytes = await page
-    .goto(targetUrl.toString(), {
-      waitUntil: "domcontentloaded",
-      timeout: appConfig.ai.requestTimeoutMs,
-    })
-    .then(async () => page.screenshot({ fullPage: true, type: "png" }))
-    .catch(() => null);
-  await browser.close();
-
-  if (!screenshotBytes) {
+  const browserResult = await runWorkerStep(() => chromium.launch({ headless: true }));
+  if (!browserResult.ok) {
+    workerLogger.warn("automation.playwright.launch-failed", {
+      message: browserResult.error,
+      targetUrl: targetUrl.toString(),
+    });
     return null;
   }
+  const browser = browserResult.data;
 
-  const persisted = await persistBuilderFile(
-    projectId,
-    "automation",
-    `evidence.${runId}`,
-    screenshotBytes,
-    `evidence.${runId}.png`,
-    "image/png",
-  );
-  return persisted.publicUrl;
+  try {
+    const pageResult = await runWorkerStep(() => browser.newPage());
+    if (!pageResult.ok) {
+      workerLogger.warn("automation.playwright.page-failed", {
+        message: pageResult.error,
+        targetUrl: targetUrl.toString(),
+      });
+      return null;
+    }
+
+    const screenshotResult = await runWorkerStep(async () => {
+      await pageResult.data.goto(targetUrl.toString(), {
+        waitUntil: "domcontentloaded",
+        timeout: appConfig.ai.requestTimeoutMs,
+      });
+      return new Uint8Array(await pageResult.data.screenshot({ fullPage: true, type: "png" }));
+    });
+    if (!screenshotResult.ok) {
+      workerLogger.warn("automation.playwright.capture-failed", {
+        message: screenshotResult.error,
+        targetUrl: targetUrl.toString(),
+      });
+      return null;
+    }
+
+    const persistedResult = await runWorkerStep(() =>
+      persistBuilderFile(
+        projectId,
+        "automation",
+        `evidence.${runId}`,
+        screenshotResult.data,
+        `evidence.${runId}.png`,
+        "image/png",
+      ),
+    );
+    if (!persistedResult.ok) {
+      workerLogger.warn("automation.playwright.persist-failed", {
+        message: persistedResult.error,
+        targetUrl: targetUrl.toString(),
+      });
+      return null;
+    }
+
+    return persistedResult.data.publicUrl;
+  } finally {
+    const closeResult = await runWorkerStep(() => browser.close());
+    if (!closeResult.ok) {
+      workerLogger.warn("automation.playwright.close-failed", {
+        message: closeResult.error,
+      });
+    }
+  }
 };
 
 /**
@@ -285,21 +361,16 @@ export const executeGenerationJob = async (
   projectId: string,
   job: GenerationJob,
 ): Promise<WorkerResult<GenerationJobExecution>> => {
-  const artifact = await buildGenerationArtifact(projectId, job).catch(
-    (error: unknown) => error as Error,
-  );
-  if (artifact instanceof Error) {
-    return {
-      ok: false,
-      error: artifact.message,
-    };
+  const artifactResult = await runWorkerStep(() => buildGenerationArtifact(projectId, job));
+  if (!artifactResult.ok) {
+    return artifactResult;
   }
 
   return {
     ok: true,
     data: {
-      artifacts: [artifact],
-      statusMessage: "draft-ready-for-review",
+      artifacts: [artifactResult.data],
+      statusMessage: "job.draft-ready-for-review",
     },
   };
 };
@@ -321,35 +392,37 @@ export const executeAutomationRun = async (
     status: "running",
     prompt: run.goal,
     artifactIds: [],
-    statusMessage: "capturing-fallback-review-evidence",
+    statusMessage: "automation.capturing-fallback-review-evidence",
     createdAtMs: run.createdAtMs,
     updatedAtMs: run.updatedAtMs,
   };
   const evidenceUrl = await attemptPlaywrightEvidence(projectId, run.id);
-  const fallbackArtifact =
+  const fallbackArtifactResult =
     evidenceUrl === null
-      ? await buildGenerationArtifact(projectId, fallbackJob).catch(
-          (error: unknown) => error as Error,
-        )
+      ? await runWorkerStep(() => buildGenerationArtifact(projectId, fallbackJob))
       : null;
-  if (fallbackArtifact instanceof Error) {
-    return {
-      ok: false,
-      error: fallbackArtifact.message,
-    };
+  if (fallbackArtifactResult && !fallbackArtifactResult.ok) {
+    return fallbackArtifactResult;
   }
 
-  const artifact: GenerationArtifact = fallbackArtifact ?? {
-    id: `artifact.${run.id}`,
-    jobId: run.id,
-    kind: "automation-evidence",
-    label: "Automation evidence",
-    previewSource: evidenceUrl ?? "",
-    summary: "Captured builder review evidence",
-    mimeType: "image/png",
-    approved: false,
-    createdAtMs: Date.now(),
-  };
+  const artifact: GenerationArtifact = fallbackArtifactResult?.data
+    ? {
+        ...fallbackArtifactResult.data,
+        kind: "automation-evidence",
+        label: "automation.artifact.label.evidence",
+        summary: "automation.artifact.captured-review-evidence",
+      }
+    : {
+        id: `artifact.${run.id}`,
+        jobId: run.id,
+        kind: "automation-evidence",
+        label: "automation.artifact.label.evidence",
+        previewSource: evidenceUrl ?? "",
+        summary: "automation.artifact.captured-review-evidence",
+        mimeType: "image/png",
+        approved: false,
+        createdAtMs: Date.now(),
+      };
 
   const completedSteps = run.steps.map((step, index) => ({
     ...step,
@@ -362,7 +435,7 @@ export const executeAutomationRun = async (
     data: {
       steps: completedSteps,
       artifacts: [artifact],
-      statusMessage: "automation-plan-ready-for-review",
+      statusMessage: "automation.plan-ready-for-review",
     },
   };
 };

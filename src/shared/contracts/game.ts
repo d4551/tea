@@ -857,9 +857,342 @@ export interface GameSseCloseFrame {
 }
 
 /**
+ * Realtime websocket frame contract emitted by the game runtime.
+ */
+export interface GameRealtimeFrame {
+  /** Optional full scene state snapshot. */
+  readonly state?: GameSceneState;
+  /** Optional command queue depth for UI diagnostics. */
+  readonly commandQueueDepth?: number;
+  /** Optional refreshed resume token for reconnect flows. */
+  readonly resumeToken?: string;
+  /** Optional refreshed resume-token expiry timestamp. */
+  readonly resumeTokenExpiresAtMs?: number;
+}
+
+/**
  * Common shape for commands accepted by both REST and WS game boundaries.
  */
 export type GameCommandPayload = Record<string, unknown>;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+
+const isStringRecordValue = (value: unknown): value is string | number | boolean =>
+  typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+
+const isDirectionValue = (value: unknown): value is Direction =>
+  value === "up" || value === "down" || value === "left" || value === "right";
+
+const isGameUiStateValue = (value: unknown): value is GameUiState =>
+  value === "idle" ||
+  value === "loading" ||
+  value === "playing" ||
+  value === "empty" ||
+  value === "error" ||
+  value === "unauthorized";
+
+const isGameActionStateValue = (value: unknown): value is GameActionState =>
+  value === "idle" ||
+  value === "loading" ||
+  value === "success" ||
+  value === "empty" ||
+  value === "error.retryable" ||
+  value === "error.nonRetryable" ||
+  value === "unauthorized" ||
+  value === "actionQueued" ||
+  value === "resolving" ||
+  value === "moved" ||
+  value === "dialogueOpen" ||
+  value === "blockedByCollision";
+
+const isQuestStepStateValue = (value: unknown): value is QuestStepState =>
+  value === "pending" || value === "active" || value === "completed";
+
+const isTriggerEventTypeValue = (value: unknown): value is TriggerEventType =>
+  value === "scene-enter" ||
+  value === "npc-interact" ||
+  value === "chat" ||
+  value === "dialogue-confirmed";
+
+const isVector2 = (value: unknown): value is Vector2 =>
+  isRecord(value) && isFiniteNumber(value.x) && isFiniteNumber(value.y);
+
+const isVector3 = (value: unknown): value is Vector3 =>
+  isRecord(value) && isFiniteNumber(value.x) && isFiniteNumber(value.y) && isFiniteNumber(value.z);
+
+const isSceneGeometry = (value: unknown): value is SceneGeometry =>
+  isRecord(value) &&
+  isFiniteNumber(value.width) &&
+  isFiniteNumber(value.height) &&
+  value.width > 0 &&
+  value.height > 0;
+
+const isCollisionMask = (value: unknown): value is CollisionMask =>
+  isRecord(value) &&
+  isFiniteNumber(value.x) &&
+  isFiniteNumber(value.y) &&
+  isFiniteNumber(value.width) &&
+  isFiniteNumber(value.height);
+
+const isMovementVector = (value: unknown): value is MovementVector =>
+  isRecord(value) && isFiniteNumber(value.x) && isFiniteNumber(value.y);
+
+const isSceneNode2D = (value: unknown): value is SceneNode2D =>
+  isRecord(value) &&
+  typeof value.id === "string" &&
+  (value.nodeType === "sprite" ||
+    value.nodeType === "tile" ||
+    value.nodeType === "spawn" ||
+    value.nodeType === "trigger" ||
+    value.nodeType === "camera") &&
+  (value.assetId === undefined || typeof value.assetId === "string") &&
+  (value.animationClipId === undefined || typeof value.animationClipId === "string") &&
+  isVector2(value.position) &&
+  isRecord(value.size) &&
+  isFiniteNumber(value.size.width) &&
+  isFiniteNumber(value.size.height) &&
+  typeof value.layer === "string";
+
+const isSceneNode3D = (value: unknown): value is SceneNode3D =>
+  isRecord(value) &&
+  typeof value.id === "string" &&
+  (value.nodeType === "model" ||
+    value.nodeType === "light" ||
+    value.nodeType === "camera" ||
+    value.nodeType === "spawn" ||
+    value.nodeType === "trigger") &&
+  (value.assetId === undefined || typeof value.assetId === "string") &&
+  (value.animationClipId === undefined || typeof value.animationClipId === "string") &&
+  isVector3(value.position) &&
+  isVector3(value.rotation) &&
+  isVector3(value.scale);
+
+const isSceneNodeDefinition = (value: unknown): value is SceneNodeDefinition =>
+  isSceneNode2D(value) || isSceneNode3D(value);
+
+const isNpcAiBlueprint = (value: unknown): value is NpcAiBlueprint =>
+  isRecord(value) &&
+  isFiniteNumber(value.wanderRadius) &&
+  isFiniteNumber(value.wanderSpeed) &&
+  Array.isArray(value.idlePauseMs) &&
+  value.idlePauseMs.length === 2 &&
+  value.idlePauseMs.every(isFiniteNumber) &&
+  typeof value.greetOnApproach === "boolean" &&
+  typeof value.greetLineKey === "string";
+
+const isEntityState = (value: unknown): value is EntityState =>
+  isRecord(value) &&
+  typeof value.id === "string" &&
+  typeof value.label === "string" &&
+  typeof value.characterKey === "string" &&
+  isVector2(value.position) &&
+  isDirectionValue(value.facing) &&
+  typeof value.animation === "string" &&
+  isFiniteNumber(value.frame) &&
+  isMovementVector(value.velocity) &&
+  isCollisionMask(value.bounds);
+
+const isGameDialogueEntry = (value: unknown): value is GameDialogueEntry =>
+  isRecord(value) && typeof value.key === "string" && typeof value.text === "string";
+
+const isNpcStateMachineValue = (value: unknown): value is NpcStateMachine =>
+  value === "idle" || value === "wander" || value === "face_player" || value === "talking";
+
+const isNpcState = (value: unknown): value is NpcState => {
+  if (!isRecord(value) || !isEntityState(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.aiEnabled === "boolean" &&
+    isFiniteNumber(value.dialogueIndex) &&
+    Array.isArray(value.dialogueLineKeys) &&
+    value.dialogueLineKeys.every((lineKey): lineKey is string => typeof lineKey === "string") &&
+    Array.isArray(value.dialogueEntries) &&
+    value.dialogueEntries.every(isGameDialogueEntry) &&
+    isFiniteNumber(value.interactRadius) &&
+    isVector2(value.homePosition) &&
+    isNpcAiBlueprint(value.aiProfile) &&
+    typeof value.active === "boolean" &&
+    isNpcStateMachineValue(value.state)
+  );
+};
+
+const isGameDialogue = (value: unknown): value is GameDialogue =>
+  isRecord(value) &&
+  typeof value.npcId === "string" &&
+  typeof value.npcLabel === "string" &&
+  typeof value.line === "string" &&
+  typeof value.lineKey === "string";
+
+const isGameQuestStepState = (value: unknown): value is GameQuestStepState =>
+  isRecord(value) &&
+  typeof value.id === "string" &&
+  typeof value.title === "string" &&
+  typeof value.description === "string" &&
+  isQuestStepStateValue(value.state);
+
+const isGameQuestState = (value: unknown): value is GameQuestState =>
+  isRecord(value) &&
+  typeof value.id === "string" &&
+  typeof value.title === "string" &&
+  typeof value.description === "string" &&
+  typeof value.completed === "boolean" &&
+  Array.isArray(value.steps) &&
+  value.steps.every(isGameQuestStepState);
+
+const isFlagRecord = (
+  value: unknown,
+): value is Readonly<Record<string, string | number | boolean>> =>
+  isRecord(value) && Object.values(value).every(isStringRecordValue);
+
+const isTriggerDefinition = (value: unknown): value is TriggerDefinition =>
+  isRecord(value) &&
+  typeof value.id === "string" &&
+  typeof value.label === "string" &&
+  isTriggerEventTypeValue(value.event) &&
+  (value.sceneId === undefined || typeof value.sceneId === "string") &&
+  (value.npcId === undefined || typeof value.npcId === "string") &&
+  (value.nodeId === undefined || typeof value.nodeId === "string") &&
+  (value.requiredFlags === undefined || isFlagRecord(value.requiredFlags)) &&
+  (value.setFlags === undefined || isFlagRecord(value.setFlags)) &&
+  (value.questId === undefined || typeof value.questId === "string") &&
+  (value.questStepId === undefined || typeof value.questStepId === "string");
+
+const isGameSceneStateValue = (value: unknown): value is GameSceneState =>
+  isRecord(value) &&
+  typeof value.sceneId === "string" &&
+  (value.sceneMode === undefined || value.sceneMode === "2d" || value.sceneMode === "3d") &&
+  typeof value.sceneTitle === "string" &&
+  typeof value.background === "string" &&
+  isSceneGeometry(value.geometry) &&
+  isEntityState(value.player) &&
+  Array.isArray(value.npcs) &&
+  value.npcs.every(isNpcState) &&
+  Array.isArray(value.collisions) &&
+  value.collisions.every(isCollisionMask) &&
+  (value.nodes === undefined ||
+    (Array.isArray(value.nodes) && value.nodes.every(isSceneNodeDefinition))) &&
+  isVector2(value.camera) &&
+  isGameUiStateValue(value.uiState) &&
+  isGameActionStateValue(value.actionState) &&
+  (value.dialogue === null || isGameDialogue(value.dialogue)) &&
+  (value.quests === undefined ||
+    (Array.isArray(value.quests) && value.quests.every(isGameQuestState))) &&
+  (value.flags === undefined || isFlagRecord(value.flags)) &&
+  isFiniteNumber(value.worldTimeMs);
+
+/**
+ * Validates a runtime scene-state payload before it reaches clients or session rehydration.
+ *
+ * @param payload Untyped value at a persistence or transport boundary.
+ * @returns Typed scene state or a deterministic validation failure.
+ */
+export const validateGameSceneState = (
+  payload: unknown,
+):
+  | {
+      readonly ok: true;
+      readonly data: GameSceneState;
+    }
+  | {
+      readonly ok: false;
+      readonly message: string;
+    } =>
+  isGameSceneStateValue(payload)
+    ? { ok: true, data: payload }
+    : { ok: false, message: "Invalid game scene state payload." };
+
+/**
+ * Validates trigger-definition arrays restored from persisted release/session payloads.
+ *
+ * @param payload Untyped trigger-definition collection.
+ * @returns Typed trigger definitions or a deterministic validation failure.
+ */
+export const validateTriggerDefinitions = (
+  payload: unknown,
+):
+  | {
+      readonly ok: true;
+      readonly data: readonly TriggerDefinition[];
+    }
+  | {
+      readonly ok: false;
+      readonly message: string;
+    } =>
+  Array.isArray(payload) && payload.every(isTriggerDefinition)
+    ? { ok: true, data: payload }
+    : { ok: false, message: "Invalid trigger definition payload." };
+
+/**
+ * Validates realtime websocket frames before the browser client mutates runtime state.
+ *
+ * @param payload Untyped websocket frame payload.
+ * @returns Typed realtime frame or a deterministic validation failure.
+ */
+export const validateGameRealtimeFrame = (
+  payload: unknown,
+):
+  | {
+      readonly ok: true;
+      readonly data: GameRealtimeFrame;
+    }
+  | {
+      readonly ok: false;
+      readonly message: string;
+    } => {
+  if (!isRecord(payload)) {
+    return { ok: false, message: "Invalid realtime frame payload." };
+  }
+
+  let state: GameSceneState | undefined;
+  if (payload.state !== undefined) {
+    const stateValidation = validateGameSceneState(payload.state);
+    if (!stateValidation.ok) {
+      return { ok: false, message: stateValidation.message };
+    }
+
+    state = stateValidation.data;
+  }
+
+  if (
+    payload.commandQueueDepth !== undefined &&
+    (!isFiniteNumber(payload.commandQueueDepth) || payload.commandQueueDepth < 0)
+  ) {
+    return { ok: false, message: "Invalid realtime frame queue depth." };
+  }
+
+  if (payload.resumeToken !== undefined && typeof payload.resumeToken !== "string") {
+    return { ok: false, message: "Invalid realtime frame resume token." };
+  }
+
+  if (
+    payload.resumeTokenExpiresAtMs !== undefined &&
+    !isFiniteNumber(payload.resumeTokenExpiresAtMs)
+  ) {
+    return { ok: false, message: "Invalid realtime frame resume expiry." };
+  }
+
+  const commandQueueDepth =
+    payload.commandQueueDepth === undefined ? undefined : payload.commandQueueDepth;
+  const resumeToken = payload.resumeToken === undefined ? undefined : payload.resumeToken;
+  const resumeTokenExpiresAtMs =
+    payload.resumeTokenExpiresAtMs === undefined ? undefined : payload.resumeTokenExpiresAtMs;
+
+  return {
+    ok: true,
+    data: {
+      state,
+      commandQueueDepth,
+      resumeToken,
+      resumeTokenExpiresAtMs,
+    },
+  };
+};
 
 /**
  * Locale-indexed validation error messages.
@@ -1321,6 +1654,28 @@ export interface GameSessionState extends GameSessionLifecycleResult {
 }
 
 /**
+ * Canonical HUD snapshot used by SSE transport rendering.
+ */
+export interface GameHudState {
+  /** Stable session identifier. */
+  readonly sessionId: string;
+  /** Scene title rendered in the HUD. */
+  readonly sceneTitle: string;
+  /** Active scene runtime mode. */
+  readonly sceneMode?: SceneMode;
+  /** Active quest title surfaced in the player-facing shell. */
+  readonly activeQuestTitle?: string;
+  /** Active locale for runtime copy. */
+  readonly locale: GameLocale;
+  /** Current player XP total. */
+  readonly xp: number;
+  /** Current progression level. */
+  readonly level: number;
+  /** Active dialogue, if any. */
+  readonly dialogue: GameSceneState["dialogue"];
+}
+
+/**
  * Builder AI request envelope.
  */
 export interface BuilderAIRequest {
@@ -1580,7 +1935,7 @@ export const parsePlayerProgressV2 = (
     ? visitedScenesValue
     : parseJson(
         typeof visitedScenesValue === "string" ? visitedScenesValue : "[]",
-        [] as unknown[],
+        [] as readonly string[],
       );
 
   const parsedInteractions =

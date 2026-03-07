@@ -3,7 +3,8 @@ import type { OracleService } from "../domain/oracle/oracle-service.ts";
 import { authSessionGuard, resolveAuthSession } from "../plugins/auth-session.ts";
 import { i18nContextPlugin } from "../plugins/i18n-context.ts";
 import { defaultOracleMode } from "../shared/constants/oracle.ts";
-import { appRoutes } from "../shared/constants/routes.ts";
+import { appRoutes, resolveRequestPathWithQuery } from "../shared/constants/routes.ts";
+import type { LayoutContext } from "../views/layout.ts";
 import { type OraclePanelState, renderOraclePanel } from "../views/oracle.ts";
 import {
   renderDevelopmentPlanPage,
@@ -12,6 +13,18 @@ import {
   renderPitchDeckPage,
 } from "../views/pages.ts";
 import { parseOracleMode } from "./oracle-input.ts";
+
+const createRouteLayoutContext = (
+  request: Request,
+  locale: LayoutContext["locale"],
+  messages: LayoutContext["messages"],
+  activeRoute: "home" | "pitchDeck" | "narrativeBible" | "developmentPlan",
+): LayoutContext => ({
+  locale,
+  messages,
+  activeRoute,
+  currentPathWithQuery: resolveRequestPathWithQuery(request),
+});
 
 const oracleQuerySchema = t.Object({
   lang: t.Optional(t.String()),
@@ -23,18 +36,12 @@ const localeQuerySchema = t.Object({
   lang: t.Optional(t.String()),
 });
 
-const resolveCurrentPathWithQuery = (request: Request): string => {
-  const requestUrl = new URL(request.url);
-  return `${requestUrl.pathname}${requestUrl.search}`;
-};
-
 const createOraclePageRoutes = (oracleService: OracleService) =>
   new Elysia({ name: "page-oracle-routes" }).use(i18nContextPlugin).guard(authSessionGuard, (app) =>
     app
       .get(
         appRoutes.home,
         async ({ query, cookie, request, locale, messages }) => {
-          const currentPathWithQuery = resolveCurrentPathWithQuery(request);
           const mode = parseOracleMode(query.mode);
           const question = query.question ?? "";
           const hasOracleInputs = query.question !== undefined || query.mode !== undefined;
@@ -60,7 +67,12 @@ const createOraclePageRoutes = (oracleService: OracleService) =>
             };
           }
 
-          return renderHomePage({ locale, messages, currentPathWithQuery }, oraclePanelState);
+          return renderHomePage(
+            {
+              layout: createRouteLayoutContext(request, locale, messages, "home"),
+            },
+            oraclePanelState,
+          );
         },
         {
           query: oracleQuerySchema,
@@ -99,9 +111,9 @@ const createStaticPageRoutes = () =>
     .get(
       appRoutes.pitchDeck,
       ({ request, locale, messages }) => {
-        const currentPathWithQuery = resolveCurrentPathWithQuery(request);
-
-        return renderPitchDeckPage({ locale, messages, currentPathWithQuery });
+        return renderPitchDeckPage({
+          layout: createRouteLayoutContext(request, locale, messages, "pitchDeck"),
+        });
       },
       {
         query: localeQuerySchema,
@@ -110,9 +122,9 @@ const createStaticPageRoutes = () =>
     .get(
       appRoutes.narrativeBible,
       ({ request, locale, messages }) => {
-        const currentPathWithQuery = resolveCurrentPathWithQuery(request);
-
-        return renderNarrativeBiblePage({ locale, messages, currentPathWithQuery });
+        return renderNarrativeBiblePage({
+          layout: createRouteLayoutContext(request, locale, messages, "narrativeBible"),
+        });
       },
       {
         query: localeQuerySchema,
@@ -121,9 +133,9 @@ const createStaticPageRoutes = () =>
     .get(
       appRoutes.developmentPlan,
       ({ request, locale, messages }) => {
-        const currentPathWithQuery = resolveCurrentPathWithQuery(request);
-
-        return renderDevelopmentPlanPage({ locale, messages, currentPathWithQuery });
+        return renderDevelopmentPlanPage({
+          layout: createRouteLayoutContext(request, locale, messages, "developmentPlan"),
+        });
       },
       {
         query: localeQuerySchema,

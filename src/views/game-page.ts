@@ -1,8 +1,12 @@
 import { appConfig, type LocaleCode } from "../config/environment.ts";
-import { appRoutes, interpolateRoutePath, withQueryParameters } from "../shared/constants/routes.ts";
+import {
+  appRoutes,
+  interpolateRoutePath,
+  withQueryParameters,
+} from "../shared/constants/routes.ts";
 import type { Messages } from "../shared/i18n/messages.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
-import { escapeHtml, renderLayout } from "./layout.ts";
+import { escapeHtml, type LayoutContext, renderDocument } from "./layout.ts";
 
 /**
  * Props for the playable runtime page.
@@ -41,6 +45,11 @@ interface InactiveGamePageProps {
  * Game page props.
  */
 export type GamePageProps = PlayableGamePageProps | InactiveGamePageProps;
+
+const resolveLocaleDisplayName = (messages: Messages, locale: LocaleCode): string =>
+  locale === "zh-CN"
+    ? messages.navigation.localeNameChinese
+    : messages.navigation.localeNameEnglish;
 
 const renderInactiveState = (
   messages: Messages,
@@ -89,15 +98,19 @@ export function GamePage(props: GamePageProps) {
       lang: props.locale,
       projectId: props.projectId,
     });
-
-    return renderLayout({
+    const layout: LayoutContext = {
       locale: props.locale,
-      title: messages.navigation.game,
       messages,
       activeRoute: "game",
       currentPathWithQuery,
-      body: renderInactiveState(messages, props.locale, props.projectId, props.state),
-    });
+      persistentProjectId: props.projectId,
+    };
+
+    return renderDocument(
+      layout,
+      messages.navigation.game,
+      renderInactiveState(messages, props.locale, props.projectId, props.state),
+    );
   }
 
   const {
@@ -114,11 +127,18 @@ export function GamePage(props: GamePageProps) {
     clientRuntimeConfig,
   } = props;
   const currentPathWithQuery = withQueryParameters(appRoutes.game, {
+    lang: locale,
     sessionId,
     projectId,
   });
+  const layout: LayoutContext = {
+    locale,
+    messages,
+    activeRoute: "game",
+    currentPathWithQuery,
+    persistentProjectId: projectId,
+  };
   const gameHudStreamPath = interpolateRoutePath(appRoutes.gameApiSessionHud, { id: sessionId });
-  const homePath = withQueryParameters(appRoutes.home, { lang: locale });
   const builderHref = withQueryParameters(appRoutes.builder, { lang: locale, projectId });
   const pageScripts = [
     {
@@ -140,14 +160,24 @@ export function GamePage(props: GamePageProps) {
     <meta name="game-client-restore-request-timeout-ms" data-game-client-restore-request-timeout-ms="${escapeHtml(String(clientRuntimeConfig.restoreRequestTimeoutMs))}" />
     <meta name="game-client-restore-max-attempts" data-game-client-restore-max-attempts="${escapeHtml(String(clientRuntimeConfig.restoreMaxAttempts))}" />
     <meta name="game-client-renderer-preference" data-game-client-renderer-preference="${escapeHtml(appConfig.playableGame.rendererPreference)}" />
-    <div class="flex h-screen w-full flex-col bg-base-300 font-serif">
-      <nav class="navbar absolute top-0 z-50 w-full border-b border-base-200 bg-base-100/90 shadow-sm backdrop-blur" role="navigation" aria-label="${escapeHtml(messages.common.primaryNavigation)}">
-        <div class="flex-1 px-4">
-          <a href="${escapeHtml(homePath)}" class="btn btn-ghost text-xl" aria-label="${escapeHtml(messages.metadata.appName)}">
-            <span class="mr-2 text-2xl" aria-hidden="true">🍃</span> ${escapeHtml(messages.metadata.appName)}
-          </a>
-        </div>
-        <div class="flex-none gap-2 px-4">
+    <div class="grid gap-6 font-serif" hx-boost="false" hx-ext="sse" sse-connect="${escapeHtml(gameHudStreamPath)}">
+      <section class="card card-border bg-base-100/95 shadow-sm">
+        <div class="card-body flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div class="space-y-2">
+            <h1
+              id="game-scene-title-heading"
+              sse-swap="scene-title-heading"
+              hx-swap="outerHTML"
+              class="text-3xl font-semibold"
+            >${escapeHtml(sceneTitle)}</h1>
+            <p
+              id="game-objective-summary"
+              sse-swap="objective-summary"
+              hx-swap="outerHTML"
+              class="text-sm text-base-content/70"
+            >${escapeHtml(activeQuestTitle ?? messages.game.objectiveDescription)}</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
           <a href="${escapeHtml(builderHref)}" class="btn btn-outline btn-sm">${escapeHtml(messages.game.builderReturn)}</a>
           <span id="game-session-meta" class="hidden"
             data-session-id="${escapeHtml(sessionId)}"
@@ -200,21 +230,26 @@ export function GamePage(props: GamePageProps) {
             role="status"
           >${escapeHtml(messages.game.initialXp)}</div>
         </div>
-      </nav>
+      </section>
 
-      <main class="relative flex flex-1 items-center justify-center overflow-hidden pt-20" id="main-content">
-        <div class="grid w-full max-w-7xl gap-6 px-4 pb-6 lg:grid-cols-[0.82fr_0.18fr]">
+      <section class="grid gap-6 lg:grid-cols-[0.82fr_0.18fr]">
           <div class="relative aspect-video overflow-hidden rounded-xl border border-base-content/20 bg-black shadow-2xl">
-            <div id="game-canvas-wrapper" class="absolute inset-0 h-full w-full cursor-none" role="img" aria-label="${escapeHtml(messages.game.gameCanvasLabel)}">
-            </div>
+            <div
+              id="game-canvas-wrapper"
+              class="absolute inset-0 h-full w-full cursor-auto outline-none data-[runtime-active=true]:cursor-none"
+              tabindex="0"
+              aria-label="${escapeHtml(messages.game.runtimeSurfaceLabel)}"
+              aria-describedby="game-runtime-help game-controls-list"
+              data-runtime-active="false"
+              data-runtime-focus-active-label="${escapeHtml(messages.game.runtimeSurfaceActive)}"
+              data-runtime-focus-inactive-label="${escapeHtml(messages.game.runtimeSurfaceInactive)}"
+            ></div>
 
             <div
               class="pointer-events-none absolute inset-0 flex flex-col justify-between p-6"
-              hx-ext="sse"
-              sse-connect="${escapeHtml(gameHudStreamPath)}"
             >
               <div class="flex justify-between items-start pt-2">
-                <div id="hud-scene" sse-swap="scene-title" hx-swap="outerHTML" aria-live="polite" role="status" class="pointer-events-auto rounded-full border border-base-content/10 bg-base-100/80 px-6 py-2 text-lg font-bold shadow backdrop-blur">
+                <div id="hud-scene" sse-swap="scene-badge" hx-swap="outerHTML" aria-live="polite" role="status" class="pointer-events-auto rounded-full border border-base-content/10 bg-base-100/80 px-6 py-2 text-lg font-bold shadow backdrop-blur">
                   ${escapeHtml(messages.game.connectingToRealm)}
                 </div>
               </div>
@@ -238,23 +273,48 @@ export function GamePage(props: GamePageProps) {
             <article class="card card-border bg-base-100 shadow-sm">
               <div class="card-body">
                 <h2 class="card-title text-lg">${escapeHtml(messages.game.objectiveTitle)}</h2>
-                <p class="text-sm text-base-content/75">${escapeHtml(activeQuestTitle ?? messages.game.objectiveDescription)}</p>
+                <p
+                  id="game-objective-card"
+                  sse-swap="objective-card"
+                  hx-swap="outerHTML"
+                  class="text-sm text-base-content/75"
+                >${escapeHtml(activeQuestTitle ?? messages.game.objectiveDescription)}</p>
                 <div class="grid gap-2 text-sm">
                   <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
                     <span>${escapeHtml(messages.game.sceneLabel)}</span>
-                    <span class="font-medium">${escapeHtml(sceneTitle)}</span>
+                    <span
+                      id="game-scene-title-value"
+                      sse-swap="scene-title-value"
+                      hx-swap="outerHTML"
+                      class="font-medium"
+                    >${escapeHtml(sceneTitle)}</span>
                   </div>
                   <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
-                    <span>${escapeHtml(messages.builder.sceneModeLabel)}</span>
-                    <span class="font-medium">${escapeHtml(sceneMode === "3d" ? messages.builder.sceneMode3d : messages.builder.sceneMode2d)}</span>
+                    <span>${escapeHtml(messages.game.sceneModeLabel)}</span>
+                    <span
+                      id="game-scene-mode-value"
+                      sse-swap="scene-mode"
+                      hx-swap="outerHTML"
+                      class="font-medium"
+                    >${escapeHtml(
+                      sceneMode === "3d" ? messages.game.sceneMode3d : messages.game.sceneMode2d,
+                    )}</span>
                   </div>
                   <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
                     <span>${escapeHtml(messages.game.projectLabel)}</span>
-                    <span class="font-mono text-xs">${escapeHtml(projectId ?? messages.game.connectionMissing)}</span>
+                    <span class="font-mono text-xs">${escapeHtml(
+                      projectId ?? messages.game.projectUnavailableValue,
+                    )}</span>
                   </div>
                   <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
                     <span>${escapeHtml(messages.game.sessionIdLabel)}</span>
                     <span class="font-mono text-xs">${escapeHtml(sessionId)}</span>
+                  </div>
+                  <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
+                    <span>${escapeHtml(messages.game.localeLabel)}</span>
+                    <span class="font-medium">${escapeHtml(
+                      resolveLocaleDisplayName(messages, locale),
+                    )}</span>
                   </div>
                 </div>
               </div>
@@ -265,14 +325,18 @@ export function GamePage(props: GamePageProps) {
                 <div class="flex flex-wrap gap-2">
                   <span class="badge badge-outline">${escapeHtml(messages.game.queueLabel)}: ${commandQueueDepth}</span>
                   <span class="badge badge-soft">${escapeHtml(messages.game.publishedProjectLabel)}</span>
-                  <span class="badge badge-ghost">${escapeHtml(locale)}</span>
+                  <span class="badge badge-ghost">${escapeHtml(
+                    resolveLocaleDisplayName(messages, locale),
+                  )}</span>
                 </div>
               </div>
             </article>
             <article class="card card-border bg-base-100 shadow-sm">
               <div class="card-body">
                 <h2 class="card-title text-lg">${escapeHtml(messages.game.controlsTitle)}</h2>
-                <ul class="space-y-2 text-sm">
+                <p id="game-runtime-help" class="text-sm text-base-content/70">${escapeHtml(messages.game.runtimeSurfaceHint)}</p>
+                <span id="game-runtime-focus-status" class="sr-only" aria-live="polite" role="status">${escapeHtml(messages.game.runtimeSurfaceInactive)}</span>
+                <ul id="game-controls-list" class="space-y-2 text-sm">
                   <li>${escapeHtml(messages.game.controlsMove)}</li>
                   <li>${escapeHtml(messages.game.controlsInteract)}</li>
                   <li>${escapeHtml(messages.game.controlsAdvance)}</li>
@@ -280,18 +344,9 @@ export function GamePage(props: GamePageProps) {
               </div>
             </article>
           </aside>
-        </div>
-      </main>
+      </section>
     </div>
   `;
 
-  return renderLayout({
-    locale,
-    title: messages.navigation.game,
-    messages,
-    activeRoute: "game",
-    currentPathWithQuery,
-    body: content,
-    scripts: pageScripts,
-  });
+  return renderDocument(layout, messages.navigation.game, content, pageScripts);
 }

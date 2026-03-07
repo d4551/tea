@@ -247,7 +247,10 @@ export const renderAiPanel = (
           >
             <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
             <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
-            <textarea name="operationsJson" class="textarea textarea-bordered w-full min-h-28" placeholder='[{"op":"replace","path":"/dialogues/en-US/npc.teaMonk.greet","value":"..."}]'></textarea>
+            <fieldset class="fieldset">
+              <legend class="fieldset-legend">${escapeHtml(messages.builder.operationsJsonLabel)}</legend>
+              <textarea name="operationsJson" class="textarea textarea-bordered w-full min-h-28" placeholder="${escapeHtml(messages.builder.operationsJsonPlaceholder)}"></textarea>
+            </fieldset>
             <div class="flex items-center gap-2">
               <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.builder.previewChanges)}</button>
               <span id="ai-patch-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>

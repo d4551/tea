@@ -32,6 +32,17 @@ export interface AppConfig {
   readonly api: {
     readonly docsPath: string;
   };
+  readonly runtime: {
+    readonly nodeEnv: NodeEnvironment;
+  };
+  readonly database: {
+    readonly url: string;
+  };
+  readonly builder: {
+    readonly workerPollIntervalMs: number;
+    readonly localAutomationOrigin: string;
+    readonly automationProbeTimeoutMs: number;
+  };
   readonly ui: {
     readonly defaultTheme: string;
     readonly maxContentWidthClass: string;
@@ -46,6 +57,7 @@ export interface AppConfig {
   readonly auth: {
     readonly sessionCookieName: string;
     readonly sessionMaxAgeSeconds: number;
+    readonly resumeTokenSecret: string;
   };
   readonly oracle: {
     readonly requireSession: boolean;
@@ -175,6 +187,8 @@ const DEFAULT_PUBLIC_DIRECTORY = "public";
 const DEFAULT_ASSETS_DIRECTORY = "assets";
 const DEFAULT_RMMZ_PACK_DIRECTORY = "LOTFK_RMMZ_Agentic_Pack";
 const DEFAULT_DOCS_PATH = "/docs";
+const DEFAULT_BUILDER_WORKER_POLL_INTERVAL_MS = 1_000;
+const DEFAULT_BUILDER_AUTOMATION_PROBE_TIMEOUT_MS = 500;
 const DEFAULT_PLAYABLE_GAME_MOUNT_PATH = "/game";
 const DEFAULT_PLAYABLE_GAME_SOURCE_DIRECTORY = "public/game";
 const DEFAULT_THEME = "silk";
@@ -218,19 +232,36 @@ const localeMatchers: readonly LocaleMatcher[] = supportedLocales.map((locale) =
   normalizedLanguage: locale.toLowerCase().split("-")[0] ?? locale.toLowerCase(),
 }));
 
+const formatEnvError = (variableName: string, detail: string): Error =>
+  new Error(`Invalid environment variable ${variableName}: ${detail}`);
+
 /**
  * Parses an environment boolean in a strict and explicit way.
  *
  * @param value Raw environment value.
  * @param fallback Fallback when the value is missing.
+ * @param variableName Environment variable name for error reporting.
  * @returns Parsed boolean value.
  */
-export const parseBoolean = (value: string | undefined, fallback: boolean): boolean => {
+export const parseBoolean = (
+  value: string | undefined,
+  fallback: boolean,
+  variableName = "unknown",
+): boolean => {
   if (value === undefined) {
     return fallback;
   }
 
-  return value.toLowerCase() === "true";
+  const normalized = value.toLowerCase();
+  if (normalized === "true") {
+    return true;
+  }
+
+  if (normalized === "false") {
+    return false;
+  }
+
+  throw formatEnvError(variableName, `expected "true" or "false" but received "${value}"`);
 };
 
 /**
@@ -239,23 +270,65 @@ export const parseBoolean = (value: string | undefined, fallback: boolean): bool
  * @param value Raw environment value.
  * @param fallback Fallback numeric value.
  * @param min Minimum allowed value.
+ * @param variableName Environment variable name for error reporting.
  * @returns Parsed bounded integer.
  */
-export const parseInteger = (value: string | undefined, fallback: number, min: number): number => {
+export const parseInteger = (
+  value: string | undefined,
+  fallback: number,
+  min: number,
+  variableName = "unknown",
+): number => {
   if (value === undefined) {
     return fallback;
   }
 
   const parsed = Number.parseInt(value, 10);
   if (Number.isNaN(parsed)) {
-    return fallback;
+    throw formatEnvError(variableName, `expected an integer but received "${value}"`);
   }
 
-  return Math.max(parsed, min);
+  if (parsed < min) {
+    throw formatEnvError(variableName, `expected a value >= ${min} but received ${parsed}`);
+  }
+
+  return parsed;
 };
+
+const parseRequiredString = (value: string | undefined, variableName: string): string => {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw formatEnvError(variableName, "value is required");
+  }
+
+  return value.trim();
+};
+
+const parseAbsoluteUrl = (value: string | undefined, variableName: string): string => {
+  const raw = parseRequiredString(value, variableName);
+  const parsed = new URL(raw);
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw formatEnvError(variableName, `expected an http/https URL but received "${raw}"`);
+  }
+
+  if (parsed.hostname === "0.0.0.0") {
+    throw formatEnvError(variableName, 'must not use "0.0.0.0" as the hostname');
+  }
+
+  return parsed.toString().replace(/\/$/u, "");
+};
+
+const resolvedHost = Bun.env.HOST ?? "0.0.0.0";
+const resolvedPort = parseInteger(Bun.env.PORT, DEFAULT_PORT, 1, "PORT");
+const resolvedDatabaseUrl = parseRequiredString(Bun.env.DATABASE_URL, "DATABASE_URL");
+const resolvedAppOrigin = parseAbsoluteUrl(Bun.env.APP_ORIGIN, "APP_ORIGIN");
+const resolvedBuilderLocalAutomationOrigin = parseAbsoluteUrl(
+  Bun.env.BUILDER_LOCAL_AUTOMATION_ORIGIN ?? resolvedAppOrigin,
+  Bun.env.BUILDER_LOCAL_AUTOMATION_ORIGIN ? "BUILDER_LOCAL_AUTOMATION_ORIGIN" : "APP_ORIGIN",
+);
 
 type GameSessionStoreMode = "prisma" | "memory";
 type PreferredAiProvider = "auto" | "ollama" | "transformers";
+type NodeEnvironment = "development" | "test" | "production";
 
 /**
  * Renderer backend preference for the playable game client.
@@ -268,22 +341,47 @@ export type RendererPreference = "webgpu" | "webgl";
 export type OnnxDevicePreference = "wasm" | "webgpu" | "cpu";
 
 const parseRendererPreference = (value: string | undefined): RendererPreference => {
+  if (value === undefined) {
+    return "webgpu";
+  }
   if (value === "webgl") {
     return "webgl";
   }
 
-  return "webgpu";
+  if (value === "webgpu") {
+    return "webgpu";
+  }
+
+  throw formatEnvError(
+    "RENDERER_PREFERENCE",
+    `expected "webgpu" or "webgl" but received "${value}"`,
+  );
 };
 
 const parseOnnxDevice = (value: string | undefined): OnnxDevicePreference => {
+  if (value === undefined) {
+    return "cpu";
+  }
+
   if (value === "webgpu" || value === "cpu") {
     return value;
   }
 
-  return "wasm";
+  if (value === "wasm") {
+    return "wasm";
+  }
+
+  throw formatEnvError(
+    "AI_ONNX_DEVICE",
+    `expected "cpu", "webgpu", or "wasm" but received "${value}"`,
+  );
 };
 
 const parseGameSessionStore = (value: string | undefined): GameSessionStoreMode => {
+  if (value === undefined) {
+    return DEFAULT_GAME_SESSION_STORE;
+  }
+
   if (value === "memory") {
     return "memory";
   }
@@ -292,15 +390,40 @@ const parseGameSessionStore = (value: string | undefined): GameSessionStoreMode 
     return "prisma";
   }
 
-  return DEFAULT_GAME_SESSION_STORE;
+  throw formatEnvError(
+    "GAME_SESSION_STORE",
+    `expected "prisma" or "memory" but received "${value}"`,
+  );
 };
 
 const parsePreferredAiProvider = (value: string | undefined): PreferredAiProvider => {
+  if (value === undefined) {
+    return DEFAULT_AI_PREFERRED_PROVIDER;
+  }
+
   if (value === "ollama" || value === "transformers" || value === "auto") {
     return value;
   }
 
-  return DEFAULT_AI_PREFERRED_PROVIDER;
+  throw formatEnvError(
+    "AI_PREFERRED_PROVIDER",
+    `expected "auto", "ollama", or "transformers" but received "${value}"`,
+  );
+};
+
+const parseNodeEnvironment = (value: string | undefined): NodeEnvironment => {
+  if (value === undefined) {
+    return "development";
+  }
+
+  if (value === "development" || value === "test" || value === "production") {
+    return value;
+  }
+
+  throw formatEnvError(
+    "NODE_ENV",
+    `expected "development", "test", or "production" but received "${value}"`,
+  );
 };
 
 /**
@@ -351,8 +474,8 @@ const resolvedApplicationVersion = Bun.env.APP_VERSION ?? "1.0.0";
 export const appConfig: AppConfig = {
   applicationName: resolvedApplicationName,
   applicationVersion: resolvedApplicationVersion,
-  host: Bun.env.HOST ?? "0.0.0.0",
-  port: parseInteger(Bun.env.PORT, DEFAULT_PORT, 1),
+  host: resolvedHost,
+  port: resolvedPort,
   defaultLocale: normalizeLocale(Bun.env.DEFAULT_LOCALE),
   stylesheetPath: resolvedStylesheetPath,
   htmxScriptPath: resolvedHtmxScriptPath,
@@ -366,6 +489,27 @@ export const appConfig: AppConfig = {
   },
   api: {
     docsPath: Bun.env.API_DOCS_PATH ?? DEFAULT_DOCS_PATH,
+  },
+  runtime: {
+    nodeEnv: parseNodeEnvironment(Bun.env.NODE_ENV),
+  },
+  database: {
+    url: resolvedDatabaseUrl,
+  },
+  builder: {
+    workerPollIntervalMs: parseInteger(
+      Bun.env.BUILDER_WORKER_POLL_INTERVAL_MS,
+      DEFAULT_BUILDER_WORKER_POLL_INTERVAL_MS,
+      100,
+      "BUILDER_WORKER_POLL_INTERVAL_MS",
+    ),
+    localAutomationOrigin: resolvedBuilderLocalAutomationOrigin,
+    automationProbeTimeoutMs: parseInteger(
+      Bun.env.BUILDER_AUTOMATION_PROBE_TIMEOUT_MS,
+      DEFAULT_BUILDER_AUTOMATION_PROBE_TIMEOUT_MS,
+      100,
+      "BUILDER_AUTOMATION_PROBE_TIMEOUT_MS",
+    ),
   },
   ui: {
     defaultTheme: Bun.env.APP_THEME ?? DEFAULT_THEME,
@@ -384,144 +528,246 @@ export const appConfig: AppConfig = {
       Bun.env.SESSION_MAX_AGE_SECONDS,
       DEFAULT_SESSION_MAX_AGE_SECONDS,
       1,
+      "SESSION_MAX_AGE_SECONDS",
+    ),
+    resumeTokenSecret: parseRequiredString(
+      Bun.env.SESSION_RESUME_TOKEN_SECRET,
+      "SESSION_RESUME_TOKEN_SECRET",
     ),
   },
   oracle: {
-    requireSession: parseBoolean(Bun.env.ORACLE_REQUIRE_SESSION, false),
-    responseDelayMs: parseInteger(Bun.env.ORACLE_RESPONSE_DELAY_MS, DEFAULT_RESPONSE_DELAY_MS, 0),
+    requireSession: parseBoolean(Bun.env.ORACLE_REQUIRE_SESSION, false, "ORACLE_REQUIRE_SESSION"),
+    responseDelayMs: parseInteger(
+      Bun.env.ORACLE_RESPONSE_DELAY_MS,
+      DEFAULT_RESPONSE_DELAY_MS,
+      0,
+      "ORACLE_RESPONSE_DELAY_MS",
+    ),
     maxQuestionLength: parseInteger(
       Bun.env.ORACLE_MAX_QUESTION_LENGTH,
       DEFAULT_MAX_QUESTION_LENGTH,
       1,
+      "ORACLE_MAX_QUESTION_LENGTH",
     ),
     answerHashMultiplier: parseInteger(
       Bun.env.ORACLE_ANSWER_HASH_MULTIPLIER,
       DEFAULT_ANSWER_HASH_MULTIPLIER,
       1,
+      "ORACLE_ANSWER_HASH_MULTIPLIER",
     ),
   },
   game: {
     sessionStore: parseGameSessionStore(Bun.env.GAME_SESSION_STORE),
     defaultSceneId: Bun.env.GAME_DEFAULT_SCENE_ID ?? DEFAULT_GAME_DEFAULT_SCENE_ID,
-    sessionTtlMs: parseInteger(Bun.env.GAME_SESSION_TTL_MS, DEFAULT_GAME_SESSION_TTL_MS, 1000),
-    tickMs: parseInteger(Bun.env.GAME_TICK_MS, DEFAULT_GAME_TICK_MS, 1),
+    sessionTtlMs: parseInteger(
+      Bun.env.GAME_SESSION_TTL_MS,
+      DEFAULT_GAME_SESSION_TTL_MS,
+      1000,
+      "GAME_SESSION_TTL_MS",
+    ),
+    tickMs: parseInteger(Bun.env.GAME_TICK_MS, DEFAULT_GAME_TICK_MS, 1, "GAME_TICK_MS"),
     sessionPersistIntervalMs: parseInteger(
       Bun.env.GAME_SESSION_PERSIST_INTERVAL_MS,
       DEFAULT_GAME_PERSIST_INTERVAL_MS,
       1,
+      "GAME_SESSION_PERSIST_INTERVAL_MS",
     ),
-    saveCooldownMs: parseInteger(Bun.env.GAME_SAVE_COOLDOWN_MS, DEFAULT_GAME_SAVE_COOLDOWN_MS, 0),
-    maxMovePerTick: parseInteger(Bun.env.GAME_MAX_MOVE_PER_TICK, DEFAULT_GAME_MAX_MOVE_PER_TICK, 1),
+    saveCooldownMs: parseInteger(
+      Bun.env.GAME_SAVE_COOLDOWN_MS,
+      DEFAULT_GAME_SAVE_COOLDOWN_MS,
+      0,
+      "GAME_SAVE_COOLDOWN_MS",
+    ),
+    maxMovePerTick: parseInteger(
+      Bun.env.GAME_MAX_MOVE_PER_TICK,
+      DEFAULT_GAME_MAX_MOVE_PER_TICK,
+      1,
+      "GAME_MAX_MOVE_PER_TICK",
+    ),
     maxCommandsPerTick: parseInteger(
       Bun.env.GAME_MAX_COMMANDS_PER_TICK,
       DEFAULT_GAME_MAX_COMMANDS_PER_TICK,
       1,
+      "GAME_MAX_COMMANDS_PER_TICK",
     ),
     maxInteractionsPerTick: parseInteger(
       Bun.env.GAME_MAX_INTERACTIONS_PER_TICK,
       DEFAULT_GAME_MAX_INTERACTIONS_PER_TICK,
       1,
+      "GAME_MAX_INTERACTIONS_PER_TICK",
     ),
     maxChatCommandsPerWindow: parseInteger(
       Bun.env.GAME_MAX_CHAT_COMMANDS_PER_WINDOW,
       DEFAULT_GAME_MAX_CHAT_COMMANDS_PER_WINDOW,
       1,
+      "GAME_MAX_CHAT_COMMANDS_PER_WINDOW",
     ),
     chatRateLimitWindowMs: parseInteger(
       Bun.env.GAME_CHAT_RATE_LIMIT_WINDOW_MS,
       DEFAULT_GAME_CHAT_RATE_LIMIT_WINDOW_MS,
       250,
+      "GAME_CHAT_RATE_LIMIT_WINDOW_MS",
     ),
     maxChatMessageLength: parseInteger(
       Bun.env.GAME_MAX_CHAT_MESSAGE_LENGTH,
       DEFAULT_GAME_MAX_CHAT_MESSAGE_LENGTH,
       1,
+      "GAME_MAX_CHAT_MESSAGE_LENGTH",
     ),
-    viewportWidth: parseInteger(Bun.env.GAME_VIEWPORT_WIDTH, DEFAULT_GAME_VIEWPORT_WIDTH, 1),
-    viewportHeight: parseInteger(Bun.env.GAME_VIEWPORT_HEIGHT, DEFAULT_GAME_VIEWPORT_HEIGHT, 1),
+    viewportWidth: parseInteger(
+      Bun.env.GAME_VIEWPORT_WIDTH,
+      DEFAULT_GAME_VIEWPORT_WIDTH,
+      1,
+      "GAME_VIEWPORT_WIDTH",
+    ),
+    viewportHeight: parseInteger(
+      Bun.env.GAME_VIEWPORT_HEIGHT,
+      DEFAULT_GAME_VIEWPORT_HEIGHT,
+      1,
+      "GAME_VIEWPORT_HEIGHT",
+    ),
     hudPollIntervalMs: parseInteger(
       Bun.env.GAME_HUD_POLL_INTERVAL_MS,
       DEFAULT_GAME_HUD_POLL_MS,
       100,
+      "GAME_HUD_POLL_INTERVAL_MS",
     ),
-    hudRetryDelayMs: parseInteger(Bun.env.GAME_HUD_RETRY_MS, DEFAULT_GAME_HUD_RETRY_MS, 0),
-    sessionPurgeIntervalMs: parseInteger(Bun.env.GAME_SESSION_PURGE_INTERVAL_MS, 60_000, 1000),
+    hudRetryDelayMs: parseInteger(
+      Bun.env.GAME_HUD_RETRY_MS,
+      DEFAULT_GAME_HUD_RETRY_MS,
+      0,
+      "GAME_HUD_RETRY_MS",
+    ),
+    sessionPurgeIntervalMs: parseInteger(
+      Bun.env.GAME_SESSION_PURGE_INTERVAL_MS,
+      60_000,
+      1000,
+      "GAME_SESSION_PURGE_INTERVAL_MS",
+    ),
     sessionResumeWindowMs: parseInteger(
       Bun.env.GAME_SESSION_RESUME_WINDOW_MS,
       DEFAULT_GAME_SESSION_RESUME_WINDOW_MS,
       1000,
+      "GAME_SESSION_RESUME_WINDOW_MS",
     ),
     commandSendIntervalMs: parseInteger(
       Bun.env.GAME_COMMAND_SEND_INTERVAL_MS,
       DEFAULT_GAME_COMMAND_SEND_INTERVAL_MS,
       10,
+      "GAME_COMMAND_SEND_INTERVAL_MS",
     ),
-    commandTtlMs: parseInteger(Bun.env.GAME_COMMAND_TTL_MS, DEFAULT_GAME_COMMAND_TTL_MS, 500),
+    commandTtlMs: parseInteger(
+      Bun.env.GAME_COMMAND_TTL_MS,
+      DEFAULT_GAME_COMMAND_TTL_MS,
+      500,
+      "GAME_COMMAND_TTL_MS",
+    ),
     socketReconnectDelayMs: parseInteger(
       Bun.env.GAME_SOCKET_RECONNECT_DELAY_MS,
       DEFAULT_GAME_SOCKET_RECONNECT_DELAY_MS,
       100,
+      "GAME_SOCKET_RECONNECT_DELAY_MS",
     ),
     restoreRequestTimeoutMs: parseInteger(
       Bun.env.GAME_RESTORE_REQUEST_TIMEOUT_MS,
       DEFAULT_GAME_RESTORE_REQUEST_TIMEOUT_MS,
       250,
+      "GAME_RESTORE_REQUEST_TIMEOUT_MS",
     ),
     restoreMaxAttempts: parseInteger(
       Bun.env.GAME_RESTORE_MAX_ATTEMPTS,
       DEFAULT_GAME_RESTORE_MAX_ATTEMPTS,
       1,
+      "GAME_RESTORE_MAX_ATTEMPTS",
     ),
   },
   ai: {
-    warmupOnBoot: parseBoolean(Bun.env.AI_WARMUP_ON_BOOT, DEFAULT_AI_WARMUP_ON_BOOT),
+    warmupOnBoot: parseBoolean(
+      Bun.env.AI_WARMUP_ON_BOOT,
+      DEFAULT_AI_WARMUP_ON_BOOT,
+      "AI_WARMUP_ON_BOOT",
+    ),
     modelWarmupTimeoutMs: parseInteger(
       Bun.env.AI_MODEL_WARMUP_TIMEOUT_MS,
       DEFAULT_AI_MODEL_WARMUP_TIMEOUT_MS,
       500,
+      "AI_MODEL_WARMUP_TIMEOUT_MS",
     ),
     pipelineTimeoutMs: parseInteger(
       Bun.env.AI_PIPELINE_TIMEOUT_MS,
       DEFAULT_AI_PIPELINE_TIMEOUT_MS,
       500,
+      "AI_PIPELINE_TIMEOUT_MS",
     ),
     transformersCacheDirectory:
       Bun.env.AI_TRANSFORMERS_CACHE_DIR ?? DEFAULT_AI_TRANSFORMERS_CACHE_DIRECTORY,
     transformersLocalModelPath:
       Bun.env.AI_TRANSFORMERS_LOCAL_MODEL_PATH ?? DEFAULT_AI_TRANSFORMERS_LOCAL_MODEL_PATH,
-    transformersAllowRemoteModels: parseBoolean(Bun.env.AI_ALLOW_REMOTE_MODELS, true),
-    transformersAllowLocalModels: parseBoolean(Bun.env.AI_ALLOW_LOCAL_MODELS, true),
+    transformersAllowRemoteModels: parseBoolean(
+      Bun.env.AI_ALLOW_REMOTE_MODELS,
+      true,
+      "AI_ALLOW_REMOTE_MODELS",
+    ),
+    transformersAllowLocalModels: parseBoolean(
+      Bun.env.AI_ALLOW_LOCAL_MODELS,
+      true,
+      "AI_ALLOW_LOCAL_MODELS",
+    ),
     onnxWasmPath: resolvedOnnxWasmPath,
-    onnxThreadCount: parseInteger(Bun.env.AI_ONNX_THREAD_COUNT, DEFAULT_AI_ONNX_THREAD_COUNT, 1),
-    onnxProxyEnabled: parseBoolean(Bun.env.AI_ONNX_PROXY_ENABLED, false),
+    onnxThreadCount: parseInteger(
+      Bun.env.AI_ONNX_THREAD_COUNT,
+      DEFAULT_AI_ONNX_THREAD_COUNT,
+      1,
+      "AI_ONNX_THREAD_COUNT",
+    ),
+    onnxProxyEnabled: parseBoolean(Bun.env.AI_ONNX_PROXY_ENABLED, false, "AI_ONNX_PROXY_ENABLED"),
     onnxDevice: parseOnnxDevice(Bun.env.AI_ONNX_DEVICE),
     ollamaBaseUrl: Bun.env.OLLAMA_BASE_URL ?? DEFAULT_OLLAMA_BASE_URL,
-    ollamaEnabled: parseBoolean(Bun.env.OLLAMA_ENABLED, true),
+    ollamaEnabled: parseBoolean(Bun.env.OLLAMA_ENABLED, true, "OLLAMA_ENABLED"),
     ollamaChatModel: Bun.env.OLLAMA_CHAT_MODEL ?? DEFAULT_OLLAMA_CHAT_MODEL,
     ollamaVisionModel: Bun.env.OLLAMA_VISION_MODEL ?? DEFAULT_OLLAMA_VISION_MODEL,
-    ollamaTimeoutMs: parseInteger(Bun.env.OLLAMA_TIMEOUT_MS, DEFAULT_OLLAMA_TIMEOUT_MS, 1000),
-    ollamaKeepAliveMs: parseInteger(Bun.env.OLLAMA_KEEP_ALIVE_MS, DEFAULT_OLLAMA_KEEP_ALIVE_MS, 0),
+    ollamaTimeoutMs: parseInteger(
+      Bun.env.OLLAMA_TIMEOUT_MS,
+      DEFAULT_OLLAMA_TIMEOUT_MS,
+      1000,
+      "OLLAMA_TIMEOUT_MS",
+    ),
+    ollamaKeepAliveMs: parseInteger(
+      Bun.env.OLLAMA_KEEP_ALIVE_MS,
+      DEFAULT_OLLAMA_KEEP_ALIVE_MS,
+      0,
+      "OLLAMA_KEEP_ALIVE_MS",
+    ),
     preferredProvider: parsePreferredAiProvider(Bun.env.AI_PREFERRED_PROVIDER),
     capabilityRefreshIntervalMs: parseInteger(
       Bun.env.AI_CAPABILITY_REFRESH_INTERVAL_MS,
       DEFAULT_AI_CAPABILITY_REFRESH_INTERVAL_MS,
       5000,
+      "AI_CAPABILITY_REFRESH_INTERVAL_MS",
     ),
-    ollamaAvailabilityTimeoutMs: parseInteger(Bun.env.OLLAMA_AVAILABILITY_TIMEOUT_MS, 3_000, 500),
+    ollamaAvailabilityTimeoutMs: parseInteger(
+      Bun.env.OLLAMA_AVAILABILITY_TIMEOUT_MS,
+      3_000,
+      500,
+      "OLLAMA_AVAILABILITY_TIMEOUT_MS",
+    ),
     requestTimeoutMs: parseInteger(
       Bun.env.AI_REQUEST_TIMEOUT_MS,
       DEFAULT_AI_REQUEST_TIMEOUT_MS,
       500,
+      "AI_REQUEST_TIMEOUT_MS",
     ),
     commandRetryBudgetMs: parseInteger(
       Bun.env.AI_COMMAND_RETRY_BUDGET_MS,
       DEFAULT_AI_COMMAND_RETRY_BUDGET_MS,
       1_000,
+      "AI_COMMAND_RETRY_BUDGET_MS",
     ),
     retryBackoffBaseMs: parseInteger(
       Bun.env.AI_RETRY_BACKOFF_BASE_MS,
       DEFAULT_AI_RETRY_BACKOFF_BASE_MS,
       50,
+      "AI_RETRY_BACKOFF_BASE_MS",
     ),
     localSentimentModel: Bun.env.AI_LOCAL_SENTIMENT_MODEL ?? DEFAULT_AI_LOCAL_SENTIMENT_MODEL,
     localTextGenerationModel:
@@ -533,18 +779,32 @@ export const appConfig: AppConfig = {
       Bun.env.AI_LOCAL_SPEECH_TO_TEXT_MODEL ?? DEFAULT_AI_LOCAL_SPEECH_TO_TEXT_MODEL,
     localTextToSpeechModel:
       Bun.env.AI_LOCAL_TEXT_TO_SPEECH_MODEL ?? DEFAULT_AI_LOCAL_TEXT_TO_SPEECH_MODEL,
-    localSpeechToTextEnabled: parseBoolean(Bun.env.AI_LOCAL_STT_ENABLED, true),
-    localTextToSpeechEnabled: parseBoolean(Bun.env.AI_LOCAL_TTS_ENABLED, true),
-    localEmbeddingsEnabled: parseBoolean(Bun.env.AI_LOCAL_EMBEDDINGS_ENABLED, true),
+    localSpeechToTextEnabled: parseBoolean(
+      Bun.env.AI_LOCAL_STT_ENABLED,
+      true,
+      "AI_LOCAL_STT_ENABLED",
+    ),
+    localTextToSpeechEnabled: parseBoolean(
+      Bun.env.AI_LOCAL_TTS_ENABLED,
+      true,
+      "AI_LOCAL_TTS_ENABLED",
+    ),
+    localEmbeddingsEnabled: parseBoolean(
+      Bun.env.AI_LOCAL_EMBEDDINGS_ENABLED,
+      true,
+      "AI_LOCAL_EMBEDDINGS_ENABLED",
+    ),
     audioInputSampleRateHz: parseInteger(
       Bun.env.AI_AUDIO_INPUT_SAMPLE_RATE_HZ,
       DEFAULT_AI_AUDIO_INPUT_SAMPLE_RATE_HZ,
       8_000,
+      "AI_AUDIO_INPUT_SAMPLE_RATE_HZ",
     ),
     audioUploadMaxBytes: parseInteger(
       Bun.env.AI_AUDIO_UPLOAD_MAX_BYTES,
       DEFAULT_AI_AUDIO_UPLOAD_MAX_BYTES,
       1_024,
+      "AI_AUDIO_UPLOAD_MAX_BYTES",
     ),
     textToSpeechSpeakerEmbeddings:
       Bun.env.AI_LOCAL_TTS_SPEAKER_EMBEDDINGS ?? DEFAULT_AI_LOCAL_TTS_SPEAKER_EMBEDDINGS,

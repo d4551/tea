@@ -44,10 +44,10 @@ export const renderBuilderDashboard = (
   const aiHref = withQueryParameters(appRoutes.builderAi, { lang: locale, projectId });
   const gameHref = published
     ? withQueryParameters(appRoutes.game, { lang: locale, projectId })
-    : withQueryParameters(appRoutes.builderAi, { lang: locale, projectId });
+    : scenesHref;
   const primaryCtaLabel = published
     ? messages.builder.playPublishedBuild
-    : messages.builder.ai;
+    : messages.builder.continueAuthoring;
   const builderStatusHref = withQueryParameters(appRoutes.aiBuilderCapabilities, {
     locale,
   });
@@ -123,7 +123,7 @@ export const renderBuilderDashboard = (
         <article class="card card-border bg-base-100 shadow-sm">
           <div class="card-body gap-4">
             <h2 class="card-title">${escapeHtml(messages.builder.flowTitle)}</h2>
-            <p class="text-base-content/80">${escapeHtml(messages.builder.engineOptionsDescription)}</p>
+            <p class="text-base-content/80">${escapeHtml(messages.builder.flowDescription)}</p>
             <ul class="list rounded-box bg-base-200 p-3">
               ${flowSteps}
             </ul>
@@ -142,7 +142,7 @@ export const renderBuilderDashboard = (
             <div class="grid gap-2 text-sm">
               <div class="flex items-center justify-between rounded-box bg-base-200 px-3 py-2">
                 <span>${escapeHtml(messages.builder.runtimeLabel)}</span>
-                <span class="badge badge-outline">Bun + Elysia + HTMX</span>
+                <span class="badge badge-outline">${escapeHtml(messages.builder.runtimeStackValue)}</span>
               </div>
               <div class="flex items-center justify-between rounded-box bg-base-200 px-3 py-2">
                 <span>${escapeHtml(messages.builder.modelLabel)}</span>
@@ -150,7 +150,7 @@ export const renderBuilderDashboard = (
               </div>
               <div class="flex items-center justify-between rounded-box bg-base-200 px-3 py-2">
                 <span>${escapeHtml(messages.builder.configKeyLabel)}</span>
-                <span class="font-mono text-xs">AI_LOCAL_* / OLLAMA_*</span>
+                <span class="font-mono text-xs">${escapeHtml(messages.builder.aiConfigPatternValue)}</span>
               </div>
             </div>
             <div class="card-actions">

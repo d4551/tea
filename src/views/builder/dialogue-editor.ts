@@ -77,8 +77,8 @@ export const renderDialogueEditor = (
                 hx-get="${escapeHtml(detailHref)}"
                 hx-target="#dialogue-detail"
                 hx-swap="innerHTML"
-                aria-label="${escapeHtml(messages.builder.preview)}: ${escapeHtml(line.key)}"
-              >${escapeHtml(messages.builder.preview)}</button>
+                aria-label="${escapeHtml(messages.builder.openDetails)}: ${escapeHtml(line.key)}"
+              >${escapeHtml(messages.builder.openDetails)}</button>
             </div>
           </div>`;
         })
@@ -130,7 +130,7 @@ export const renderDialogueEditor = (
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueSearchLabel)}</legend>
                 <input name="search" type="text" class="input input-bordered w-full" value="${escapeHtml(search)}" placeholder="${escapeHtml(messages.builder.dialogueSearchPlaceholder)}" />
               </fieldset>
-              <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.builder.preview)}</button>
+              <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.builder.filterAction)}</button>
             </form>
 
             <form
@@ -228,14 +228,17 @@ export const renderDialogueDetail = (
             hx-swap="innerHTML"
             hx-indicator="#dialogue-delete-spinner"
             hx-disabled-elt="this"
-          >${escapeHtml(messages.builder.delete)}</button>
+        >${escapeHtml(messages.builder.delete)}</button>
           <span id="dialogue-delete-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
         </div>
-        <textarea
-          name="text"
-          class="textarea textarea-bordered w-full min-h-28"
-          required
-        >${escapeHtml(text)}</textarea>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueLine)}</legend>
+          <textarea
+            name="text"
+            class="textarea textarea-bordered w-full min-h-28"
+            required
+          >${escapeHtml(text)}</textarea>
+        </fieldset>
         <div class="flex items-center justify-end gap-2">
           <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
           <span id="dialogue-detail-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>

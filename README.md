@@ -81,6 +81,8 @@ The product centers on a **builder/player loop**: author content in the builder,
 - **Type-Safe Stack** — end-to-end types from Prisma schema through Elysia route contracts and SSR views
 - **Internationalization** — `Accept-Language` q-weight parsing with deterministic locale persistence
 - **Structured Observability** — correlation ID propagation, levelled JSON logging, typed error envelopes
+- **Canonical Runtime Ownership** — `game-loop` orchestrates simulation, session resolution, and runtime metrics while `playerProgressStore` owns XP/level/interaction persistence
+- **Domain-Owned Builder Factories** — mechanics, generation, and automation create flows now originate in `builder-service`, so routes no longer invent authored defaults
 
 ### Platform Readiness
 
@@ -95,7 +97,7 @@ The builder exposes a capability matrix that reflects current implementation sta
 | Animation pipeline | Partial | Clip definitions; no frame editor |
 | Mechanics | Partial | Quests, triggers, dialogue graphs; quest edit/delete implemented |
 | AI authoring | Partial | Patch preview/apply; dialogue generate |
-| Automation / RPA | Missing | Worker stub; approval-gated workflow in place |
+| Automation / RPA | Partial | Lifecycle-managed worker, auditable steps, Playwright-backed evidence capture |
 
 ---
 
@@ -142,7 +144,7 @@ bun run dev
 
 ### System Overview
 
-Browser runtime (SSR + HTMX, Playable Client with Pixi + Three, HUD via SSE, Command stream via WebSocket) connects to the Elysia server. Plugins run in strict order. Domain services persist via Prisma.
+Browser runtime (SSR + HTMX, Playable Client with Pixi + Three, HUD via SSE, Command stream via WebSocket) connects to the Elysia server. Plugins run in strict order. Domain services stay thin, while Prisma client extensions own session, progress, and builder project persistence primitives.
 
 ```mermaid
 graph TB
@@ -163,10 +165,12 @@ graph TB
     GR["game-routes"]
     AR["api-routes"]
     AIR["ai-routes"]
+    AIP["ai-provider-plugin"]
     GP["game-plugin"]
     BR["builder-routes"]
     BA["builder-api-routes"]
     SP["session-purge"]
+    CW["creator-worker"]
   end
 
   subgraph Domain["Domain Services"]
@@ -185,7 +189,7 @@ graph TB
   CLIENT -->|REST create/state/restore/save/command| GP
   CLIENT -->|WebSocket| GP
   CLIENT -->|SSE HUD stream| GP
-  RC --> EH --> CT --> SW --> SA --> PR --> GR --> AR --> AIR --> GP --> BR --> BA --> SP
+  RC --> EH --> CT --> SW --> SA --> PR --> GR --> AR --> AIR --> AIP --> GP --> BR --> BA --> SP --> CW
   GP --> LOOP
   LOOP --> STORE
   LOOP --> SCENE
@@ -222,7 +226,7 @@ sequenceDiagram
 
 ### Plugin Pipeline
 
-Plugins are composed in strict order. Each plugin decorates the request context for downstream consumers. Infrastructure plugins (request-context, onError, content-type, swagger, static-assets) run first; then page, game, API, and AI routes; then game-plugin; then builder routes; finally session-purge.
+Plugins are composed in strict order. Each plugin decorates the request context for downstream consumers. Infrastructure plugins (request-context, onError, content-type, swagger, static-assets) run first; then page, game, API, and AI routes; then the AI provider lifecycle plugin; then game-plugin; then builder routes; finally session-purge and creator-worker for lifecycle-owned background execution. Builder locale, project id, and current-path resolution are centralized in `src/plugins/builder-request-context.ts`, full-page SSR shells consume a shared `LayoutContext` from `src/views/layout.ts`, builder JSON draft-state decode/versioned-save/snapshot projection now live behind `src/domain/builder/builder-project-state-store.ts`, `src/shared/contracts/game.ts` now owns persisted scene-state / realtime-frame validation, `game-plugin` now owns session-scoped websocket tick cleanup plus transport teardown when a session closes or is deleted, and `game-loop` owns canonical session resolution, dashboard/session metrics, expired-session purging, and the HUD state read path consumed by SSE transport rendering.
 
 ```mermaid
 flowchart LR
@@ -234,15 +238,17 @@ flowchart LR
   F --> G["game-routes"]
   G --> H["api-routes"]
   H --> I["ai-routes"]
-  I --> J["game-plugin"]
-  J --> K["builder-routes"]
-  K --> L["builder-api-routes"]
-  L --> M["session-purge"]
+  I --> J["ai-provider-plugin"]
+  J --> K["game-plugin"]
+  K --> L["builder-routes"]
+  L --> M["builder-api-routes"]
+  M --> N["session-purge"]
+  N --> O["creator-worker"]
 ```
 
 ### Domain Model
 
-Core entities: GameSession (authoritative runtime state), PlayerProgress (XP and level), BuilderProject (draft state and versioning), BuilderProjectRelease (immutable published snapshots).
+Core entities: GameSession (authoritative runtime state), PlayerProgress (XP and level), BuilderProject (draft state/versioning), BuilderProjectScene / BuilderProjectDialogueEntry (relational draft world-content registries), BuilderProjectAsset / BuilderProjectAnimationClip (relational draft media registries), BuilderProjectDialogueGraph / BuilderProjectQuest / BuilderProjectTrigger / BuilderProjectFlag (relational draft mechanics registries), BuilderProjectGenerationJob / BuilderProjectArtifact / BuilderProjectAutomationRun (relational draft worker state), and BuilderProjectRelease (immutable published snapshots).
 
 ```mermaid
 erDiagram
@@ -267,6 +273,65 @@ erDiagram
     int publishedReleaseVersion
     json state
   }
+  BUILDER_PROJECT_SCENE {
+    string projectId PK
+    string id PK
+    string titleKey
+  }
+  BUILDER_PROJECT_DIALOGUE_ENTRY {
+    string projectId PK
+    string locale PK
+    string key PK
+  }
+  BUILDER_PROJECT_ASSET {
+    string projectId PK
+    string id PK
+    string kind
+    string sceneMode
+  }
+  BUILDER_PROJECT_ANIMATION_CLIP {
+    string projectId PK
+    string id PK
+    string assetId
+    string sceneMode
+  }
+  BUILDER_PROJECT_DIALOGUE_GRAPH {
+    string projectId PK
+    string id PK
+    string rootNodeId
+  }
+  BUILDER_PROJECT_QUEST {
+    string projectId PK
+    string id PK
+    string title
+  }
+  BUILDER_PROJECT_TRIGGER {
+    string projectId PK
+    string id PK
+    string event
+  }
+  BUILDER_PROJECT_FLAG {
+    string projectId PK
+    string key PK
+    string label
+  }
+  BUILDER_PROJECT_GENERATION_JOB {
+    string projectId PK
+    string id PK
+    string kind
+    string status
+  }
+  BUILDER_PROJECT_ARTIFACT {
+    string projectId PK
+    string id PK
+    string jobId
+    string kind
+  }
+  BUILDER_PROJECT_AUTOMATION_RUN {
+    string projectId PK
+    string id PK
+    string status
+  }
   BUILDER_PROJECT_RELEASE {
     string projectId FK
     int releaseVersion
@@ -274,6 +339,18 @@ erDiagram
     json state
   }
   GAME_SESSION ||--|| PLAYER_PROGRESS : has
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_SCENE : owns
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_DIALOGUE_ENTRY : owns
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_ASSET : owns
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_ANIMATION_CLIP : owns
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_DIALOGUE_GRAPH : owns
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_QUEST : owns
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_TRIGGER : owns
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_FLAG : owns
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_GENERATION_JOB : owns
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_ARTIFACT : owns
+  BUILDER_PROJECT ||--o{ BUILDER_PROJECT_AUTOMATION_RUN : owns
+  BUILDER_PROJECT_ASSET ||--o{ BUILDER_PROJECT_ANIMATION_CLIP : drives
   BUILDER_PROJECT ||--o{ BUILDER_PROJECT_RELEASE : publishes
   BUILDER_PROJECT ||..o{ GAME_SESSION : seeds
 ```
@@ -335,17 +412,25 @@ flowchart TB
 
 ### Builder Publish Contract
 
-Draft mutations update builderProject.state. Publish creates an immutable release snapshot. Runtime sessions load only published release data.
+Draft mutations update `builderProject.state` only for residual draft metadata, while scenes, localized dialogue catalogs, media, mechanics, and worker state live in relational draft tables. Publish creates an immutable release snapshot with the full materialized project. Runtime sessions load only published release data.
 
 ```mermaid
 flowchart TD
-  A["Draft mutations: scenes, NPCs, dialogue, assets, mechanics"] --> B["builderProject.state with version and checksum"]
-  B --> C["publishProject true"]
-  C --> D["Create immutable builderProjectRelease"]
-  D --> E["Set publishedReleaseVersion on project"]
-  E --> F["gameLoop.createSession with projectId"]
-  F --> G["Load published release snapshot only"]
-  G --> H["Session seeded with immutable release data"]
+  A["Draft mutations: scenes, NPCs, dialogue, mechanics"] --> B["builderProject.state with version and checksum"]
+  A --> C["builderProjectScene + builderProjectDialogueEntry"]
+  A --> D["builderProjectAsset + builderProjectAnimationClip"]
+  A --> E["builderProjectDialogueGraph + builderProjectQuest + builderProjectTrigger + builderProjectFlag"]
+  A --> F["builderProjectGenerationJob + builderProjectArtifact + builderProjectAutomationRun"]
+  B --> G["publishProject true"]
+  C --> G
+  D --> G
+  E --> G
+  F --> G
+  G --> H["Create immutable builderProjectRelease"]
+  H --> I["Set publishedReleaseVersion on project"]
+  I --> J["gameLoop.createSession with projectId"]
+  J --> K["Load published release snapshot only"]
+  K --> L["Session seeded with immutable release data"]
 ```
 
 ---
@@ -355,8 +440,9 @@ flowchart TD
 ```text
 tea/
 ├── packages/             # Bun workspaces
-├── prisma/               # Schema and migrations
-│   └── schema.prisma     # Single source of truth
+├── prisma/               # Schema and local libSQL database
+│   ├── schema.prisma     # Single source of truth
+│   └── dev.db            # Local development database
 ├── assets/               # Canonical media assets mounted at runtime
 ├── public/               # Static web assets
 ├── scripts/              # Bun-native build/dev orchestration
@@ -383,7 +469,7 @@ tea/
 | `bun run lint` | Biome linting |
 | `bun run typecheck` | Strict TypeScript checking |
 | `bun test` | Run test suite |
-| `bun run verify` | Full pipeline: lint → typecheck → test |
+| `bun run verify` | Full pipeline: build:assets → lint → typecheck → test |
 
 ---
 
@@ -394,11 +480,15 @@ Core `.env` variables (see `.env.example` for full defaults):
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | libSQL connection string (e.g., `file:./prisma/dev.db`) |
+| `APP_ORIGIN` | Absolute browser-reachable app origin used for local callbacks and automation evidence |
 | `NODE_ENV` | `development` or `production` |
 | `PORT` | Server port (default: 3000) |
 | `SESSION_COOKIE_NAME` | Cookie name for anonymous auth-session identity |
 | `SESSION_MAX_AGE_SECONDS` | Anonymous session cookie lifetime in seconds |
+| `SESSION_RESUME_TOKEN_SECRET` | Required secret used to sign session resume tokens |
+| `BUILDER_LOCAL_AUTOMATION_ORIGIN` | Optional absolute override for builder-local automation/browser evidence capture |
 | `AI_WARMUP_ON_BOOT` | Optional boolean to enable eager local model warmup at boot (default: `false`) |
+| `AI_ONNX_DEVICE` | ONNX execution device (`cpu`, `webgpu`, or `wasm`); use `cpu` for Bun server runtime stability |
 
 Game runtime controls:
 
@@ -454,9 +544,11 @@ Builder API highlights:
 | Endpoint | Method | Purpose |
 |---|---|---|
 | `/api/builder/assets/upload` | POST | Multipart asset upload (file input) |
+| `/api/builder/generation-jobs/:jobId/stream` | GET (SSE) | Stream generation job review state |
 | `/api/builder/quests/:questId` | GET | Quest edit form |
 | `/api/builder/quests/:questId/form` | POST | Save quest |
 | `/api/builder/quests/:questId` | DELETE | Delete quest |
+| `/api/builder/automation-runs/:runId/approve` | POST | Approve or reject automation evidence |
 
 Deprecated/removed surface:
 
@@ -567,7 +659,7 @@ bun run dev
 
 #### 系统概览
 
-浏览器运行时（SSR + HTMX、可玩客户端 Pixi + Three、HUD 通过 SSE、命令流通过 WebSocket）连接 Elysia 服务器。插件按严格顺序执行。领域服务通过 Prisma 持久化。
+浏览器运行时（SSR + HTMX、可玩客户端 Pixi + Three、HUD 通过 SSE、命令流通过 WebSocket）连接 Elysia 服务器。插件按严格顺序执行。领域服务保持轻量，Prisma Client 扩展负责会话、进度与构建器项目持久化原语。
 
 ```mermaid
 graph TB
@@ -588,10 +680,12 @@ graph TB
     GR["game-routes"]
     AR["api-routes"]
     AIR["ai-routes"]
+    AIP["ai-provider-plugin"]
     GP["game-plugin"]
     BR["builder-routes"]
     BA["builder-api-routes"]
     SP["session-purge"]
+    CW["creator-worker"]
   end
 
   subgraph Domain["领域服务"]
@@ -610,7 +704,7 @@ graph TB
   CLIENT -->|REST create/state/restore/save/command| GP
   CLIENT -->|WebSocket| GP
   CLIENT -->|SSE HUD 流| GP
-  RC --> EH --> CT --> SW --> SA --> PR --> GR --> AR --> AIR --> GP --> BR --> BA --> SP
+  RC --> EH --> CT --> SW --> SA --> PR --> GR --> AR --> AIR --> AIP --> GP --> BR --> BA --> SP --> CW
   GP --> LOOP
   LOOP --> STORE
   LOOP --> SCENE
@@ -644,7 +738,7 @@ sequenceDiagram
 
 #### 插件流水线
 
-插件按严格顺序组合，每个插件为下游消费者装饰请求上下文。基础设施插件先执行，然后是页面、游戏、API、AI 路由，接着是 game-plugin，最后是 builder 路由和 session-purge。
+插件按严格顺序组合，每个插件为下游消费者装饰请求上下文。基础设施插件先执行，然后是页面、游戏、API 与 AI 路由，接着是 AI provider 生命周期插件、game-plugin，再到 builder 路由，最后由 session-purge 与 creator-worker 生命周期插件托管后台轮询任务。Builder 的 locale、project id 与 current-path 解析统一收敛到 `src/plugins/builder-request-context.ts`，完整页面 SSR 壳层统一消费 `src/views/layout.ts` 中的 `LayoutContext`，builder JSON 草稿状态的 decode / versioned-save / snapshot projection 统一收敛到 `src/domain/builder/builder-project-state-store.ts`，`src/shared/contracts/game.ts` 统一负责持久化 scene state、trigger definitions 与 realtime websocket frame 的边界校验，`game-plugin` 统一负责 session 级别的 websocket tick 清理，以及 session close/delete 时的 transport teardown，而 `game-loop` 统一负责会话解析、仪表盘/会话指标以及 HUD 状态读取。
 
 ```mermaid
 flowchart LR
@@ -656,10 +750,12 @@ flowchart LR
   F --> G["game-routes"]
   G --> H["api-routes"]
   H --> I["ai-routes"]
-  I --> J["game-plugin"]
-  J --> K["builder-routes"]
-  K --> L["builder-api-routes"]
-  L --> M["session-purge"]
+  I --> J["ai-provider-plugin"]
+  J --> K["game-plugin"]
+  K --> L["builder-routes"]
+  L --> M["builder-api-routes"]
+  M --> N["session-purge"]
+  N --> O["creator-worker"]
 ```
 
 #### 领域模型
@@ -725,13 +821,15 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-  A["草稿变更 scenes NPCs dialogue assets mechanics"] --> B["builderProject.state version checksum"]
-  B --> C["publishProject true"]
-  C --> D["创建不可变 builderProjectRelease"]
-  D --> E["更新 publishedReleaseVersion"]
-  E --> F["gameLoop.createSession projectId"]
-  F --> G["仅加载已发布快照"]
-  G --> H["会话由不可变发布数据初始化"]
+  A["草稿变更 scenes NPCs dialogue mechanics"] --> B["builderProject.state version checksum"]
+  A --> C["builderProjectAsset + builderProjectAnimationClip"]
+  B --> D["publishProject true"]
+  C --> D
+  D --> E["创建不可变 builderProjectRelease"]
+  E --> F["更新 publishedReleaseVersion"]
+  F --> G["gameLoop.createSession projectId"]
+  G --> H["仅加载已发布快照"]
+  H --> I["会话由不可变发布数据初始化"]
 ```
 
 ### 项目结构
@@ -774,10 +872,14 @@ tea/
 | 变量 | 用途 |
 |---|---|
 | `DATABASE_URL` | libSQL 连接字符串 (例如: `file:./prisma/dev.db`) |
+| `APP_ORIGIN` | 供本地回调与自动化证据抓取使用的绝对应用访问地址 |
 | `NODE_ENV` | `development` (开发) 或 `production` (生产) |
 | `PORT` | 服务器端口 (默认: 3000) |
 | `SESSION_COOKIE_NAME` | 匿名 auth-session 的 Cookie 名称 |
 | `SESSION_MAX_AGE_SECONDS` | 匿名会话 Cookie 生命周期（秒） |
+| `SESSION_RESUME_TOKEN_SECRET` | 用于签名会话恢复令牌的必填密钥 |
+| `BUILDER_LOCAL_AUTOMATION_ORIGIN` | 用于构建器本地自动化 / 浏览器证据抓取的可选绝对覆盖地址 |
+| `AI_ONNX_DEVICE` | ONNX 执行设备（`cpu`、`webgpu` 或 `wasm`）；Bun 服务端建议使用 `cpu` |
 
 游戏运行时关键参数：
 

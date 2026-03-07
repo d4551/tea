@@ -1,7 +1,10 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { createApp } from "../src/app.ts";
 import { appConfig } from "../src/config/environment.ts";
 import { ProviderRegistry } from "../src/domain/ai/providers/provider-registry.ts";
+import type { BuilderProjectSnapshot } from "../src/domain/builder/builder-project-state-store.ts";
+import { builderService } from "../src/domain/builder/builder-service.ts";
+import { gameLoop } from "../src/domain/game/game-loop.ts";
 import { correlationIdHeader } from "../src/lib/correlation-id.ts";
 import { gameAssetUrls } from "../src/shared/constants/game-assets.ts";
 import { contentType, httpStatus } from "../src/shared/constants/http.ts";
@@ -11,10 +14,64 @@ import { prisma } from "../src/shared/services/db.ts";
 
 let app: Awaited<ReturnType<typeof createApp>>;
 const baseUrl = "http://localhost";
+const managedSessionIds = new Set<string>();
 
 const toUrl = (path: string): string => `${baseUrl}${path}`;
 const countOccurrences = (source: string, fragment: string): number =>
   source.split(fragment).length - 1;
+const drainResponseBody = async (response: Response): Promise<void> => {
+  if (response.bodyUsed || !response.body) {
+    return;
+  }
+
+  await response.arrayBuffer();
+};
+
+const readSseUntil = async (
+  response: Response,
+  predicate: (content: string) => boolean,
+  maxChunks = 32,
+): Promise<string> => {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    return "";
+  }
+
+  const decoder = new TextDecoder();
+  let collected = "";
+
+  try {
+    for (let index = 0; index < maxChunks; index += 1) {
+      const next = await reader.read();
+      if (next.done) {
+        break;
+      }
+
+      const chunk: unknown = next.value;
+
+      if (chunk instanceof Uint8Array) {
+        collected += decoder.decode(chunk, { stream: true });
+      } else if (chunk instanceof ArrayBuffer) {
+        collected += decoder.decode(new Uint8Array(chunk), { stream: true });
+      } else {
+        collected += String(chunk);
+      }
+
+      if (predicate(collected)) {
+        break;
+      }
+    }
+  } finally {
+    await reader.cancel();
+  }
+
+  return collected;
+};
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 const readSessionCookieHeader = (response: Response): string | null => {
   const setCookie = response.headers.get("set-cookie");
   if (!setCookie) {
@@ -47,11 +104,40 @@ const createBuilderProject = async (projectId = `contract-${Date.now()}`) => {
   return { response, payload };
 };
 
+const snapshotToDraftState = (snapshot: BuilderProjectSnapshot): Record<string, unknown> => ({
+  scenes: Object.fromEntries(snapshot.scenes),
+  dialogues: Object.fromEntries(
+    [...snapshot.dialogues.entries()].map(([locale, catalog]) => [
+      locale,
+      Object.fromEntries(catalog),
+    ]),
+  ),
+  assets: Object.fromEntries(snapshot.assets),
+  animationClips: Object.fromEntries(snapshot.animationClips),
+  dialogueGraphs: Object.fromEntries(snapshot.dialogueGraphs),
+  quests: Object.fromEntries(snapshot.quests),
+  triggers: Object.fromEntries(snapshot.triggers),
+  flags: Object.fromEntries(snapshot.flags),
+  generationJobs: Object.fromEntries(snapshot.generationJobs),
+  artifacts: Object.fromEntries(snapshot.artifacts),
+  automationRuns: Object.fromEntries(snapshot.automationRuns),
+});
+
 beforeAll(async () => {
   app = await createApp();
 });
 
+afterEach(async () => {
+  for (const sessionId of managedSessionIds) {
+    await gameLoop.closeSession(sessionId);
+  }
+  managedSessionIds.clear();
+});
+
 afterAll(async () => {
+  if (app.server) {
+    await app.stop();
+  }
   await (await ProviderRegistry.getInstance()).dispose();
   await prisma.$disconnect();
 });
@@ -73,6 +159,7 @@ describe("API contracts", () => {
       app.handle(new Request(toUrl("/assets/images/sprites/cha-jiang-sprite.png"))),
       app.handle(new Request(toUrl(`${appConfig.staticAssets.rmmzPackPrefix}/README.md`))),
     ]);
+    await Promise.all(responses.map((response) => drainResponseBody(response)));
 
     expect(responses.every((response) => response.status === httpStatus.ok)).toBe(true);
   });
@@ -96,6 +183,7 @@ describe("API contracts", () => {
   test("home route issues an anonymous session cookie", async () => {
     const response = await app.handle(new Request(toUrl(appRoutes.home)));
     const setCookie = response.headers.get("set-cookie");
+    await drainResponseBody(response);
 
     expect(response.status).toBe(httpStatus.ok);
     expect(setCookie?.includes(`${appConfig.auth.sessionCookieName}=`)).toBe(true);
@@ -400,6 +488,7 @@ describe("API contracts", () => {
     };
     const sessionCookie = readSessionCookieHeader(createResponse);
     const sessionId = createPayload.data?.sessionId ?? "";
+    managedSessionIds.add(sessionId);
 
     const commandResponse = await app.handle(
       new Request(toUrl(appRoutes.gameApiSessionCommand.replace(":id", sessionId)), {
@@ -450,6 +539,7 @@ describe("API contracts", () => {
     };
     const sessionCookie = readSessionCookieHeader(createResponse);
     const sessionId = createPayload.data?.sessionId ?? "";
+    managedSessionIds.add(sessionId);
 
     const commandResponse = await app.handle(
       new Request(toUrl(appRoutes.gameApiSessionCommand.replace(":id", sessionId)), {
@@ -515,6 +605,7 @@ describe("API contracts", () => {
     };
     const sessionCookie = readSessionCookieHeader(createResponse) ?? ownerCookie;
     const sessionId = createPayload.data?.sessionId ?? "";
+    managedSessionIds.add(sessionId);
 
     await prisma.gameSession.update({
       where: { id: sessionId },
@@ -660,6 +751,700 @@ describe("API contracts", () => {
     expect(removePayload.data?.result?.action).toBe("deleted");
   });
 
+  test("scene node form updates preserve unspecified authored fields", async () => {
+    const projectId = `scene-node-${Date.now()}`;
+    const project = await builderService.createProject(projectId);
+    expect(project).not.toBeNull();
+    if (!project) {
+      return;
+    }
+
+    const teaHouse = project.scenes.get("teaHouse");
+    expect(teaHouse).toBeDefined();
+    if (!teaHouse) {
+      return;
+    }
+
+    await builderService.saveScene(projectId, {
+      id: teaHouse.id,
+      scene: {
+        ...teaHouse,
+        nodes: [
+          {
+            id: "hero-marker",
+            nodeType: "sprite",
+            assetId: "asset-hero",
+            animationClipId: "clip-idle",
+            position: { x: 10, y: 20 },
+            size: { width: 32, height: 48 },
+            layer: "background",
+          },
+        ],
+      },
+    });
+
+    const response = await app.handle(
+      new Request(toUrl(`/api/builder/scenes/${teaHouse.id}/nodes`), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          projectId,
+          locale: "en-US",
+          id: "hero-marker",
+          positionX: "44",
+          positionY: "55",
+        }),
+      }),
+    );
+    const updatedScene = await builderService.getScene(projectId, teaHouse.id);
+    const updatedNode = updatedScene?.nodes?.find((node) => node.id === "hero-marker");
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(updatedNode).toEqual({
+      id: "hero-marker",
+      nodeType: "sprite",
+      assetId: "asset-hero",
+      animationClipId: "clip-idle",
+      position: { x: 44, y: 55 },
+      size: { width: 32, height: 48 },
+      layer: "background",
+    });
+  });
+
+  test("scene form updates preserve authored collisions npcs and nodes", async () => {
+    const projectId = `scene-form-${crypto.randomUUID()}`;
+    const project = await builderService.createProject(projectId);
+    expect(project).not.toBeNull();
+    if (!project) {
+      return;
+    }
+
+    const teaHouse = project.scenes.get("teaHouse");
+    expect(teaHouse).toBeDefined();
+    if (!teaHouse) {
+      return;
+    }
+
+    await builderService.saveScene(projectId, {
+      id: teaHouse.id,
+      scene: {
+        ...teaHouse,
+        collisions: [{ x: 1, y: 2, width: 3, height: 4 }],
+        nodes: [
+          {
+            id: "draft-camera",
+            nodeType: "camera",
+            position: { x: 11, y: 22 },
+            size: { width: 320, height: 180 },
+            layer: "foreground",
+          },
+        ],
+      },
+    });
+
+    const response = await app.handle(
+      new Request(toUrl(`/api/builder/scenes/${teaHouse.id}/form`), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          projectId,
+          locale: "en-US",
+          titleKey: "scene.teaHouse.updated",
+          geometryWidth: "800",
+        }),
+      }),
+    );
+
+    const updatedScene = await builderService.getScene(projectId, teaHouse.id);
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(updatedScene?.titleKey).toBe("scene.teaHouse.updated");
+    expect(updatedScene?.geometry.width).toBe(800);
+    expect(updatedScene?.geometry.height).toBe(teaHouse.geometry.height);
+    expect(updatedScene?.npcs).toEqual(teaHouse.npcs);
+    expect(updatedScene?.collisions).toEqual([{ x: 1, y: 2, width: 3, height: 4 }]);
+    expect(updatedScene?.nodes).toEqual([
+      {
+        id: "draft-camera",
+        nodeType: "camera",
+        position: { x: 11, y: 22 },
+        size: { width: 320, height: 180 },
+        layer: "foreground",
+      },
+    ]);
+  });
+
+  test("scene persistence preserves the full authored node repertoire", async () => {
+    const projectId = `scene-node-repertoire-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+
+    await builderService.saveScene(projectId, {
+      id: "scene.repertoire.2d",
+      scene: {
+        id: "scene.repertoire.2d",
+        titleKey: "scene.repertoire.2d",
+        background: "/images/repertoire-2d.png",
+        sceneMode: "2d",
+        geometry: { width: 640, height: 360 },
+        spawn: { x: 32, y: 48 },
+        npcs: [],
+        collisions: [],
+        nodes: [
+          {
+            id: "tile-1",
+            nodeType: "tile",
+            position: { x: 10, y: 20 },
+            size: { width: 16, height: 16 },
+            layer: "background",
+          },
+          {
+            id: "camera-1",
+            nodeType: "camera",
+            position: { x: 30, y: 40 },
+            size: { width: 320, height: 180 },
+            layer: "foreground",
+          },
+        ],
+      },
+    });
+
+    await builderService.saveScene(projectId, {
+      id: "scene.repertoire.3d",
+      scene: {
+        id: "scene.repertoire.3d",
+        titleKey: "scene.repertoire.3d",
+        background: "/images/repertoire-3d.png",
+        sceneMode: "3d",
+        geometry: { width: 640, height: 360 },
+        spawn: { x: 0, y: 0 },
+        npcs: [],
+        collisions: [],
+        nodes: [
+          {
+            id: "spawn-3d",
+            nodeType: "spawn",
+            position: { x: 1, y: 2, z: 3 },
+            rotation: { x: 0, y: 0, z: 0 },
+            scale: { x: 1, y: 1, z: 1 },
+          },
+          {
+            id: "trigger-3d",
+            nodeType: "trigger",
+            position: { x: 4, y: 5, z: 6 },
+            rotation: { x: 0, y: 0.5, z: 0 },
+            scale: { x: 2, y: 2, z: 2 },
+          },
+        ],
+      },
+    });
+
+    const restored2d = await builderService.getScene(projectId, "scene.repertoire.2d");
+    const restored3d = await builderService.getScene(projectId, "scene.repertoire.3d");
+
+    expect(restored2d?.nodes).toEqual([
+      {
+        id: "tile-1",
+        nodeType: "tile",
+        position: { x: 10, y: 20 },
+        size: { width: 16, height: 16 },
+        layer: "background",
+      },
+      {
+        id: "camera-1",
+        nodeType: "camera",
+        position: { x: 30, y: 40 },
+        size: { width: 320, height: 180 },
+        layer: "foreground",
+      },
+    ]);
+    expect(restored3d?.nodes).toEqual([
+      {
+        id: "spawn-3d",
+        nodeType: "spawn",
+        position: { x: 1, y: 2, z: 3 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+      },
+      {
+        id: "trigger-3d",
+        nodeType: "trigger",
+        position: { x: 4, y: 5, z: 6 },
+        rotation: { x: 0, y: 0.5, z: 0 },
+        scale: { x: 2, y: 2, z: 2 },
+      },
+    ]);
+  });
+
+  test("npc form updates preserve unspecified dialogue keys and AI tuning", async () => {
+    const projectId = `npc-form-${crypto.randomUUID()}`;
+    const project = await builderService.createProject(projectId);
+    expect(project).not.toBeNull();
+    if (!project) {
+      return;
+    }
+
+    const teaHouse = project.scenes.get("teaHouse");
+    expect(teaHouse).toBeDefined();
+    if (!teaHouse) {
+      return;
+    }
+
+    await builderService.saveNpc(projectId, {
+      sceneId: teaHouse.id,
+      npc: {
+        characterKey: "guide",
+        labelKey: "npc.guide.name",
+        x: 40,
+        y: 50,
+        dialogueKeys: ["guide.intro", "guide.followup"],
+        interactRadius: 30,
+        ai: {
+          wanderRadius: 18,
+          wanderSpeed: 1.5,
+          idlePauseMs: [1000, 3000],
+          greetOnApproach: true,
+          greetLineKey: "guide.custom.greet",
+        },
+      },
+    });
+
+    const response = await app.handle(
+      new Request(toUrl("/api/builder/npcs/guide/form"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          projectId,
+          locale: "en-US",
+          sceneId: teaHouse.id,
+          x: "77",
+        }),
+      }),
+    );
+
+    const updatedNpc = await builderService.findNpc(projectId, "guide");
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(updatedNpc).toEqual({
+      characterKey: "guide",
+      labelKey: "npc.guide.name",
+      x: 77,
+      y: 50,
+      dialogueKeys: ["guide.intro", "guide.followup"],
+      interactRadius: 30,
+      ai: {
+        wanderRadius: 18,
+        wanderSpeed: 1.5,
+        idlePauseMs: [1000, 3000],
+        greetOnApproach: true,
+        greetLineKey: "guide.custom.greet",
+      },
+    });
+  });
+
+  test("quest form updates preserve additional authored steps", async () => {
+    const projectId = `quest-form-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+
+    await builderService.saveQuest(projectId, {
+      id: "quest.branching",
+      quest: {
+        id: "quest.branching",
+        title: "Original title",
+        description: "Original description",
+        steps: [
+          {
+            id: "quest.branching.step.1",
+            title: "Step one",
+            description: "First step",
+            triggerId: "trigger.one",
+          },
+          {
+            id: "quest.branching.step.2",
+            title: "Step two",
+            description: "Second step",
+            triggerId: "trigger.two",
+          },
+        ],
+      },
+    });
+
+    const response = await app.handle(
+      new Request(toUrl("/api/builder/quests/quest.branching/form"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          projectId,
+          locale: "en-US",
+          id: "quest.branching",
+          title: "Updated title",
+          description: "Updated description",
+          triggerId: "trigger.updated",
+        }),
+      }),
+    );
+
+    const updatedQuest = (await builderService.listQuests(projectId)).find(
+      (candidate) => candidate.id === "quest.branching",
+    );
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(updatedQuest).toEqual({
+      id: "quest.branching",
+      title: "Updated title",
+      description: "Updated description",
+      steps: [
+        {
+          id: "quest.branching.step.1",
+          title: "Updated title",
+          description: "Updated description",
+          triggerId: "trigger.updated",
+        },
+        {
+          id: "quest.branching.step.2",
+          title: "Step two",
+          description: "Second step",
+          triggerId: "trigger.two",
+        },
+      ],
+    });
+  });
+
+  test("builder project creation stores authored assets and clips outside the draft state blob", async () => {
+    const projectId = `media-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+
+    const [projectRow, assetCount, clipCount] = await Promise.all([
+      prisma.builderProject.findUnique({
+        where: { id: projectId },
+        select: { state: true },
+      }),
+      prisma.builderProjectAsset.count({ where: { projectId } }),
+      prisma.builderProjectAnimationClip.count({ where: { projectId } }),
+    ]);
+
+    const stateRecord = asRecord(projectRow?.state);
+    expect("assets" in stateRecord).toBe(false);
+    expect("animationClips" in stateRecord).toBe(false);
+    expect(assetCount).toBeGreaterThan(0);
+    expect(clipCount).toBeGreaterThan(0);
+  });
+
+  test("builder project reads promote legacy blob media into relational draft rows", async () => {
+    const projectId = `legacy-media-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+    const snapshot = await builderService.getProject(projectId);
+    expect(snapshot).not.toBeNull();
+    if (!snapshot) {
+      return;
+    }
+
+    await prisma.builderProjectAnimationClip.deleteMany({ where: { projectId } });
+    await prisma.builderProjectAsset.deleteMany({ where: { projectId } });
+    await prisma.builderProject.update({
+      where: { id: projectId },
+      data: {
+        state: JSON.parse(JSON.stringify(snapshotToDraftState(snapshot))),
+      },
+    });
+
+    const migratedSnapshot = await builderService.getProject(projectId);
+    const [projectRow, assetCount, clipCount] = await Promise.all([
+      prisma.builderProject.findUnique({
+        where: { id: projectId },
+        select: { state: true },
+      }),
+      prisma.builderProjectAsset.count({ where: { projectId } }),
+      prisma.builderProjectAnimationClip.count({ where: { projectId } }),
+    ]);
+
+    expect(migratedSnapshot).not.toBeNull();
+    expect(assetCount).toBe(snapshot.assets.size);
+    expect(clipCount).toBe(snapshot.animationClips.size);
+
+    const stateRecord = asRecord(projectRow?.state);
+    expect("assets" in stateRecord).toBe(false);
+    expect("animationClips" in stateRecord).toBe(false);
+  });
+
+  test("builder project creation stores scenes and localized dialogue entries outside the draft state blob", async () => {
+    const projectId = `content-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+
+    const [projectRow, sceneCount, dialogueEntryCount] = await Promise.all([
+      prisma.builderProject.findUnique({
+        where: { id: projectId },
+        select: { state: true },
+      }),
+      prisma.builderProjectScene.count({ where: { projectId } }),
+      prisma.builderProjectDialogueEntry.count({ where: { projectId } }),
+    ]);
+
+    const stateRecord = asRecord(projectRow?.state);
+    expect("scenes" in stateRecord).toBe(false);
+    expect("dialogues" in stateRecord).toBe(false);
+    expect(sceneCount).toBeGreaterThan(0);
+    expect(dialogueEntryCount).toBeGreaterThan(0);
+  });
+
+  test("builder project reads promote legacy blob scenes and dialogue catalogs into relational draft rows", async () => {
+    const projectId = `legacy-content-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+    const snapshot = await builderService.getProject(projectId);
+    expect(snapshot).not.toBeNull();
+    if (!snapshot) {
+      return;
+    }
+
+    await prisma.builderProjectDialogueEntry.deleteMany({ where: { projectId } });
+    await prisma.builderProjectScene.deleteMany({ where: { projectId } });
+    await prisma.builderProject.update({
+      where: { id: projectId },
+      data: {
+        state: JSON.parse(JSON.stringify(snapshotToDraftState(snapshot))),
+      },
+    });
+
+    const migratedSnapshot = await builderService.getProject(projectId);
+    const [projectRow, sceneCount, dialogueEntryCount] = await Promise.all([
+      prisma.builderProject.findUnique({
+        where: { id: projectId },
+        select: { state: true },
+      }),
+      prisma.builderProjectScene.count({ where: { projectId } }),
+      prisma.builderProjectDialogueEntry.count({ where: { projectId } }),
+    ]);
+
+    const expectedDialogueCount = [...snapshot.dialogues.values()].reduce(
+      (count, catalog) => count + catalog.size,
+      0,
+    );
+
+    expect(migratedSnapshot).not.toBeNull();
+    expect(sceneCount).toBe(snapshot.scenes.size);
+    expect(dialogueEntryCount).toBe(expectedDialogueCount);
+
+    const stateRecord = asRecord(projectRow?.state);
+    expect("scenes" in stateRecord).toBe(false);
+    expect("dialogues" in stateRecord).toBe(false);
+  });
+
+  test("builder mechanics state stores dialogue graphs quests triggers and flags outside the draft state blob", async () => {
+    const projectId = `mechanics-state-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+
+    const [projectRow, dialogueGraphCount, questCount, triggerCount, flagCount] = await Promise.all(
+      [
+        prisma.builderProject.findUnique({
+          where: { id: projectId },
+          select: { state: true },
+        }),
+        prisma.builderProjectDialogueGraph.count({ where: { projectId } }),
+        prisma.builderProjectQuest.count({ where: { projectId } }),
+        prisma.builderProjectTrigger.count({ where: { projectId } }),
+        prisma.builderProjectFlag.count({ where: { projectId } }),
+      ],
+    );
+
+    const stateRecord = asRecord(projectRow?.state);
+    expect("dialogueGraphs" in stateRecord).toBe(false);
+    expect("quests" in stateRecord).toBe(false);
+    expect("triggers" in stateRecord).toBe(false);
+    expect("flags" in stateRecord).toBe(false);
+    expect(dialogueGraphCount).toBeGreaterThan(0);
+    expect(questCount).toBeGreaterThan(0);
+    expect(triggerCount).toBeGreaterThan(0);
+    expect(flagCount).toBeGreaterThan(0);
+  });
+
+  test("builder project reads promote legacy blob mechanics into relational draft rows", async () => {
+    const projectId = `legacy-mechanics-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+    const snapshot = await builderService.getProject(projectId);
+    expect(snapshot).not.toBeNull();
+    if (!snapshot) {
+      return;
+    }
+
+    await prisma.builderProjectFlag.deleteMany({ where: { projectId } });
+    await prisma.builderProjectTrigger.deleteMany({ where: { projectId } });
+    await prisma.builderProjectQuest.deleteMany({ where: { projectId } });
+    await prisma.builderProjectDialogueGraph.deleteMany({ where: { projectId } });
+    await prisma.builderProject.update({
+      where: { id: projectId },
+      data: {
+        state: JSON.parse(JSON.stringify(snapshotToDraftState(snapshot))),
+      },
+    });
+
+    const migratedSnapshot = await builderService.getProject(projectId);
+    const [projectRow, dialogueGraphCount, questCount, triggerCount, flagCount] = await Promise.all(
+      [
+        prisma.builderProject.findUnique({
+          where: { id: projectId },
+          select: { state: true },
+        }),
+        prisma.builderProjectDialogueGraph.count({ where: { projectId } }),
+        prisma.builderProjectQuest.count({ where: { projectId } }),
+        prisma.builderProjectTrigger.count({ where: { projectId } }),
+        prisma.builderProjectFlag.count({ where: { projectId } }),
+      ],
+    );
+
+    expect(migratedSnapshot).not.toBeNull();
+    expect(dialogueGraphCount).toBe(snapshot.dialogueGraphs.size);
+    expect(questCount).toBe(snapshot.quests.size);
+    expect(triggerCount).toBe(snapshot.triggers.size);
+    expect(flagCount).toBe(snapshot.flags.size);
+
+    const stateRecord = asRecord(projectRow?.state);
+    expect("dialogueGraphs" in stateRecord).toBe(false);
+    expect("quests" in stateRecord).toBe(false);
+    expect("triggers" in stateRecord).toBe(false);
+    expect("flags" in stateRecord).toBe(false);
+  });
+
+  test("builder worker state stores jobs artifacts and automation runs outside the draft state blob", async () => {
+    const projectId = `worker-state-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+
+    await builderService.saveGenerationJob(projectId, {
+      id: "job.contract",
+      job: {
+        id: "job.contract",
+        kind: "portrait",
+        status: "queued",
+        prompt: "Generate a reviewable portrait",
+        artifactIds: [],
+        statusMessage: "queued",
+        createdAtMs: Date.now(),
+        updatedAtMs: Date.now(),
+      },
+    });
+    await builderService.saveAutomationRun(projectId, {
+      id: "run.contract",
+      run: {
+        id: "run.contract",
+        status: "queued",
+        goal: "Capture builder review evidence",
+        steps: [
+          {
+            id: "step.browser",
+            action: "browser",
+            summary: "Open builder",
+            status: "pending",
+          },
+        ],
+        artifactIds: [],
+        statusMessage: "queued",
+        createdAtMs: Date.now(),
+        updatedAtMs: Date.now(),
+      },
+    });
+    await builderService.processQueuedWork(projectId);
+
+    const [projectRow, jobCount, artifactCount, automationRunCount] = await Promise.all([
+      prisma.builderProject.findUnique({
+        where: { id: projectId },
+        select: { state: true },
+      }),
+      prisma.builderProjectGenerationJob.count({ where: { projectId } }),
+      prisma.builderProjectArtifact.count({ where: { projectId } }),
+      prisma.builderProjectAutomationRun.count({ where: { projectId } }),
+    ]);
+
+    const stateRecord = asRecord(projectRow?.state);
+    expect("generationJobs" in stateRecord).toBe(false);
+    expect("artifacts" in stateRecord).toBe(false);
+    expect("automationRuns" in stateRecord).toBe(false);
+    expect(jobCount).toBeGreaterThan(0);
+    expect(artifactCount).toBeGreaterThan(0);
+    expect(automationRunCount).toBeGreaterThan(0);
+  });
+
+  test("builder project reads promote legacy blob worker state into relational draft rows", async () => {
+    const projectId = `legacy-worker-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+    await builderService.saveGenerationJob(projectId, {
+      id: "job.legacy",
+      job: {
+        id: "job.legacy",
+        kind: "portrait",
+        status: "queued",
+        prompt: "Legacy queued job",
+        artifactIds: [],
+        statusMessage: "queued",
+        createdAtMs: Date.now(),
+        updatedAtMs: Date.now(),
+      },
+    });
+    await builderService.saveAutomationRun(projectId, {
+      id: "run.legacy",
+      run: {
+        id: "run.legacy",
+        status: "queued",
+        goal: "Legacy automation",
+        steps: [
+          {
+            id: "step.legacy",
+            action: "builder",
+            summary: "Inspect project shell",
+            status: "pending",
+          },
+        ],
+        artifactIds: [],
+        statusMessage: "queued",
+        createdAtMs: Date.now(),
+        updatedAtMs: Date.now(),
+      },
+    });
+    await builderService.processQueuedWork(projectId);
+
+    const snapshot = await builderService.getProject(projectId);
+    expect(snapshot).not.toBeNull();
+    if (!snapshot) {
+      return;
+    }
+
+    await prisma.builderProjectArtifact.deleteMany({ where: { projectId } });
+    await prisma.builderProjectAutomationRun.deleteMany({ where: { projectId } });
+    await prisma.builderProjectGenerationJob.deleteMany({ where: { projectId } });
+    await prisma.builderProject.update({
+      where: { id: projectId },
+      data: {
+        state: JSON.parse(JSON.stringify(snapshotToDraftState(snapshot))),
+      },
+    });
+
+    const migratedSnapshot = await builderService.getProject(projectId);
+    const [projectRow, jobCount, artifactCount, automationRunCount] = await Promise.all([
+      prisma.builderProject.findUnique({
+        where: { id: projectId },
+        select: { state: true },
+      }),
+      prisma.builderProjectGenerationJob.count({ where: { projectId } }),
+      prisma.builderProjectArtifact.count({ where: { projectId } }),
+      prisma.builderProjectAutomationRun.count({ where: { projectId } }),
+    ]);
+
+    expect(migratedSnapshot).not.toBeNull();
+    expect(jobCount).toBe(snapshot.generationJobs.size);
+    expect(artifactCount).toBe(snapshot.artifacts.size);
+    expect(automationRunCount).toBe(snapshot.automationRuns.size);
+
+    const stateRecord = asRecord(projectRow?.state);
+    expect("generationJobs" in stateRecord).toBe(false);
+    expect("artifacts" in stateRecord).toBe(false);
+    expect("automationRuns" in stateRecord).toBe(false);
+  });
+
   test("game command queue overflow maps to conflict state", async () => {
     const createResponse = await app.handle(
       new Request(toUrl(appRoutes.gameApiSession), {
@@ -680,6 +1465,7 @@ describe("API contracts", () => {
     };
     const sessionCookie = readSessionCookieHeader(createResponse);
     const sessionId = createPayload.data?.sessionId ?? "";
+    managedSessionIds.add(sessionId);
     const targetPath = appRoutes.gameApiSessionCommand.replace(":id", sessionId);
 
     const commandRequests = Array.from(
@@ -709,6 +1495,11 @@ describe("API contracts", () => {
           };
         })
       : null;
+    await Promise.all(
+      responses.map((response) =>
+        response === conflictResponse ? Promise.resolve() : drainResponseBody(response),
+      ),
+    );
 
     expect(createResponse.status).toBe(httpStatus.ok);
     expect(createPayload.ok).toBe(true);
@@ -803,7 +1594,7 @@ describe("API contracts", () => {
     expect(typeof payload.data?.features?.speechSynthesis).toBe("boolean");
     expect(typeof payload.data?.features?.localInference).toBe("boolean");
     expect(payload.data?.localRuntime?.transformers?.integration).toBe("huggingface");
-    expect(payload.data?.localRuntime?.onnx?.backend).toBe("wasm");
+    expect(payload.data?.localRuntime?.onnx?.backend).toBe(appConfig.ai.onnxDevice);
     expect(payload.data?.localRuntime?.catalog?.some((entry) => entry.key === "speechToText")).toBe(
       true,
     );
@@ -1020,6 +1811,23 @@ describe("HTMX partial rendering", () => {
     expect(html.includes('name="game-client-socket-reconnect-delay-ms"')).toBe(true);
     expect(html.includes('name="game-client-restore-request-timeout-ms"')).toBe(true);
     expect(html.includes('name="game-client-restore-max-attempts"')).toBe(true);
+    expect(html.includes('hx-boost="false"')).toBe(true);
+    expect(countOccurrences(html, 'id="main-content"')).toBe(1);
+    expect(html.includes('role="img"')).toBe(false);
+    expect(html.includes('id="game-canvas-wrapper"')).toBe(true);
+    expect(html.includes('tabindex="0"')).toBe(true);
+    expect(html.includes("data-runtime-focus-active-label=")).toBe(true);
+    expect(html.includes('id="game-runtime-help"')).toBe(true);
+    expect(html.includes('id="game-controls-list"')).toBe(true);
+    expect(html.includes("No project bound")).toBe(true);
+    expect(html.includes(">English<")).toBe(true);
+    expect(html.includes("Scene mode")).toBe(true);
+    expect(html.includes('id="game-scene-title-heading"')).toBe(true);
+    expect(html.includes('sse-swap="scene-title-heading"')).toBe(true);
+    expect(html.includes('id="game-objective-card"')).toBe(true);
+    expect(html.includes('sse-swap="objective-card"')).toBe(true);
+    expect(html.includes('id="game-scene-mode-value"')).toBe(true);
+    expect(html.includes('sse-swap="scene-mode"')).toBe(true);
   });
 
   test("builder dashboard preserves locale-aware navigation links", async () => {
@@ -1036,9 +1844,25 @@ describe("HTMX partial rendering", () => {
     expect(html.includes(`/builder/npcs?lang=zh-CN&amp;projectId=${projectId}`)).toBe(true);
     expect(html.includes(`/builder/ai?lang=zh-CN&amp;projectId=${projectId}`)).toBe(true);
     expect(html.includes("/public/vendor/htmx-ext/focus-panel.js")).toBe(true);
+    expect(html.includes("/public/vendor/builder-scene-editor.js")).toBe(true);
     expect(html.includes('id="builder-project-shell"')).toBe(true);
     expect(html.includes(projectId)).toBe(true);
     expect(html.includes('id="builder-platform-readiness"')).toBe(true);
+  });
+
+  test("mechanics workspace detail pane uses the shared focus-panel contract", async () => {
+    const projectId = `mechanics-focus-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+    const response = await app.handle(
+      new Request(toUrl(`${appRoutes.builderMechanics}?lang=en-US&projectId=${projectId}`)),
+    );
+    const html = await response.text();
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(html.includes('id="mechanics-detail"')).toBe(true);
+    expect(html.includes('data-focus-panel="true"')).toBe(true);
+    expect(html.includes('hx-ext="focus-panel"')).toBe(true);
+    expect(html.includes('tabindex="-1"')).toBe(true);
   });
 
   test("scene editor preview avoids inline style attributes", async () => {
@@ -1052,6 +1876,9 @@ describe("HTMX partial rendering", () => {
     expect(response.status).toBe(httpStatus.ok);
     expect(html.includes("<svg")).toBe(true);
     expect(html.includes("style=")).toBe(false);
+    expect(html.includes("data-scene-editor")).toBe(true);
+    expect(html.includes("data-scene-node-form")).toBe(true);
+    expect(html.includes("data-scene-selected-node")).toBe(true);
   });
 
   test("builder assets page makes sprite and animation pipeline gaps explicit", async () => {
@@ -1298,8 +2125,26 @@ describe("HTMX partial rendering", () => {
     );
     const generationHtml = await generationResponse.text();
     expect(generationResponse.status).toBe(httpStatus.ok);
-    expect(generationHtml.includes("blocked_for_approval")).toBe(true);
-    const generationJobIdMatch = generationHtml.match(/generation-jobs\/([^/"?]+)\/approve/);
+    expect(generationHtml.includes("Queued")).toBe(true);
+    await builderService.processQueuedWork(projectId);
+    const refreshedAssetsResponse = await app.handle(
+      new Request(
+        toUrl(
+          withQueryParameters(appRoutes.builderAssets, {
+            projectId,
+            locale: "en-US",
+          }),
+        ),
+      ),
+    );
+    const refreshedAssetsHtml = await refreshedAssetsResponse.text();
+    expect(refreshedAssetsResponse.status).toBe(httpStatus.ok);
+    expect(refreshedAssetsHtml.includes("Awaiting approval")).toBe(true);
+    expect(refreshedAssetsHtml.includes("Review Portrait")).toBe(true);
+    expect(refreshedAssetsHtml.includes("Generated draft for")).toBe(true);
+    expect(refreshedAssetsHtml.includes("generation.artifact.label.review:portrait")).toBe(false);
+    expect(refreshedAssetsHtml.includes("generation.artifact.summary.target:")).toBe(false);
+    const generationJobIdMatch = refreshedAssetsHtml.match(/generation-jobs\/([^/"?]+)\/approve/);
     expect(generationJobIdMatch).not.toBeNull();
     const generationJobId = generationJobIdMatch?.[1];
     expect(generationJobId).toBeDefined();
@@ -1325,7 +2170,10 @@ describe("HTMX partial rendering", () => {
         },
       ),
     );
-    const generationStreamText = await generationStreamResponse.text();
+    const generationStreamText = await readSseUntil(
+      generationStreamResponse,
+      (content) => content.includes('"ok":true') && content.includes(generationJobId),
+    );
     expect(generationStreamResponse.status).toBe(httpStatus.ok);
     expect(generationStreamResponse.headers.get("content-type")).toContain("text/event-stream");
     expect(generationStreamText.includes('"ok":true')).toBe(true);
@@ -1347,8 +2195,10 @@ describe("HTMX partial rendering", () => {
     );
     const generationApproveHtml = await generationApproveResponse.text();
     expect(generationApproveResponse.status).toBe(httpStatus.ok);
-    expect(generationApproveHtml.includes("succeeded")).toBe(true);
+    expect(generationApproveHtml.includes("Succeeded")).toBe(true);
     expect(generationApproveHtml.includes(`asset.generated.${generationJobId}`)).toBe(true);
+    expect(generationApproveHtml.includes("Generated Portrait")).toBe(true);
+    expect(generationApproveHtml.includes("generation.asset.label.generated:portrait")).toBe(false);
 
     const triggerId = `trigger-${crypto.randomUUID().slice(0, 8)}`;
     const triggerResponse = await app.handle(
@@ -1372,6 +2222,16 @@ describe("HTMX partial rendering", () => {
     const triggerHtml = await triggerResponse.text();
     expect(triggerResponse.status).toBe(httpStatus.ok);
     expect(triggerHtml.includes(triggerId)).toBe(true);
+    const createdTrigger = (await builderService.listTriggers(projectId)).find(
+      (candidate) => candidate.id === triggerId,
+    );
+    expect(createdTrigger).toEqual({
+      id: triggerId,
+      label: "Meet the builder guide",
+      event: "npc-interact",
+      sceneId: "teaHouse",
+      npcId: "teaMonk",
+    });
 
     const questId = `quest-${crypto.randomUUID().slice(0, 8)}`;
     const questResponse = await app.handle(
@@ -1394,6 +2254,22 @@ describe("HTMX partial rendering", () => {
     const questHtml = await questResponse.text();
     expect(questResponse.status).toBe(httpStatus.ok);
     expect(questHtml.includes(questId)).toBe(true);
+    const createdQuest = (await builderService.listQuests(projectId)).find(
+      (candidate) => candidate.id === questId,
+    );
+    expect(createdQuest).toEqual({
+      id: questId,
+      title: "Builder intro",
+      description: "Walk through the first authored mechanic.",
+      steps: [
+        {
+          id: `${questId}.step.1`,
+          title: "Builder intro",
+          description: "Walk through the first authored mechanic.",
+          triggerId,
+        },
+      ],
+    });
 
     const graphId = `graph-${crypto.randomUUID().slice(0, 8)}`;
     const graphResponse = await app.handle(
@@ -1416,6 +2292,20 @@ describe("HTMX partial rendering", () => {
     const graphHtml = await graphResponse.text();
     expect(graphResponse.status).toBe(httpStatus.ok);
     expect(graphHtml.includes(graphId)).toBe(true);
+    const createdGraph = (await builderService.listDialogueGraphs(projectId)).find(
+      (candidate) => candidate.id === graphId,
+    );
+    expect(createdGraph?.id).toBe(graphId);
+    expect(createdGraph?.title).toBe("Guide intro graph");
+    expect(createdGraph?.npcId).toBe("teaMonk");
+    expect(createdGraph?.rootNodeId).toBe("root");
+    expect(createdGraph?.nodes).toEqual([
+      {
+        id: "root",
+        line: "npc.teaMonk.greet",
+        edges: [],
+      },
+    ]);
 
     const automationResponse = await app.handle(
       new Request(toUrl("/api/builder/automation-runs/create/form"), {
@@ -1433,8 +2323,30 @@ describe("HTMX partial rendering", () => {
     );
     const automationHtml = await automationResponse.text();
     expect(automationResponse.status).toBe(httpStatus.ok);
-    expect(automationHtml.includes("blocked_for_approval")).toBe(true);
-    const automationRunIdMatch = automationHtml.match(/automation-runs\/([^/"?]+)\/approve/);
+    expect(automationHtml.includes("Queued")).toBe(true);
+    await builderService.processQueuedWork(projectId);
+    const refreshedAutomationResponse = await app.handle(
+      new Request(
+        toUrl(
+          withQueryParameters(appRoutes.builderAutomation, {
+            projectId,
+            locale: "en-US",
+          }),
+        ),
+      ),
+    );
+    const refreshedAutomationHtml = await refreshedAutomationResponse.text();
+    expect(refreshedAutomationResponse.status).toBe(httpStatus.ok);
+    expect(refreshedAutomationHtml.includes("Awaiting approval")).toBe(true);
+    expect(refreshedAutomationHtml.includes("Automation plan ready for review")).toBe(true);
+    expect(refreshedAutomationHtml.includes("Attach evidence to the draft review")).toBe(true);
+    expect(refreshedAutomationHtml.includes("automation.plan-ready-for-review")).toBe(false);
+    expect(refreshedAutomationHtml.includes("automation.artifact.captured-review-evidence")).toBe(
+      false,
+    );
+    const automationRunIdMatch = refreshedAutomationHtml.match(
+      /automation-runs\/([^/"?]+)\/approve/,
+    );
     expect(automationRunIdMatch).not.toBeNull();
     const automationRunId = automationRunIdMatch?.[1];
     expect(automationRunId).toBeDefined();
@@ -1458,7 +2370,7 @@ describe("HTMX partial rendering", () => {
     );
     const automationApproveHtml = await automationApproveResponse.text();
     expect(automationApproveResponse.status).toBe(httpStatus.ok);
-    expect(automationApproveHtml.includes("succeeded")).toBe(true);
+    expect(automationApproveHtml.includes("Succeeded")).toBe(true);
   });
 
   test("AI patch preview and apply form routes expose review flow and refresh project shell", async () => {

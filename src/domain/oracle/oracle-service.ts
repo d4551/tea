@@ -2,7 +2,7 @@ import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
 import { getMessages } from "../../shared/i18n/translator.ts";
 import { prisma } from "../../shared/services/db.ts";
-import { ModelManager } from "../ai/model-manager.ts";
+import { ProviderRegistry } from "../ai/providers/provider-registry.ts";
 import type {
   OracleEmptyState,
   OracleFatalErrorState,
@@ -30,8 +30,8 @@ interface OracleAnswer {
 
 /**
  * Creates the oracle service.
- * Uses the local AI ModelManager for generation and sentiment.
- * Falls back to deterministic hash-based answers if models are unavailable.
+ * Uses the shared AI provider registry for generation and sentiment routing.
+ * Falls back to deterministic hash-based answers if providers are unavailable.
  */
 export const createOracleService = (): OracleService => ({
   evaluate: async (request) => {
@@ -86,18 +86,28 @@ export const createOracleService = (): OracleService => ({
 // ── Answer generation ────────────────────────────────────────────────────────
 
 /**
- * Attempts AI generation; falls back to deterministic hash if model unavailable.
+ * Attempts provider-routed AI generation; falls back to deterministic hash if generation is
+ * unavailable.
  */
 const buildAnswer = async (
   question: string,
   oracleMessages: ReturnType<typeof getMessages>["oracle"],
 ): Promise<OracleAnswer> => {
-  const ai = await ModelManager.getInstance();
-  const generated = await ai.generateOracle(question).catch(() => null);
+  const registry = await ProviderRegistry.getInstance();
+  const generation = await registry.chat({
+    messages: [
+      {
+        role: "user",
+        content: `The Tea Oracle speaks of "${question}":`,
+      },
+    ],
+    temperature: 0.85,
+    maxTokens: 80,
+  });
 
-  if (generated && generated.length > 0) {
+  if (generation.ok && generation.text.trim().length > 0) {
     return {
-      text: generated,
+      text: generation.text.trim(),
       source: "ai",
     };
   }
@@ -109,7 +119,7 @@ const buildAnswer = async (
 };
 
 /**
- * Persists the interaction with AI-detected sentiment.
+ * Persists the interaction with provider-routed sentiment classification.
  */
 const persistInteraction = async (
   prompt: string,
@@ -118,11 +128,7 @@ const persistInteraction = async (
 ): Promise<void> => {
   const sentiment =
     sentimentOverride ??
-    (
-      await ModelManager.getInstance()
-        .then((ai) => ai.analyzeSentiment(prompt))
-        .catch(() => null)
-    )?.label ??
+    (await ProviderRegistry.getInstance().then((registry) => registry.classify(prompt)))?.label ??
     "UNKNOWN";
 
   await prisma.oracleInteraction.recordWithSentiment(prompt, sentiment, fortune);

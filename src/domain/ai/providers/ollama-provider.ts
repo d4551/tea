@@ -8,6 +8,7 @@
 
 import { appConfig } from "../../../config/environment.ts";
 import { createLogger } from "../../../lib/logger.ts";
+import { safeJsonParse } from "../../../shared/utils/safe-json.ts";
 import type {
   AiCapability,
   AiChatParams,
@@ -88,6 +89,164 @@ interface OllamaStreamChunk {
  */
 const VISION_FAMILIES: ReadonlySet<string> = new Set(["clip", "llava", "mllama"]);
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const readString = (value: unknown): string | null => (typeof value === "string" ? value : null);
+
+const readNumber = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) ? value : null;
+
+const readStringArray = (value: unknown): readonly string[] | null => {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  return value.every((entry) => typeof entry === "string") ? value : null;
+};
+
+const parseOllamaDetails = (value: unknown): OllamaModelEntry["details"] | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const format = readString(value.format);
+  const family = readString(value.family);
+  const parameterSize = readString(value.parameter_size);
+  const quantizationLevel = readString(value.quantization_level);
+  if (!format || !family || !parameterSize || !quantizationLevel) {
+    return null;
+  }
+
+  const familiesValue = value.families;
+  const families = familiesValue === null ? null : (readStringArray(familiesValue) ?? null);
+
+  return {
+    parent_model: readString(value.parent_model) ?? undefined,
+    format,
+    family,
+    families,
+    parameter_size: parameterSize,
+    quantization_level: quantizationLevel,
+  };
+};
+
+const parseOllamaModelEntry = (value: unknown): OllamaModelEntry | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const name = readString(value.name);
+  const model = readString(value.model);
+  const modifiedAt = readString(value.modified_at);
+  const size = readNumber(value.size);
+  const digest = readString(value.digest);
+  const details = parseOllamaDetails(value.details);
+  if (!name || !model || !modifiedAt || size === null || !digest || !details) {
+    return null;
+  }
+
+  return {
+    name,
+    model,
+    modified_at: modifiedAt,
+    size,
+    digest,
+    details,
+  };
+};
+
+const parseOllamaTagsResponse = (value: unknown): readonly OllamaModelEntry[] => {
+  if (!isRecord(value) || !Array.isArray(value.models)) {
+    return [];
+  }
+
+  return value.models
+    .map((entry) => parseOllamaModelEntry(entry))
+    .filter((entry): entry is OllamaModelEntry => entry !== null);
+};
+
+const parseOllamaShowResponse = (value: unknown): OllamaShowResponse | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const modelfile = readString(value.modelfile);
+  const template = readString(value.template);
+  const details = parseOllamaDetails(value.details);
+  if (!modelfile || !template || !details) {
+    return null;
+  }
+
+  return {
+    modelfile,
+    template,
+    details,
+    model_info: isRecord(value.model_info) ? value.model_info : undefined,
+  };
+};
+
+const parseOllamaChatResponse = (value: unknown): OllamaChatResponse | null => {
+  if (!isRecord(value) || !isRecord(value.message)) {
+    return null;
+  }
+
+  const role = readString(value.message.role);
+  const content = readString(value.message.content);
+  const done = typeof value.done === "boolean" ? value.done : null;
+  if (!role || content === null || done === null) {
+    return null;
+  }
+
+  return {
+    message: {
+      role,
+      content,
+    },
+    done,
+    total_duration: readNumber(value.total_duration) ?? undefined,
+    eval_count: readNumber(value.eval_count) ?? undefined,
+  };
+};
+
+const parseOllamaStreamChunk = (value: unknown): OllamaStreamChunk | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const done = typeof value.done === "boolean" ? value.done : null;
+  if (done === null) {
+    return null;
+  }
+
+  const message = isRecord(value.message)
+    ? {
+        role: readString(value.message.role) ?? "",
+        content: readString(value.message.content) ?? "",
+      }
+    : undefined;
+
+  return {
+    message,
+    done,
+  };
+};
+
+const parseOllamaEmbeddingsResponse = (value: unknown): readonly number[][] => {
+  if (!isRecord(value) || !Array.isArray(value.embeddings)) {
+    return [];
+  }
+
+  return value.embeddings
+    .filter((embedding): embedding is readonly unknown[] => Array.isArray(embedding))
+    .map((embedding) =>
+      embedding
+        .map((entry) => readNumber(entry))
+        .filter((entry): entry is number => entry !== null),
+    )
+    .filter((embedding) => embedding.length > 0);
+};
+
 /**
  * Detects capabilities from Ollama model metadata.
  *
@@ -118,31 +277,6 @@ const detectModelCapabilities = (
 };
 
 /**
- * Builds a fetch request with timeout for the Ollama API.
- *
- * @param path API path (e.g. "/api/chat").
- * @param options Fetch options.
- * @returns Fetch response.
- */
-const ollamaFetch = async (path: string, options: RequestInit = {}): Promise<Response> => {
-  const url = `${appConfig.ai.ollamaBaseUrl}${path}`;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), appConfig.ai.ollamaTimeoutMs);
-
-  const response = await fetch(url, {
-    ...options,
-    signal: controller.signal,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-  clearTimeout(timeoutId);
-  return response;
-};
-
-/**
  * Ollama provider implementation using the local REST API.
  */
 export class OllamaProvider implements AiProvider {
@@ -152,6 +286,38 @@ export class OllamaProvider implements AiProvider {
   private _lastCapabilityCheckMs = 0;
   private _lastFailureMs = 0;
   private _consecutiveFailures = 0;
+
+  /**
+   * Creates an Ollama provider bound to a concrete fetch implementation.
+   *
+   * @param fetchImpl Native fetch implementation used for all Ollama requests.
+   */
+  constructor(private readonly fetchImpl: typeof fetch = fetch) {}
+
+  /**
+   * Executes a timeout-bounded request against the configured Ollama API.
+   *
+   * @param path API path (for example `/api/chat`).
+   * @param options Fetch options.
+   * @returns Fetch response.
+   */
+  private async ollamaFetch(path: string, options: RequestInit = {}): Promise<Response> {
+    const url = `${appConfig.ai.ollamaBaseUrl}${path}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), appConfig.ai.ollamaTimeoutMs);
+
+    const response = await this.fetchImpl(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+    });
+
+    clearTimeout(timeoutId);
+    return response;
+  }
 
   /**
    * Checks whether the Ollama server is reachable.
@@ -169,7 +335,7 @@ export class OllamaProvider implements AiProvider {
       appConfig.ai.ollamaAvailabilityTimeoutMs,
     );
 
-    const response = await fetch(appConfig.ai.ollamaBaseUrl, {
+    const response = await this.fetchImpl(appConfig.ai.ollamaBaseUrl, {
       signal: controller.signal,
     }).catch(() => null);
 
@@ -220,7 +386,7 @@ export class OllamaProvider implements AiProvider {
       return this._cachedCapabilities;
     }
 
-    const response = await ollamaFetch("/api/tags").catch(() => null);
+    const response = await this.ollamaFetch("/api/tags").catch(() => null);
     if (!response?.ok) {
       logger.warn("ollama.tags.failed", {
         status: response?.status ?? "unreachable",
@@ -230,22 +396,20 @@ export class OllamaProvider implements AiProvider {
       return [];
     }
 
-    const data = (await response.json()) as {
-      readonly models: readonly OllamaModelEntry[];
-    };
+    const data = parseOllamaTagsResponse(await response.json());
 
     const capabilities: AiModelCapabilities[] = [];
 
-    for (const entry of data.models) {
+    for (const entry of data) {
       let showData: OllamaShowResponse | null = null;
 
-      const showResponse = await ollamaFetch("/api/show", {
+      const showResponse = await this.ollamaFetch("/api/show", {
         method: "POST",
         body: JSON.stringify({ name: entry.name }),
       }).catch(() => null);
 
       if (showResponse?.ok) {
-        showData = (await showResponse.json()) as OllamaShowResponse;
+        showData = parseOllamaShowResponse(await showResponse.json());
       }
 
       const caps = detectModelCapabilities(entry, showData);
@@ -300,7 +464,7 @@ export class OllamaProvider implements AiProvider {
       })),
     ];
 
-    const response = await ollamaFetch("/api/chat", {
+    const response = await this.ollamaFetch("/api/chat", {
       method: "POST",
       body: JSON.stringify({
         model,
@@ -326,7 +490,14 @@ export class OllamaProvider implements AiProvider {
       };
     }
 
-    const result = (await response.json()) as OllamaChatResponse;
+    const result = parseOllamaChatResponse(await response.json());
+    if (!result) {
+      return {
+        ok: false,
+        error: "Ollama chat failed: invalid response payload",
+        retryable: true,
+      };
+    }
     const durationMs = Date.now() - startMs;
 
     return {
@@ -355,7 +526,7 @@ export class OllamaProvider implements AiProvider {
       })),
     ];
 
-    const response = await ollamaFetch("/api/chat", {
+    const response = await this.ollamaFetch("/api/chat", {
       method: "POST",
       body: JSON.stringify({
         model,
@@ -395,7 +566,10 @@ export class OllamaProvider implements AiProvider {
           continue;
         }
 
-        const chunk = JSON.parse(line) as OllamaStreamChunk;
+        const chunk = parseOllamaStreamChunk(safeJsonParse<unknown>(line, null));
+        if (!chunk) {
+          continue;
+        }
         if (chunk.message?.content) {
           yield chunk.message.content;
         }
@@ -483,7 +657,7 @@ export class OllamaProvider implements AiProvider {
   async generateEmbedding(text: string): Promise<Float32Array | null> {
     const model = appConfig.ai.ollamaChatModel;
 
-    const response = await ollamaFetch("/api/embeddings", {
+    const response = await this.ollamaFetch("/api/embeddings", {
       method: "POST",
       body: JSON.stringify({ model, input: text }),
     }).catch(() => null);
@@ -492,11 +666,8 @@ export class OllamaProvider implements AiProvider {
       return null;
     }
 
-    const data = (await response.json()) as {
-      readonly embeddings?: readonly number[][];
-    };
-
-    const firstEmbedding = data.embeddings?.[0];
+    const embeddings = parseOllamaEmbeddingsResponse(await response.json());
+    const firstEmbedding = embeddings[0];
     return firstEmbedding ? new Float32Array(firstEmbedding) : null;
   }
 

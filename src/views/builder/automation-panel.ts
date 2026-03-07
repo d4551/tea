@@ -3,6 +3,12 @@ import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts
 import type { AutomationRun } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
+import {
+  getAutomationStatusMessageLabel,
+  getAutomationStepActionLabel,
+  getAutomationStepSummaryLabel,
+  getLongRunningStatusLabel,
+} from "./view-labels.ts";
 
 /**
  * Renders the automation review and orchestration workspace.
@@ -49,14 +55,14 @@ export const renderAutomationPanel = (
         <div class="card-body gap-3">
           <div class="flex items-center justify-between gap-3">
             <h3 class="card-title text-base">${escapeHtml(run.goal)}</h3>
-            <span class="badge badge-outline">${escapeHtml(run.status)}</span>
+            <span class="badge badge-outline">${escapeHtml(getLongRunningStatusLabel(messages, run.status))}</span>
           </div>
-          <p class="text-sm text-base-content/75">${escapeHtml(run.statusMessage)}</p>
+          <p class="text-sm text-base-content/75">${escapeHtml(getAutomationStatusMessageLabel(messages, run.statusMessage))}</p>
           <div class="space-y-2">
             ${run.steps
               .map(
                 (step) => `<div class="rounded-box bg-base-200/70 px-3 py-2 text-sm">
-                  <span class="font-medium">${escapeHtml(step.action)}</span>: ${escapeHtml(step.summary)}
+                  <span class="font-medium">${escapeHtml(getAutomationStepActionLabel(messages, step.action))}</span>: ${escapeHtml(getAutomationStepSummaryLabel(messages, step.summary))}
                 </div>`,
               )
               .join("")}
@@ -73,7 +79,10 @@ export const renderAutomationPanel = (
         <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
         <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
         <h1 class="card-title text-2xl">${escapeHtml(messages.builder.automationWorkspaceTitle)}</h1>
-        <textarea name="goal" class="textarea textarea-bordered w-full" rows="4" placeholder="${escapeHtml(messages.builder.automationGoalPlaceholder)}" required></textarea>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.automationGoalLabel)}</legend>
+          <textarea name="goal" class="textarea textarea-bordered w-full" rows="4" placeholder="${escapeHtml(messages.builder.automationGoalPlaceholder)}" required></textarea>
+        </fieldset>
         <div class="flex items-center gap-2">
           <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.createAutomationRun)}</button>
           <span id="automation-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
@@ -86,7 +95,7 @@ export const renderAutomationPanel = (
         <h2 class="text-2xl font-semibold">${escapeHtml(messages.builder.automation)}</h2>
         <span class="badge badge-outline">${runs.length}</span>
       </div>
-      <div class="grid gap-4 xl:grid-cols-2">${runCards || `<div role="alert" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.automationWorkspaceTitle)}</span></div>`}</div>
+      <div class="grid gap-4 xl:grid-cols-2">${runCards || `<div role="alert" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noAutomationRuns)}</span></div>`}</div>
     </section>
   </section>`;
 };

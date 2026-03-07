@@ -4,7 +4,7 @@ import { builderService } from "../domain/builder/builder-service.ts";
 import { gameLoop } from "../domain/game/game-loop.ts";
 import { authSessionGuard, resolveAuthSession } from "../plugins/auth-session.ts";
 import { defaultGameConfig } from "../shared/config/game-config.ts";
-import { appRoutes } from "../shared/constants/routes.ts";
+import { appRoutes, resolveRequestQueryParam } from "../shared/constants/routes.ts";
 import type { GameSessionState } from "../shared/contracts/game.ts";
 import { resolveRequestLocale } from "../shared/i18n/translator.ts";
 import { GamePage } from "../views/game-page.ts";
@@ -15,9 +15,8 @@ const resolveSessionContext = (
   readonly sessionId: string | null;
   readonly projectId: string | null;
 } => {
-  const url = new URL(request.url);
-  const sessionId = url.searchParams.get("sessionId")?.trim() ?? null;
-  const projectId = url.searchParams.get("projectId")?.trim() ?? null;
+  const sessionId = resolveRequestQueryParam(request, "sessionId")?.trim() ?? null;
+  const projectId = resolveRequestQueryParam(request, "projectId")?.trim() ?? null;
   return { sessionId, projectId };
 };
 

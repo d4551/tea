@@ -41,6 +41,17 @@ model BuilderProject {
   publishedReleaseVersion Int?
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
+  scenes                 BuilderProjectScene[]
+  dialogueEntries        BuilderProjectDialogueEntry[]
+  assets                 BuilderProjectAsset[]
+  animationClips         BuilderProjectAnimationClip[]
+  dialogueGraphs         BuilderProjectDialogueGraph[]
+  quests                 BuilderProjectQuest[]
+  triggers               BuilderProjectTrigger[]
+  flags                  BuilderProjectFlag[]
+  generationJobs         BuilderProjectGenerationJob[]
+  artifacts              BuilderProjectArtifact[]
+  automationRuns         BuilderProjectAutomationRun[]
   releases               BuilderProjectRelease[]
 }
 
@@ -54,6 +65,181 @@ model BuilderProjectRelease {
   createdAt      DateTime       @default(now())
 
   @@unique([projectId, releaseVersion])
+}
+
+model BuilderProjectScene {
+  projectId    String
+  id           String
+  project      BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sceneMode    String?
+  titleKey     String
+  background   String
+  geometry     Json
+  spawn        Json
+  npcs         Json
+  nodes        Json?
+  collisions   Json
+
+  @@id([projectId, id])
+  @@index([projectId])
+}
+
+model BuilderProjectDialogueEntry {
+  projectId   String
+  locale      String
+  key         String
+  project     BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  text        String
+
+  @@id([projectId, locale, key])
+  @@index([projectId])
+  @@index([projectId, locale])
+}
+
+model BuilderProjectAsset {
+  projectId   String
+  id          String
+  project     BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  kind        String
+  label       String
+  sceneMode   String
+  source      String
+  tags        Json
+  variants    Json
+  approved    Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  animationClips BuilderProjectAnimationClip[]
+
+  @@id([projectId, id])
+  @@index([projectId])
+}
+
+model BuilderProjectAnimationClip {
+  projectId    String
+  id           String
+  project      BuilderProject      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assetId      String
+  asset        BuilderProjectAsset @relation(fields: [projectId, assetId], references: [projectId, id], onDelete: Cascade)
+  label        String
+  sceneMode    String
+  stateTag     String
+  playbackFps  Int
+  startFrame   Int
+  frameCount   Int
+  loop         Boolean
+  direction    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@id([projectId, id])
+  @@index([projectId])
+}
+
+model BuilderProjectGenerationJob {
+  projectId     String
+  id            String
+  project       BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  kind          String
+  status        String
+  prompt        String
+  targetId      String?
+  artifactIds   Json
+  statusMessage String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@id([projectId, id])
+  @@index([projectId])
+}
+
+model BuilderProjectDialogueGraph {
+  projectId    String
+  id           String
+  project      BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title        String
+  npcId        String?
+  rootNodeId   String
+  nodes        Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@id([projectId, id])
+  @@index([projectId])
+}
+
+model BuilderProjectQuest {
+  projectId    String
+  id           String
+  project      BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title        String
+  description  String
+  steps        Json
+
+  @@id([projectId, id])
+  @@index([projectId])
+}
+
+model BuilderProjectTrigger {
+  projectId       String
+  id              String
+  project         BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  label           String
+  event           String
+  sceneId         String?
+  npcId           String?
+  nodeId          String?
+  requiredFlags   Json?
+  setFlags        Json?
+  questId         String?
+  questStepId     String?
+
+  @@id([projectId, id])
+  @@index([projectId])
+}
+
+model BuilderProjectFlag {
+  projectId      String
+  key            String
+  project        BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  label          String
+  initialValue   Json
+
+  @@id([projectId, key])
+  @@index([projectId])
+}
+
+model BuilderProjectArtifact {
+  projectId      String
+  id             String
+  project        BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  jobId          String
+  kind           String
+  label          String
+  previewSource  String
+  summary        String
+  mimeType       String?
+  approved       Boolean @default(false)
+  createdAt      DateTime @default(now())
+
+  @@id([projectId, id])
+  @@index([projectId])
+}
+
+model BuilderProjectAutomationRun {
+  projectId      String
+  id             String
+  project        BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status         String
+  goal           String
+  steps          Json
+  artifactIds    Json
+  statusMessage  String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@id([projectId, id])
+  @@index([projectId])
 }
 
 model PlayerProgress {
