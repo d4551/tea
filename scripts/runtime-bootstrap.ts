@@ -46,8 +46,8 @@ const setupSteps = [
     description: "bun run prisma:generate",
   },
   {
-    command: ["bunx", "--bun", "prisma", "db", "push"],
-    description: "bunx --bun prisma db push",
+    command: ["bun", "run", "prisma:apply-schema"],
+    description: "bun run prisma:apply-schema",
   },
   {
     command: ["bun", "run", "build:assets"],

@@ -99,6 +99,33 @@ const verifyDatabaseReachable = async (): Promise<RuntimeReadinessCheck> => {
   };
 };
 
+const requiredDatabaseTables = [
+  "BuilderProject",
+  "GameSession",
+  "OracleInteraction",
+  "AiKnowledgeDocument",
+] as const;
+
+const verifyDatabaseSchema = async (): Promise<RuntimeReadinessCheck> => {
+  const rows = await prisma.$queryRaw<readonly { readonly name: string }[]>`
+    SELECT name
+    FROM sqlite_master
+    WHERE type = 'table'
+  `;
+  const availableTables = new Set(rows.map((row) => row.name));
+  const missingTables = requiredDatabaseTables.filter(
+    (tableName) => !availableTables.has(tableName),
+  );
+
+  return {
+    key: "database:schema",
+    label: "Database schema ready",
+    ok: missingTables.length === 0,
+    detail:
+      missingTables.length === 0 ? requiredDatabaseTables.join(", ") : missingTables.join(", "),
+  };
+};
+
 const verifyAiRouting = async (): Promise<RuntimeReadinessCheck> => ({
   key: "ai:routing",
   label: "AI routing configured",
@@ -127,6 +154,7 @@ export const collectRuntimeReadinessReport = async (): Promise<RuntimeReadinessR
     requiredPublicAssetPaths.map((assetPath) => verifyRequiredAsset(assetPath)),
   );
   const databaseCheck = await verifyDatabaseReachable();
+  const databaseSchemaCheck = await verifyDatabaseSchema();
   const aiRoutingCheck = await verifyAiRouting();
   const automationOriginCheck: RuntimeReadinessCheck = {
     key: "builder:automation-origin",
@@ -138,6 +166,7 @@ export const collectRuntimeReadinessReport = async (): Promise<RuntimeReadinessR
     ...directoryChecks,
     ...assetChecks,
     databaseCheck,
+    databaseSchemaCheck,
     aiRoutingCheck,
     automationOriginCheck,
   ] as const;

@@ -10,6 +10,7 @@ describe("runtime bootstrap", () => {
     expect(Array.isArray(report.checks)).toBe(true);
     expect(report.checks.length).toBeGreaterThan(0);
     expect(report.checks.some((check) => check.key === "database:reachable")).toBe(true);
+    expect(report.checks.some((check) => check.key === "database:schema")).toBe(true);
     expect(report.checks.some((check) => check.key === "ai:routing")).toBe(true);
   });
 
@@ -66,13 +67,13 @@ describe("runtime bootstrap", () => {
       "bun install",
       "created .env from .env.example",
       "bun run prisma:generate",
-      "bunx --bun prisma db push",
+      "bun run prisma:apply-schema",
       "bun run build:assets",
     ]);
     expect(commands).toEqual([
       "bun install",
       "bun run prisma:generate",
-      "bunx --bun prisma db push",
+      "bun run prisma:apply-schema",
       "bun run build:assets",
     ]);
     expect(await Bun.file(`${cwd}/.env`).text()).toBe("TEST_VALUE=from-example\n");

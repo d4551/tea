@@ -27,10 +27,14 @@ export const assertRequiredAssetsExist = async (): Promise<void> => {
 export const assertDatabaseReachable = async (): Promise<void> => {
   const report = await collectRuntimeReadinessReport();
   const failedDatabaseCheck = report.checks.find(
-    (check) => check.key === "database:reachable" && !check.ok,
+    (check) => (check.key === "database:reachable" || check.key === "database:schema") && !check.ok,
   );
   if (failedDatabaseCheck) {
-    throw new Error("Database is not reachable.");
+    throw new Error(
+      failedDatabaseCheck.key === "database:schema"
+        ? `Database schema is not ready: ${failedDatabaseCheck.detail ?? "missing required tables"}`
+        : "Database is not reachable.",
+    );
   }
 };
 
