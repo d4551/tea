@@ -3,8 +3,6 @@ import { dirname, extname, join } from "node:path";
 import { appConfig } from "../../config/environment.ts";
 import { toPublicAssetUrl } from "../../shared/constants/assets.ts";
 
-const builderAssetRoot = "uploads/builder";
-
 /**
  * Stable persisted builder asset metadata.
  */
@@ -61,7 +59,7 @@ const toRelativeStoragePath = (
   basename: string,
   extension: string,
 ): string =>
-  `${builderAssetRoot}/${sanitizePathSegment(projectId, "default")}/${sanitizePathSegment(scope, "misc")}/${sanitizePathSegment(basename, "asset")}.${sanitizePathSegment(extension, "dat")}`;
+  `${appConfig.paths.builderUploadsDirectory}/${sanitizePathSegment(projectId, "default")}/${sanitizePathSegment(scope, "misc")}/${sanitizePathSegment(basename, "asset")}.${sanitizePathSegment(extension, "dat")}`;
 
 /**
  * Writes an asset-like file into the public builder storage tree.

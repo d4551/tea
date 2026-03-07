@@ -1,4 +1,4 @@
-import { type Cookie, t } from "elysia";
+import { type Cookie, Elysia, t } from "elysia";
 import { appConfig } from "../config/environment.ts";
 
 /**
@@ -11,6 +11,16 @@ export interface AuthSession {
   readonly hasSession: boolean;
 }
 
+/**
+ * Request-scoped auth context derived from the session cookie.
+ */
+export interface AuthRequestContext {
+  /** Stable anonymous session identifier resolved for the current request. */
+  readonly authSessionId: string;
+  /** Whether the current request arrived with an existing session cookie. */
+  readonly authHasSession: boolean;
+}
+
 interface AuthSessionCookieOptions {
   readonly httpOnly: boolean;
   readonly sameSite: "lax";
@@ -18,7 +28,7 @@ interface AuthSessionCookieOptions {
   readonly maxAge: number;
 }
 
-type AuthCookieBag = Record<string, Cookie<unknown>>;
+export type AuthCookieBag = Record<string, Cookie<unknown>>;
 const authSessionCache = new WeakMap<AuthCookieBag, AuthSession>();
 
 const authSessionCookieSchema = t.Cookie({
@@ -63,6 +73,21 @@ export const resolveAuthSession = (cookie: AuthCookieBag): AuthSession => {
 };
 
 /**
+ * Resolves canonical request-scoped auth context from Elysia's cookie bag.
+ *
+ * @param cookie Elysia cookie bag for the current request.
+ * @returns Session identity and existing-session state for request handlers.
+ */
+export const resolveAuthRequestContext = (cookie: AuthCookieBag): AuthRequestContext => {
+  const authSession = resolveAuthSession(cookie);
+
+  return {
+    authSessionId: authSession.sessionId,
+    authHasSession: authSession.hasSession,
+  };
+};
+
+/**
  * Shared auth-session guard used by page and API route trees.
  */
 export const authSessionGuard = {
@@ -76,3 +101,18 @@ export const authSessionGuard = {
     });
   },
 } as const;
+
+/**
+ * Elysia plugin that derives canonical auth-session state for downstream handlers.
+ */
+export const authSessionContextPlugin = new Elysia({ name: "auth-session-context" }).derive(
+  { as: "scoped" },
+  ({ cookie }) => {
+    const context = resolveAuthRequestContext(cookie);
+
+    return {
+      authSessionId: context.authSessionId,
+      authHasSession: context.authHasSession,
+    };
+  },
+);

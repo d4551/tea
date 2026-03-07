@@ -1072,4 +1072,6 @@ const createPrismaClient = (): ExtendedPrismaClient => {
 
 export const prisma: ExtendedPrismaClient = globalThis._devPrisma ?? createPrismaClient();
 
-if (appConfig.runtime.nodeEnv !== "production") globalThis._devPrisma = prisma;
+if (appConfig.runtime.nodeEnv === "development") {
+  globalThis._devPrisma = prisma;
+}

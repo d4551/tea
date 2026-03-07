@@ -10,6 +10,8 @@
     "dev": "bun run scripts/dev.ts",
     "start": "bun run build:assets && bun src/server.ts",
     "build:assets": "bun run scripts/build-assets.ts",
+    "setup": "bun run scripts/setup.ts",
+    "doctor": "bun run scripts/doctor.ts",
     "lint": "biome check .",
     "typecheck": "tsc --noEmit",
     "test": "bun test",

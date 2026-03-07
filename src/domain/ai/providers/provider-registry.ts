@@ -10,6 +10,7 @@ import { appConfig } from "../../../config/environment.ts";
 import { createLogger } from "../../../lib/logger.ts";
 import type { ProviderReadiness } from "../../../shared/contracts/game.ts";
 import { OllamaProvider } from "./ollama-provider.ts";
+import { OpenAiCompatibleProvider } from "./openai-compatible-provider.ts";
 import type {
   AiCapability,
   AiChatParams,
@@ -19,6 +20,9 @@ import type {
   AiProvider,
   AiSpeechSynthesisParams,
   AiSpeechSynthesisResult,
+  AiToolPlanParams,
+  AiToolPlanResult,
+  AiToolPlanStep,
   AiTranscriptionParams,
   AiTranscriptionResult,
 } from "./provider-types.ts";
@@ -45,6 +49,24 @@ export interface AiSystemStatus {
   readonly capabilities: readonly AiModelCapabilities[];
   readonly preferredProvider: string;
 }
+
+const providerOrdering: Readonly<Record<AiProvider["name"], number>> = {
+  "openai-compatible-local": 0,
+  ollama: 1,
+  transformers: 2,
+  "openai-compatible-cloud": 3,
+};
+
+const mapFallbackPlanSteps = (text: string): readonly AiToolPlanStep[] =>
+  text
+    .split(/\r?\n/gu)
+    .map((entry) => entry.replace(/^\s*(?:[-*]|\d+[.)])\s*/u, "").trim())
+    .filter((entry) => entry.length > 0)
+    .map((title, index) => ({
+      id: `step-${index + 1}`,
+      title,
+      kind: index === 0 ? "analysis" : "builder",
+    }));
 
 /**
  * Manages AI provider lifecycle, capability detection, and request routing.
@@ -74,7 +96,40 @@ export class ProviderRegistry {
       return ProviderRegistry._instance;
     }
 
-    const providers: AiProvider[] = [new TransformersProvider(), new OllamaProvider()];
+    const providers: AiProvider[] = [new TransformersProvider()];
+    if (appConfig.ai.ollamaEnabled) {
+      providers.push(new OllamaProvider());
+    }
+    if (appConfig.ai.openAiCompatible.local.enabled) {
+      providers.push(
+        new OpenAiCompatibleProvider({
+          name: "openai-compatible-local",
+          providerLabel: appConfig.ai.openAiCompatible.local.providerLabel,
+          baseUrl: appConfig.ai.openAiCompatible.local.baseUrl,
+          apiKey: appConfig.ai.openAiCompatible.local.apiKey,
+          availabilityTimeoutMs: appConfig.ai.openAiCompatible.local.availabilityTimeoutMs,
+          chatModel: appConfig.ai.openAiCompatible.local.chatModel,
+          embeddingModel: appConfig.ai.openAiCompatible.local.embeddingModel,
+          visionModel: appConfig.ai.openAiCompatible.local.visionModel,
+          local: true,
+        }),
+      );
+    }
+    if (appConfig.ai.openAiCompatible.cloud.enabled) {
+      providers.push(
+        new OpenAiCompatibleProvider({
+          name: "openai-compatible-cloud",
+          providerLabel: appConfig.ai.openAiCompatible.cloud.providerLabel,
+          baseUrl: appConfig.ai.openAiCompatible.cloud.baseUrl,
+          apiKey: appConfig.ai.openAiCompatible.cloud.apiKey,
+          availabilityTimeoutMs: appConfig.ai.openAiCompatible.cloud.availabilityTimeoutMs,
+          chatModel: appConfig.ai.openAiCompatible.cloud.chatModel,
+          embeddingModel: appConfig.ai.openAiCompatible.cloud.embeddingModel,
+          visionModel: appConfig.ai.openAiCompatible.cloud.visionModel,
+          local: false,
+        }),
+      );
+    }
 
     const registry = new ProviderRegistry(providers);
     ProviderRegistry._instance = registry;
@@ -170,24 +225,45 @@ export class ProviderRegistry {
       }
     }
 
-    const priority = ["ollama", "transformers"];
+    const localProviders = this._providers
+      .filter((provider) => {
+        if (!(this._providerAvailability.get(provider.name) ?? false)) {
+          return false;
+        }
 
-    for (const name of priority) {
-      const provider = this._providers.find((p) => p.name === name);
-      if (!provider || !(this._providerAvailability.get(name) ?? false)) {
-        continue;
-      }
-
-      const hasCapability = this._allCapabilities.some(
-        (c) => c.provider === name && c.capabilities.has(capability),
+        const capabilityRecord = this._allCapabilities.find(
+          (entry) => entry.provider === provider.name && entry.capabilities.has(capability),
+        );
+        return capabilityRecord?.local === true;
+      })
+      .sort(
+        (left, right) => (providerOrdering[left.name] ?? 99) - (providerOrdering[right.name] ?? 99),
       );
 
-      if (hasCapability) {
-        return provider;
-      }
+    if (localProviders[0]) {
+      return localProviders[0];
     }
 
-    return null;
+    if (!appConfig.ai.routing.cloudFallbackEnabled) {
+      return null;
+    }
+
+    return (
+      this._providers
+        .filter((provider) => {
+          if (!(this._providerAvailability.get(provider.name) ?? false)) {
+            return false;
+          }
+
+          return this._allCapabilities.some(
+            (entry) => entry.provider === provider.name && entry.capabilities.has(capability),
+          );
+        })
+        .sort(
+          (left, right) =>
+            (providerOrdering[left.name] ?? 99) - (providerOrdering[right.name] ?? 99),
+        )[0] ?? null
+    );
   }
 
   /**
@@ -306,6 +382,67 @@ export class ProviderRegistry {
 
     logger.info("registry.synthesize.routing", { provider: provider.name });
     return provider.synthesizeSpeech(params);
+  }
+
+  /**
+   * Routes text embedding generation to the best available provider.
+   *
+   * @param text Input text to embed.
+   * @returns Dense embedding vector, or null when unavailable.
+   */
+  async generateEmbedding(text: string): Promise<Float32Array | null> {
+    await this._ensureCapabilitiesReady();
+    const provider = this.selectProvider("embeddings");
+    if (!provider) {
+      return null;
+    }
+
+    logger.info("registry.embedding.routing", { provider: provider.name });
+    return provider.generateEmbedding(text);
+  }
+
+  /**
+   * Routes structured tool planning to the best available provider and falls back to
+   * deterministic chat-based step extraction when no dedicated planner exists.
+   *
+   * @param params Planning parameters.
+   * @returns Structured planning result.
+   */
+  async planTools(params: AiToolPlanParams): Promise<AiToolPlanResult> {
+    await this._ensureCapabilitiesReady();
+    const selectedPlanner = this.selectProvider("structured-planning");
+    const directPlanner =
+      selectedPlanner &&
+      this._providers.find(
+        (provider) =>
+          provider.name === selectedPlanner.name && typeof provider.planTools === "function",
+      );
+
+    if (directPlanner?.planTools) {
+      logger.info("registry.planTools.routing", { provider: directPlanner.name, mode: "direct" });
+      return directPlanner.planTools(params);
+    }
+
+    const fallback = await this.chat({
+      systemPrompt: [
+        "Produce a concise implementation plan.",
+        "Return one step per line.",
+        "Do not add numbering prefixes other than plain ordered steps.",
+      ].join("\n"),
+      messages: [{ role: "user", content: params.goal }],
+      temperature: 0.1,
+    });
+
+    if (!fallback.ok) {
+      return fallback;
+    }
+
+    return {
+      ok: true,
+      steps: mapFallbackPlanSteps(fallback.text),
+      model: fallback.model,
+      durationMs: fallback.durationMs,
+    };
   }
 
   /**

@@ -20,6 +20,8 @@ export interface BuilderRequestContext {
   readonly builderProjectId: string;
   /** Active builder return path for HTMX/project shell refresh flows. */
   readonly builderCurrentPath: string;
+  /** Optional builder workspace search term from the request. */
+  readonly builderSearch: string;
 }
 
 const toContextSource = (value: unknown): ContextSource =>
@@ -97,6 +99,16 @@ const resolveBuilderCurrentPath = (
   return request ? resolveRequestPathname(request) : appRoutes.builder;
 };
 
+const resolveBuilderSearch = (
+  querySource: ContextSource,
+  bodySource: ContextSource,
+  fallback = "",
+): string => {
+  const candidate = readStringField(bodySource, "search") ?? readStringField(querySource, "search");
+  const normalized = candidate?.trim() ?? "";
+  return normalized.length > 0 ? normalized : fallback;
+};
+
 /**
  * Resolves canonical builder request context from request/query/body/params sources.
  */
@@ -115,6 +127,7 @@ export const resolveBuilderRequestContext = (input: {
     builderLocale: resolveBuilderLocale(input.request, querySource, bodySource),
     builderProjectId: resolveBuilderProjectId(querySource, bodySource, paramSource),
     builderCurrentPath: resolveBuilderCurrentPath(input.request, querySource, bodySource),
+    builderSearch: resolveBuilderSearch(querySource, bodySource),
   };
 };
 
@@ -150,8 +163,39 @@ export const mergeBuilderRequestContext = (
       readStringField(querySource, "currentPath"))
         ? resolveBuilderCurrentPath(undefined, querySource, bodySource)
         : base.builderCurrentPath,
+    builderSearch:
+      (readStringField(bodySource, "search") ?? readStringField(querySource, "search"))
+        ? resolveBuilderSearch(querySource, bodySource, base.builderSearch)
+        : base.builderSearch,
   };
 };
+
+/**
+ * Reads canonical builder context from one scoped request context plus optional body/query/param
+ * overrides in a single owner-controlled merge.
+ *
+ * @param base Existing scoped builder request context.
+ * @param input Optional body/query/param override payloads.
+ * @returns Canonical builder context with all provided overrides applied in builder precedence order.
+ */
+export const readBuilderScopedContext = (
+  base: Pick<BuilderRequestContext, "builderLocale" | "builderProjectId" | "builderCurrentPath"> &
+    Partial<Pick<BuilderRequestContext, "builderSearch">>,
+  input: {
+    readonly body?: unknown;
+    readonly query?: unknown;
+    readonly params?: unknown;
+  },
+): BuilderRequestContext =>
+  mergeBuilderRequestContext(
+    {
+      builderLocale: base.builderLocale,
+      builderProjectId: base.builderProjectId,
+      builderCurrentPath: base.builderCurrentPath,
+      builderSearch: base.builderSearch ?? "",
+    },
+    input,
+  );
 
 /**
  * Elysia plugin that derives canonical builder locale, project, and current path per request.
@@ -165,6 +209,7 @@ export const builderRequestContextPlugin = new Elysia({ name: "builder-request-c
       builderLocale: context.builderLocale,
       builderProjectId: context.builderProjectId,
       builderCurrentPath: context.builderCurrentPath,
+      builderSearch: context.builderSearch,
     };
   },
 );

@@ -28,6 +28,7 @@ import { ThreeLayer } from "./three-layer.ts";
 
 type PersistedSessionMeta = {
   readonly sessionId: string;
+  readonly participantSessionId: string;
   readonly resumeToken: string;
   readonly locale: string;
   readonly participantRole: "owner" | "controller" | "spectator";
@@ -44,6 +45,7 @@ type RestoreSessionResponse = {
   readonly ok: true;
   readonly data: {
     readonly sessionId: string;
+    readonly participantSessionId?: string;
     readonly locale: string;
     readonly timestamp: string;
     readonly state: GameSceneState;
@@ -116,6 +118,30 @@ const findPreviousEntity = (
   }
 
   return getSceneEntities(state).find((entity) => entity.id === entityId) ?? null;
+};
+
+const resolveLocalActor = (
+  state: GameSceneState,
+  participantSessionId: string,
+): EntityState | GameParticipantPresence["entity"] =>
+  participantSessionId.length > 0
+    ? (state.coPlayers?.find((presence) => presence.sessionId === participantSessionId)?.entity ??
+      state.player)
+    : state.player;
+
+const resolveLocalCamera = (
+  state: GameSceneState,
+  participantSessionId: string,
+): Readonly<{ readonly x: number; readonly y: number }> => {
+  const localActor = resolveLocalActor(state, participantSessionId);
+  if (localActor.id === state.player.id) {
+    return state.camera;
+  }
+
+  return {
+    x: state.camera.x + (localActor.position.x - state.player.position.x),
+    y: state.camera.y + (localActor.position.y - state.player.position.y),
+  };
 };
 
 const parsePositiveInteger = (rawValue: string | undefined): number | null => {
@@ -252,6 +278,8 @@ const readSessionMeta = (runtimeConfig: GameClientRuntimeConfig): PersistedSessi
   const locale =
     readMeta('meta[name="game-session-locale"]')?.dataset.gameSessionLocale ??
     resolveDocumentLocale();
+  const participantSessionId =
+    readMeta('meta[name="game-session-participant-id"]')?.dataset.gameSessionParticipantId ?? "";
   const resumeToken =
     readMeta('meta[name="game-session-resume-token"]')?.dataset.sessionResumeToken ?? "";
   const participantRoleRaw = readMeta('meta[name="game-session-participant-role"]')?.dataset
@@ -282,6 +310,7 @@ const readSessionMeta = (runtimeConfig: GameClientRuntimeConfig): PersistedSessi
 
   const runtimeMeta: PersistedSessionMeta = {
     sessionId,
+    participantSessionId,
     resumeToken,
     locale,
     participantRole,
@@ -298,6 +327,7 @@ const readSessionMeta = (runtimeConfig: GameClientRuntimeConfig): PersistedSessi
   const stored = safeJsonParse<PersistedSessionMeta | null>(storedRaw, null);
   if (
     stored?.sessionId === sessionId &&
+    stored.participantSessionId.length > 0 &&
     stored.locale.length > 0 &&
     stored.resumeToken.length > 0 &&
     Number.isFinite(stored.expiresAtMs) &&
@@ -310,6 +340,7 @@ const readSessionMeta = (runtimeConfig: GameClientRuntimeConfig): PersistedSessi
       version: stored.version,
       locale: stored.locale,
       expiresAtMs: stored.expiresAtMs,
+      participantSessionId: stored.participantSessionId,
       participantRole:
         stored.participantRole === "spectator" || stored.participantRole === "controller"
           ? stored.participantRole
@@ -734,6 +765,8 @@ const initGameClient = async (): Promise<void> => {
 
         runtimeSessionMeta = {
           ...runtimeSessionMeta,
+          participantSessionId:
+            payload.data.participantSessionId ?? runtimeSessionMeta.participantSessionId,
           resumeToken: payload.data.resumeToken ?? runtimeSessionMeta.resumeToken,
           expiresAtMs: payload.data.resumeTokenExpiresAtMs ?? runtimeSessionMeta.expiresAtMs,
           commandQueueDepth: payload.data.commandQueueDepth ?? runtimeSessionMeta.commandQueueDepth,
@@ -954,6 +987,7 @@ const initGameClient = async (): Promise<void> => {
         targetState,
         lastState,
         Math.min((now - lastMoveSentAt) / runtimeConfig.commandSendIntervalMs, 1),
+        runtimeSessionMeta.participantSessionId,
         sprites,
         nodeOverlays,
         world,
@@ -1113,6 +1147,7 @@ const renderState = (
   current: GameSceneState,
   previous: GameSceneState | null,
   alpha: number,
+  participantSessionId: string,
   sprites: Map<string, Sprite>,
   nodeOverlays: Map<string, Graphics>,
   world: Container,
@@ -1120,6 +1155,7 @@ const renderState = (
 ): void => {
   const entities = getSceneEntities(current);
   const activeNodeIds = new Set<string>();
+  const camera = resolveLocalCamera(current, participantSessionId);
 
   for (const entity of entities) {
     const manifest = resolveSpriteManifest(entity.characterKey);
@@ -1139,8 +1175,8 @@ const renderState = (
 
     sprite.texture = resolveEntityTexture(current, entity);
     sprite.scale.set(manifest?.scale ?? 1);
-    sprite.x = previousX + (entity.position.x - previousX) * alpha - current.camera.x;
-    sprite.y = previousY + (entity.position.y - previousY) * alpha - current.camera.y;
+    sprite.x = previousX + (entity.position.x - previousX) * alpha - camera.x;
+    sprite.y = previousY + (entity.position.y - previousY) * alpha - camera.y;
     sprite.zIndex = sprite.y;
   }
 
@@ -1170,8 +1206,8 @@ const renderState = (
         width: 2,
         alpha: 0.9,
       });
-      overlay.x = node.position.x - current.camera.x;
-      overlay.y = node.position.y - current.camera.y;
+      overlay.x = node.position.x - camera.x;
+      overlay.y = node.position.y - camera.y;
       overlay.zIndex = overlay.y + node.size.height;
     }
   }

@@ -58,8 +58,8 @@ export interface Messages {
       readonly userFlowSteps: readonly string[];
       readonly apiSurfaceTitle: string;
       readonly apiSurfaceDescription: string;
-      readonly legacyTitle: string;
-      readonly legacyDescription: string;
+      readonly supportingDocsTitle: string;
+      readonly supportingDocsDescription: string;
       readonly docsCta: string;
     };
     readonly pitchDeck: {
@@ -131,6 +131,15 @@ export interface Messages {
     readonly fallbackDialogue: string;
     readonly noProviderAvailable: string;
     readonly visionNotAvailable: string;
+    readonly retrievalAssistUnavailable: string;
+    readonly toolPlanningUnavailable: string;
+    readonly dialogueGenerationUnavailable: string;
+    readonly sceneGenerationUnavailable: string;
+    readonly designAssistUnavailable: string;
+    readonly audioPayloadTooLarge: string;
+    readonly audioPayloadInvalid: string;
+    readonly audioTranscriptionUnavailable: string;
+    readonly audioSynthesisUnavailable: string;
   };
   readonly game: {
     readonly sessionExpiredStream: string;
@@ -175,6 +184,8 @@ export interface Messages {
     readonly projectUnavailableDescription: string;
     readonly projectUnpublishedTitle: string;
     readonly projectUnpublishedDescription: string;
+    readonly sessionUnavailableTitle: string;
+    readonly sessionUnavailableDescription: string;
     readonly invalidInviteTitle: string;
     readonly invalidInviteDescription: string;
     readonly returnToBuilder: string;
@@ -269,6 +280,28 @@ export interface Messages {
     readonly dialogueLine: string;
     readonly providerStatus: string;
     readonly availableModels: string;
+    readonly knowledgeWorkspaceTitle: string;
+    readonly knowledgeWorkspaceDescription: string;
+    readonly knowledgeTitleLabel: string;
+    readonly knowledgeSourceLabel: string;
+    readonly knowledgeTextLabel: string;
+    readonly ingestKnowledgeDocument: string;
+    readonly deleteKnowledgeDocument: string;
+    readonly deleteKnowledgeDocumentConfirm: string;
+    readonly knowledgeChunksLabel: string;
+    readonly noKnowledgeDocuments: string;
+    readonly retrievalWorkspaceTitle: string;
+    readonly retrievalWorkspaceDescription: string;
+    readonly retrievalPromptPlaceholder: string;
+    readonly runRetrievalAssist: string;
+    readonly retrievalResultTitle: string;
+    readonly noKnowledgeMatches: string;
+    readonly toolPlanWorkspaceTitle: string;
+    readonly toolPlanWorkspaceDescription: string;
+    readonly toolPlanGoalPlaceholder: string;
+    readonly previewToolPlan: string;
+    readonly toolPlanPreviewTitle: string;
+    readonly toolPlanPreviewDescription: string;
     readonly closeSidebar: string;
     readonly currentProject: string;
     readonly projectIdLabel: string;
@@ -602,8 +635,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         apiSurfaceTitle: "Platform surface",
         apiSurfaceDescription:
           "Operational endpoints, builder mutations, and local AI runtime details are exposed through documented APIs instead of hidden implementation paths.",
-        legacyTitle: "Legacy references",
-        legacyDescription:
+        supportingDocsTitle: "Supporting documents",
+        supportingDocsDescription:
           "Pitch, narrative, and delivery documents remain available as supporting material, but they are no longer the main product entrypoint.",
         docsCta: "Open API docs",
       },
@@ -697,6 +730,22 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       fallbackDialogue: "The mountain mist obscures the path... Try again later.",
       noProviderAvailable: "No AI provider is currently available.",
       visionNotAvailable: "Vision analysis requires an Ollama vision model.",
+      retrievalAssistUnavailable:
+        "Retrieval-assisted guidance is currently unavailable from the configured AI providers.",
+      toolPlanningUnavailable:
+        "Structured tool planning is currently unavailable from the configured AI providers.",
+      dialogueGenerationUnavailable:
+        "Dialogue generation is currently unavailable from the configured AI providers.",
+      sceneGenerationUnavailable:
+        "Scene generation is currently unavailable from the configured AI providers.",
+      designAssistUnavailable:
+        "Design assistance is currently unavailable from the configured AI providers.",
+      audioPayloadTooLarge: "Audio upload is too large for the configured runtime limit.",
+      audioPayloadInvalid: "Audio payload could not be decoded as a WAV recording.",
+      audioTranscriptionUnavailable:
+        "Speech transcription is currently unavailable from the configured AI providers.",
+      audioSynthesisUnavailable:
+        "Speech synthesis is currently unavailable from the configured AI providers.",
     },
     game: {
       sessionExpiredStream: "Session has expired and will stop streaming.",
@@ -745,6 +794,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       projectUnpublishedTitle: "Project is not published",
       projectUnpublishedDescription:
         "This player surface only runs immutable published releases. Publish the draft in the builder first.",
+      sessionUnavailableTitle: "Session could not be restored",
+      sessionUnavailableDescription:
+        "The runtime could not hydrate a valid session snapshot. Retry from the builder or start a fresh published session.",
       invalidInviteTitle: "Invite is invalid",
       invalidInviteDescription:
         "The multiplayer invite has expired or is no longer valid. Ask the session owner for a fresh invite link.",
@@ -842,6 +894,34 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       dialogueLine: "Dialogue Line",
       providerStatus: "Provider Status",
       availableModels: "Available Models",
+      knowledgeWorkspaceTitle: "Knowledge workspace",
+      knowledgeWorkspaceDescription:
+        "Index project-specific implementation notes, lore, or asset references for grounded retrieval and agentic planning.",
+      knowledgeTitleLabel: "Document title",
+      knowledgeSourceLabel: "Document source",
+      knowledgeTextLabel: "Document text",
+      ingestKnowledgeDocument: "Index knowledge document",
+      deleteKnowledgeDocument: "Delete document",
+      deleteKnowledgeDocumentConfirm: "Delete this indexed knowledge document?",
+      knowledgeChunksLabel: "chunks",
+      noKnowledgeDocuments: "No knowledge documents indexed yet.",
+      retrievalWorkspaceTitle: "Retrieval test",
+      retrievalWorkspaceDescription:
+        "Ground an implementation answer in the project knowledge base before applying AI-authored changes.",
+      retrievalPromptPlaceholder:
+        "What builder steps should I take to wire a new quest intro with grounded dialogue?",
+      runRetrievalAssist: "Run retrieval assist",
+      retrievalResultTitle: "Grounded retrieval result",
+      noKnowledgeMatches: "No indexed knowledge chunks matched this prompt.",
+      toolPlanWorkspaceTitle: "Tool plan preview",
+      toolPlanWorkspaceDescription:
+        "Generate a structured agent/tool plan before running automation or applying project mutations.",
+      toolPlanGoalPlaceholder:
+        "Prepare a safe builder plan to add a guide NPC, connect its dialogue graph, and publish a reviewable draft.",
+      previewToolPlan: "Preview tool plan",
+      toolPlanPreviewTitle: "Structured tool plan",
+      toolPlanPreviewDescription:
+        "Review the generated step sequence before turning it into automation or manual builder work.",
       closeSidebar: "Close sidebar",
       currentProject: "Current project",
       projectIdLabel: "Project ID",
@@ -1189,8 +1269,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         apiSurfaceTitle: "平台接口面",
         apiSurfaceDescription:
           "运维端点、构建器写接口与本地 AI 运行时细节都通过文档化 API 暴露，而不是隐藏在实现内部。",
-        legacyTitle: "历史文档入口",
-        legacyDescription: "路演材料、叙事文档与开发计划仍可查看，但不再作为产品主入口。",
+        supportingDocsTitle: "补充文档入口",
+        supportingDocsDescription:
+          "路演材料、叙事文档与开发计划仍可查看，但它们只作为补充材料，不再作为产品主入口。",
         docsCta: "打开 API 文档",
       },
       pitchDeck: {
@@ -1282,6 +1363,15 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       fallbackDialogue: "山雾迷蒙，前路未明……请稍后再试。",
       noProviderAvailable: "当前无可用的 AI 提供程序。",
       visionNotAvailable: "视觉分析需要 Ollama 视觉模型。",
+      retrievalAssistUnavailable: "当前配置的 AI 提供方暂时无法执行检索增强问答。",
+      toolPlanningUnavailable: "当前配置的 AI 提供方暂时无法生成工具执行计划。",
+      dialogueGenerationUnavailable: "当前配置的 AI 提供方暂时无法生成对话内容。",
+      sceneGenerationUnavailable: "当前配置的 AI 提供方暂时无法生成场景描述。",
+      designAssistUnavailable: "当前配置的 AI 提供方暂时无法提供设计辅助建议。",
+      audioPayloadTooLarge: "音频上传超过了当前运行时允许的大小限制。",
+      audioPayloadInvalid: "音频内容无法解析为有效的 WAV 录音。",
+      audioTranscriptionUnavailable: "当前配置的 AI 提供方暂时无法执行语音转写。",
+      audioSynthesisUnavailable: "当前配置的 AI 提供方暂时无法执行语音合成。",
     },
     game: {
       sessionExpiredStream: "会话已过期，将停止推送。",
@@ -1326,6 +1416,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       projectUnavailableDescription: "请求的项目不存在。请返回构建器，切换到有效项目或创建新项目。",
       projectUnpublishedTitle: "项目尚未发布",
       projectUnpublishedDescription: "玩家视图只运行不可变的已发布版本。请先在构建器中发布草稿。",
+      sessionUnavailableTitle: "无法恢复会话",
+      sessionUnavailableDescription:
+        "运行时未能恢复有效的会话快照。请返回构建器重新进入，或启动一个新的已发布会话。",
       invalidInviteTitle: "邀请已失效",
       invalidInviteDescription: "该多人邀请已经过期或不可用。请向会话所有者索取新的邀请链接。",
       returnToBuilder: "返回构建器",
@@ -1420,6 +1513,31 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       dialogueLine: "对话内容",
       providerStatus: "提供商状态",
       availableModels: "可用模型",
+      knowledgeWorkspaceTitle: "知识工作区",
+      knowledgeWorkspaceDescription:
+        "索引项目专属的实现笔记、设定文本与资源参考，用于有依据的检索与代理式规划。",
+      knowledgeTitleLabel: "文档标题",
+      knowledgeSourceLabel: "文档来源",
+      knowledgeTextLabel: "文档正文",
+      ingestKnowledgeDocument: "索引知识文档",
+      deleteKnowledgeDocument: "删除文档",
+      deleteKnowledgeDocumentConfirm: "确定要删除这份已索引的知识文档吗？",
+      knowledgeChunksLabel: "片段",
+      noKnowledgeDocuments: "尚未索引知识文档。",
+      retrievalWorkspaceTitle: "检索测试",
+      retrievalWorkspaceDescription: "在应用 AI 生成修改前，先用项目知识库为实现建议提供依据。",
+      retrievalPromptPlaceholder: "要如何为新任务开场接入一段有依据的引导对话？",
+      runRetrievalAssist: "运行检索辅助",
+      retrievalResultTitle: "有依据的检索结果",
+      noKnowledgeMatches: "没有已索引的知识片段匹配当前提示词。",
+      toolPlanWorkspaceTitle: "工具方案预览",
+      toolPlanWorkspaceDescription:
+        "在执行自动化或应用项目修改前，先生成结构化的代理 / 工具步骤方案。",
+      toolPlanGoalPlaceholder:
+        "准备一个安全的构建器方案：添加向导 NPC、连接其对话图，并生成可审查的发布草稿。",
+      previewToolPlan: "预览工具方案",
+      toolPlanPreviewTitle: "结构化工具方案",
+      toolPlanPreviewDescription: "先审查生成的步骤序列，再将其转化为自动化或手动构建工作。",
       closeSidebar: "关闭侧边栏",
       currentProject: "当前项目",
       projectIdLabel: "项目 ID",

@@ -28,6 +28,27 @@ export interface AiRuntimeProfile {
     readonly maxUploadBytes: number;
     readonly speakerEmbeddingsConfigured: boolean;
   };
+  /** OpenAI-compatible local/cloud routing lanes. */
+  readonly apiCompatible: {
+    readonly local: {
+      readonly enabled: boolean;
+      readonly providerLabel: string;
+      readonly baseUrl: string;
+      readonly chatModel: string;
+      readonly embeddingModel?: string;
+      readonly visionModel?: string;
+    };
+    readonly cloud: {
+      readonly enabled: boolean;
+      readonly providerLabel: string;
+      readonly baseUrl: string;
+      readonly chatModel: string;
+      readonly embeddingModel?: string;
+      readonly visionModel?: string;
+    };
+    readonly defaultPolicy: "local-first";
+    readonly cloudFallbackEnabled: boolean;
+  };
   /** Configured local model targets. */
   readonly catalog: readonly LocalModelCatalogEntry[];
 }
@@ -57,6 +78,26 @@ export const getAiRuntimeProfile = (): AiRuntimeProfile => ({
     inputSampleRateHz: appConfig.ai.audioInputSampleRateHz,
     maxUploadBytes: appConfig.ai.audioUploadMaxBytes,
     speakerEmbeddingsConfigured: appConfig.ai.textToSpeechSpeakerEmbeddings.trim().length > 0,
+  },
+  apiCompatible: {
+    local: {
+      enabled: appConfig.ai.openAiCompatible.local.enabled,
+      providerLabel: appConfig.ai.openAiCompatible.local.providerLabel,
+      baseUrl: appConfig.ai.openAiCompatible.local.baseUrl,
+      chatModel: appConfig.ai.openAiCompatible.local.chatModel,
+      embeddingModel: appConfig.ai.openAiCompatible.local.embeddingModel,
+      visionModel: appConfig.ai.openAiCompatible.local.visionModel,
+    },
+    cloud: {
+      enabled: appConfig.ai.openAiCompatible.cloud.enabled,
+      providerLabel: appConfig.ai.openAiCompatible.cloud.providerLabel,
+      baseUrl: appConfig.ai.openAiCompatible.cloud.baseUrl,
+      chatModel: appConfig.ai.openAiCompatible.cloud.chatModel,
+      embeddingModel: appConfig.ai.openAiCompatible.cloud.embeddingModel,
+      visionModel: appConfig.ai.openAiCompatible.cloud.visionModel,
+    },
+    defaultPolicy: appConfig.ai.routing.defaultPolicy,
+    cloudFallbackEnabled: appConfig.ai.routing.cloudFallbackEnabled,
   },
   catalog: getLocalModelCatalog(),
 });

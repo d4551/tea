@@ -206,6 +206,64 @@ export interface BuilderQuestFormPayload {
 }
 
 /**
+ * Form-style payload used to create one authored scene with canonical defaults.
+ */
+export interface BuilderSceneCreatePayload {
+  /** Stable scene identifier. */
+  readonly id: string;
+  /** Localized title key. */
+  readonly titleKey: string;
+  /** Background asset path or key. */
+  readonly background: string;
+  /** Optional scene mode override. */
+  readonly sceneMode?: string;
+  /** Optional geometry width input. */
+  readonly geometryWidth?: string;
+  /** Optional geometry height input. */
+  readonly geometryHeight?: string;
+  /** Optional spawn X input. */
+  readonly spawnX?: string;
+  /** Optional spawn Y input. */
+  readonly spawnY?: string;
+}
+
+/**
+ * Form-style payload used to create one authored asset with canonical defaults.
+ */
+export interface BuilderAssetCreatePayload {
+  /** Stable asset identifier. */
+  readonly id?: string;
+  /** Human-readable label. */
+  readonly label?: string;
+  /** Asset kind. */
+  readonly kind?: BuilderAsset["kind"];
+  /** Optional scene mode override. */
+  readonly sceneMode?: string;
+  /** Source URL or stored public path. */
+  readonly source: string;
+  /** Optional source filename for id derivation. */
+  readonly sourceName?: string;
+  /** Optional source MIME type from the transport layer. */
+  readonly sourceMimeType?: string;
+}
+
+/**
+ * Form-style payload used to create one animation clip with canonical defaults.
+ */
+export interface BuilderAnimationClipCreatePayload {
+  /** Stable clip identifier. */
+  readonly id: string;
+  /** Target asset identifier. */
+  readonly assetId: string;
+  /** State-tag or animation label. */
+  readonly stateTag: string;
+  /** Optional playback FPS input. */
+  readonly playbackFps?: string;
+  /** Optional frame-count input. */
+  readonly frameCount?: string;
+}
+
+/**
  * Form-style payload used to queue a generation job with canonical defaults.
  */
 export interface BuilderGenerationJobCreatePayload {
@@ -286,6 +344,11 @@ export interface BuilderService {
     projectId: string,
     payload: BuilderScenePayload,
   ): Promise<BuilderMutation<SceneDefinition> | null>;
+  /** Creates a scene using canonical domain-owned defaults. */
+  createScene(
+    projectId: string,
+    payload: BuilderSceneCreatePayload,
+  ): Promise<BuilderMutation<SceneDefinition> | null>;
   /** Applies a partial scene form update without replacing nested authored state. */
   saveSceneForm(
     projectId: string,
@@ -333,6 +396,8 @@ export interface BuilderService {
   ): Promise<BuilderMutation<string | null> | null>;
   /** Publishes or unpublishes a project. */
   publishProject(projectId: string, published: boolean): Promise<BuilderProjectSnapshot | null>;
+  /** Resolves a transport publish flag into a canonical boolean state. */
+  resolvePublishState(value: boolean | string): boolean;
   /** Finds a scene by project and scene id. */
   getScene(projectId: string, sceneId: string): Promise<SceneDefinition | null>;
   /** Finds an NPC from any project scene by character key. */
@@ -348,6 +413,11 @@ export interface BuilderService {
     projectId: string,
     payload: BuilderAssetPayload,
   ): Promise<BuilderMutation<BuilderAsset> | null>;
+  /** Creates one authored asset using canonical source-derived defaults. */
+  createAsset(
+    projectId: string,
+    payload: BuilderAssetCreatePayload,
+  ): Promise<BuilderMutation<BuilderAsset> | null>;
   /** Removes one asset. */
   removeAsset(projectId: string, assetId: string): Promise<BuilderMutation<null> | null>;
   /** Lists authored animation clips. */
@@ -356,6 +426,11 @@ export interface BuilderService {
   saveAnimationClip(
     projectId: string,
     payload: BuilderAnimationClipPayload,
+  ): Promise<BuilderMutation<AnimationClip> | null>;
+  /** Creates one animation clip using canonical domain-owned defaults. */
+  createAnimationClip(
+    projectId: string,
+    payload: BuilderAnimationClipCreatePayload,
   ): Promise<BuilderMutation<AnimationClip> | null>;
   /** Removes an animation clip. */
   removeAnimationClip(projectId: string, clipId: string): Promise<BuilderMutation<null> | null>;
@@ -514,6 +589,65 @@ const trimOrFallback = (value: string | undefined, fallback: string): string => 
   const trimmed = trimOptionalField(value);
   return trimmed ?? fallback;
 };
+
+const inferAssetSourceFormat = (source: string): string => {
+  const normalized = source.trim().toLowerCase();
+  const extension = normalized.split(".").pop()?.trim();
+  return extension && extension.length > 0 ? extension : "dat";
+};
+
+const inferAssetMimeType = (format: string, fallback?: string): string | undefined => {
+  const normalized = format.trim().toLowerCase();
+  const mappedMimeType: Readonly<Record<string, string>> = {
+    gltf: "model/gltf+json",
+    glb: "model/gltf-binary",
+    usd: "application/usd",
+    usda: "model/vnd.usda",
+    usdc: "model/vnd.usdc",
+    usdz: "model/vnd.usd+zip",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    webp: "image/webp",
+    wav: "audio/wav",
+    mp3: "audio/mpeg",
+    json: "application/json",
+  };
+  return mappedMimeType[normalized] ?? fallback;
+};
+
+const buildAssetVariants = (
+  id: string,
+  source: string,
+  sourceFormat: string,
+  sourceMimeType: string | undefined,
+): BuilderAsset["variants"] => {
+  const normalizedFormat = sourceFormat.toLowerCase();
+  if (normalizedFormat === "usd" || normalizedFormat === "usda" || normalizedFormat === "usdc") {
+    return [
+      {
+        id: `${id}.source`,
+        format: normalizedFormat,
+        source,
+        usage: "source",
+        mimeType: sourceMimeType,
+      },
+    ];
+  }
+
+  return [
+    {
+      id: `${id}.runtime`,
+      format: normalizedFormat,
+      source,
+      usage: "runtime",
+      mimeType: sourceMimeType,
+    },
+  ];
+};
+
+const inferClipDirection = (stateTag: string): AnimationClip["direction"] | undefined =>
+  (["up", "down", "left", "right"] as const).find((candidate) => stateTag.includes(candidate));
 
 const isSceneNode3d = (
   node: SceneNodeDefinition | undefined,
@@ -834,6 +968,36 @@ class PrismaBuilderService implements BuilderService {
       payload: mutation.payload.scene,
       checksum: mutation.entry.row.checksum,
     };
+  }
+
+  /**
+   * Creates one authored scene using domain-owned defaults and coercion.
+   */
+  public async createScene(
+    projectId: string,
+    payload: BuilderSceneCreatePayload,
+  ): Promise<BuilderMutation<SceneDefinition> | null> {
+    const sceneId = payload.id.trim();
+    return this.saveScene(projectId, {
+      id: sceneId,
+      scene: {
+        id: sceneId,
+        titleKey: payload.titleKey.trim(),
+        background: payload.background.trim(),
+        sceneMode: payload.sceneMode === "3d" ? "3d" : "2d",
+        geometry: {
+          width: Math.max(1, parseBuilderInteger(payload.geometryWidth, 640)),
+          height: Math.max(1, parseBuilderInteger(payload.geometryHeight, 360)),
+        },
+        spawn: {
+          x: parseBuilderInteger(payload.spawnX, 320),
+          y: parseBuilderInteger(payload.spawnY, 180),
+        },
+        npcs: [],
+        collisions: [],
+        nodes: [],
+      },
+    });
   }
 
   public async saveSceneForm(
@@ -1245,6 +1409,16 @@ class PrismaBuilderService implements BuilderService {
     return this.stateStore.publishProject(projectId, published);
   }
 
+  /**
+   * Resolves one transport publish flag into the canonical boolean project state.
+   */
+  public resolvePublishState(value: boolean | string): boolean {
+    if (typeof value === "boolean") {
+      return value;
+    }
+    return parseBuilderBoolean(value, false);
+  }
+
   public async getScene(projectId: string, sceneId: string): Promise<SceneDefinition | null> {
     const entry = await this.readProjectEntry(projectId);
     if (!entry) {
@@ -1330,6 +1504,44 @@ class PrismaBuilderService implements BuilderService {
     };
   }
 
+  /**
+   * Creates one authored asset using domain-owned source and variant derivation.
+   */
+  public async createAsset(
+    projectId: string,
+    payload: BuilderAssetCreatePayload,
+  ): Promise<BuilderMutation<BuilderAsset> | null> {
+    const source = payload.source.trim();
+    const sourceName = trimOptionalField(payload.sourceName);
+    const sourceId =
+      sourceName?.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9_.-]/g, "-") ?? "asset";
+    const id = trimOptionalField(payload.id, sourceId) ?? "asset";
+    const label = trimOptionalField(payload.label, id) ?? id;
+    const kind = payload.kind ?? "portrait";
+    const sceneMode = payload.sceneMode === "3d" ? "3d" : "2d";
+    const sourceFormat = inferAssetSourceFormat(source);
+    const sourceMimeType = inferAssetMimeType(sourceFormat, payload.sourceMimeType);
+    const now = Date.now();
+
+    return this.saveAsset(projectId, {
+      id,
+      asset: {
+        id,
+        kind,
+        label,
+        sceneMode,
+        source,
+        sourceFormat,
+        sourceMimeType,
+        tags: [kind, sceneMode],
+        variants: buildAssetVariants(id, source, sourceFormat, sourceMimeType),
+        approved: false,
+        createdAtMs: now,
+        updatedAtMs: now,
+      },
+    });
+  }
+
   public async removeAsset(
     projectId: string,
     assetId: string,
@@ -1390,6 +1602,43 @@ class PrismaBuilderService implements BuilderService {
       payload: mutation.payload.clip,
       checksum: mutation.entry.row.checksum,
     };
+  }
+
+  /**
+   * Creates one animation clip using canonical domain-owned defaults.
+   */
+  public async createAnimationClip(
+    projectId: string,
+    payload: BuilderAnimationClipCreatePayload,
+  ): Promise<BuilderMutation<AnimationClip> | null> {
+    const entry = await this.readProjectEntry(projectId);
+    if (!entry) {
+      return null;
+    }
+
+    const clipId = payload.id.trim();
+    const assetId = payload.assetId.trim();
+    const stateTag = payload.stateTag.trim();
+    const asset = entry.state.assets[assetId];
+    const now = Date.now();
+
+    return this.saveAnimationClip(projectId, {
+      id: clipId,
+      clip: {
+        id: clipId,
+        assetId,
+        label: clipId,
+        sceneMode: asset?.sceneMode ?? "2d",
+        stateTag,
+        playbackFps: Math.max(1, parseBuilderInteger(payload.playbackFps, 8)),
+        startFrame: 0,
+        frameCount: Math.max(1, parseBuilderInteger(payload.frameCount, 4)),
+        loop: true,
+        direction: inferClipDirection(stateTag),
+        createdAtMs: now,
+        updatedAtMs: now,
+      },
+    });
   }
 
   public async removeAnimationClip(

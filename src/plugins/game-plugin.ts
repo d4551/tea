@@ -5,7 +5,7 @@ import { gameLoop } from "../domain/game/game-loop.ts";
 import { ensureCorrelationIdHeader } from "../lib/correlation-id.ts";
 import { ApplicationError, errorEnvelope } from "../lib/error-envelope.ts";
 import { createLogger } from "../lib/logger.ts";
-import { authSessionGuard, resolveAuthSession } from "../plugins/auth-session.ts";
+import { authSessionGuard } from "../plugins/auth-session.ts";
 import { defaultGameConfig } from "../shared/config/game-config.ts";
 import { httpStatus } from "../shared/constants/http.ts";
 import { appRoutes, withQueryParameters } from "../shared/constants/routes.ts";
@@ -19,11 +19,7 @@ import type {
 import { getMessages } from "../shared/i18n/translator.ts";
 import { safeJsonParse } from "../shared/utils/safe-json.ts";
 import { escapeHtml } from "../views/layout.ts";
-import {
-  type GameRequestContext,
-  gameRequestContextPlugin,
-  resolveGameRequestContext,
-} from "./game-request-context.ts";
+import { gameRequestContextPlugin, resolveGameWebSocketContext } from "./game-request-context.ts";
 import { type SseUtils, ssePlugin } from "./sse-plugin.ts";
 
 const _logger = createLogger("game.plugin");
@@ -139,6 +135,7 @@ const gameParticipantSchema = t.Object({
 });
 const gameSessionStateSchema = t.Object({
   sessionId: t.String(),
+  participantSessionId: t.Optional(t.String()),
   locale: t.String(),
   timestamp: t.String(),
   state: t.Optional(t.Object({}, { additionalProperties: true })),
@@ -265,19 +262,6 @@ const buildCloseFrame = (
   message,
   sessionId,
 });
-
-const isGameRequestContext = (value: unknown): value is GameRequestContext =>
-  typeof value === "object" &&
-  value !== null &&
-  "gameParticipantSessionId" in value &&
-  "gameRequestLocale" in value;
-
-const readGameRequestContext = (
-  request: Request,
-  cookie: Parameters<typeof resolveAuthSession>[0],
-  value: unknown,
-): GameRequestContext =>
-  isGameRequestContext(value) ? value : resolveGameRequestContext(request, cookie);
 
 const asLifecycleState = async (
   sessionId: string,
@@ -588,19 +572,17 @@ const createHudStreamHandler = async function* ({
   params,
   sse,
   request,
-  cookie,
-  ...contextValue
+  gameParticipantSessionId,
 }: {
   params: { id: string };
   sse: SseUtils;
   request: Request;
-  cookie: Parameters<typeof resolveAuthSession>[0];
+  gameParticipantSessionId: string;
 }): AsyncGenerator<string> {
-  const context = readGameRequestContext(request, cookie, contextValue);
-  const session = await requireAccessibleGameSession(params.id, context.gameParticipantSessionId);
+  const session = await requireAccessibleGameSession(params.id, gameParticipantSessionId);
   yield* createHudStream({
     session,
-    participantSessionId: context.gameParticipantSessionId,
+    participantSessionId: gameParticipantSessionId,
     sse,
     signal: request.signal,
   });
@@ -609,6 +591,8 @@ const createHudStreamHandler = async function* ({
 const wsConnKeys = new WeakMap<object, string>();
 const wsCleanups = new Map<string, () => void>();
 const wsConnSessions = new Map<string, string>();
+const wsParticipantIds = new Map<string, string>();
+const wsParticipantRoles = new Map<string, "owner" | "controller" | "spectator">();
 const wsConnSockets = new Map<
   string,
   { close(code?: number): void; unsubscribe(topic: string): void }
@@ -616,52 +600,20 @@ const wsConnSockets = new Map<
 const wsConnectionKeysBySession = new Map<string, Set<string>>();
 const wsLocales = new Map<string, SupportedLocale>();
 
-const readObjectProperty = (value: unknown, key: string): unknown => {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return undefined;
-  }
-
-  return Object.hasOwn(value, key) ? (value as Record<string, unknown>)[key] : undefined;
-};
-
-const normalizeResumeToken = (rawValue: unknown): string | undefined => {
-  if (typeof rawValue === "string") {
-    const token = rawValue.trim();
-    return token.length > 0 ? token : undefined;
-  }
-  if (Array.isArray(rawValue)) {
-    const token = rawValue.find((value) => typeof value === "string" && value.length > 0) as
-      | string
-      | undefined;
-    return token;
-  }
-
-  return undefined;
-};
-
-const readResumeTokenFromWsQuery = (query: unknown): string | undefined => {
-  return normalizeResumeToken(readObjectProperty(query, "resumeToken"));
-};
-
-const resolveWsOwnerSessionId = (rawCookie: unknown): string | null => {
-  if (!rawCookie || typeof rawCookie !== "object") {
-    return null;
-  }
-
-  const auth = resolveAuthSession(rawCookie as Parameters<typeof resolveAuthSession>[0]);
-  return auth.sessionId;
-};
-
 const registerWsConnection = (
   sessionId: string,
   connKey: string,
   locale: SupportedLocale,
+  participantSessionId: string,
+  participantRole: "owner" | "controller" | "spectator",
   cleanup: () => void,
   socket: { close(code?: number): void; unsubscribe(topic: string): void },
 ): void => {
   wsCleanups.set(connKey, cleanup);
   wsLocales.set(connKey, locale);
   wsConnSessions.set(connKey, sessionId);
+  wsParticipantIds.set(connKey, participantSessionId);
+  wsParticipantRoles.set(connKey, participantRole);
   wsConnSockets.set(connKey, socket);
 
   const sessionKeys = wsConnectionKeysBySession.get(sessionId) ?? new Set<string>();
@@ -673,6 +625,8 @@ const cleanupWsConnection = (connKey: string): void => {
   wsCleanups.get(connKey)?.();
   wsCleanups.delete(connKey);
   wsLocales.delete(connKey);
+  wsParticipantIds.delete(connKey);
+  wsParticipantRoles.delete(connKey);
   wsConnSockets.delete(connKey);
 
   const sessionId = wsConnSessions.get(connKey);
@@ -714,9 +668,8 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
     app
       .post(
         route.create,
-        async ({ body, request, cookie, ...contextValue }) => {
-          const context = readGameRequestContext(request, cookie, contextValue);
-          const ownerSessionId = context.gameParticipantSessionId;
+        async ({ body, gameParticipantSessionId, gameRequestLocale }) => {
+          const ownerSessionId = gameParticipantSessionId;
           const requestedLocale =
             typeof body?.locale === "string" && body.locale.length > 0 ? body.locale : undefined;
           const sceneId =
@@ -727,7 +680,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
               : undefined;
 
           const snapshot = await gameLoop.createSession(
-            normalizeLocale(requestedLocale ?? context.gameRequestLocale),
+            normalizeLocale(requestedLocale ?? gameRequestLocale),
             sceneId,
             projectId,
             ownerSessionId,
@@ -739,6 +692,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
               ? toGameSessionStatePayload(state)
               : {
                   sessionId: snapshot.sessionId,
+                  participantSessionId: ownerSessionId,
                   locale: snapshot.locale,
                   timestamp: snapshot.timestamp,
                   projectId: snapshot.projectId,
@@ -776,12 +730,8 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .get(
         route.state,
-        async ({ params, request, cookie, ...contextValue }) => {
-          const context = readGameRequestContext(request, cookie, contextValue);
-          const state = await requireAccessibleGameSession(
-            params.id,
-            context.gameParticipantSessionId,
-          );
+        async ({ params, gameParticipantSessionId }) => {
+          const state = await requireAccessibleGameSession(params.id, gameParticipantSessionId);
           return { ok: true, data: toGameSessionStatePayload(state) };
         },
         {
@@ -796,12 +746,11 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .post(
         route.restore,
-        async ({ params, body, set, request, cookie, ...contextValue }) => {
-          const context = readGameRequestContext(request, cookie, contextValue);
+        async ({ params, body, set, gameParticipantSessionId }) => {
           const restoredSession = await gameLoop.restoreSession(
             params.id,
             body.resumeToken,
-            context.gameParticipantSessionId,
+            gameParticipantSessionId,
           );
           if (!restoredSession) {
             set.status = httpStatus.unauthorized;
@@ -815,7 +764,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
 
           const sessionState = await requireAccessibleGameSession(
             params.id,
-            context.gameParticipantSessionId,
+            gameParticipantSessionId,
           );
           return { ok: true, data: toGameSessionStatePayload(sessionState) };
         },
@@ -832,11 +781,10 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .post(
         route.join,
-        async ({ params, body, set, request, status, cookie, ...contextValue }) => {
-          const context = readGameRequestContext(request, cookie, contextValue);
+        async ({ params, body, set, request, status, gameParticipantSessionId }) => {
           const sessionState = await gameLoop.joinSession(
             body.inviteToken,
-            context.gameParticipantSessionId,
+            gameParticipantSessionId,
           );
           if (!sessionState || sessionState.sessionId !== params.id) {
             return status(
@@ -866,9 +814,8 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .post(
         route.close,
-        async ({ params, set, request, cookie, ...contextValue }) => {
-          const context = readGameRequestContext(request, cookie, contextValue);
-          const ownerSessionId = context.gameParticipantSessionId;
+        async ({ params, set, gameParticipantSessionId }) => {
+          const ownerSessionId = gameParticipantSessionId;
           const session = await requireOwnedGameSession(params.id, ownerSessionId);
           const closed = await gameLoop.closeSession(session.id);
           if (!closed) {
@@ -902,9 +849,16 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .post(
         route.invite,
-        async ({ params, body, request, cookie, set, status, ...contextValue }) => {
-          const context = readGameRequestContext(request, cookie, contextValue);
-          const ownerSessionId = context.gameParticipantSessionId;
+        async ({
+          params,
+          body,
+          request,
+          set,
+          status,
+          gameParticipantSessionId,
+          gameRequestLocale,
+        }) => {
+          const ownerSessionId = gameParticipantSessionId;
           await requireOwnedGameSession(params.id, ownerSessionId);
           const inviteToken = await gameLoop.createInviteToken(
             params.id,
@@ -925,7 +879,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
               ),
             );
           }
-          const locale = normalizeLocale(body.locale ?? context.gameRequestLocale);
+          const locale = normalizeLocale(body.locale ?? gameRequestLocale);
           const joinPath = withQueryParameters(appRoutes.game, {
             lang: locale,
             invite: inviteToken,
@@ -965,9 +919,8 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .post(
         route.save,
-        async ({ params, set, request, cookie, ...contextValue }) => {
-          const context = readGameRequestContext(request, cookie, contextValue);
-          const ownerSessionId = context.gameParticipantSessionId;
+        async ({ params, set, gameParticipantSessionId }) => {
+          const ownerSessionId = gameParticipantSessionId;
           const session = await requireOwnedGameSession(params.id, ownerSessionId);
           const saveCooldownRemainingMs = gameLoop.getSaveCooldownRemainingMs(params.id);
           if (saveCooldownRemainingMs > 0) {
@@ -1004,9 +957,8 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .delete(
         "/session/:id",
-        async ({ params, set, request, cookie, ...contextValue }) => {
-          const context = readGameRequestContext(request, cookie, contextValue);
-          const ownerSessionId = context.gameParticipantSessionId;
+        async ({ params, set, gameParticipantSessionId }) => {
+          const ownerSessionId = gameParticipantSessionId;
           const session = await requireOwnedGameSession(params.id, ownerSessionId);
           const closed = await gameLoop.closeSession(session.id);
           if (!closed) {
@@ -1040,13 +992,14 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .post(
         route.command,
-        async ({ body, params, set, request, cookie, ...contextValue }) => {
-          const context = readGameRequestContext(request, cookie, contextValue);
-          const session = await requireControllableGameSession(
-            params.id,
-            context.gameParticipantSessionId,
+        async ({ body, params, set, gameParticipantSessionId }) => {
+          const session = await requireControllableGameSession(params.id, gameParticipantSessionId);
+          const result = gameLoop.processCommand(
+            session.sessionId,
+            gameParticipantSessionId,
+            body,
+            session.locale,
           );
-          const result = gameLoop.processCommand(session.sessionId, body, session.locale);
           if (result.state === "rejected") {
             set.status = httpStatus.unprocessableEntity;
             throw new ApplicationError(
@@ -1121,12 +1074,8 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .get(
         route.dialogue,
-        async ({ params, request, cookie, ...contextValue }) => {
-          const context = readGameRequestContext(request, cookie, contextValue);
-          const session = await requireAccessibleGameSession(
-            params.id,
-            context.gameParticipantSessionId,
-          );
+        async ({ params, gameParticipantSessionId }) => {
+          const session = await requireAccessibleGameSession(params.id, gameParticipantSessionId);
           return { ok: true, data: session.state.dialogue };
         },
         {
@@ -1152,11 +1101,12 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
         async open(ws) {
           const sessionId = ws.data.params.id;
           ws.subscribe(`game:${sessionId}`);
-
-          const resumeToken = readResumeTokenFromWsQuery(readObjectProperty(ws.data, "query"));
-          const participantSessionId = resolveWsOwnerSessionId(
-            readObjectProperty(ws.data, "cookie"),
-          );
+          const transport = resolveGameWebSocketContext({
+            query: ws.data.query,
+            cookie: ws.data.cookie,
+          });
+          const resumeToken = transport.gameResumeToken;
+          const participantSessionId = transport.gameParticipantSessionId;
           const sessionResult = await gameLoop.getStoredSession(sessionId);
           if (!sessionResult.ok) {
             ws.close(
@@ -1167,7 +1117,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
             return;
           }
 
-          if (typeof resumeToken !== "string" || typeof participantSessionId !== "string") {
+          if (resumeToken === null || participantSessionId === null) {
             ws.close(wsCloseCode.sessionExpired);
             return;
           }
@@ -1178,6 +1128,11 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
             participantSessionId,
           );
           if (!joinedSession) {
+            ws.close(wsCloseCode.sessionExpired);
+            return;
+          }
+          const joinedState = await asLifecycleState(sessionId, participantSessionId);
+          if (!joinedState) {
             ws.close(wsCloseCode.sessionExpired);
             return;
           }
@@ -1201,22 +1156,41 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
                   commandQueueDepth: state.commandQueueDepth,
                   resumeToken: state.resumeToken,
                   resumeTokenExpiresAtMs: state.resumeTokenExpiresAtMs,
+                  participantSessionId: state.participantSessionId,
                   participants: state.participants,
                   participantRole: state.participantRole,
                 }),
               );
             });
           });
-          registerWsConnection(sessionId, connKey, locale, cleanup, ws);
+          registerWsConnection(
+            sessionId,
+            connKey,
+            locale,
+            participantSessionId,
+            joinedState.participantRole,
+            cleanup,
+            ws,
+          );
         },
 
         message(ws, command) {
           const sessionId = ws.data.params.id;
           const connKey = wsConnKeys.get(ws);
           const locale = (connKey ? wsLocales.get(connKey) : undefined) ?? "en-US";
+          const participantSessionId = connKey ? wsParticipantIds.get(connKey) : undefined;
+          const participantRole = connKey ? wsParticipantRoles.get(connKey) : undefined;
+          if (!participantSessionId || participantRole === "spectator") {
+            return;
+          }
           const normalizedCommand =
             typeof command === "string" ? safeJsonParse(command, null) : command;
-          const result = gameLoop.processCommand(sessionId, normalizedCommand, locale);
+          const result = gameLoop.processCommand(
+            sessionId,
+            participantSessionId,
+            normalizedCommand,
+            locale,
+          );
           if (result.state !== "queued") {
             _logger.info("game.command.rejected", {
               sessionId,

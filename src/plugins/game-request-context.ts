@@ -1,7 +1,8 @@
 import { Elysia } from "elysia";
 import type { LocaleCode } from "../config/environment.ts";
+import { resolveRequestQueryParam } from "../shared/constants/routes.ts";
 import { resolveRequestLocale } from "../shared/i18n/translator.ts";
-import { resolveAuthSession } from "./auth-session.ts";
+import { type AuthCookieBag, resolveAuthSession } from "./auth-session.ts";
 
 /**
  * Derived request context shared by game HTTP routes.
@@ -11,7 +12,57 @@ export interface GameRequestContext {
   readonly gameParticipantSessionId: string;
   /** Negotiated locale for the current request. */
   readonly gameRequestLocale: LocaleCode;
+  /** Requested session id from the game page query string. */
+  readonly gameRequestedSessionId: string | null;
+  /** Requested project id from the game page query string. */
+  readonly gameRequestedProjectId: string | null;
+  /** Requested invite token from the game page query string. */
+  readonly gameInviteToken: string | null;
 }
+
+/**
+ * Canonical websocket transport context for game session restore and command routing.
+ */
+export interface GameWebSocketContext {
+  /** Authenticated anonymous session id derived from the websocket cookie bag. */
+  readonly gameParticipantSessionId: string | null;
+  /** Resume token carried by websocket query parameters. */
+  readonly gameResumeToken: string | null;
+}
+
+type WebSocketTransportObject = Record<string, unknown>;
+
+const toWebSocketTransportObject = (value: unknown): WebSocketTransportObject =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as WebSocketTransportObject)
+    : {};
+
+const isAuthCookieBag = (value: unknown): value is AuthCookieBag =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const readStringProperty = (source: WebSocketTransportObject, key: string): string | undefined =>
+  typeof source[key] === "string" ? source[key] : undefined;
+
+const normalizeTransportString = (value: unknown): string | null => {
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const normalized = normalizeTransportString(entry);
+      if (normalized) {
+        return normalized;
+      }
+    }
+  }
+
+  return null;
+};
+
+const resolveTrimmedQueryValue = (request: Request, key: string): string | null =>
+  normalizeTransportString(resolveRequestQueryParam(request, key));
 
 /**
  * Resolves canonical game request context from one HTTP request.
@@ -22,11 +73,37 @@ export interface GameRequestContext {
  */
 export const resolveGameRequestContext = (
   request: Request,
-  cookie: Parameters<typeof resolveAuthSession>[0],
+  cookie: AuthCookieBag,
 ): GameRequestContext => ({
   gameParticipantSessionId: resolveAuthSession(cookie).sessionId,
   gameRequestLocale: resolveRequestLocale(request),
+  gameRequestedSessionId: resolveTrimmedQueryValue(request, "sessionId"),
+  gameRequestedProjectId: resolveTrimmedQueryValue(request, "projectId"),
+  gameInviteToken: resolveTrimmedQueryValue(request, "invite"),
 });
+
+/**
+ * Safely resolves websocket transport identity and resume-token metadata.
+ *
+ * @param input Raw websocket cookie/query payloads supplied by Elysia.
+ * @returns Canonical websocket participant identity and resume token.
+ */
+export const resolveGameWebSocketContext = (input: {
+  readonly cookie: unknown;
+  readonly query: unknown;
+}): GameWebSocketContext => {
+  const cookieSource = isAuthCookieBag(input.cookie) ? input.cookie : {};
+  const querySource = toWebSocketTransportObject(input.query);
+  const authSession = resolveAuthSession(cookieSource);
+
+  return {
+    gameParticipantSessionId: authSession.sessionId,
+    gameResumeToken:
+      normalizeTransportString(
+        readStringProperty(querySource, "resumeToken") ?? querySource.resumeToken,
+      ) ?? null,
+  };
+};
 
 /**
  * Elysia plugin that derives canonical game participant identity and locale per request.
@@ -39,6 +116,9 @@ export const gameRequestContextPlugin = new Elysia({ name: "game-request-context
     return {
       gameParticipantSessionId: context.gameParticipantSessionId,
       gameRequestLocale: context.gameRequestLocale,
+      gameRequestedSessionId: context.gameRequestedSessionId,
+      gameRequestedProjectId: context.gameRequestedProjectId,
+      gameInviteToken: context.gameInviteToken,
     };
   },
 );

@@ -35,7 +35,7 @@ graph TB
     STORE["GameStateStore"]
     SCENE["SceneEngine + NpcAiEngine"]
     BUILDER["PrismaBuilderService"]
-    AI["ProviderRegistry + game-ai-service"]
+    AI["ProviderRegistry + game-ai-service + knowledge-base-service"]
   end
 
   subgraph Data["Prisma Models"]
@@ -58,16 +58,17 @@ graph TB
   STORE --> PP
   BA --> BUILDER --> BP
   BUILDER --> BPR
+  AIR --> AI
 ```
 
 ## Ownership Boundaries
 
 - `request-context` owns correlation-id creation and per-request completion logs.
-- `builder-request-context` owns canonical builder locale, project id, and current-path resolution from request URL, query/body overrides, and route params, and exposes that context through a scoped Elysia derive plugin so builder page/API handlers do not reparsing request URLs independently.
+- `builder-request-context` owns canonical builder locale, project id, current path, and scoped body/query/param merges from request URL and handler inputs, and exposes that context through a scoped Elysia derive plugin so builder page/API handlers do not recompose request context independently.
 - `oracle-service` owns stable oracle answer composition. It uses provider-routed chat only when a non-Transformers chat backend is available; otherwise it falls back to deterministic SSR-safe oracle copy while still routing sentiment persistence through the shared provider registry.
 - `layout.ts` owns the shared SSR `LayoutContext` and document renderer, so page, builder, and game shells consume one route-derived layout contract instead of rebuilding nav/path state independently.
-- `auth-session` owns anonymous cookie identity, and that cookie identity is now the ownership boundary for game sessions.
-- `game-request-context` owns canonical HTTP request-derived gameplay identity and negotiated locale for game SSR/API handlers.
+- `auth-session` owns anonymous cookie identity plus request-scoped auth-session context for page/API handlers, and that cookie identity is now the ownership boundary for game sessions.
+- `game-request-context` owns canonical gameplay transport identity: HTTP participant/locale resolution plus playable-page `sessionId` / `projectId` / `invite` query resolution for SSR and API handlers, plus websocket participant/resume-token resolution for session restore and command lanes.
 - `game-plugin` owns game transport contracts:
   - REST lifecycle routes (`create`, `state`, `restore`, `save`, `close`, `delete`)
   - multiplayer invite/join routes
@@ -75,12 +76,15 @@ graph TB
   - canonical HUD SSE stream
   - command/state websocket endpoint
   - websocket tick registration/cleanup and session-scoped transport teardown
-- `game-loop` owns authoritative simulation, canonical session resolution, dashboard/session metrics, expired-session purging, HUD state projection, token verification, tick scheduling, throttled persistence, and chat rate limiting.
+- `game-loop` owns authoritative simulation, canonical session resolution, owner/controller avatar movement, dashboard/session metrics, expired-session purging, HUD state projection, token verification, tick scheduling, throttled persistence, and chat rate limiting.
 - `playerProgressStore` owns XP, level, and one-time interaction persistence consumed by the game loop and HUD projection.
 - `shared/contracts/game.ts` owns boundary validation for persisted scene state, trigger definitions, and realtime websocket frames before they reach runtime or client renderers.
 - `GameStateStore` stays the persistence boundary behind `game-loop`, including persisted shared-session participants.
 - `builder-project-state-store` owns builder project JSON decode/normalize, optimistic versioned saves, snapshot projection, and published-release reads.
-- `builder-service` owns builder domain mutations, canonical create-form defaults for mechanics/generation/automation, publish/unpublish orchestration, AI patch preview/apply flows, and canonical asset metadata for OpenUSD-aware ingestion.
+- `builder-service` owns builder domain mutations, canonical create-form defaults for scenes/assets/animation clips/mechanics/generation/automation, publish/unpublish orchestration, AI patch preview/apply flows, and canonical asset metadata for OpenUSD-aware ingestion.
+- `knowledge-base-service` owns RAG chunking, embedding resolution, knowledge-document persistence, semantic retrieval, and retrieval-augmented assist prompts.
+- `ProviderRegistry` owns provider lifecycle, capability routing, embeddings routing, and structured tool planning across Ollama, Transformers.js, and generic OpenAI-compatible local/cloud lanes. `knowledge-base-service` consumes that registry rather than binding to local/cloud providers directly.
+- `runtime-readiness` owns setup/doctor/startup verification for DB reachability, required assets, writable directories, Bun version policy, and AI routing configuration.
 - `ai-provider-plugin` owns provider-registry boot, periodic capability refresh, and shutdown disposal.
 - `creator-worker-plugin` owns lifecycle-managed generation-job and automation-run draining.
 
@@ -144,7 +148,7 @@ Enforced rules:
 | HUD | `GET /api/game/session/:id/hud` | Canonical SSE HTML stream (`scene-title`, `xp`, `dialogue`, `participants`, `close`) |
 | WS | `/api/game/session/:id/ws` | Token-gated command/state realtime lane |
 
-Removed legacy transport:
+Removed retired transport surfaces:
 
 - `/api/game/session/:id/partials/dialogue` is removed.
 - HUD rendering now has one source of truth: the SSE stream.
@@ -196,10 +200,12 @@ flowchart TD
   DRAFT --> CONTENT["builderProjectScene + builderProjectDialogueEntry"]
   DRAFT --> MEDIA["builderProjectAsset + builderProjectAnimationClip"]
   DRAFT --> MECHANICS["builderProjectDialogueGraph + builderProjectQuest + builderProjectTrigger + builderProjectFlag"]
+  DRAFT --> KNOWLEDGE["aiKnowledgeDocument + aiKnowledgeChunk"]
   PROJECT --> PUBLISH["publishProject(true)"]
   CONTENT --> PUBLISH
   MEDIA --> PUBLISH
   MECHANICS --> PUBLISH
+  KNOWLEDGE --> PUBLISH
   PUBLISH --> SNAPSHOT["Create immutable builderProjectRelease"]
   SNAPSHOT --> POINTER["Update publishedReleaseVersion"]
   POINTER --> RUNTIME["gameLoop.createSession(projectId)"]
@@ -214,9 +220,40 @@ Current behavior:
 - Asset ingestion accepts images, audio, glTF/GLB, and OpenUSD source files (`.usd`, `.usda`, `.usdc`, `.usdz`).
 - Published runtime currently treats `usdz` as the directly loadable OpenUSD variant in Three.js, while `.usd/.usda/.usdc` remain authoritative source variants for later import or conversion workflows.
 - Generation review streams via `GET /api/builder/generation-jobs/:jobId/stream`; automation evidence review via builder automation routes.
+- AI knowledge ingestion/list/search/assist live behind `/api/ai/knowledge/documents`, `/api/ai/knowledge/search`, and `/api/ai/assist/retrieval`.
 - Publish creates a new immutable release snapshot that materializes residual draft JSON plus relational content, media, mechanics, and worker state.
 - Runtime session seeding consumes the published snapshot, not mutable draft state.
 - Unpublish clears `publishedReleaseVersion` without deleting historical releases.
+
+## AI / RAG Topology
+
+```mermaid
+flowchart LR
+  DOC["Knowledge document payload"] --> KBS["knowledge-base-service"]
+  KBS --> CHUNK["Chunk + overlap projection"]
+  CHUNK --> EMBED["ProviderRegistry.generateEmbedding()"]
+  EMBED -->|ready| STORE["AiKnowledgeDocument + AiKnowledgeChunk"]
+  EMBED -->|cold / degraded| HASH["Deterministic fallback embedding"]
+  HASH --> STORE
+  QUERY["Search / retrieval assist request"] --> KBS
+  STORE --> KBS
+  KBS --> PLAN["ProviderRegistry.planTools()"]
+  KBS --> CHAT["ProviderRegistry.chat()"]
+```
+
+Notes:
+
+- RAG corpus is persisted in Prisma so retrieval is available across requests and boots.
+- Embedding generation remains provider-routed and local-first, but the service uses deterministic fallback embeddings when the configured embedding backend cannot answer within the configured pipeline timeout budget.
+- The recommended local API-compatible runtime target is Ramalama (or any equivalent OpenAI-compatible local server) exposed through the generic `/v1` provider lane rather than bespoke route logic.
+- Structured tool planning is routed through `ProviderRegistry.planTools()` so local/cloud providers share one contract instead of each route inventing its own planner surface.
+
+## Setup and Audit Surface
+
+- `scripts/install-macos.sh`, `scripts/install-linux.sh`, and `scripts/install-windows.ps1` are the repo-owned fresh-machine bootstrap entrypoints.
+- `bun run setup` is the canonical Bun-native bootstrap workflow once Bun is present.
+- `bun run doctor` emits the same typed readiness envelope used by startup preflight.
+- Builder AI knowledge management and tool-plan review live on the SSR builder AI page; route handlers delegate to `knowledge-base-service` and `ProviderRegistry` instead of duplicating RAG/planning logic in transport handlers.
 
 ## Client Runtime Config Contract
 

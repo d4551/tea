@@ -56,7 +56,12 @@ describe("environment parsing", () => {
   });
 
   test("static asset directories are config-driven", () => {
+    expect(appConfig.bootstrap.supportedBunRange).toBe("1.3.x");
+    expect(appConfig.bootstrap.installBunVersion.startsWith("1.3.")).toBe(true);
     expect(appConfig.database.url.length).toBeGreaterThan(0);
+    expect(appConfig.paths.builderUploadsDirectory.length).toBeGreaterThan(0);
+    expect(appConfig.paths.aiCacheDirectory.length).toBeGreaterThan(0);
+    expect(appConfig.paths.aiLocalModelDirectory.length).toBeGreaterThan(0);
     expect(appConfig.staticAssets.publicDirectory.length).toBeGreaterThan(0);
     expect(appConfig.staticAssets.assetsDirectory.length).toBeGreaterThan(0);
     expect(appConfig.staticAssets.rmmzPackDirectory.length).toBeGreaterThan(0);
@@ -83,11 +88,32 @@ describe("environment parsing", () => {
     expect(appConfig.ai.onnxWasmPath.length).toBeGreaterThan(0);
     expect(appConfig.ai.localSpeechToTextModel.length).toBeGreaterThan(0);
     expect(appConfig.ai.localTextToSpeechModel.length).toBeGreaterThan(0);
+    expect(appConfig.ai.routing.defaultPolicy).toBe("local-first");
+    expect(appConfig.ai.routing.cloudFallbackEnabled).toBe(true);
+    expect(appConfig.ai.routing.ragPersistence).toBe("prisma");
+    expect(appConfig.ai.openAiCompatible.local.baseUrl.length).toBeGreaterThan(0);
+    expect(appConfig.ai.openAiCompatible.local.providerLabel.length).toBeGreaterThan(0);
+    expect(appConfig.ai.openAiCompatible.local.chatModel.length).toBeGreaterThan(0);
+    expect(appConfig.ai.openAiCompatible.cloud.baseUrl.length).toBeGreaterThan(0);
+    expect(appConfig.ai.openAiCompatible.cloud.providerLabel.length).toBeGreaterThan(0);
+    expect(appConfig.ai.openAiCompatible.cloud.chatModel.length).toBeGreaterThan(0);
+    expect(appConfig.ai.ragChunkSize).toBeGreaterThanOrEqual(100);
+    expect(appConfig.ai.ragChunkOverlap).toBeGreaterThanOrEqual(0);
+    expect(appConfig.ai.ragSearchLimit).toBeGreaterThan(0);
+    expect(appConfig.ai.ragHashDimension).toBeGreaterThanOrEqual(8);
     expect(appConfig.ai.audioInputSampleRateHz).toBeGreaterThanOrEqual(8000);
     expect(appConfig.ai.audioUploadMaxBytes).toBeGreaterThan(0);
     expect(appRoutes.aiCatalog).toBe("/api/ai/catalog");
+    expect(appRoutes.aiKnowledgeDocuments).toBe("/api/ai/knowledge/documents");
+    expect(appRoutes.aiKnowledgeSearch).toBe("/api/ai/knowledge/search");
+    expect(appRoutes.aiAssistRetrieval).toBe("/api/ai/assist/retrieval");
+    expect(appRoutes.aiPlanTools).toBe("/api/ai/plan/tools");
     expect(appRoutes.aiTranscribe).toBe("/api/ai/audio/transcribe");
     expect(appRoutes.aiSynthesize).toBe("/api/ai/audio/synthesize");
+    expect(appRoutes.aiBuilderKnowledgeList).toBe("/api/builder/ai/knowledge/list");
+    expect(appRoutes.aiBuilderKnowledgeDocuments).toBe("/api/builder/ai/knowledge/documents");
+    expect(appRoutes.aiBuilderKnowledgeSearch).toBe("/api/builder/ai/knowledge/search");
+    expect(appRoutes.aiBuilderToolPlan).toBe("/api/builder/ai/plan/tools");
   });
 
   test("asset path helpers normalize url and local paths", () => {

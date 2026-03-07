@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { createApp } from "../src/app.ts";
 import { appConfig } from "../src/config/environment.ts";
 import { ProviderRegistry } from "../src/domain/ai/providers/provider-registry.ts";
@@ -6,6 +6,7 @@ import type { BuilderProjectSnapshot } from "../src/domain/builder/builder-proje
 import { builderService } from "../src/domain/builder/builder-service.ts";
 import { gameLoop } from "../src/domain/game/game-loop.ts";
 import { correlationIdHeader } from "../src/lib/correlation-id.ts";
+import { defaultGameConfig } from "../src/shared/config/game-config.ts";
 import { gameAssetUrls } from "../src/shared/constants/game-assets.ts";
 import { contentType, httpStatus } from "../src/shared/constants/http.ts";
 import { defaultOracleMode } from "../src/shared/constants/oracle.ts";
@@ -62,7 +63,11 @@ const readSseUntil = async (
       }
     }
   } finally {
-    await reader.cancel();
+    try {
+      await reader.cancel();
+    } finally {
+      reader.releaseLock();
+    }
   }
 
   return collected;
@@ -79,6 +84,29 @@ const readSessionCookieHeader = (response: Response): string | null => {
   }
 
   return setCookie.split(";")[0] ?? null;
+};
+
+const createDeterministicEmbedding = (text: string): Float32Array => {
+  const values = new Float32Array(8);
+  for (const [index, character] of [...text].entries()) {
+    const slot = index % values.length;
+    values[slot] = (values[slot] ?? 0) + (character.codePointAt(0) ?? 0) / 1024;
+  }
+  values[0] = (values[0] ?? 0) === 0 ? 1 : (values[0] ?? 0);
+  return values;
+};
+
+const withMockedEmbeddingGeneration = async <T>(run: () => Promise<T>): Promise<T> => {
+  const registry = await ProviderRegistry.getInstance();
+  const originalGenerateEmbedding: ProviderRegistry["generateEmbedding"] =
+    registry.generateEmbedding.bind(registry);
+  registry.generateEmbedding = async (text: string) => createDeterministicEmbedding(text);
+
+  try {
+    return await run();
+  } finally {
+    registry.generateEmbedding = originalGenerateEmbedding;
+  }
 };
 
 const createBuilderProject = async (projectId = `contract-${Date.now()}`) => {
@@ -132,14 +160,6 @@ afterEach(async () => {
     await gameLoop.closeSession(sessionId);
   }
   managedSessionIds.clear();
-});
-
-afterAll(async () => {
-  if (app.server) {
-    await app.stop();
-  }
-  await (await ProviderRegistry.getInstance()).dispose();
-  await prisma.$disconnect();
 });
 
 describe("API contracts", () => {
@@ -679,6 +699,113 @@ describe("API contracts", () => {
       ),
     ).toBe(true);
     expect(spectatorCommandResponse.status).toBe(httpStatus.unauthorized);
+  });
+
+  test("controller command flow moves the controller avatar without moving the owner avatar", async () => {
+    const ownerCreateResponse = await app.handle(
+      new Request(toUrl(appRoutes.gameApiSession), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          locale: "en-US",
+        }),
+      }),
+    );
+    const ownerCreatePayload = (await ownerCreateResponse.json()) as {
+      readonly ok: boolean;
+      readonly data?: {
+        readonly sessionId: string;
+      };
+    };
+    const ownerCookie = readSessionCookieHeader(ownerCreateResponse);
+    const sessionId = ownerCreatePayload.data?.sessionId ?? "";
+    managedSessionIds.add(sessionId);
+
+    const controllerHomeResponse = await app.handle(new Request(toUrl(appRoutes.home)));
+    const controllerCookie = readSessionCookieHeader(controllerHomeResponse);
+
+    const inviteResponse = await app.handle(
+      new Request(toUrl(appRoutes.gameApiSessionInvite.replace(":id", sessionId)), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json",
+          ...(ownerCookie ? { cookie: ownerCookie } : {}),
+        },
+        body: JSON.stringify({
+          role: "controller",
+          locale: "en-US",
+        }),
+      }),
+    );
+    const invitePayload = (await inviteResponse.json()) as {
+      readonly ok: boolean;
+      readonly data?: {
+        readonly inviteToken: string;
+      };
+    };
+
+    const joinResponse = await app.handle(
+      new Request(toUrl(appRoutes.gameApiSessionJoin.replace(":id", sessionId)), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(controllerCookie ? { cookie: controllerCookie } : {}),
+        },
+        body: JSON.stringify({
+          inviteToken: invitePayload.data?.inviteToken ?? "",
+        }),
+      }),
+    );
+    const joinPayload = (await joinResponse.json()) as {
+      readonly ok: boolean;
+      readonly data?: {
+        readonly participantSessionId?: string;
+        readonly state?: {
+          readonly player: { readonly position: { readonly x: number } };
+          readonly coPlayers?: readonly {
+            readonly sessionId: string;
+            readonly role: string;
+            readonly entity: { readonly position: { readonly x: number } };
+          }[];
+        };
+      };
+    };
+    const controllerSessionId = joinPayload.data?.participantSessionId ?? "";
+    const initialOwnerX = joinPayload.data?.state?.player.position.x ?? 0;
+    const initialControllerX =
+      joinPayload.data?.state?.coPlayers?.find(
+        (presence) => presence.sessionId === controllerSessionId && presence.role === "controller",
+      )?.entity.position.x ?? 0;
+
+    const commandResponse = await app.handle(
+      new Request(toUrl(appRoutes.gameApiSessionCommand.replace(":id", sessionId)), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(controllerCookie ? { cookie: controllerCookie } : {}),
+        },
+        body: JSON.stringify({
+          type: "move",
+          direction: "right",
+          durationMs: defaultGameConfig.tickMs,
+        }),
+      }),
+    );
+
+    await gameLoop.tick(sessionId, defaultGameConfig.tickMs);
+    const nextState = await gameLoop.getSessionState(sessionId, controllerSessionId);
+    const movedControllerX =
+      nextState?.state.coPlayers?.find((presence) => presence.sessionId === controllerSessionId)
+        ?.entity.position.x ?? 0;
+
+    expect(joinResponse.status).toBe(httpStatus.ok);
+    expect(commandResponse.status).toBe(httpStatus.ok);
+    expect(controllerSessionId.length > 0).toBe(true);
+    expect(nextState?.state.player.position.x).toBe(initialOwnerX);
+    expect(movedControllerX > initialControllerX).toBe(true);
   });
 
   test("game session state endpoint repairs malformed persisted scene payloads", async () => {
@@ -1240,8 +1367,8 @@ describe("API contracts", () => {
     expect(clipCount).toBeGreaterThan(0);
   });
 
-  test("builder project reads promote legacy blob media into relational draft rows", async () => {
-    const projectId = `legacy-media-${crypto.randomUUID()}`;
+  test("builder project reads promote blob-backed media into relational draft rows", async () => {
+    const projectId = `blob-media-${crypto.randomUUID()}`;
     await createBuilderProject(projectId);
     const snapshot = await builderService.getProject(projectId);
     expect(snapshot).not.toBeNull();
@@ -1297,8 +1424,8 @@ describe("API contracts", () => {
     expect(dialogueEntryCount).toBeGreaterThan(0);
   });
 
-  test("builder project reads promote legacy blob scenes and dialogue catalogs into relational draft rows", async () => {
-    const projectId = `legacy-content-${crypto.randomUUID()}`;
+  test("builder project reads promote blob-backed scenes and dialogue catalogs into relational draft rows", async () => {
+    const projectId = `blob-content-${crypto.randomUUID()}`;
     await createBuilderProject(projectId);
     const snapshot = await builderService.getProject(projectId);
     expect(snapshot).not.toBeNull();
@@ -1367,8 +1494,8 @@ describe("API contracts", () => {
     expect(flagCount).toBeGreaterThan(0);
   });
 
-  test("builder project reads promote legacy blob mechanics into relational draft rows", async () => {
-    const projectId = `legacy-mechanics-${crypto.randomUUID()}`;
+  test("builder project reads promote blob-backed mechanics into relational draft rows", async () => {
+    const projectId = `blob-mechanics-${crypto.randomUUID()}`;
     await createBuilderProject(projectId);
     const snapshot = await builderService.getProject(projectId);
     expect(snapshot).not.toBeNull();
@@ -1472,16 +1599,16 @@ describe("API contracts", () => {
     expect(automationRunCount).toBeGreaterThan(0);
   });
 
-  test("builder project reads promote legacy blob worker state into relational draft rows", async () => {
-    const projectId = `legacy-worker-${crypto.randomUUID()}`;
+  test("builder project reads promote blob-backed worker state into relational draft rows", async () => {
+    const projectId = `blob-worker-${crypto.randomUUID()}`;
     await createBuilderProject(projectId);
     await builderService.saveGenerationJob(projectId, {
-      id: "job.legacy",
+      id: "job.migrated",
       job: {
-        id: "job.legacy",
+        id: "job.migrated",
         kind: "portrait",
         status: "queued",
-        prompt: "Legacy queued job",
+        prompt: "Migrated queued job",
         artifactIds: [],
         statusMessage: "queued",
         createdAtMs: Date.now(),
@@ -1489,14 +1616,14 @@ describe("API contracts", () => {
       },
     });
     await builderService.saveAutomationRun(projectId, {
-      id: "run.legacy",
+      id: "run.migrated",
       run: {
-        id: "run.legacy",
+        id: "run.migrated",
         status: "queued",
-        goal: "Legacy automation",
+        goal: "Migrated automation",
         steps: [
           {
-            id: "step.legacy",
+            id: "step.migrated",
             action: "builder",
             summary: "Inspect project shell",
             status: "pending",
@@ -1727,6 +1854,142 @@ describe("API contracts", () => {
       ),
     ).toBe(true);
   });
+
+  test("AI knowledge routes ingest list and semantically search indexed documents", async () => {
+    await withMockedEmbeddingGeneration(async () => {
+      const projectId = `knowledge-${crypto.randomUUID()}`;
+      const ingestResponse = await app.handle(
+        new Request(toUrl(appRoutes.aiKnowledgeDocuments), {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            projectId,
+            title: "Combat Design Notes",
+            source: "design/combat.md",
+            text: [
+              "The tea guardian encounter should use stamina instead of mana.",
+              "Parry timing should reward controller-role co-op players with a stagger window.",
+              "OpenUSD props should remain source assets until converted to runtime variants.",
+            ].join("\n\n"),
+            locale: "en-US",
+          }),
+        }),
+      );
+      const ingestPayload = (await ingestResponse.json()) as {
+        readonly ok: boolean;
+        readonly data?: {
+          readonly id: string;
+          readonly projectId: string | null;
+          readonly chunkCount: number;
+        };
+      };
+
+      const listResponse = await app.handle(
+        new Request(toUrl(`${appRoutes.aiKnowledgeDocuments}?projectId=${projectId}`)),
+      );
+      const listPayload = (await listResponse.json()) as {
+        readonly ok: boolean;
+        readonly data?: {
+          readonly documents?: ReadonlyArray<{
+            readonly id: string;
+            readonly projectId: string | null;
+            readonly chunkCount: number;
+          }>;
+        };
+      };
+
+      const searchResponse = await app.handle(
+        new Request(toUrl(appRoutes.aiKnowledgeSearch), {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            projectId,
+            query: "How should parry timing work for co-op players?",
+            locale: "en-US",
+            limit: 3,
+          }),
+        }),
+      );
+      const searchPayload = (await searchResponse.json()) as {
+        readonly ok: boolean;
+        readonly data?: {
+          readonly matches?: ReadonlyArray<{
+            readonly title: string;
+            readonly source: string;
+            readonly text: string;
+            readonly score: number;
+          }>;
+        };
+      };
+
+      expect(ingestResponse.status).toBe(httpStatus.ok);
+      expect(ingestPayload.ok).toBe(true);
+      expect(ingestPayload.data?.projectId).toBe(projectId);
+      expect((ingestPayload.data?.chunkCount ?? 0) > 0).toBe(true);
+
+      expect(listResponse.status).toBe(httpStatus.ok);
+      expect(listPayload.ok).toBe(true);
+      expect(
+        listPayload.data?.documents?.some((document) => document.projectId === projectId),
+      ).toBe(true);
+
+      expect(searchResponse.status).toBe(httpStatus.ok);
+      expect(searchPayload.ok).toBe(true);
+      expect(searchPayload.data?.matches?.length).toBeGreaterThan(0);
+      expect(searchPayload.data?.matches?.[0]?.title).toBe("Combat Design Notes");
+      expect(searchPayload.data?.matches?.[0]?.source).toBe("design/combat.md");
+      expect(searchPayload.data?.matches?.[0]?.text.includes("Parry timing")).toBe(true);
+      expect(typeof searchPayload.data?.matches?.[0]?.score).toBe("number");
+    });
+  });
+
+  test("AI knowledge routes delete indexed documents", async () => {
+    await withMockedEmbeddingGeneration(async () => {
+      const projectId = `knowledge-delete-${crypto.randomUUID()}`;
+      const ingestResponse = await app.handle(
+        new Request(toUrl(appRoutes.aiKnowledgeDocuments), {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            projectId,
+            title: "Delete Me",
+            source: "notes/delete.md",
+            text: "Temporary indexed text.",
+            locale: "en-US",
+          }),
+        }),
+      );
+      const ingestPayload = (await ingestResponse.json()) as {
+        readonly ok: boolean;
+        readonly data?: { readonly id: string };
+      };
+
+      const deleteResponse = await app.handle(
+        new Request(
+          toUrl(
+            `${appRoutes.aiKnowledgeDocuments}/${ingestPayload.data?.id}?projectId=${encodeURIComponent(projectId)}`,
+          ),
+          {
+            method: "DELETE",
+          },
+        ),
+      );
+      const deletePayload = (await deleteResponse.json()) as {
+        readonly ok: boolean;
+        readonly data?: { readonly deleted: boolean };
+      };
+
+      expect(deleteResponse.status).toBe(httpStatus.ok);
+      expect(deletePayload.ok).toBe(true);
+      expect(deletePayload.data?.deleted).toBe(true);
+    });
+  });
 });
 
 describe("HTMX partial rendering", () => {
@@ -1779,6 +2042,20 @@ describe("HTMX partial rendering", () => {
     expect(html.includes("/public/vendor/htmx-ext/oracle-indicator.js")).toBe(true);
     expect(html.includes("/public/vendor/htmx-ext/focus-panel.js")).toBe(true);
     expect(html.includes("/public/vendor/htmx-ext/game-hud.js")).toBe(false);
+  });
+
+  test("builder AI page renders knowledge and tool-planning workspaces", async () => {
+    const response = await app.handle(
+      new Request(toUrl(`${appRoutes.builderAi}?projectId=default`)),
+    );
+    const html = await response.text();
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(html.includes("Knowledge workspace")).toBe(true);
+    expect(html.includes(appRoutes.aiBuilderKnowledgeDocuments)).toBe(true);
+    expect(html.includes(appRoutes.aiBuilderKnowledgeSearch)).toBe(true);
+    expect(html.includes(appRoutes.aiBuilderToolPlan)).toBe(true);
+    expect(html.includes("Tool plan preview")).toBe(true);
   });
 
   test("home route handles non-js oracle form fallback as full SSR page", async () => {
@@ -2612,5 +2889,94 @@ describe("HTMX partial rendering", () => {
       unpublishedHtml.includes(`/builder?lang=en-US&amp;projectId=${unpublishedProjectId}`),
     ).toBe(true);
     expect(unpublishedHtml.includes('id="game-canvas-wrapper"')).toBe(false);
+  });
+
+  test("game route renders a deterministic session-unavailable state when hydration fails", async () => {
+    const originalGetSessionState = gameLoop.getSessionState.bind(gameLoop);
+
+    gameLoop.getSessionState = async () => null;
+
+    try {
+      const response = await app.handle(new Request(toUrl(`${appRoutes.game}?lang=en-US`)));
+      const html = await response.text();
+
+      expect(response.status).toBe(httpStatus.ok);
+      expect(html.includes("Session could not be restored")).toBe(true);
+      expect(html.includes('id="game-canvas-wrapper"')).toBe(false);
+    } finally {
+      gameLoop.getSessionState = originalGetSessionState;
+    }
+  });
+
+  test("tool planning route returns structured steps", async () => {
+    const registry = await ProviderRegistry.getInstance();
+    const originalPlanTools = registry.planTools.bind(registry);
+    registry.planTools = async () => ({
+      ok: true,
+      steps: [
+        { id: "step-1", title: "Inspect the active scene", kind: "analysis" },
+        { id: "step-2", title: "Apply the reviewed builder mutation", kind: "builder" },
+      ],
+      model: "ramalama-local",
+      durationMs: 42,
+    });
+
+    try {
+      const response = await app.handle(
+        new Request(toUrl(appRoutes.aiPlanTools), {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            accept: "application/json",
+          },
+          body: JSON.stringify({ goal: "Review and update the active project scene." }),
+        }),
+      );
+      const payload = (await response.json()) as {
+        readonly ok: true;
+        readonly data: {
+          readonly steps: readonly { readonly id: string; readonly title: string }[];
+        };
+      };
+
+      expect(response.status).toBe(httpStatus.ok);
+      expect(payload.ok).toBe(true);
+      expect(payload.data.steps[0]?.title).toBe("Inspect the active scene");
+      expect(payload.data.steps[1]?.id).toBe("step-2");
+    } finally {
+      registry.planTools = originalPlanTools;
+    }
+  });
+
+  test("transcribe route returns typed validation errors for invalid wav payloads", async () => {
+    const incomingCorrelationId = "ai-transcribe-correlation-id";
+    const response = await app.handle(
+      new Request(toUrl(appRoutes.aiTranscribe), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json",
+          [correlationIdHeader]: incomingCorrelationId,
+        },
+        body: JSON.stringify({
+          audioBase64: Buffer.from("not-a-valid-wav").toString("base64"),
+        }),
+      }),
+    );
+    const payload = (await response.json()) as {
+      readonly ok: false;
+      readonly error: {
+        readonly code: string;
+        readonly category: string;
+        readonly message: string;
+        readonly correlationId: string;
+      };
+    };
+
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("VALIDATION_ERROR");
+    expect(payload.error.category).toBe("validation");
+    expect(response.headers.get(correlationIdHeader)).toBe(incomingCorrelationId);
+    expect(payload.error.correlationId).toBe(incomingCorrelationId);
   });
 });

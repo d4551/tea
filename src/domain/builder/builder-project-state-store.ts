@@ -104,7 +104,7 @@ export interface BuilderProjectSnapshot {
   readonly automationRuns: Map<string, AutomationRun>;
   /** Project publish status. */
   readonly published: boolean;
-  /** Creation owner marker for audit trail compatibility. */
+  /** Creation owner marker for audit-trail provenance. */
   readonly createdBy: string;
   /** Last update owner marker. */
   readonly updatedBy: string;

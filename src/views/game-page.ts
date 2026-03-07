@@ -19,6 +19,7 @@ interface PlayableGamePageProps {
   readonly state: "playable";
   readonly locale: LocaleCode;
   readonly sessionId: string;
+  readonly participantSessionId: string;
   readonly projectId?: string;
   readonly sceneTitle: string;
   readonly sceneMode?: "2d" | "3d";
@@ -42,7 +43,11 @@ interface PlayableGamePageProps {
  * Props for non-playable project states.
  */
 interface InactiveGamePageProps {
-  readonly state: "missing-project" | "unpublished-project" | "invalid-invite";
+  readonly state:
+    | "missing-project"
+    | "unpublished-project"
+    | "invalid-invite"
+    | "session-unavailable";
   readonly locale: LocaleCode;
   readonly projectId?: string;
 }
@@ -80,15 +85,19 @@ const renderInactiveState = (
   const title =
     state === "invalid-invite"
       ? messages.game.invalidInviteTitle
-      : state === "missing-project"
-        ? messages.game.projectUnavailableTitle
-        : messages.game.projectUnpublishedTitle;
+      : state === "session-unavailable"
+        ? messages.game.sessionUnavailableTitle
+        : state === "missing-project"
+          ? messages.game.projectUnavailableTitle
+          : messages.game.projectUnpublishedTitle;
   const description =
     state === "invalid-invite"
       ? messages.game.invalidInviteDescription
-      : state === "missing-project"
-        ? messages.game.projectUnavailableDescription
-        : messages.game.projectUnpublishedDescription;
+      : state === "session-unavailable"
+        ? messages.game.sessionUnavailableDescription
+        : state === "missing-project"
+          ? messages.game.projectUnavailableDescription
+          : messages.game.projectUnpublishedDescription;
 
   return `<section class="mx-auto grid max-w-3xl gap-6 pt-8">
     <article class="card card-border bg-base-100 shadow-xl">
@@ -139,6 +148,7 @@ export function GamePage(props: GamePageProps) {
 
   const {
     sessionId,
+    participantSessionId,
     projectId,
     sceneTitle,
     sceneMode,
@@ -176,6 +186,7 @@ export function GamePage(props: GamePageProps) {
 
   const content = `
     <meta name="game-session-id" data-session-id="${escapeHtml(sessionId)}" />
+    <meta name="game-session-participant-id" data-game-session-participant-id="${escapeHtml(participantSessionId)}" />
     <meta name="game-session-resume-token" data-session-resume-token="${escapeHtml(resumeToken)}" />
     <meta name="game-session-locale" data-game-session-locale="${escapeHtml(locale)}" />
     <meta name="game-session-resume-expires-at-ms" data-game-session-resume-expires-at-ms="${escapeHtml(String(resumeTokenExpiresAtMs))}" />
@@ -209,6 +220,7 @@ export function GamePage(props: GamePageProps) {
           <a href="${escapeHtml(builderHref)}" class="btn btn-outline btn-sm">${escapeHtml(messages.game.builderReturn)}</a>
           <span id="game-session-meta" class="hidden"
             data-session-id="${escapeHtml(sessionId)}"
+            data-participant-session-id="${escapeHtml(participantSessionId)}"
             data-resume-token="${escapeHtml(resumeToken)}"
             data-command-queue-depth="${commandQueueDepth}"
             data-version="${version}"

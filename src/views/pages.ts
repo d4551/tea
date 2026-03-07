@@ -176,8 +176,8 @@ export const renderHomePage = (
   <section class="grid gap-4 sm:grid-cols-3">
     <article class="card card-border bg-base-100 shadow-sm sm:col-span-3">
       <div class="card-body">
-        <h2 class="card-title">${escapeHtml(messages.pages.home.legacyTitle)}</h2>
-        <p class="text-base-content/75">${escapeHtml(messages.pages.home.legacyDescription)}</p>
+        <h2 class="card-title">${escapeHtml(messages.pages.home.supportingDocsTitle)}</h2>
+        <p class="text-base-content/75">${escapeHtml(messages.pages.home.supportingDocsDescription)}</p>
       </div>
     </article>
     <a href="${withLocaleQuery(appRoutes.pitchDeck, locale)}" class="card card-border bg-base-100 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" aria-label="${escapeHtml(messages.navigation.pitchDeck)}">

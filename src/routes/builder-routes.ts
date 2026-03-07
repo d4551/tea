@@ -7,6 +7,7 @@
  */
 import { Elysia } from "elysia";
 import { appConfig } from "../config/environment.ts";
+import { knowledgeBaseService } from "../domain/ai/knowledge-base-service.ts";
 import { getAiRuntimeProfile } from "../domain/ai/local-runtime-profile.ts";
 import { builderService } from "../domain/builder/builder-service.ts";
 import { evaluateBuilderPlatformReadiness } from "../domain/builder/platform-readiness.ts";
@@ -15,10 +16,7 @@ import { gameScenes, gameSpriteManifests } from "../domain/game/data/sprite-data
 import { gameLoop } from "../domain/game/game-loop.ts";
 import { builderRequestContextPlugin } from "../plugins/builder-request-context.ts";
 import { assetRelativePaths, toPublicAssetUrl } from "../shared/constants/assets.ts";
-import {
-  resolveRequestPathWithQuery,
-  resolveRequestQueryParam,
-} from "../shared/constants/routes.ts";
+import { resolveRequestPathWithQuery } from "../shared/constants/routes.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
 import { renderAiPanel } from "../views/builder/ai-panel.ts";
 import { renderAssetsEditor } from "../views/builder/assets-editor.ts";
@@ -238,24 +236,32 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
       body,
     );
   })
-  .get("/dialogue", async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
-    const messages = getMessages(builderLocale);
-    const project = await builderService.getProject(builderProjectId);
-    const chromeProject = toChromeProject(project);
-    const catalog = await builderService.getDialogues(builderProjectId, builderLocale);
-    const search = resolveRequestQueryParam(request, "search")?.trim() ?? "";
-    const body = renderDialogueEditor(messages, catalog, builderLocale, builderProjectId, search);
-    return wrapOrPartial(
-      request,
-      builderLocale,
-      messages,
-      "dialogue",
-      builderCurrentPath,
-      builderProjectId,
-      chromeProject,
-      body,
-    );
-  })
+  .get(
+    "/dialogue",
+    async ({ request, builderLocale, builderProjectId, builderCurrentPath, builderSearch }) => {
+      const messages = getMessages(builderLocale);
+      const project = await builderService.getProject(builderProjectId);
+      const chromeProject = toChromeProject(project);
+      const catalog = await builderService.getDialogues(builderProjectId, builderLocale);
+      const body = renderDialogueEditor(
+        messages,
+        catalog,
+        builderLocale,
+        builderProjectId,
+        builderSearch,
+      );
+      return wrapOrPartial(
+        request,
+        builderLocale,
+        messages,
+        "dialogue",
+        builderCurrentPath,
+        builderProjectId,
+        chromeProject,
+        body,
+      );
+    },
+  )
   .get("/assets", async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
     const messages = getMessages(builderLocale);
     const project = await builderService.getProject(builderProjectId);
@@ -409,6 +415,7 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
       builderLocale,
       builderProjectId,
       readiness,
+      await knowledgeBaseService.listDocuments(builderProjectId),
     );
     return wrapOrPartial(
       request,

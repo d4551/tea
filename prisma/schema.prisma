@@ -15,6 +15,35 @@ model OracleInteraction {
   createdAt DateTime @default(now())
 }
 
+model AiKnowledgeDocument {
+  id          String             @id @default(cuid())
+  projectId   String?
+  title       String
+  source      String
+  locale      String             @default("en-US")
+  contentHash String
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  chunks      AiKnowledgeChunk[]
+
+  @@index([projectId])
+  @@index([projectId, locale])
+}
+
+model AiKnowledgeChunk {
+  id            String              @id
+  documentId    String
+  document      AiKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  ordinal       Int
+  text          String
+  embedding     Json
+  tokenEstimate Int
+  createdAt     DateTime            @default(now())
+
+  @@index([documentId])
+  @@index([documentId, ordinal])
+}
+
 model GameSession {
   id          String   @id @default(cuid())
   ownerSessionId String @default("anonymous")

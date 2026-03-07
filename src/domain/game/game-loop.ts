@@ -68,6 +68,10 @@ const resumeTokenSecretMaterial = [
 
 type SnapshotCallback = (snapshot: GameSessionSnapshot) => void;
 
+type RuntimeActorEntity =
+  | MutableGameSceneState["player"]
+  | NonNullable<MutableGameSceneState["coPlayers"]>[number]["entity"];
+
 interface GameLoopDependencies {
   /** Canonical session persistence owner. */
   readonly stateStore?: GameStateStore;
@@ -78,6 +82,8 @@ interface GameLoopDependencies {
 type QueuedCommand = Readonly<{
   /** Envelope accepted by command runtime. */
   readonly envelope: GameCommandEnvelope;
+  /** Authenticated participant that issued the command. */
+  readonly participantSessionId: string;
 }>;
 
 const isExpired = (envelope: GameCommandEnvelope): boolean => {
@@ -264,8 +270,11 @@ export class GameLoopService {
   }
 
   private buildParticipantPresence(session: GameSession): readonly GameParticipantPresence[] {
-    const ownerPosition = session.scene.player.position;
     const ownerBounds = session.scene.player.bounds;
+    const existingPresenceBySessionId = new Map(
+      (session.scene.coPlayers ?? []).map((presence) => [presence.sessionId, presence]),
+    );
+    const resolvedPresenceEntities: RuntimeActorEntity[] = [];
 
     return session.participants
       .filter(
@@ -276,37 +285,109 @@ export class GameLoopService {
         } => participant.role !== "owner",
       )
       .map((participant, index) => {
-        const offset = MULTIPLAYER_PRESENCE_OFFSETS[
-          index % MULTIPLAYER_PRESENCE_OFFSETS.length
-        ] ?? {
-          x: 0,
-          y: 0,
-        };
+        const existingPresence = existingPresenceBySessionId.get(participant.sessionId);
         const characterKey = PRESENCE_CHARACTER_BY_ROLE[participant.role];
-
-        return {
+        const entity = existingPresence?.entity;
+        const position =
+          entity?.position ??
+          this.resolveParticipantSpawnPosition(session, index, resolvedPresenceEntities);
+        const nextPresence = {
           sessionId: participant.sessionId,
           role: participant.role,
           entity: {
             id: `participant-${participant.sessionId}`,
             label: participant.sessionId,
             characterKey,
-            position: {
-              x: ownerPosition.x + offset.x,
-              y: ownerPosition.y + offset.y,
-            },
-            facing: session.scene.player.facing,
-            animation: `idle-${session.scene.player.facing}`,
-            frame: 0,
-            velocity: { x: 0, y: 0 },
-            bounds: ownerBounds,
+            position,
+            facing: entity?.facing ?? session.scene.player.facing,
+            animation: entity?.animation ?? `idle-${session.scene.player.facing}`,
+            frame: entity?.frame ?? 0,
+            velocity: entity?.velocity ?? { x: 0, y: 0 },
+            bounds: entity?.bounds ?? ownerBounds,
           },
-        };
+        } satisfies GameParticipantPresence;
+        resolvedPresenceEntities.push(nextPresence.entity);
+
+        return nextPresence;
       });
   }
 
   private syncParticipantPresence(session: Mutable<GameSession>): void {
     session.scene.coPlayers = [...this.buildParticipantPresence(session)];
+  }
+
+  private resolveParticipantSpawnPosition(
+    session: GameSession,
+    index: number,
+    claimedEntities: readonly RuntimeActorEntity[],
+  ): RuntimeActorEntity["position"] {
+    const ownerPosition = session.scene.player.position;
+    const ownerBounds = session.scene.player.bounds;
+    const candidateOffsets = [
+      ...MULTIPLAYER_PRESENCE_OFFSETS,
+      { x: 0, y: -96 },
+      { x: 96, y: 0 },
+      { x: -96, y: 0 },
+      { x: 0, y: 96 },
+    ];
+
+    for (let attempt = 0; attempt < candidateOffsets.length; attempt += 1) {
+      const offset = candidateOffsets[(index + attempt) % candidateOffsets.length] ??
+        candidateOffsets[0] ?? { x: 0, y: -96 };
+      const candidate = {
+        x: ownerPosition.x + offset.x,
+        y: ownerPosition.y + offset.y,
+      };
+      const footX = candidate.x + ownerBounds.x;
+      const footY = candidate.y + ownerBounds.y;
+      const collidesScene = sceneEngine.checkStaticCollision(
+        footX,
+        footY,
+        ownerBounds.width,
+        ownerBounds.height,
+        session.scene.collisions,
+      );
+      const collidesNpc = sceneEngine.checkNpcCollision(
+        footX,
+        footY,
+        ownerBounds.width,
+        ownerBounds.height,
+        session.scene.npcs,
+      );
+      const collidesParticipant = claimedEntities.some((entity) => {
+        const otherX = entity.position.x + entity.bounds.x;
+        const otherY = entity.position.y + entity.bounds.y;
+        return (
+          footX < otherX + entity.bounds.width &&
+          footX + ownerBounds.width > otherX &&
+          footY < otherY + entity.bounds.height &&
+          footY + ownerBounds.height > otherY
+        );
+      });
+      if (!collidesScene && !collidesNpc && !collidesParticipant) {
+        return candidate;
+      }
+    }
+
+    return {
+      x: ownerPosition.x,
+      y: ownerPosition.y - 96,
+    };
+  }
+
+  private resolveSceneActor(
+    state: MutableGameSceneState,
+    session: GameSession,
+    participantSessionId: string,
+  ): RuntimeActorEntity | null {
+    if (participantSessionId === session.ownerSessionId) {
+      return state.player;
+    }
+
+    const presence = state.coPlayers?.find(
+      (candidate) => candidate.sessionId === participantSessionId,
+    );
+    return presence?.entity ?? null;
   }
 
   private resolveParticipantRole(
@@ -459,10 +540,13 @@ export class GameLoopService {
     return changed;
   }
 
-  private resolveTriggeredSceneNode(state: MutableGameSceneState): SceneNodeDefinition | null {
+  private resolveTriggeredSceneNode(
+    state: MutableGameSceneState,
+    actor: RuntimeActorEntity,
+  ): SceneNodeDefinition | null {
     const nodes = state.nodes ?? [];
-    const playerX = state.player.position.x;
-    const playerY = state.player.position.y;
+    const actorX = actor.position.x;
+    const actorY = actor.position.y;
 
     for (const node of nodes) {
       if (node.nodeType !== "trigger") {
@@ -470,16 +554,16 @@ export class GameLoopService {
       }
 
       if ("size" in node) {
-        const withinX = playerX >= node.position.x && playerX <= node.position.x + node.size.width;
-        const withinY = playerY >= node.position.y && playerY <= node.position.y + node.size.height;
+        const withinX = actorX >= node.position.x && actorX <= node.position.x + node.size.width;
+        const withinY = actorY >= node.position.y && actorY <= node.position.y + node.size.height;
         if (withinX && withinY) {
           return node;
         }
         continue;
       }
 
-      const dx = playerX - node.position.x;
-      const dy = playerY - node.position.y;
+      const dx = actorX - node.position.x;
+      const dy = actorY - node.position.y;
       const dz = 0 - node.position.z;
       if (Math.sqrt(dx * dx + dy * dy + dz * dz) <= 64) {
         return node;
@@ -666,6 +750,7 @@ export class GameLoopService {
 
     return {
       ...snapshot,
+      participantSessionId,
       participantRole,
       participants: sessionResult.payload.participants,
       commandQueueDepth: this.getCommandQueueDepth(sessionId),
@@ -1062,27 +1147,26 @@ export class GameLoopService {
     );
   }
 
-  private isPlayerFacingNpc(
-    state: MutableGameSceneState,
-    npc: Mutable<(typeof state.npcs)[number]>,
+  private isActorFacingNpc(
+    actor: RuntimeActorEntity,
+    npc: Mutable<MutableGameSceneState["npcs"][number]>,
   ): boolean {
-    const playerCenterX =
-      state.player.position.x + state.player.bounds.x + state.player.bounds.width / 2;
-    const playerCenterY =
-      state.player.position.y + state.player.bounds.y + state.player.bounds.height / 2;
+    const playerCenterX = actor.position.x + actor.bounds.x + actor.bounds.width / 2;
+    const playerCenterY = actor.position.y + actor.bounds.y + actor.bounds.height / 2;
     const npcCenterX = npc.position.x + npc.bounds.x + npc.bounds.width / 2;
     const npcCenterY = npc.position.y + npc.bounds.y + npc.bounds.height / 2;
     const dx = npcCenterX - playerCenterX;
     const dy = npcCenterY - playerCenterY;
     if (Math.abs(dx) >= Math.abs(dy)) {
-      return dx >= 0 ? state.player.facing === "right" : state.player.facing === "left";
+      return dx >= 0 ? actor.facing === "right" : actor.facing === "left";
     }
 
-    return dy >= 0 ? state.player.facing === "down" : state.player.facing === "up";
+    return dy >= 0 ? actor.facing === "down" : actor.facing === "up";
   }
 
   private resolveChatTarget(
     state: MutableGameSceneState,
+    actor: RuntimeActorEntity,
     npcId: string,
   ): Mutable<(typeof state.npcs)[number]> | null {
     const target = state.npcs.find((candidate) => candidate.id === npcId) as
@@ -1092,16 +1176,12 @@ export class GameLoopService {
       return null;
     }
 
-    const interactable = sceneEngine.findInteractableNpc(
-      state.player.position,
-      state.player.bounds,
-      state.npcs,
-    );
+    const interactable = sceneEngine.findInteractableNpc(actor.position, actor.bounds, state.npcs);
     if (!interactable || interactable.id !== npcId) {
       return null;
     }
 
-    if (!this.isPlayerFacingNpc(state, target)) {
+    if (!this.isActorFacingNpc(actor, target)) {
       return null;
     }
 
@@ -1112,6 +1192,7 @@ export class GameLoopService {
 
   public processCommand(
     sessionId: string,
+    participantSessionId: string,
     command: GameCommandInput | unknown,
     sessionLocale: GameLocale,
   ): GameCommandResult {
@@ -1180,7 +1261,7 @@ export class GameLoopService {
     }
 
     if (queue.length < defaultGameConfig.maxCommandsPerTick) {
-      queue.push({ envelope });
+      queue.push({ envelope, participantSessionId });
       this.ensureTicking(sessionId);
       return {
         sessionId,
@@ -1222,12 +1303,16 @@ export class GameLoopService {
     let nextActionState: GameSceneState["actionState"] = state.dialogue ? "dialogueOpen" : "empty";
     let commandApplied = false;
 
-    let playerMoved = false;
+    const movedActorIds = new Set<string>();
     let interactionCount = 0;
 
     for (const queued of queue) {
       const cmd = queued.envelope.command;
       const commandType = cmd.type;
+      const actor = this.resolveSceneActor(state, session, queued.participantSessionId);
+      if (!actor) {
+        continue;
+      }
 
       if (commandType === "interact" || commandType === "chat") {
         interactionCount += 1;
@@ -1250,26 +1335,28 @@ export class GameLoopService {
         const speed = Math.max(1, Math.min(defaultGameConfig.maxMovePerTick * durationScale, 80));
 
         const result = sceneEngine.moveEntity(
-          state.player.position,
-          state.player.facing,
-          state.player.bounds,
+          actor.position,
+          actor.facing,
+          actor.bounds,
           vector,
           speed,
           state.collisions,
           state.npcs,
         );
 
-        state.player.position.x = result.position.x;
-        state.player.position.y = result.position.y;
-        state.player.facing = result.facing;
-        state.player.velocity.x = vector.x * speed;
-        state.player.velocity.y = vector.y * speed;
-        state.player.animation = `walk-${result.facing}`;
-        state.player.frame = result.moved ? state.player.frame + 1 : 0;
-        playerMoved = result.moved || playerMoved;
+        actor.position.x = result.position.x;
+        actor.position.y = result.position.y;
+        actor.facing = result.facing;
+        actor.velocity.x = vector.x * speed;
+        actor.velocity.y = vector.y * speed;
+        actor.animation = `walk-${result.facing}`;
+        actor.frame = result.moved ? actor.frame + 1 : 0;
+        if (result.moved) {
+          movedActorIds.add(actor.id);
+        }
         commandApplied = true;
         nextActionState = result.moved ? "moved" : "blockedByCollision";
-        const triggeredNode = this.resolveTriggeredSceneNode(state);
+        const triggeredNode = this.resolveTriggeredSceneNode(state, actor);
         if (triggeredNode) {
           this.applyMatchingTriggers(state, session.triggerDefinitions ?? [], "scene-enter", {
             sceneId: state.sceneId,
@@ -1279,8 +1366,8 @@ export class GameLoopService {
       } else if (commandType === "interact") {
         commandApplied = true;
         const interactable = sceneEngine.findInteractableNpc(
-          state.player.position,
-          state.player.bounds,
+          actor.position,
+          actor.bounds,
           state.npcs,
         ) as Mutable<(typeof state.npcs)[0]> | null;
 
@@ -1288,8 +1375,8 @@ export class GameLoopService {
           interactable.state = "talking";
           interactable.active = true;
 
-          const dx = state.player.position.x - interactable.position.x;
-          const dy = state.player.position.y - interactable.position.y;
+          const dx = actor.position.x - interactable.position.x;
+          const dy = actor.position.y - interactable.position.y;
           interactable.facing =
             Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
           interactable.animation = `idle-${interactable.facing}`;
@@ -1336,7 +1423,7 @@ export class GameLoopService {
         // Enforce chat message length limit before forwarding to AI
         const msg = (cmd.message ?? "").slice(0, defaultGameConfig.maxChatMessageLength);
         if (cmd.npcId && msg.length > 0) {
-          const interactable = this.resolveChatTarget(state, cmd.npcId);
+          const interactable = this.resolveChatTarget(state, actor, cmd.npcId);
 
           if (interactable?.aiEnabled) {
             interactable.state = "talking";
@@ -1414,11 +1501,21 @@ export class GameLoopService {
       nextActionState = state.dialogue ? "dialogueOpen" : "idle";
     }
 
-    if (!playerMoved && state.dialogue === null && nextActionState !== "dialogueOpen") {
-      state.player.animation = `idle-${state.player.facing}`;
-      state.player.velocity.x = 0;
-      state.player.velocity.y = 0;
-      state.player.frame = 0;
+    if (state.dialogue === null && nextActionState !== "dialogueOpen") {
+      const runtimeActors: RuntimeActorEntity[] = [
+        state.player,
+        ...(state.coPlayers?.map((presence) => presence.entity) ?? []),
+      ];
+      for (const actor of runtimeActors) {
+        if (movedActorIds.has(actor.id)) {
+          continue;
+        }
+
+        actor.animation = `idle-${actor.facing}`;
+        actor.velocity.x = 0;
+        actor.velocity.y = 0;
+        actor.frame = 0;
+      }
     }
 
     state.actionState = nextActionState;

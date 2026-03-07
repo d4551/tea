@@ -75,16 +75,17 @@ The product centers on a **builder/player loop**: author content in the builder,
 ### Key Capabilities
 
 - **Builder/Player Loop** — project-scoped authoring, publish/unpublish, immutable releases, and playable validation
-- **Shared-Session Multiplayer** — owners can issue invite tokens for controller and spectator roles inside the same published runtime session
+- **Shared-Session Multiplayer** — owners can issue invite tokens for controller and spectator roles, and controller participants now drive their own in-scene avatars inside the same published runtime session
 - **Server-Side Rendering** — all pages render on the server via Elysia; HTMX provides progressive enhancement with `hx-indicator` and `hx-disabled-elt` for loading feedback
 - **AI Narrative Engine** — on-device inference via 🤗 Transformers with ONNX/WebGPU acceleration; patch preview/apply for reviewable co-author flow
+- **AI Knowledge + RAG** — persisted project-scoped/app-scoped knowledge documents, embeddings-backed semantic search, retrieval-augmented implementation assist, and structured tool planning for agentic workflows
 - **Playable Game Client** — PixiJS 8 canvas with Three.js 3D layer, bundled and hot-reloaded during development
 - **OpenUSD-Aware Asset Ingestion** — builder uploads accept `.usd`, `.usda`, `.usdc`, and `.usdz`, and the published Three.js runtime can load `usdz` assets directly
 - **Type-Safe Stack** — end-to-end types from Prisma schema through Elysia route contracts and SSR views
 - **Internationalization** — `Accept-Language` q-weight parsing with deterministic locale persistence
 - **Structured Observability** — correlation ID propagation, levelled JSON logging, typed error envelopes
 - **Canonical Runtime Ownership** — `game-loop` orchestrates simulation, session resolution, and runtime metrics while `playerProgressStore` owns XP/level/interaction persistence
-- **Domain-Owned Builder Factories** — mechanics, generation, and automation create flows now originate in `builder-service`, so routes no longer invent authored defaults
+- **Domain-Owned Builder Factories** — scene, asset, animation clip, mechanics, generation, and automation create flows now originate in `builder-service`, so routes no longer invent authored defaults
 
 ### Platform Readiness
 
@@ -98,9 +99,10 @@ The builder exposes a capability matrix that reflects current implementation sta
 | Sprite pipeline | Partial | Manifest-based; asset upload implemented |
 | Animation pipeline | Partial | Clip definitions; no frame editor |
 | Mechanics | Partial | Quests, triggers, dialogue graphs; quest edit/delete implemented |
-| AI authoring | Partial | Patch preview/apply; dialogue generate |
+| AI authoring | Partial | Patch preview/apply; dialogue generate; structured tool planning |
+| RAG / knowledge retrieval | Partial | Persisted documents, semantic search, retrieval assist; vector storage is JSON-backed in Prisma rows rather than a dedicated vector database |
 | Automation / RPA | Partial | Lifecycle-managed worker, auditable steps, Playwright-backed evidence capture |
-| Multiplayer | Partial | Shared-session owner/controller/spectator flow with visible co-player presence; not yet multi-avatar co-op |
+| Multiplayer | Partial | Shared-session owner/controller/spectator flow with independent owner/controller avatars; spectator mode remains observe-only |
 | OpenUSD | Partial | `.usd/.usda/.usdc/.usdz` ingest supported; `usdz` playable in Three.js runtime |
 
 ---
@@ -129,18 +131,29 @@ The builder exposes a capability matrix that reflects current implementation sta
 # Clone
 git clone https://github.com/d4551/tea.git && cd tea
 
-# Install dependencies
-bun install
+# Bootstrap on a Bun-ready machine
+bun run setup
 
-# Configure environment
-cp .env.example .env
+# Or bootstrap from an OS installer entrypoint
+./scripts/install-macos.sh
+./scripts/install-linux.sh
+powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
 
-# Generate Prisma client
-bun run prisma:generate
+# Verify runtime readiness
+bun run doctor
 
 # Start development (launches all watchers)
 bun run dev
 ```
+
+Setup performs:
+
+- `bun install`
+- `.env` creation only when missing
+- `bun run prisma:generate`
+- `bunx --bun prisma db push`
+- `bun run build:assets`
+- typed readiness verification for DB reachability, required assets, writable directories, and AI routing
 
 ---
 
@@ -231,7 +244,7 @@ sequenceDiagram
 
 ### Plugin Pipeline
 
-Plugins are composed in strict order. Each plugin decorates the request context for downstream consumers. Infrastructure plugins (request-context, onError, content-type, swagger, static-assets) run first; then page, game, API, and AI routes; then the AI provider lifecycle plugin; then the scoped `game-request-context` derive plugin; then `game-plugin`; then builder routes; finally session-purge and creator-worker for lifecycle-owned background execution. Builder locale, project id, and current-path resolution are attached once through `src/plugins/builder-request-context.ts`, game HTTP participant identity/locale are attached once through `src/plugins/game-request-context.ts`, full-page SSR shells consume a shared `LayoutContext` from `src/views/layout.ts`, builder JSON draft-state decode/versioned-save/snapshot projection now live behind `src/domain/builder/builder-project-state-store.ts`, `src/shared/contracts/game.ts` owns persisted scene-state / realtime-frame validation, `game-plugin` owns session-scoped websocket tick cleanup plus transport teardown when a session closes or is deleted, and `game-loop` owns canonical session resolution, dashboard/session metrics, expired-session purging, and the HUD state read path consumed by SSE transport rendering.
+Plugins are composed in strict order. Each plugin decorates the request context for downstream consumers. Infrastructure plugins (request-context, onError, content-type, swagger, static-assets) run first; then page, game, API, and AI routes; then the AI provider lifecycle plugin; then the scoped `game-request-context` derive plugin; then `game-plugin`; then builder routes; finally session-purge and creator-worker for lifecycle-owned background execution. Builder locale, project id, current path, and scoped body/query/param merges are attached once through `src/plugins/builder-request-context.ts`, page/oracle auth-session state is attached once through `src/plugins/auth-session.ts`, game HTTP participant identity/locale plus playable-page `sessionId` / `projectId` / `invite` query resolution and websocket participant/resume-token resolution are attached once through `src/plugins/game-request-context.ts`, full-page SSR shells consume a shared `LayoutContext` from `src/views/layout.ts`, builder JSON draft-state decode/versioned-save/snapshot projection now live behind `src/domain/builder/builder-project-state-store.ts`, `src/shared/contracts/game.ts` owns persisted scene-state / realtime-frame validation, `game-plugin` owns session-scoped websocket tick cleanup plus transport teardown when a session closes or is deleted, and `game-loop` owns canonical session resolution, dashboard/session metrics, expired-session purging, and the HUD state read path consumed by SSE transport rendering.
 
 ```mermaid
 flowchart LR
@@ -254,7 +267,7 @@ flowchart LR
 
 ### Domain Model
 
-Core entities: GameSession (authoritative runtime state), GameSessionParticipant (shared-session multiplayer membership), PlayerProgress (XP and level), BuilderProject (draft state/versioning), BuilderProjectScene / BuilderProjectDialogueEntry (relational draft world-content registries), BuilderProjectAsset / BuilderProjectAnimationClip (relational draft media registries), BuilderProjectDialogueGraph / BuilderProjectQuest / BuilderProjectTrigger / BuilderProjectFlag (relational draft mechanics registries), BuilderProjectGenerationJob / BuilderProjectArtifact / BuilderProjectAutomationRun (relational draft worker state), and BuilderProjectRelease (immutable published snapshots).
+Core entities: GameSession (authoritative runtime state), GameSessionParticipant (shared-session multiplayer membership), PlayerProgress (XP and level), BuilderProject (draft state/versioning), BuilderProjectScene / BuilderProjectDialogueEntry (relational draft world-content registries), BuilderProjectAsset / BuilderProjectAnimationClip (relational draft media registries), BuilderProjectDialogueGraph / BuilderProjectQuest / BuilderProjectTrigger / BuilderProjectFlag (relational draft mechanics registries), BuilderProjectGenerationJob / BuilderProjectArtifact / BuilderProjectAutomationRun (relational draft worker state), AiKnowledgeDocument / AiKnowledgeChunk (persisted RAG corpus), and BuilderProjectRelease (immutable published snapshots).
 
 ```mermaid
 erDiagram
@@ -491,6 +504,8 @@ tea/
 | Command | Description |
 |---|---|
 | `bun run dev` | Start development server with all watchers |
+| `bun run setup` | Bun-native bootstrap: install deps, preserve/create `.env`, generate Prisma, push schema, build assets, run readiness checks |
+| `bun run doctor` | Non-mutating readiness report for DB reachability, required assets, writable directories, and AI routing |
 | `bun run build:assets` | One-off asset compilation |
 | `bun run start` | Production: build and start |
 | `bun run lint` | Biome linting |
@@ -513,9 +528,23 @@ Core `.env` variables (see `.env.example` for full defaults):
 | `SESSION_COOKIE_NAME` | Cookie name for anonymous auth-session identity |
 | `SESSION_MAX_AGE_SECONDS` | Anonymous session cookie lifetime in seconds |
 | `SESSION_RESUME_TOKEN_SECRET` | Required secret used to sign session resume tokens |
+| `BUN_SUPPORTED_RANGE` | Supported Bun major/minor line enforced by setup and doctor |
+| `BUN_INSTALL_VERSION` | Exact Bun version used by the OS bootstrap scripts |
 | `BUILDER_LOCAL_AUTOMATION_ORIGIN` | Optional absolute override for builder-local automation/browser evidence capture |
+| `BUILDER_UPLOADS_DIRECTORY` | Writable builder upload root for source assets and generated artifacts |
 | `AI_WARMUP_ON_BOOT` | Optional boolean to enable eager local model warmup at boot (default: `false`) |
+| `AI_CACHE_DIRECTORY` | Writable cache directory checked by setup, doctor, and startup preflight |
+| `AI_LOCAL_MODEL_DIRECTORY` | Writable local model directory checked by setup, doctor, and startup preflight |
 | `AI_ONNX_DEVICE` | ONNX execution device (`cpu`, `webgpu`, or `wasm`); use `cpu` for Bun server runtime stability |
+| `AI_LOCAL_API_COMPATIBLE_ENABLED` | Enables a local OpenAI-compatible inference lane (recommended for Ramalama-class local servers) |
+| `AI_LOCAL_API_COMPATIBLE_BASE_URL` | Base URL for the local OpenAI-compatible API (for example `http://127.0.0.1:8080/v1`) |
+| `AI_CLOUD_API_COMPATIBLE_ENABLED` | Enables the hosted OpenAI-compatible fallback lane |
+| `AI_CLOUD_API_COMPATIBLE_BASE_URL` | Base URL for the hosted OpenAI-compatible API |
+| `AI_CLOUD_FALLBACK_ENABLED` | Allows hosted OpenAI-compatible providers when no local-capable provider can satisfy the request |
+| `AI_RAG_CHUNK_SIZE` | Plain-text chunk size used when ingesting persisted knowledge documents |
+| `AI_RAG_CHUNK_OVERLAP` | Overlap between adjacent RAG chunks |
+| `AI_RAG_SEARCH_LIMIT` | Default retrieval limit for semantic search and retrieval assist |
+| `AI_RAG_HASH_DIMENSION` | Deterministic fallback embedding dimension used when local/cloud embeddings are unavailable or degraded |
 
 Game runtime controls:
 
@@ -535,6 +564,30 @@ Game runtime controls:
 | `GAME_SOCKET_RECONNECT_DELAY_MS` | Client reconnect backoff delay |
 | `GAME_RESTORE_REQUEST_TIMEOUT_MS` | Restore POST timeout budget |
 | `GAME_RESTORE_MAX_ATTEMPTS` | Max restore retries before expired UX state |
+
+AI routing defaults:
+
+- Routing policy is `local-first` through [src/domain/ai/providers/provider-registry.ts](/Users/brandondonnelly/Downloads/tea/src/domain/ai/providers/provider-registry.ts).
+- Local AI can run through Ollama, Transformers.js, or an OpenAI-compatible local server such as Ramalama exposed on a `/v1` endpoint.
+- Hosted AI support uses the same OpenAI-compatible provider contract instead of vendor-specific route bindings.
+- Cloud-capable providers remain available through the same registry only when enabled and a local-capable provider cannot satisfy the capability.
+- RAG persistence is Prisma-backed through [src/domain/ai/knowledge-base-service.ts](/Users/brandondonnelly/Downloads/tea/src/domain/ai/knowledge-base-service.ts); there is no separate vector database in this pass.
+
+Repo audit checklist:
+
+- Auth request context owner: [src/plugins/auth-session.ts](/Users/brandondonnelly/Downloads/tea/src/plugins/auth-session.ts)
+- Builder request context owner: [src/plugins/builder-request-context.ts](/Users/brandondonnelly/Downloads/tea/src/plugins/builder-request-context.ts)
+- Game request context owner: [src/plugins/game-request-context.ts](/Users/brandondonnelly/Downloads/tea/src/plugins/game-request-context.ts)
+- AI provider routing owner: [src/domain/ai/providers/provider-registry.ts](/Users/brandondonnelly/Downloads/tea/src/domain/ai/providers/provider-registry.ts)
+- Knowledge/RAG retrieval owner: [src/domain/ai/knowledge-base-service.ts](/Users/brandondonnelly/Downloads/tea/src/domain/ai/knowledge-base-service.ts)
+- Builder draft/release persistence owner: [src/domain/builder/builder-project-state-store.ts](/Users/brandondonnelly/Downloads/tea/src/domain/builder/builder-project-state-store.ts)
+- Multiplayer session/runtime owner: [src/domain/game/game-loop.ts](/Users/brandondonnelly/Downloads/tea/src/domain/game/game-loop.ts)
+- Setup/doctor/preflight owner: [src/bootstrap/runtime-readiness.ts](/Users/brandondonnelly/Downloads/tea/src/bootstrap/runtime-readiness.ts)
+- No route-local defaulting: request context is owned by scoped request-context plugins
+- No direct provider binding outside `ProviderRegistry`
+- No direct persistence access outside owning domain stores/services
+- No raw user-facing strings outside message catalogs
+- No active authored/runtime state trapped in opaque JSON except immutable release snapshots and opaque machine payloads
 
 ---
 
@@ -563,6 +616,10 @@ Other primary endpoints:
 | `/` | GET | SSR home page |
 | `/api/health` | GET | System health envelope |
 | `/api/oracle` | POST | Oracle interaction |
+| `/api/ai/knowledge/documents` | GET / POST | List or ingest persisted knowledge documents for app/project-scoped RAG |
+| `/api/ai/knowledge/search` | POST | Semantic search across persisted knowledge chunks |
+| `/api/ai/assist/retrieval` | POST | Retrieval-augmented assist using the best available chat-capable provider |
+| `/api/ai/plan/tools` | POST | Structured tool planning for agentic implementation flows |
 | `/builder/*` | GET | Builder SSR views |
 | `/api/builder/*` | REST | Builder data + AI compose/test/assist |
 
@@ -580,6 +637,12 @@ Builder API highlights:
 Deprecated/removed surface:
 
 - `/api/game/session/:id/partials/dialogue` was removed. HUD rendering is now single-path via SSE.
+
+AI retrieval behavior:
+
+- Knowledge ingestion chunks plain text, embeds each chunk, and persists the corpus in Prisma.
+- Embeddings route through the shared provider registry, so local Transformers and cloud/back-end providers share one routing boundary.
+- When the active embedding backend is cold, degraded, or unavailable, the knowledge service falls back to deterministic hashed embeddings so retrieval endpoints remain responsive instead of timing out.
 
 ---
 
@@ -766,7 +829,7 @@ sequenceDiagram
 
 #### 插件流水线
 
-插件按严格顺序组合，每个插件为下游消费者装饰请求上下文。基础设施插件先执行，然后是页面、游戏、API 与 AI 路由，接着是 AI provider 生命周期插件、作用域化的 `game-request-context` derive 插件、`game-plugin`，再到 builder 路由，最后由 session-purge 与 creator-worker 生命周期插件托管后台轮询任务。Builder 的 locale、project id 与 current-path 解析统一收敛到 `src/plugins/builder-request-context.ts`，游戏 HTTP 的 participant identity 与 locale 解析统一收敛到 `src/plugins/game-request-context.ts`，完整页面 SSR 壳层统一消费 `src/views/layout.ts` 中的 `LayoutContext`，builder JSON 草稿状态的 decode / versioned-save / snapshot projection 统一收敛到 `src/domain/builder/builder-project-state-store.ts`，`src/shared/contracts/game.ts` 统一负责持久化 scene state、trigger definitions 与 realtime websocket frame 的边界校验，`game-plugin` 统一负责 session 级别的 websocket tick 清理，以及 session close/delete 时的 transport teardown，而 `game-loop` 统一负责会话解析、仪表盘/会话指标以及 HUD 状态读取。
+插件按严格顺序组合，每个插件为下游消费者装饰请求上下文。基础设施插件先执行，然后是页面、游戏、API 与 AI 路由，接着是 AI provider 生命周期插件、作用域化的 `game-request-context` derive 插件、`game-plugin`，再到 builder 路由，最后由 session-purge 与 creator-worker 生命周期插件托管后台轮询任务。Builder 的 locale、project id、current-path 以及 body/query/param 的作用域合并统一收敛到 `src/plugins/builder-request-context.ts`，页面与 oracle API 的 auth-session 状态统一收敛到 `src/plugins/auth-session.ts`，游戏 HTTP 的 participant identity / locale、可玩页面 `sessionId` / `projectId` / `invite` 查询参数，以及 websocket 的 participant / resume-token 解析统一收敛到 `src/plugins/game-request-context.ts`，完整页面 SSR 壳层统一消费 `src/views/layout.ts` 中的 `LayoutContext`，builder JSON 草稿状态的 decode / versioned-save / snapshot projection 统一收敛到 `src/domain/builder/builder-project-state-store.ts`，`src/shared/contracts/game.ts` 统一负责持久化 scene state、trigger definitions 与 realtime websocket frame 的边界校验，`game-plugin` 统一负责 session 级别的 websocket tick 清理，以及 session close/delete 时的 transport teardown，而 `game-loop` 统一负责会话解析、仪表盘/会话指标以及 HUD 状态读取。
 
 ```mermaid
 flowchart LR

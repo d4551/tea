@@ -1727,6 +1727,8 @@ export interface GameCommandResult {
 export interface GameSessionLifecycleResult {
   /** Session object used by create/restore calls. */
   readonly sessionId: string;
+  /** Authenticated participant identity bound to this session snapshot. */
+  readonly participantSessionId: string;
   /** Current scene locale. */
   readonly locale: LocaleCode;
   /** Current server timestamp. */
@@ -1737,7 +1739,7 @@ export interface GameSessionLifecycleResult {
   readonly releaseVersion?: number;
   /** Command queue depth at this point in time. */
   readonly commandQueueDepth: number;
-  /** Contract version for compatibility and replay tooling. */
+  /** Contract version for replay tooling and deterministic state validation. */
   readonly version: number;
   /** Resume token used by UI reconnection flows. */
   readonly resumeToken: string;

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { appConfig } from "../src/config/environment.ts";
 import { buildSessionSceneState } from "../src/domain/game/utils/session-state.ts";
+import { resolveGameWebSocketContext } from "../src/plugins/game-request-context.ts";
 import { defaultGameConfig, resolveScene } from "../src/shared/config/game-config.ts";
 import {
   validateGameRealtimeFrame,
@@ -105,5 +107,33 @@ describe("game shared contracts", () => {
     ]);
 
     expect(validation.ok).toBe(false);
+  });
+
+  test("websocket context resolver reads canonical participant id and resume token", () => {
+    const context = resolveGameWebSocketContext({
+      cookie: {
+        [appConfig.auth.sessionCookieName]: {
+          value: "participant-42",
+        },
+      },
+      query: {
+        resumeToken: "resume-token-123",
+      },
+    });
+
+    expect(context.gameParticipantSessionId).toBe("participant-42");
+    expect(context.gameResumeToken).toBe("resume-token-123");
+  });
+
+  test("websocket context resolver trims token arrays and falls back to anonymous session ids", () => {
+    const context = resolveGameWebSocketContext({
+      cookie: null,
+      query: {
+        resumeToken: ["", "  resume-token-456  "],
+      },
+    });
+
+    expect(context.gameParticipantSessionId?.length).toBeGreaterThan(0);
+    expect(context.gameResumeToken).toBe("resume-token-456");
   });
 });

@@ -35,8 +35,20 @@ export interface AppConfig {
   readonly runtime: {
     readonly nodeEnv: NodeEnvironment;
   };
+  readonly bootstrap: {
+    readonly supportedBunRange: string;
+    readonly installBunVersion: string;
+  };
   readonly database: {
     readonly url: string;
+    readonly localDirectory: string | null;
+  };
+  readonly paths: {
+    readonly builderUploadsDirectory: string;
+    readonly aiCacheDirectory: string;
+    readonly aiLocalModelDirectory: string;
+    readonly publicAssetOutputDirectory: string;
+    readonly playableGameOutputDirectory: string;
   };
   readonly builder: {
     readonly workerPollIntervalMs: number;
@@ -108,7 +120,12 @@ export interface AppConfig {
     readonly ollamaVisionModel: string;
     readonly ollamaTimeoutMs: number;
     readonly ollamaKeepAliveMs: number;
-    readonly preferredProvider: "auto" | "ollama" | "transformers";
+    readonly preferredProvider:
+      | "auto"
+      | "ollama"
+      | "transformers"
+      | "openai-compatible-local"
+      | "openai-compatible-cloud";
     readonly capabilityRefreshIntervalMs: number;
     readonly ollamaAvailabilityTimeoutMs: number;
     readonly requestTimeoutMs: number;
@@ -123,6 +140,37 @@ export interface AppConfig {
     readonly localSpeechToTextEnabled: boolean;
     readonly localTextToSpeechEnabled: boolean;
     readonly localEmbeddingsEnabled: boolean;
+    readonly openAiCompatible: {
+      readonly local: {
+        readonly enabled: boolean;
+        readonly providerLabel: string;
+        readonly baseUrl: string;
+        readonly apiKey: string;
+        readonly availabilityTimeoutMs: number;
+        readonly chatModel: string;
+        readonly embeddingModel?: string;
+        readonly visionModel?: string;
+      };
+      readonly cloud: {
+        readonly enabled: boolean;
+        readonly providerLabel: string;
+        readonly baseUrl: string;
+        readonly apiKey: string;
+        readonly availabilityTimeoutMs: number;
+        readonly chatModel: string;
+        readonly embeddingModel?: string;
+        readonly visionModel?: string;
+      };
+    };
+    readonly routing: {
+      readonly defaultPolicy: "local-first";
+      readonly cloudFallbackEnabled: boolean;
+      readonly ragPersistence: "prisma";
+    };
+    readonly ragChunkSize: number;
+    readonly ragChunkOverlap: number;
+    readonly ragSearchLimit: number;
+    readonly ragHashDimension: number;
     readonly audioInputSampleRateHz: number;
     readonly audioUploadMaxBytes: number;
     readonly textToSpeechSpeakerEmbeddings: string;
@@ -172,12 +220,21 @@ const DEFAULT_OLLAMA_TIMEOUT_MS = 30_000;
 const DEFAULT_OLLAMA_KEEP_ALIVE_MS = 300_000;
 const DEFAULT_AI_PREFERRED_PROVIDER = "auto";
 const DEFAULT_AI_CAPABILITY_REFRESH_INTERVAL_MS = 60_000;
+const DEFAULT_AI_LOCAL_API_COMPATIBLE_PROVIDER_LABEL = "ramalama";
+const DEFAULT_AI_LOCAL_API_COMPATIBLE_BASE_URL = "http://127.0.0.1:8080/v1";
+const DEFAULT_AI_CLOUD_API_COMPATIBLE_PROVIDER_LABEL = "openai-compatible-cloud";
+const DEFAULT_AI_CLOUD_API_COMPATIBLE_BASE_URL = "https://api.openai.com/v1";
+const DEFAULT_AI_API_COMPATIBLE_AVAILABILITY_TIMEOUT_MS = 3_000;
 const DEFAULT_AI_LOCAL_SENTIMENT_MODEL = "Xenova/distilbert-base-uncased-finetuned-sst-2-english";
 const DEFAULT_AI_LOCAL_TEXT_GENERATION_MODEL = "Xenova/gpt2";
 const DEFAULT_AI_LOCAL_NPC_DIALOGUE_MODEL = "Xenova/gpt2";
 const DEFAULT_AI_LOCAL_EMBEDDING_MODEL = "Xenova/all-MiniLM-L6-v2";
 const DEFAULT_AI_LOCAL_SPEECH_TO_TEXT_MODEL = "onnx-community/whisper-tiny.en";
 const DEFAULT_AI_LOCAL_TEXT_TO_SPEECH_MODEL = "Xenova/speecht5_tts";
+const DEFAULT_AI_RAG_CHUNK_SIZE = 800;
+const DEFAULT_AI_RAG_CHUNK_OVERLAP = 120;
+const DEFAULT_AI_RAG_SEARCH_LIMIT = 5;
+const DEFAULT_AI_RAG_HASH_DIMENSION = 64;
 const DEFAULT_AI_LOCAL_TTS_SPEAKER_EMBEDDINGS =
   "https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/speaker_embeddings.bin";
 const DEFAULT_PUBLIC_PREFIX = "/public";
@@ -197,6 +254,9 @@ const DEFAULT_SESSION_COOKIE_NAME = "lotfk_session";
 const DEFAULT_SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 const DEFAULT_ANSWER_HASH_MULTIPLIER = 7;
 const DEFAULT_LOCALE: LocaleCode = "en-US";
+const DEFAULT_SUPPORTED_BUN_RANGE = "1.3.x";
+const DEFAULT_INSTALL_BUN_VERSION = "1.3.10";
+const DEFAULT_BUILDER_UPLOADS_DIRECTORY = "uploads/builder";
 const resolvedPublicPrefix = Bun.env.PUBLIC_ASSET_PREFIX ?? DEFAULT_PUBLIC_PREFIX;
 const resolvedAssetsPrefix = Bun.env.IMAGES_ASSET_PREFIX ?? DEFAULT_ASSETS_PREFIX;
 const resolvedRmmzPackPrefix = Bun.env.RMMZ_PACK_PREFIX ?? DEFAULT_RMMZ_PACK_PREFIX;
@@ -303,6 +363,15 @@ const parseRequiredString = (value: string | undefined, variableName: string): s
   return value.trim();
 };
 
+const parseOptionalString = (value: string | undefined): string | undefined => {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+};
+
 const parseAbsoluteUrl = (value: string | undefined, variableName: string): string => {
   const raw = parseRequiredString(value, variableName);
   const parsed = new URL(raw);
@@ -317,6 +386,32 @@ const parseAbsoluteUrl = (value: string | undefined, variableName: string): stri
   return parsed.toString().replace(/\/$/u, "");
 };
 
+const parseConfiguredAbsoluteUrl = (
+  value: string | undefined,
+  fallback: string,
+  variableName: string,
+): string => parseAbsoluteUrl(value ?? fallback, variableName);
+
+const resolveLocalDatabaseDirectory = (databaseUrl: string): string | null => {
+  const normalized = databaseUrl.trim();
+  const matchedPrefix = ["libsql:file:", "file:"].find((prefix) => normalized.startsWith(prefix));
+  if (!matchedPrefix) {
+    return null;
+  }
+
+  const pathPart = normalized.slice(matchedPrefix.length).split("?")[0]?.trim() ?? "";
+  if (pathPart.length === 0) {
+    return null;
+  }
+
+  const lastSlashIndex = pathPart.lastIndexOf("/");
+  if (lastSlashIndex <= 0) {
+    return ".";
+  }
+
+  return pathPart.slice(0, lastSlashIndex);
+};
+
 const resolvedHost = Bun.env.HOST ?? "0.0.0.0";
 const resolvedPort = parseInteger(Bun.env.PORT, DEFAULT_PORT, 1, "PORT");
 const resolvedDatabaseUrl = parseRequiredString(Bun.env.DATABASE_URL, "DATABASE_URL");
@@ -327,7 +422,12 @@ const resolvedBuilderLocalAutomationOrigin = parseAbsoluteUrl(
 );
 
 type GameSessionStoreMode = "prisma" | "memory";
-type PreferredAiProvider = "auto" | "ollama" | "transformers";
+type PreferredAiProvider =
+  | "auto"
+  | "ollama"
+  | "transformers"
+  | "openai-compatible-local"
+  | "openai-compatible-cloud";
 type NodeEnvironment = "development" | "test" | "production";
 
 /**
@@ -401,13 +501,19 @@ const parsePreferredAiProvider = (value: string | undefined): PreferredAiProvide
     return DEFAULT_AI_PREFERRED_PROVIDER;
   }
 
-  if (value === "ollama" || value === "transformers" || value === "auto") {
+  if (
+    value === "ollama" ||
+    value === "transformers" ||
+    value === "auto" ||
+    value === "openai-compatible-local" ||
+    value === "openai-compatible-cloud"
+  ) {
     return value;
   }
 
   throw formatEnvError(
     "AI_PREFERRED_PROVIDER",
-    `expected "auto", "ollama", or "transformers" but received "${value}"`,
+    `expected "auto", "ollama", "transformers", "openai-compatible-local", or "openai-compatible-cloud" but received "${value}"`,
   );
 };
 
@@ -493,8 +599,21 @@ export const appConfig: AppConfig = {
   runtime: {
     nodeEnv: parseNodeEnvironment(Bun.env.NODE_ENV),
   },
+  bootstrap: {
+    supportedBunRange: Bun.env.BUN_SUPPORTED_RANGE ?? DEFAULT_SUPPORTED_BUN_RANGE,
+    installBunVersion: Bun.env.BUN_INSTALL_VERSION ?? DEFAULT_INSTALL_BUN_VERSION,
+  },
   database: {
     url: resolvedDatabaseUrl,
+    localDirectory: resolveLocalDatabaseDirectory(resolvedDatabaseUrl),
+  },
+  paths: {
+    builderUploadsDirectory: Bun.env.BUILDER_UPLOADS_DIRECTORY ?? DEFAULT_BUILDER_UPLOADS_DIRECTORY,
+    aiCacheDirectory: Bun.env.AI_CACHE_DIRECTORY ?? DEFAULT_AI_TRANSFORMERS_CACHE_DIRECTORY,
+    aiLocalModelDirectory:
+      Bun.env.AI_LOCAL_MODEL_DIRECTORY ?? DEFAULT_AI_TRANSFORMERS_LOCAL_MODEL_PATH,
+    publicAssetOutputDirectory: resolvedPublicDirectory,
+    playableGameOutputDirectory: resolvedPlayableGameSourceDirectory,
   },
   builder: {
     workerPollIntervalMs: parseInteger(
@@ -793,6 +912,97 @@ export const appConfig: AppConfig = {
       Bun.env.AI_LOCAL_EMBEDDINGS_ENABLED,
       true,
       "AI_LOCAL_EMBEDDINGS_ENABLED",
+    ),
+    openAiCompatible: {
+      local: {
+        enabled: parseBoolean(
+          Bun.env.AI_LOCAL_API_COMPATIBLE_ENABLED,
+          false,
+          "AI_LOCAL_API_COMPATIBLE_ENABLED",
+        ),
+        providerLabel:
+          parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_PROVIDER_LABEL) ??
+          DEFAULT_AI_LOCAL_API_COMPATIBLE_PROVIDER_LABEL,
+        baseUrl: parseConfiguredAbsoluteUrl(
+          Bun.env.AI_LOCAL_API_COMPATIBLE_BASE_URL,
+          DEFAULT_AI_LOCAL_API_COMPATIBLE_BASE_URL,
+          "AI_LOCAL_API_COMPATIBLE_BASE_URL",
+        ),
+        apiKey: parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_API_KEY) ?? "",
+        availabilityTimeoutMs: parseInteger(
+          Bun.env.AI_LOCAL_API_COMPATIBLE_AVAILABILITY_TIMEOUT_MS,
+          DEFAULT_AI_API_COMPATIBLE_AVAILABILITY_TIMEOUT_MS,
+          1,
+          "AI_LOCAL_API_COMPATIBLE_AVAILABILITY_TIMEOUT_MS",
+        ),
+        chatModel:
+          parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_CHAT_MODEL) ??
+          DEFAULT_OLLAMA_CHAT_MODEL,
+        embeddingModel: parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_EMBEDDING_MODEL),
+        visionModel: parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_VISION_MODEL),
+      },
+      cloud: {
+        enabled: parseBoolean(
+          Bun.env.AI_CLOUD_API_COMPATIBLE_ENABLED,
+          false,
+          "AI_CLOUD_API_COMPATIBLE_ENABLED",
+        ),
+        providerLabel:
+          parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_PROVIDER_LABEL) ??
+          DEFAULT_AI_CLOUD_API_COMPATIBLE_PROVIDER_LABEL,
+        baseUrl: parseConfiguredAbsoluteUrl(
+          Bun.env.AI_CLOUD_API_COMPATIBLE_BASE_URL,
+          DEFAULT_AI_CLOUD_API_COMPATIBLE_BASE_URL,
+          "AI_CLOUD_API_COMPATIBLE_BASE_URL",
+        ),
+        apiKey: parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_API_KEY) ?? "",
+        availabilityTimeoutMs: parseInteger(
+          Bun.env.AI_CLOUD_API_COMPATIBLE_AVAILABILITY_TIMEOUT_MS,
+          DEFAULT_AI_API_COMPATIBLE_AVAILABILITY_TIMEOUT_MS,
+          1,
+          "AI_CLOUD_API_COMPATIBLE_AVAILABILITY_TIMEOUT_MS",
+        ),
+        chatModel:
+          parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_CHAT_MODEL) ?? "gpt-4.1-mini",
+        embeddingModel:
+          parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_EMBEDDING_MODEL) ??
+          "text-embedding-3-small",
+        visionModel:
+          parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_VISION_MODEL) ?? "gpt-4.1-mini",
+      },
+    },
+    routing: {
+      defaultPolicy: "local-first",
+      cloudFallbackEnabled: parseBoolean(
+        Bun.env.AI_CLOUD_FALLBACK_ENABLED,
+        true,
+        "AI_CLOUD_FALLBACK_ENABLED",
+      ),
+      ragPersistence: "prisma",
+    },
+    ragChunkSize: parseInteger(
+      Bun.env.AI_RAG_CHUNK_SIZE,
+      DEFAULT_AI_RAG_CHUNK_SIZE,
+      100,
+      "AI_RAG_CHUNK_SIZE",
+    ),
+    ragChunkOverlap: parseInteger(
+      Bun.env.AI_RAG_CHUNK_OVERLAP,
+      DEFAULT_AI_RAG_CHUNK_OVERLAP,
+      0,
+      "AI_RAG_CHUNK_OVERLAP",
+    ),
+    ragSearchLimit: parseInteger(
+      Bun.env.AI_RAG_SEARCH_LIMIT,
+      DEFAULT_AI_RAG_SEARCH_LIMIT,
+      1,
+      "AI_RAG_SEARCH_LIMIT",
+    ),
+    ragHashDimension: parseInteger(
+      Bun.env.AI_RAG_HASH_DIMENSION,
+      DEFAULT_AI_RAG_HASH_DIMENSION,
+      8,
+      "AI_RAG_HASH_DIMENSION",
     ),
     audioInputSampleRateHz: parseInteger(
       Bun.env.AI_AUDIO_INPUT_SAMPLE_RATE_HZ,

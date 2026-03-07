@@ -1,6 +1,6 @@
 import { Elysia, t } from "elysia";
 import type { OracleService } from "../domain/oracle/oracle-service.ts";
-import { authSessionGuard, resolveAuthSession } from "../plugins/auth-session.ts";
+import { authSessionContextPlugin, authSessionGuard } from "../plugins/auth-session.ts";
 import { i18nContextPlugin } from "../plugins/i18n-context.ts";
 import { defaultOracleMode } from "../shared/constants/oracle.ts";
 import { appRoutes, resolveRequestPathWithQuery } from "../shared/constants/routes.ts";
@@ -37,73 +37,76 @@ const localeQuerySchema = t.Object({
 });
 
 const createOraclePageRoutes = (oracleService: OracleService) =>
-  new Elysia({ name: "page-oracle-routes" }).use(i18nContextPlugin).guard(authSessionGuard, (app) =>
-    app
-      .get(
-        appRoutes.home,
-        async ({ query, cookie, request, locale, messages }) => {
-          const mode = parseOracleMode(query.mode);
-          const question = query.question ?? "";
-          const hasOracleInputs = query.question !== undefined || query.mode !== undefined;
+  new Elysia({ name: "page-oracle-routes" })
+    .use(i18nContextPlugin)
+    .use(authSessionContextPlugin)
+    .guard(authSessionGuard, (app) =>
+      app
+        .get(
+          appRoutes.home,
+          async ({ query, request, locale, messages, authHasSession }) => {
+            const mode = parseOracleMode(query.mode);
+            const question = query.question ?? "";
+            const hasOracleInputs = query.question !== undefined || query.mode !== undefined;
 
-          let oraclePanelState: OraclePanelState = {
-            state: "idle",
-            mode: defaultOracleMode,
-            question: "",
-          };
+            let oraclePanelState: OraclePanelState = {
+              state: "idle",
+              mode: defaultOracleMode,
+              question: "",
+            };
 
-          if (hasOracleInputs) {
+            if (hasOracleInputs) {
+              const outcome = await oracleService.evaluate({
+                locale,
+                mode,
+                question,
+                hasSession: authHasSession,
+              });
+
+              oraclePanelState = {
+                ...outcome,
+                mode,
+                question,
+              };
+            }
+
+            return renderHomePage(
+              {
+                layout: createRouteLayoutContext(request, locale, messages, "home"),
+              },
+              oraclePanelState,
+            );
+          },
+          {
+            query: oracleQuerySchema,
+          },
+        )
+        .get(
+          appRoutes.oraclePartial,
+          async ({ query, locale, messages, authHasSession }) => {
+            const mode = parseOracleMode(query.mode);
+            const question = query.question ?? "";
+
             const outcome = await oracleService.evaluate({
               locale,
               mode,
               question,
-              hasSession: resolveAuthSession(cookie).hasSession,
+              hasSession: authHasSession,
             });
 
-            oraclePanelState = {
+            const panelState: OraclePanelState = {
               ...outcome,
               mode,
               question,
             };
-          }
 
-          return renderHomePage(
-            {
-              layout: createRouteLayoutContext(request, locale, messages, "home"),
-            },
-            oraclePanelState,
-          );
-        },
-        {
-          query: oracleQuerySchema,
-        },
-      )
-      .get(
-        appRoutes.oraclePartial,
-        async ({ query, cookie, locale, messages }) => {
-          const mode = parseOracleMode(query.mode);
-          const question = query.question ?? "";
-
-          const outcome = await oracleService.evaluate({
-            locale,
-            mode,
-            question,
-            hasSession: resolveAuthSession(cookie).hasSession,
-          });
-
-          const panelState: OraclePanelState = {
-            ...outcome,
-            mode,
-            question,
-          };
-
-          return renderOraclePanel(messages, panelState);
-        },
-        {
-          query: oracleQuerySchema,
-        },
-      ),
-  );
+            return renderOraclePanel(messages, panelState);
+          },
+          {
+            query: oracleQuerySchema,
+          },
+        ),
+    );
 
 const createStaticPageRoutes = () =>
   new Elysia({ name: "page-static-routes" })

@@ -17,6 +17,19 @@ export interface DecodedWavAudio {
   readonly durationMs: number;
 }
 
+/**
+ * Result of safely decoding a WAV payload without relying on exception control flow.
+ */
+export type DecodedWavAudioResult =
+  | {
+      readonly ok: true;
+      readonly value: DecodedWavAudio;
+    }
+  | {
+      readonly ok: false;
+      readonly error: string;
+    };
+
 const readAscii = (view: DataView, offset: number, length: number): string => {
   let result = "";
   for (let index = 0; index < length; index += 1) {
@@ -134,6 +147,26 @@ export const decodeWavAudio = (input: Uint8Array): DecodedWavAudio => {
     channels: channelCount,
     durationMs: Math.round((frameCount / sampleRate) * 1000),
   };
+};
+
+/**
+ * Attempts to decode a WAV payload into mono inference-ready PCM without throwing.
+ *
+ * @param input Raw WAV bytes.
+ * @returns Typed decode result with either the decoded payload or a stable error message.
+ */
+export const safeDecodeWavAudio = (input: Uint8Array): DecodedWavAudioResult => {
+  try {
+    return {
+      ok: true,
+      value: decodeWavAudio(input),
+    };
+  } catch (error: unknown) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unsupported WAV payload.",
+    };
+  }
 };
 
 /**

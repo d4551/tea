@@ -1,31 +1,21 @@
-import { appConfig } from "../config/environment.ts";
-import { createLogger } from "../lib/logger.ts";
-import { assetRelativePaths, joinLocalPath } from "../shared/constants/assets.ts";
-import { prisma } from "../shared/services/db.ts";
-
-const preflightLogger = createLogger("bootstrap.preflight");
-
-const requiredPublicAssetPaths = [
-  joinLocalPath(appConfig.staticAssets.publicDirectory, assetRelativePaths.stylesheetOutputFile),
-  joinLocalPath(appConfig.staticAssets.publicDirectory, assetRelativePaths.htmxPublicBundleFile),
-  joinLocalPath(
-    appConfig.staticAssets.publicDirectory,
-    assetRelativePaths.builderSceneEditorBundleFile,
-  ),
-  joinLocalPath(appConfig.playableGame.sourceDirectory, assetRelativePaths.gameClientBundleFile),
-] as const;
+import {
+  assertRuntimeReadiness,
+  collectRuntimeReadinessReport,
+  ensureRuntimeDirectories,
+} from "./runtime-readiness.ts";
 
 /**
  * Verifies that the expected built asset files exist before the server boots.
  *
- * @throws When any required public asset is missing.
+ * @throws When any required runtime asset check fails.
  */
 export const assertRequiredAssetsExist = async (): Promise<void> => {
-  for (const assetPath of requiredPublicAssetPaths) {
-    const exists = await Bun.file(assetPath).exists();
-    if (!exists) {
-      throw new Error(`Missing required asset: ${assetPath}`);
-    }
+  const report = await collectRuntimeReadinessReport();
+  const failedAssetCheck = report.checks.find(
+    (check) => check.key.startsWith("asset:") && !check.ok,
+  );
+  if (failedAssetCheck) {
+    throw new Error(`Missing required asset: ${failedAssetCheck.detail ?? failedAssetCheck.key}`);
   }
 };
 
@@ -35,7 +25,20 @@ export const assertRequiredAssetsExist = async (): Promise<void> => {
  * @throws When the configured database cannot be queried.
  */
 export const assertDatabaseReachable = async (): Promise<void> => {
-  await prisma.$queryRawUnsafe("SELECT 1");
+  const report = await collectRuntimeReadinessReport();
+  const failedDatabaseCheck = report.checks.find(
+    (check) => check.key === "database:reachable" && !check.ok,
+  );
+  if (failedDatabaseCheck) {
+    throw new Error("Database is not reachable.");
+  }
+};
+
+/**
+ * Ensures runtime directories exist before startup proceeds.
+ */
+export const ensureRequiredDirectoriesExist = async (): Promise<void> => {
+  await ensureRuntimeDirectories();
 };
 
 /**
@@ -44,12 +47,5 @@ export const assertDatabaseReachable = async (): Promise<void> => {
  * @throws When database connectivity, asset presence, or URL config is invalid.
  */
 export const assertStartupReadiness = async (): Promise<void> => {
-  new URL(appConfig.builder.localAutomationOrigin);
-  await assertDatabaseReachable();
-  await assertRequiredAssetsExist();
-
-  preflightLogger.info("startup.readiness.ok", {
-    assetCount: requiredPublicAssetPaths.length,
-    automationOrigin: appConfig.builder.localAutomationOrigin,
-  });
+  await assertRuntimeReadiness();
 };

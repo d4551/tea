@@ -1,7 +1,6 @@
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { createApp } from "../src/app.ts";
 import { appConfig } from "../src/config/environment.ts";
-import { ProviderRegistry } from "../src/domain/ai/providers/provider-registry.ts";
 import { builderService } from "../src/domain/builder/builder-service.ts";
 import { gameScenes } from "../src/domain/game/data/sprite-data.ts";
 import { GameLoopService, gameLoop } from "../src/domain/game/game-loop.ts";
@@ -13,7 +12,6 @@ import { gameAssetUrls } from "../src/shared/constants/game-assets.ts";
 import { httpStatus } from "../src/shared/constants/http.ts";
 import { appRoutes } from "../src/shared/constants/routes.ts";
 import type { SceneDefinition } from "../src/shared/contracts/game.ts";
-import { prisma } from "../src/shared/services/db.ts";
 
 let app: Awaited<ReturnType<typeof createApp>>;
 const baseUrl = "http://localhost";
@@ -121,14 +119,6 @@ afterEach(async () => {
   managedSessionIds.clear();
 });
 
-afterAll(async () => {
-  if (app.server) {
-    await app.stop();
-  }
-  await (await ProviderRegistry.getInstance()).dispose();
-  await prisma.$disconnect();
-});
-
 describe("game engine runtime", () => {
   test("buildSessionSceneState keeps entity bounds local and materializes NPC interaction data", () => {
     const teaHouseScene = gameScenes.teaHouse;
@@ -168,6 +158,7 @@ describe("game engine runtime", () => {
 
     const accepted = gameLoop.processCommand(
       session.sessionId,
+      "anonymous",
       { type: "move", direction: "right" },
       "en-US",
     );
@@ -184,6 +175,43 @@ describe("game engine runtime", () => {
     expect(advanced).toBe(true);
   });
 
+  test("controller movement updates the controller avatar instead of the owner avatar", async () => {
+    const ownerSessionId = `owner-${crypto.randomUUID()}`;
+    const controllerSessionId = `controller-${crypto.randomUUID()}`;
+    const session = await gameLoop.createSession("en-US", "teaHouse", undefined, ownerSessionId);
+    managedSessionIds.add(session.sessionId);
+
+    await gameStateStore.saveParticipant(session.sessionId, controllerSessionId, "controller");
+    const initialControllerState = await gameLoop.getSessionState(
+      session.sessionId,
+      controllerSessionId,
+    );
+    const initialPresence = initialControllerState?.state.coPlayers?.find(
+      (presence) => presence.sessionId === controllerSessionId,
+    );
+    const initialOwnerX = initialControllerState?.state.player.position.x ?? 0;
+    const initialControllerX = initialPresence?.entity.position.x ?? 0;
+
+    const accepted = gameLoop.processCommand(
+      session.sessionId,
+      controllerSessionId,
+      { type: "move", direction: "right" },
+      "en-US",
+    );
+    expect(accepted.state).toBe("queued");
+
+    await gameLoop.tick(session.sessionId, defaultGameConfig.tickMs);
+
+    const movedState = await gameLoop.getSessionState(session.sessionId, controllerSessionId);
+    const movedPresence = movedState?.state.coPlayers?.find(
+      (presence) => presence.sessionId === controllerSessionId,
+    );
+
+    expect(movedState?.participantSessionId).toBe(controllerSessionId);
+    expect(movedState?.state.player.position.x).toBe(initialOwnerX);
+    expect((movedPresence?.entity.position.x ?? 0) > initialControllerX).toBe(true);
+  });
+
   test("confirmDialogue closes an active NPC conversation", async () => {
     const projectId = `dialogue-confirm-${crypto.randomUUID()}`;
     await publishProjectWithNpcAtSpawn(projectId, "teaHouse", "teaMonk");
@@ -192,6 +220,7 @@ describe("game engine runtime", () => {
     managedSessionIds.add(session.sessionId);
     const interactResult = gameLoop.processCommand(
       session.sessionId,
+      "anonymous",
       { type: "interact" },
       "en-US",
     );
@@ -204,6 +233,7 @@ describe("game engine runtime", () => {
 
     const confirmResult = gameLoop.processCommand(
       session.sessionId,
+      "anonymous",
       { type: "confirmDialogue" },
       "en-US",
     );
@@ -294,6 +324,7 @@ describe("game engine runtime", () => {
 
     const interactResult = gameLoop.processCommand(
       session.sessionId,
+      "anonymous",
       { type: "interact" },
       "en-US",
     );
