@@ -1,9 +1,7 @@
 import type {
-  CutsceneActionType,
   CutsceneDefinition,
   CutscenePlaybackState,
   CutsceneStep,
-  Vector2,
 } from "../../shared/contracts/game.ts";
 
 /**

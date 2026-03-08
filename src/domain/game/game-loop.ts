@@ -1560,6 +1560,12 @@ export class GameLoopService {
                 state.combat = undefined;
                 nextActionState = "success";
                 await this.progressStore.awardXp(sessionId, 50); // Give 50 XP for winning combat
+                this.applyMatchingTriggers(
+                  state,
+                  session.triggerDefinitions ?? [],
+                  "combat-victory",
+                  { sceneId: state.sceneId },
+                );
               } else if (nextCombatState.phase === "defeat") {
                 state.combat = undefined;
                 nextActionState = "idle";

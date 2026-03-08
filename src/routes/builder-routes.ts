@@ -22,7 +22,11 @@ import { renderAiPanel } from "../views/builder/ai-panel.ts";
 import { renderAssetsEditor } from "../views/builder/assets-editor.ts";
 import { renderAutomationPanel } from "../views/builder/automation-panel.ts";
 import { type DashboardStats, renderBuilderDashboard } from "../views/builder/builder-dashboard.ts";
-import { type BuilderChromeProject, renderBuilderLayout } from "../views/builder/builder-layout.ts";
+import {
+  type BuilderChromeProject,
+  renderBuilderLayout,
+  renderBuilderSidebar,
+} from "../views/builder/builder-layout.ts";
 import { renderDialogueEditor } from "../views/builder/dialogue-editor.ts";
 import { renderMechanicsEditor } from "../views/builder/mechanics-editor.ts";
 import { renderNpcEditor } from "../views/builder/npc-editor.ts";
@@ -79,6 +83,16 @@ const wrapOrPartial = (
     mergedScripts.push(script);
   }
 
+  const customSidebarHtml = renderBuilderSidebar({
+    locale,
+    messages,
+    activeTab,
+    currentPath,
+    projectId,
+    project,
+    body,
+  });
+
   const builderBody = renderBuilderLayout({
     locale,
     messages,
@@ -94,6 +108,9 @@ const wrapOrPartial = (
     activeRoute: "builder",
     currentPathWithQuery,
     persistentProjectId: projectId,
+    customSidebarHtml,
+    hideTopBar: true,
+    hideFooter: true,
   };
   return renderDocument(layout, messages.builder.title, builderBody, mergedScripts);
 };
@@ -135,14 +152,16 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
       );
     }
     const totalScenes = project.scenes.size;
-    const totalNpcs = Array.from(project.scenes.values()).reduce(
-      (acc, scene) => acc + scene.npcs.length,
-      0,
-    );
+    const sceneValues = Array.from(project.scenes.values());
+    const scenes2d = sceneValues.filter((scene) => scene.sceneMode !== "3d").length;
+    const scenes3d = sceneValues.filter((scene) => scene.sceneMode === "3d").length;
+    const totalNpcs = sceneValues.reduce((acc, scene) => acc + scene.npcs.length, 0);
 
     const stats: DashboardStats = {
       activeSessions: await gameLoop.countActiveSessions(),
       totalScenes,
+      scenes2d,
+      scenes3d,
       totalNpcs,
       aiAvailable: features.providers.length > 0,
       providers: [...features.providers],
@@ -281,7 +300,7 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
     const features = await detectAvailableFeatures();
     const readiness = evaluateBuilderPlatformReadiness({
       sceneCount: project.scenes.size,
-      spriteManifestCount: project.assets.size,
+      spriteManifestCount: project.spriteAtlases.size,
       aiFeatures: features,
       rendererPreference: appConfig.playableGame.rendererPreference,
       onnxDevice: appConfig.ai.onnxDevice,
@@ -384,6 +403,7 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
       builderLocale,
       builderProjectId,
       Array.from(project.automationRuns.values()),
+      Array.from(project.artifacts.values()),
     );
     return wrapOrPartial(
       request,

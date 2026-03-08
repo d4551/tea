@@ -4,10 +4,10 @@ import type {
   AnimationClip,
   AnimationKeyframe,
   AnimationTimeline,
-  SpriteAtlasManifest,
   AssetVariant,
   AutomationRun,
   AutomationRunStep,
+  AutomationStepSpec,
   BuilderAsset,
   DialogueGraph,
   GameFlagDefinition,
@@ -15,14 +15,16 @@ import type {
   GenerationJob,
   QuestDefinition,
   SceneDefinition,
+  SceneNode2D,
+  SceneNode3D,
   SceneNodeDefinition,
   SceneNpcDefinition,
+  SpriteAtlasManifest,
   TriggerDefinition,
 } from "../../shared/contracts/game.ts";
 import {
   type BuilderProjectAnimationClipRow,
   type BuilderProjectAnimationTimelineRow,
-  type BuilderProjectSpriteAtlasRow,
   type BuilderProjectArtifactRow,
   type BuilderProjectAssetRow,
   type BuilderProjectAutomationRunRow,
@@ -33,6 +35,7 @@ import {
   type BuilderProjectQuestRow,
   type BuilderProjectRow,
   type BuilderProjectSceneRow,
+  type BuilderProjectSpriteAtlasRow,
   type BuilderProjectTriggerRow,
   prisma,
 } from "../../shared/services/db.ts";
@@ -388,28 +391,10 @@ const toDraftStateInput = (state: BuilderProjectState): Prisma.InputJsonValue =>
   return JSON.parse(JSON.stringify(draftState)) as Prisma.InputJsonValue;
 };
 
-const hasLegacyDraftContent = (state: BuilderProjectState): boolean =>
-  Object.keys(state.scenes).length > 0 ||
-  Object.values(state.dialogues).some((catalog) => Object.keys(catalog).length > 0);
-
-const hasLegacyDraftMedia = (state: BuilderProjectState): boolean =>
-  Object.keys(state.assets).length > 0 || Object.keys(state.animationClips).length > 0;
-
-const hasLegacyDraftWorkerState = (state: BuilderProjectState): boolean =>
-  Object.keys(state.generationJobs).length > 0 ||
-  Object.keys(state.artifacts).length > 0 ||
-  Object.keys(state.automationRuns).length > 0;
-
-const hasLegacyDraftMechanics = (state: BuilderProjectState): boolean =>
-  Object.keys(state.dialogueGraphs).length > 0 ||
-  Object.keys(state.quests).length > 0 ||
-  Object.keys(state.triggers).length > 0 ||
-  Object.keys(state.flags).length > 0;
-
 const toNumberValue = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
 
-const toVector2 = (value: unknown): { readonly x: number; readonly y: number } | null => {
+const _toVector2 = (value: unknown): { readonly x: number; readonly y: number } | null => {
   const record = asRecord(value);
   const x = toNumberValue(record.x);
   const y = toNumberValue(record.y);
@@ -426,7 +411,7 @@ const toVector3 = (
   return x === null || y === null || z === null ? null : { x, y, z };
 };
 
-const toSceneGeometry = (value: unknown): SceneDefinition["geometry"] | null => {
+const _toSceneGeometry = (value: unknown): SceneDefinition["geometry"] | null => {
   const record = asRecord(value);
   const width = toNumberValue(record.width);
   const height = toNumberValue(record.height);
@@ -459,7 +444,7 @@ const toNpcAiBlueprint = (value: unknown): SceneNpcDefinition["ai"] | null => {
   };
 };
 
-const toSceneNpcs = (value: unknown): SceneDefinition["npcs"] =>
+const _toSceneNpcs = (value: unknown): SceneDefinition["npcs"] =>
   Array.isArray(value)
     ? value.flatMap((item) => {
         const record = asRecord(item);
@@ -497,7 +482,7 @@ const toSceneNpcs = (value: unknown): SceneDefinition["npcs"] =>
       })
     : [];
 
-const toSceneNodes = (
+const _toSceneNodes = (
   value: unknown,
   sceneMode?: SceneDefinition["sceneMode"],
 ): SceneDefinition["nodes"] | undefined => {
@@ -513,11 +498,28 @@ const toSceneNodes = (
       continue;
     }
 
+    const x = toNumberValue(record.positionX ?? asRecord(record.position).x);
+    const y = toNumberValue(record.positionY ?? asRecord(record.position).y);
+    const z = toNumberValue(record.positionZ ?? asRecord(record.position).z);
+
+    const position = x !== null && y !== null ? (z !== null ? { x, y, z } : { x, y }) : null;
+
+    const rotX = toNumberValue(record.rotationX ?? asRecord(record.rotation).x);
+    const rotY = toNumberValue(record.rotationY ?? asRecord(record.rotation).y);
+    const rotZ = toNumberValue(record.rotationZ ?? asRecord(record.rotation).z);
+    const rotation =
+      rotX !== null && rotY !== null && rotZ !== null ? { x: rotX, y: rotY, z: rotZ } : null;
+
+    const scaleX = toNumberValue(record.scaleX ?? asRecord(record.scale).x);
+    const scaleY = toNumberValue(record.scaleY ?? asRecord(record.scale).y);
+    const scaleZ = toNumberValue(record.scaleZ ?? asRecord(record.scale).z);
+    const scale =
+      scaleX !== null && scaleY !== null && scaleZ !== null
+        ? { x: scaleX, y: scaleY, z: scaleZ }
+        : null;
+
     const isThreeDimensionalNode =
-      sceneMode === "3d" ||
-      toVector3(record.position) !== null ||
-      toVector3(record.rotation) !== null ||
-      toVector3(record.scale) !== null;
+      sceneMode === "3d" || z !== null || rotation !== null || scale !== null;
 
     if (
       !isThreeDimensionalNode &&
@@ -527,10 +529,8 @@ const toSceneNodes = (
         record.nodeType === "trigger" ||
         record.nodeType === "camera")
     ) {
-      const position = toVector2(record.position);
-      const sizeRecord = asRecord(record.size);
-      const width = toNumberValue(sizeRecord.width);
-      const height = toNumberValue(sizeRecord.height);
+      const width = toNumberValue(record.sizeWidth ?? asRecord(record.size).width);
+      const height = toNumberValue(record.sizeHeight ?? asRecord(record.size).height);
       if (
         position === null ||
         width === null ||
@@ -614,18 +614,97 @@ const toScenesFromRows = (
         return [];
       }
 
+      /** Converts relational NPC rows with flat AI columns to domain NPC definitions. */
+      const npcs: SceneNpcDefinition[] = Array.isArray(row.npcs)
+        ? row.npcs.flatMap((npc) => {
+            const dialogueKeys = Array.isArray(npc.dialogueKeys)
+              ? npc.dialogueKeys.sort((a, b) => a.ordinal - b.ordinal).map((dk) => dk.key)
+              : [];
+            const ai: SceneNpcDefinition["ai"] = {
+              wanderRadius: npc.wanderRadius ?? 0,
+              wanderSpeed: npc.wanderSpeed ?? 0,
+              idlePauseMs: [npc.idlePauseMinMs ?? 2000, npc.idlePauseMaxMs ?? 5000],
+              greetOnApproach: npc.greetOnApproach ?? false,
+              greetLineKey: npc.greetLineKey ?? "",
+            };
+            if (typeof npc.characterKey !== "string" || typeof npc.labelKey !== "string") {
+              return [];
+            }
+            return [
+              {
+                characterKey: npc.characterKey,
+                x: npc.x,
+                y: npc.y,
+                labelKey: npc.labelKey,
+                dialogueKeys,
+                interactRadius: npc.interactRadius,
+                ai,
+              } satisfies SceneNpcDefinition,
+            ];
+          })
+        : [];
+
+      /** Converts relational node rows with flat position/rotation/scale columns. */
+      const nodes: SceneNodeDefinition[] | undefined = Array.isArray(row.nodes)
+        ? row.nodes.flatMap((node): SceneNodeDefinition[] => {
+            const x = node.positionX;
+            const y = node.positionY;
+            const z = node.positionZ;
+            if (x === null || y === null) {
+              return [];
+            }
+
+            // 3D node: has z coordinate
+            if (z !== null) {
+              const node3d: SceneNode3D = {
+                id: node.id,
+                nodeType: node.nodeType as SceneNode3D["nodeType"],
+                position: { x, y, z },
+                rotation: {
+                  x: node.rotationX ?? 0,
+                  y: node.rotationY ?? 0,
+                  z: node.rotationZ ?? 0,
+                },
+                scale: {
+                  x: node.scaleX ?? 1,
+                  y: node.scaleY ?? 1,
+                  z: node.scaleZ ?? 1,
+                },
+                ...(node.assetId ? { assetId: node.assetId } : {}),
+                ...(node.animationClipId ? { animationClipId: node.animationClipId } : {}),
+              };
+              return [node3d];
+            }
+
+            // 2D node: no z coordinate
+            const node2d: SceneNode2D = {
+              id: node.id,
+              nodeType: node.nodeType as SceneNode2D["nodeType"],
+              position: { x, y },
+              size: {
+                width: node.sizeWidth ?? 0,
+                height: node.sizeHeight ?? 0,
+              },
+              layer: node.layer ?? "foreground",
+              ...(node.assetId ? { assetId: node.assetId } : {}),
+              ...(node.animationClipId ? { animationClipId: node.animationClipId } : {}),
+            };
+            return [node2d];
+          })
+        : undefined;
+
       return [
         [
           row.id,
           {
             id: row.id,
-            sceneMode: row.sceneMode === "2d" || row.sceneMode === "3d" ? row.sceneMode : undefined,
+            sceneMode,
             titleKey: row.titleKey,
             background: row.background,
             geometry,
             spawn,
-            npcs: toSceneNpcs(row.npcs),
-            nodes: toSceneNodes(row.nodes, sceneMode),
+            npcs,
+            nodes,
             collisions: toCollisionMasks(row.collisions),
           } satisfies SceneDefinition,
         ],
@@ -792,19 +871,17 @@ const toSpriteAtlasFromRows = (
  */
 const parseSpriteAtlasFrames = (raw: string): SpriteAtlasManifest["frames"] => {
   const parsed = safeJsonParse<unknown[]>(raw, []);
-  return parsed.filter(
-    (f): f is SpriteAtlasManifest["frames"][number] => {
-      if (typeof f !== "object" || f === null) return false;
-      const r = f as Record<string, unknown>;
-      return (
-        typeof r.name === "string" &&
-        typeof r.x === "number" &&
-        typeof r.y === "number" &&
-        typeof r.width === "number" &&
-        typeof r.height === "number"
-      );
-    },
-  );
+  return parsed.filter((f): f is SpriteAtlasManifest["frames"][number] => {
+    if (typeof f !== "object" || f === null) return false;
+    const r = f as Record<string, unknown>;
+    return (
+      typeof r.name === "string" &&
+      typeof r.x === "number" &&
+      typeof r.y === "number" &&
+      typeof r.width === "number" &&
+      typeof r.height === "number"
+    );
+  });
 };
 
 /**
@@ -829,7 +906,9 @@ const parseTrackKeyframes = (raw: string): AnimationTimeline["tracks"][number]["
       typeof (item as Record<string, unknown>).easing === "string"
     ) {
       const kf = item as { timeMs: number; value: number; easing: AnimationKeyframe["easing"] };
-      return [{ timeMs: kf.timeMs, value: kf.value, easing: kf.easing } satisfies AnimationKeyframe];
+      return [
+        { timeMs: kf.timeMs, value: kf.value, easing: kf.easing } satisfies AnimationKeyframe,
+      ];
     }
     return [];
   });
@@ -865,19 +944,26 @@ const toDialogueGraphNodes = (value: unknown): DialogueGraph["nodes"] =>
                   edge && typeof edge === "object" && !Array.isArray(edge)
                     ? (edge as Record<string, unknown>)
                     : null;
+
+                if (!edgeRecord) {
+                  return [];
+                }
+
+                const toId = edgeRecord.toNodeId ?? edgeRecord.to;
                 if (
-                  edgeRecord &&
-                  typeof edgeRecord.to === "string" &&
+                  typeof toId === "string" &&
                   (edgeRecord.requiredFlag === undefined ||
+                    edgeRecord.requiredFlag === null ||
                     typeof edgeRecord.requiredFlag === "string") &&
                   (edgeRecord.advanceQuestStepId === undefined ||
+                    edgeRecord.advanceQuestStepId === null ||
                     typeof edgeRecord.advanceQuestStepId === "string")
                 ) {
                   return [
                     {
-                      to: edgeRecord.to,
-                      requiredFlag: edgeRecord.requiredFlag,
-                      advanceQuestStepId: edgeRecord.advanceQuestStepId,
+                      to: toId,
+                      requiredFlag: edgeRecord.requiredFlag || undefined,
+                      advanceQuestStepId: edgeRecord.advanceQuestStepId || undefined,
                     },
                   ];
                 }
@@ -953,7 +1039,30 @@ const toQuestsFromRows = (
 const toFlagValueRecord = (
   value: unknown,
 ): Readonly<Record<string, string | number | boolean>> | undefined => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!value) {
+    return undefined;
+  }
+
+  if (Array.isArray(value)) {
+    const record = value
+      .filter(
+        (item): item is Record<string, unknown> =>
+          item &&
+          typeof item === "object" &&
+          typeof item.key === "string" &&
+          typeof item.valueType === "string",
+      )
+      .map((item) => {
+        let val: string | number | boolean = "";
+        if (item.valueType === "boolean") val = Boolean(item.boolValue);
+        else if (item.valueType === "number") val = Number(item.numberValue);
+        else if (item.valueType === "string") val = String(item.stringValue ?? "");
+        return [item.key, val] as [string, string | number | boolean];
+      });
+    return record.length > 0 ? Object.fromEntries(record) : undefined;
+  }
+
+  if (typeof value !== "object") {
     return undefined;
   }
 
@@ -1089,38 +1198,16 @@ const toGenerationArtifactsFromRows = (
     ]),
   ) as Record<string, GenerationArtifact>;
 
-const toAutomationRunStepArray = (value: unknown): readonly AutomationRunStep[] =>
-  Array.isArray(value)
-    ? value.flatMap((item) => {
-        if (
-          item &&
-          typeof item === "object" &&
-          typeof item.id === "string" &&
-          (item.action === "browser" ||
-            item.action === "http" ||
-            item.action === "builder" ||
-            item.action === "attach-file") &&
-          typeof item.summary === "string" &&
-          (item.status === "pending" ||
-            item.status === "running" ||
-            item.status === "completed" ||
-            item.status === "failed") &&
-          (item.evidenceSource === undefined || typeof item.evidenceSource === "string")
-        ) {
-          return [
-            {
-              id: item.id,
-              action: item.action,
-              summary: item.summary,
-              status: item.status,
-              evidenceSource: item.evidenceSource,
-            } satisfies AutomationRunStep,
-          ];
-        }
+const parseAutomationStepSpec = (raw: string | null): AutomationStepSpec | undefined => {
+  if (!raw) {
+    return undefined;
+  }
 
-        return [];
-      })
-    : [];
+  const parsed = safeJsonParse<unknown>(raw, null);
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? (parsed as AutomationStepSpec)
+    : undefined;
+};
 
 const toAutomationRunsFromRows = (
   rows: readonly BuilderProjectAutomationRunRow[],
@@ -1132,7 +1219,17 @@ const toAutomationRunsFromRows = (
         id: row.id,
         status: row.status as AutomationRun["status"],
         goal: row.goal,
-        steps: toAutomationRunStepArray(row.steps),
+        steps: row.steps.map(
+          (step) =>
+            ({
+              id: step.id,
+              action: step.action as AutomationRunStep["action"],
+              summary: step.summary,
+              status: step.status as AutomationRunStep["status"],
+              spec: parseAutomationStepSpec(step.specJson ?? null),
+              evidenceSource: step.evidenceSource ?? undefined,
+            }) satisfies AutomationRunStep,
+        ),
         artifactIds: row.artifacts.map((a) => a.artifactId),
         statusMessage: row.statusMessage,
         createdAtMs: row.createdAt.getTime(),
@@ -1447,37 +1544,6 @@ export class BuilderProjectStateStore {
     return toEntry(savedRow, state);
   }
 
-  private async promoteLegacyDraftRelationalState(
-    row: BuilderProjectRow,
-    state: BuilderProjectState,
-  ): Promise<BuilderProjectStateEntry | null> {
-    const migratedRow = await prisma.builderProject.saveStateVersioned(
-      row.id,
-      row.version,
-      toDraftStateInput(state),
-      checksumOf(state),
-      "builder-media-migration",
-      {
-        scenes: Object.values(state.scenes),
-        dialogues: state.dialogues,
-        assets: Object.values(state.assets),
-        animationClips: Object.values(state.animationClips),
-        dialogueGraphs: Object.values(state.dialogueGraphs),
-        quests: Object.values(state.quests),
-        triggers: Object.values(state.triggers),
-        flags: Object.values(state.flags),
-        generationJobs: Object.values(state.generationJobs),
-        artifacts: Object.values(state.artifacts),
-        automationRuns: Object.values(state.automationRuns),
-      },
-    );
-    if (!migratedRow) {
-      return this.readProjectEntry(row.id);
-    }
-
-    return toEntry(migratedRow, state);
-  }
-
   private async materializeProjectEntry(
     row: BuilderProjectRow,
   ): Promise<BuilderProjectStateEntry | null> {
@@ -1488,40 +1554,6 @@ export class BuilderProjectStateStore {
       this.readDraftMechanics(row.id),
       this.readDraftWorkerState(row.id),
     ]);
-    if (
-      Object.keys(content.scenes).length === 0 &&
-      Object.values(content.dialogues).every((catalog) => Object.keys(catalog).length === 0) &&
-      hasLegacyDraftContent(draftState)
-    ) {
-      return this.promoteLegacyDraftRelationalState(row, draftState);
-    }
-
-    if (
-      Object.keys(media.assets).length === 0 &&
-      Object.keys(media.animationClips).length === 0 &&
-      hasLegacyDraftMedia(draftState)
-    ) {
-      return this.promoteLegacyDraftRelationalState(row, draftState);
-    }
-
-    if (
-      Object.keys(mechanics.dialogueGraphs).length === 0 &&
-      Object.keys(mechanics.quests).length === 0 &&
-      Object.keys(mechanics.triggers).length === 0 &&
-      Object.keys(mechanics.flags).length === 0 &&
-      hasLegacyDraftMechanics(draftState)
-    ) {
-      return this.promoteLegacyDraftRelationalState(row, draftState);
-    }
-
-    if (
-      Object.keys(workerState.generationJobs).length === 0 &&
-      Object.keys(workerState.artifacts).length === 0 &&
-      Object.keys(workerState.automationRuns).length === 0 &&
-      hasLegacyDraftWorkerState(draftState)
-    ) {
-      return this.promoteLegacyDraftRelationalState(row, draftState);
-    }
 
     return toEntry(
       row,

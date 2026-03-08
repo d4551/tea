@@ -22,10 +22,7 @@ export class AnimationTimelineService {
    * @param elapsedMs The total elapsed playback time for this timeline instance.
    * @returns A record mapping animated properties to their current numeric values.
    */
-  public evaluate(
-    timeline: AnimationTimeline,
-    elapsedMs: number,
-  ): AnimationPlaybackState {
+  public evaluate(timeline: AnimationTimeline, elapsedMs: number): AnimationPlaybackState {
     const state: AnimationPlaybackState = {};
     if (timeline.durationMs <= 0 || timeline.tracks.length === 0) {
       return state;
@@ -52,26 +49,33 @@ export class AnimationTimelineService {
   private evaluateTrack(track: AnimationTrack, t: number): number {
     const keyframes = track.keyframes;
 
-    // Fast paths
+    // Fast paths - use optional chaining with fallbacks to avoid non-null assertions
+    const firstKeyframe = keyframes[0];
+    if (!firstKeyframe) {
+      return 0;
+    }
+
     if (keyframes.length === 1) {
-      return keyframes[0]!.value;
+      return firstKeyframe.value;
     }
-    if (t <= keyframes[0]!.timeMs) {
-      return keyframes[0]!.value;
+    if (t <= firstKeyframe.timeMs) {
+      return firstKeyframe.value;
     }
-    const lastKeyframe = keyframes[keyframes.length - 1]!;
-    if (t >= lastKeyframe.timeMs) {
+
+    const lastKeyframe = keyframes[keyframes.length - 1];
+    if (lastKeyframe && t >= lastKeyframe.timeMs) {
       return lastKeyframe.value;
     }
 
-    // Find bounding keyframes
-    let k1: AnimationKeyframe = keyframes[0]!;
-    let k2: AnimationKeyframe = keyframes[1]!;
+    // Find bounding keyframes - initialize with first two keyframes as defaults
+    const secondKeyframe = keyframes[1];
+    let k1: AnimationKeyframe = firstKeyframe;
+    let k2: AnimationKeyframe = secondKeyframe ?? firstKeyframe;
 
     for (let i = 0; i < keyframes.length - 1; i++) {
-      const current = keyframes[i]!;
-      const next = keyframes[i + 1]!;
-      if (t >= current.timeMs && t <= next.timeMs) {
+      const current = keyframes[i];
+      const next = keyframes[i + 1];
+      if (current && next && t >= current.timeMs && t <= next.timeMs) {
         k1 = current;
         k2 = next;
         break;

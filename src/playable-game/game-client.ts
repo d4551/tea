@@ -11,12 +11,6 @@ import {
 } from "pixi.js";
 import { gameSpriteManifests } from "../domain/game/data/sprite-data.ts";
 import { appRoutes, interpolateRoutePath } from "../shared/constants/routes.ts";
-import {
-  GAME_SESSION_STORAGE_KEY,
-  WS_CLOSE_SESSION_MISSING,
-  WS_CLOSE_TOKEN_EXPIRED,
-  validateGameRealtimeFrame,
-} from "../shared/contracts/game.ts";
 import type {
   EntityState,
   GameCommand,
@@ -26,6 +20,12 @@ import type {
   NpcState,
   SpriteAnimationConfig,
   SpriteManifest,
+} from "../shared/contracts/game.ts";
+import {
+  GAME_SESSION_STORAGE_KEY,
+  validateGameRealtimeFrame,
+  WS_CLOSE_SESSION_MISSING,
+  WS_CLOSE_TOKEN_EXPIRED,
 } from "../shared/contracts/game.ts";
 import { readLocalStorage, writeLocalStorage } from "../shared/utils/browser-storage.ts";
 import { safeJsonParse } from "../shared/utils/safe-json.ts";
@@ -84,10 +84,33 @@ type GameClientLabels = {
   readonly reconnectAction: string;
   readonly runtimeFocusActive: string;
   readonly runtimeFocusInactive: string;
+  readonly spectatorControlDenied: string;
 };
 
 const SESSION_META_KEY = GAME_SESSION_STORAGE_KEY;
+const CLOCK_SKEW_TOLERANCE_MS = 5_000;
+const MAX_TEXTURE_CACHE_SIZE = 256;
+
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+const clientLog = (
+  level: "info" | "warn" | "error",
+  event: string,
+  detail?: Record<string, unknown>,
+): void => {
+  const entry = JSON.stringify({ ts: Date.now(), level, module: "game-client", event, ...detail });
+  if (level === "error") console.error(entry);
+  else if (level === "warn") console.warn(entry);
+  else console.info(entry);
+};
+
+const evictLruEntry = (cache: Map<string, Texture>): void => {
+  const firstKey = cache.keys().next().value;
+  if (firstKey !== undefined) {
+    cache.get(firstKey)?.destroy();
+    cache.delete(firstKey);
+  }
+};
 
 const readMeta = (selector: string): HTMLMetaElement | null =>
   document.querySelector<HTMLMetaElement>(selector);
@@ -230,6 +253,7 @@ const readGameClientLabels = (
   const reconnectAction = readNonEmptyDatasetValue(reconnectButton, "reconnectLabel");
   const runtimeFocusActive = readNonEmptyDatasetValue(wrapper, "runtimeFocusActiveLabel");
   const runtimeFocusInactive = readNonEmptyDatasetValue(wrapper, "runtimeFocusInactiveLabel");
+  const spectatorControlDenied = readNonEmptyDatasetValue(wrapper, "spectatorControlDeniedLabel");
 
   if (
     !queueLabel ||
@@ -241,7 +265,8 @@ const readGameClientLabels = (
     !connectionMissing ||
     !reconnectAction ||
     !runtimeFocusActive ||
-    !runtimeFocusInactive
+    !runtimeFocusInactive ||
+    !spectatorControlDenied
   ) {
     return null;
   }
@@ -259,6 +284,7 @@ const readGameClientLabels = (
     reconnectAction,
     runtimeFocusActive,
     runtimeFocusInactive,
+    spectatorControlDenied,
   };
 };
 
@@ -336,7 +362,7 @@ const readSessionMeta = (runtimeConfig: GameClientRuntimeConfig): PersistedSessi
     stored.locale.length > 0 &&
     stored.resumeToken.length > 0 &&
     Number.isFinite(stored.expiresAtMs) &&
-    stored.expiresAtMs > Date.now()
+    stored.expiresAtMs > Date.now() - CLOCK_SKEW_TOLERANCE_MS
   ) {
     return {
       ...runtimeMeta,
@@ -636,6 +662,9 @@ const initGameClient = async (): Promise<void> => {
 
     const texture = (await Assets.load(assetUrl)) as Texture;
     loadedTextures.set(assetUrl, texture);
+    if (loadedTextures.size > MAX_TEXTURE_CACHE_SIZE) {
+      evictLruEntry(loadedTextures);
+    }
     return texture;
   };
 
@@ -703,6 +732,9 @@ const initGameClient = async (): Promise<void> => {
     });
 
     frameTextures.set(cacheKey, texture);
+    if (frameTextures.size > MAX_TEXTURE_CACHE_SIZE) {
+      evictLruEntry(frameTextures);
+    }
     return texture;
   };
 
@@ -884,7 +916,9 @@ const initGameClient = async (): Promise<void> => {
         return;
       }
 
-      const tokenExpired = event.code === WS_CLOSE_TOKEN_EXPIRED || runtimeSessionMeta.expiresAtMs <= Date.now();
+      const tokenExpired =
+        event.code === WS_CLOSE_TOKEN_EXPIRED ||
+        runtimeSessionMeta.expiresAtMs <= Date.now() + CLOCK_SKEW_TOLERANCE_MS;
       if (tokenExpired) {
         connectionMode = "reconnecting";
         setConnectionStatus(statusBadge, labels, "reconnecting", event.code);
@@ -919,6 +953,13 @@ const initGameClient = async (): Promise<void> => {
 
   const sendEnvelope = (command: GameCommand): void => {
     if (runtimeSessionMeta.participantRole === "spectator") {
+      if (command.type !== "move") {
+        document.body.dispatchEvent(
+          new CustomEvent("showToast", {
+            detail: { message: labels.spectatorControlDenied, type: "info" },
+          }),
+        );
+      }
       return;
     }
     if (activeSocket?.readyState !== WebSocket.OPEN) {
@@ -1238,7 +1279,10 @@ const renderState = (
   }
 };
 
-void initGameClient().catch(() => {
+void initGameClient().catch((error: unknown) => {
+  clientLog("error", "init-failed", {
+    message: error instanceof Error ? error.message : String(error),
+  });
   const wrapper = document.getElementById("game-canvas-wrapper");
   const statusBadge = document.getElementById("game-connection-status");
   const queueBadge = document.getElementById("game-command-queue");

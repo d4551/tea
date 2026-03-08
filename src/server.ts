@@ -28,10 +28,16 @@ export const startServer = async (): Promise<void> => {
     return;
   }
 
-  ModelManager.getInstance()
-    .then((manager) => manager.ensureWarmup())
-    .then(() => bootstrapLogger.info("ai.models.ready"))
-    .catch((err) => bootstrapLogger.error("ai.models.warmup.failed", { err: String(err) }));
+  void (async () => {
+    // SAFETY: AI model warmup crosses into ONNX runtime FFI and may fail on missing native deps.
+    try {
+      const manager = await ModelManager.getInstance();
+      await manager.ensureWarmup();
+      bootstrapLogger.info("ai.models.ready");
+    } catch (err: unknown) {
+      bootstrapLogger.error("ai.models.warmup.failed", { err: String(err) });
+    }
+  })();
 };
 
 if (import.meta.main) {

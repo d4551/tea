@@ -74,10 +74,11 @@ describe("CombatEngine", () => {
       );
 
       expect(results).toHaveLength(1);
-      const res = results[0]!;
-      expect(res.targetId).toBe(enemy.id);
-      expect(res.damageType).toBe("physical");
-      expect(res.finalDamage).toBeGreaterThan(0);
+      const res = results[0];
+      expect(res).toBeDefined();
+      expect(res?.targetId).toBe(enemy.id);
+      expect(res?.damageType).toBe("physical");
+      expect(res?.finalDamage).toBeGreaterThan(0);
 
       const nextState = combatEngine.applyResultsAndAdvanceTurn(
         { ...state, phase: "player_turn" },

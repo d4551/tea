@@ -6,7 +6,6 @@ import type {
   AssetVariant,
   BuilderAsset,
   EntityState,
-  EquipmentLoadout,
   GameActionState,
   GameDialogue,
   GameLocale,

@@ -596,6 +596,7 @@ export interface Messages {
     readonly automationStatusCanceledByReview: string;
     readonly automationStatusPlanReadyForReview: string;
     readonly automationStatusCapturingFallbackEvidence: string;
+    readonly automationStatusOriginUnavailable: string;
     readonly assistantReviewTitle: string;
     readonly assistantReviewDescription: string;
     readonly previewChanges: string;
@@ -1287,6 +1288,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       automationStatusCanceledByReview: "Canceled by review",
       automationStatusPlanReadyForReview: "Automation plan ready for review",
       automationStatusCapturingFallbackEvidence: "Capturing fallback review evidence",
+      automationStatusOriginUnavailable:
+        "Local builder automation origin is unavailable. Start the builder runtime and retry.",
       assistantReviewTitle: "Review AI changes",
       assistantReviewDescription:
         "Generate structured operations, preview them against the active project, then apply only the valid changes.",
@@ -1950,6 +1953,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       automationStatusCanceledByReview: "已在审查中取消",
       automationStatusPlanReadyForReview: "自动化方案已准备好供审查",
       automationStatusCapturingFallbackEvidence: "正在采集回退审查证据",
+      automationStatusOriginUnavailable: "本地构建器自动化目标不可用。请先启动构建运行时后重试。",
       assistantReviewTitle: "审查 AI 修改",
       assistantReviewDescription: "先生成结构化操作，再对当前项目预览，仅在有效时应用。",
       previewChanges: "预览修改",

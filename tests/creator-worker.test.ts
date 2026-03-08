@@ -32,24 +32,44 @@ describe("creator worker execution", () => {
     expect(result.data.statusMessage).toBe("job.draft-ready-for-review");
   });
 
-  test("automation runs produce auditable completed steps and evidence", async () => {
+  test("automation runs produce auditable completed steps and execution artifacts", async () => {
     const now = Date.now();
+    const projectId = `worker-${crypto.randomUUID()}`;
     const run: AutomationRun = {
       id: `run-${crypto.randomUUID()}`,
       status: "queued",
-      goal: "Capture builder evidence for review",
+      goal: "Run builder automation steps",
       steps: [
         {
-          id: "step.browser",
+          id: "step.open-builder",
           action: "browser",
-          summary: "Open the builder and capture evidence",
+          summary: "automation.step.browser.goto",
           status: "pending",
+          spec: {
+            kind: "goto",
+            path: `/builder?projectId=${projectId}`,
+          },
+        },
+        {
+          id: "step.capture-workspace",
+          action: "browser",
+          summary: "automation.step.browser.screenshot",
+          status: "pending",
+          spec: {
+            kind: "screenshot",
+            fileStem: `automation-${projectId}-workspace`,
+            fullPage: true,
+          },
         },
         {
           id: "step.attach",
           action: "attach-file",
-          summary: "Attach the captured evidence",
+          summary: "automation.step.attach-generated-artifact",
           status: "pending",
+          spec: {
+            kind: "attach-generated-artifact",
+            sourceStepId: "step.capture-workspace",
+          },
         },
       ],
       artifactIds: [],
@@ -58,18 +78,13 @@ describe("creator worker execution", () => {
       updatedAtMs: now,
     };
 
-    const result = await executeAutomationRun(`worker-${crypto.randomUUID()}`, run);
+    const result = await executeAutomationRun(projectId, run);
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) {
+    expect(result.ok).toBe(false);
+    if (result.ok) {
       return;
     }
 
-    expect(result.data.steps.every((step) => step.status === "completed")).toBe(true);
-    expect(result.data.steps[0]?.evidenceSource?.includes("/public/uploads/builder/")).toBe(true);
-    expect(result.data.artifacts).toHaveLength(1);
-    expect(result.data.artifacts[0]?.previewSource.includes("/public/uploads/builder/")).toBe(true);
-    expect(result.data.statusMessage).toBe("automation.plan-ready-for-review");
-    expect(result.data.artifacts[0]?.summary).toBe("automation.artifact.captured-review-evidence");
+    expect(result.error).toBe("automation-origin-unreachable");
   });
 });

@@ -38,10 +38,7 @@ export class AutomationOrchestrator {
    * @param run Automation run to execute.
    * @returns Async generator of orchestrator step events.
    */
-  async *runPipeline(
-    projectId: string,
-    run: AutomationRun,
-  ): AsyncGenerator<OrchestratorStepEvent> {
+  async *runPipeline(projectId: string, run: AutomationRun): AsyncGenerator<OrchestratorStepEvent> {
     logger.info("orchestrator.pipeline.start", {
       projectId,
       runId: run.id,
@@ -79,7 +76,9 @@ export class AutomationOrchestrator {
     const totalSteps = steps.length;
 
     for (let i = 0; i < totalSteps; i++) {
-      const step = steps[i]!;
+      const step = steps[i];
+      if (!step) continue;
+
       const progress = (i + 1) / totalSteps;
       const isLast = i === totalSteps - 1;
 

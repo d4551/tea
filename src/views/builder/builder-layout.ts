@@ -10,7 +10,6 @@ import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 import {
   iconAi,
-  iconAnimations,
   iconAssets,
   iconAutomation,
   iconDashboard,
@@ -120,12 +119,6 @@ const builderNavItems = (messages: Messages): readonly BuilderNavItem[] => [
     icon: iconAutomation,
   },
   { key: "ai", label: messages.builder.ai, href: appRoutes.builderAi, icon: iconAi },
-  {
-    key: "animations",
-    label: messages.builder.animations,
-    href: appRoutes.builderAnimations,
-    icon: iconAnimations,
-  },
 ];
 
 const withBuilderQuery = (path: string, locale: LocaleCode, projectId: string): string =>

@@ -46,6 +46,10 @@ const requiredPublicAssetPaths = [
   joinLocalPath(appConfig.staticAssets.publicDirectory, assetRelativePaths.htmxPublicBundleFile),
   joinLocalPath(
     appConfig.staticAssets.publicDirectory,
+    assetRelativePaths.htmxExtensionLayoutControlsFile,
+  ),
+  joinLocalPath(
+    appConfig.staticAssets.publicDirectory,
     assetRelativePaths.builderSceneEditorBundleFile,
   ),
   joinLocalPath(appConfig.playableGame.sourceDirectory, assetRelativePaths.gameClientBundleFile),

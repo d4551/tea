@@ -48,7 +48,10 @@ export class CombatEngine {
         const def = target.stats.defense;
 
         // Simple damage formula
-        const rawDamage = Math.max(1, Math.floor(atk * defaultGameConfig.combatDamageMultiplier - def));
+        const rawDamage = Math.max(
+          1,
+          Math.floor(atk * defaultGameConfig.combatDamageMultiplier - def),
+        );
 
         // Critical hit check
         const isCritical = Math.random() < actor.stats.critRate;

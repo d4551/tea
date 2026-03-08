@@ -599,6 +599,10 @@ const trimOrFallback = (value: string | undefined, fallback: string): string => 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
+const assertUnreachable = (_value: never): never => {
+  throw new Error("automation-step-kind-unsupported");
+};
+
 const toAutomationStepSummary = (spec: AutomationStepSpec): string => {
   switch (spec.kind) {
     case "goto":
@@ -629,6 +633,8 @@ const toAutomationStepSummary = (spec: AutomationStepSpec): string => {
       return "automation.step.builder.queue-generation-job";
     case "attach-generated-artifact":
       return "automation.step.attach-generated-artifact";
+    default:
+      return assertUnreachable(spec);
   }
 };
 
@@ -652,6 +658,8 @@ const inferAutomationStepAction = (spec: AutomationStepSpec): AutomationRunStep[
       return "builder";
     case "attach-generated-artifact":
       return "attach-file";
+    default:
+      return assertUnreachable(spec);
   }
 };
 

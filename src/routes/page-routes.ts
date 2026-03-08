@@ -69,7 +69,10 @@ export const createPageRoutes = (oracleService: OracleService) =>
 
             return renderHomePage(
               {
-                layout: createRouteLayoutContext(request, locale, messages, "home"),
+                layout: {
+                  ...createRouteLayoutContext(request, locale, messages, "home"),
+                  oraclePanelState,
+                },
               },
               oraclePanelState,
             );
@@ -104,4 +107,3 @@ export const createPageRoutes = (oracleService: OracleService) =>
           },
         ),
     );
-

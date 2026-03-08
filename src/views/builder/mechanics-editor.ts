@@ -21,6 +21,8 @@ const renderTriggerEventOptions = (
     { value: "npc-interact", label: messages.builder.triggerEventNpcInteract },
     { value: "chat", label: messages.builder.triggerEventChat },
     { value: "dialogue-confirmed", label: messages.builder.triggerEventDialogueConfirmed },
+    { value: "combat-victory", label: messages.builder.triggerEventCombatVictory },
+    { value: "item-acquired", label: messages.builder.triggerEventItemAcquired },
   ]
     .map(
       (option) =>

@@ -67,14 +67,18 @@ export const createOracleService = (): OracleService => ({
       } satisfies OracleFatalErrorState;
     }
 
-    const answer = await buildAnswer(trimmedQuestion, messages.aiPlayground);
+    const answer = await buildAnswer(trimmedQuestion, messages);
 
-    // Persist interaction with real sentiment from the AI model
-    await persistInteraction(
-      trimmedQuestion,
-      answer.text,
-      answer.source === "fallback" ? "UNKNOWN" : undefined,
-    ).catch((err) => logger.error("oracle.persist.failed", { err: String(err) }));
+    // SAFETY: Persistence is fire-and-forget; DB write failure must not block the user response.
+    try {
+      await persistInteraction(
+        trimmedQuestion,
+        answer.text,
+        answer.source === "fallback" ? "UNKNOWN" : undefined,
+      );
+    } catch (err: unknown) {
+      logger.error("oracle.persist.failed", { err: String(err) });
+    }
 
     return {
       state: "success",
@@ -91,13 +95,13 @@ export const createOracleService = (): OracleService => ({
  */
 const buildAnswer = async (
   question: string,
-  oracleMessages: ReturnType<typeof getMessages>["aiPlayground"],
+  messages: ReturnType<typeof getMessages>,
 ): Promise<OracleAnswer> => {
   const registry = await ProviderRegistry.getInstance();
   const provider = registry.selectProvider("chat");
   if (!provider || provider.name === "transformers") {
     return {
-      text: buildDeterministicAnswer(question, oracleMessages),
+      text: buildDeterministicAnswer(question, messages),
       source: "fallback",
     };
   }
@@ -121,7 +125,7 @@ const buildAnswer = async (
   }
 
   return {
-    text: buildDeterministicAnswer(question, oracleMessages),
+    text: buildDeterministicAnswer(question, messages),
     source: "fallback",
   };
 };
@@ -178,9 +182,7 @@ const resolveForcedMode = (
 
 const buildDeterministicAnswer = (
   _question: string,
-  _oracleMessages: ReturnType<typeof getMessages>["aiPlayground"],
+  messages: ReturnType<typeof getMessages>,
 ): string => {
-  const messages = getMessages("en-US");
   return messages.ai.fallbackDialogue;
 };
-

@@ -1,6 +1,5 @@
 import { appConfig, type LocaleCode } from "../config/environment.ts";
 import type { OracleMode, OracleOutcome } from "../domain/oracle/oracle-types.ts";
-import { oracleModes } from "../shared/constants/oracle.ts";
 import { appRoutes } from "../shared/constants/routes.ts";
 import type { Messages } from "../shared/i18n/messages.ts";
 import { escapeHtml } from "./layout.ts";
@@ -37,7 +36,6 @@ export const renderOracleSection = (
   panelState: OraclePanelState,
   locale: LocaleCode,
 ): string => {
-
   return `<section aria-labelledby="oracle-title" class="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
     <article class="card border border-base-300 bg-base-100 shadow-sm">
       <div class="card-body gap-4">
@@ -68,7 +66,7 @@ export const renderOracleSection = (
             <legend class="fieldset-legend">${escapeHtml(messages.aiPlayground.promptLabel)}</legend>
             <input
               id="oracle-question"
-              class="input input-bordered w-full"
+              class="input w-full"
               type="text"
               name="question"
               value="${escapeHtml(panelState.question)}"
@@ -103,28 +101,47 @@ export const renderOracleSection = (
  */
 export const renderOraclePanel = (messages: Messages, panelState: OraclePanelState): string => {
   if (panelState.state === "loading") {
-    return `<article id="oracle-panel" class="card border border-info/30 bg-info/10" role="status" aria-live="polite" aria-busy="true" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
-      <div class="card-body">
-        <h3 class="card-title text-info">${escapeHtml(messages.aiPlayground.loadingTitle)}</h3>
-        <p>${escapeHtml(messages.aiPlayground.loadingDescription)}</p>
+    return `<article id="oracle-panel" class="card border border-info/30 bg-info/5" role="status" aria-live="polite" aria-busy="true" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
+      <div class="card-body gap-3">
+        <h3 class="card-title text-info text-sm">${escapeHtml(messages.aiPlayground.loadingTitle)}</h3>
+        <div class="chat chat-start">
+          <div class="chat-bubble chat-bubble-info opacity-60">${escapeHtml(panelState.question)}</div>
+        </div>
+        <div class="chat chat-end">
+          <div class="chat-bubble space-y-2 w-full max-w-xs">
+            <div class="skeleton-shimmer h-3 w-full rounded"></div>
+            <div class="skeleton-shimmer h-3 w-4/5 rounded"></div>
+            <div class="skeleton-shimmer h-3 w-3/5 rounded"></div>
+          </div>
+        </div>
       </div>
     </article>`;
   }
 
   if (panelState.state === "idle") {
-    return `<article id="oracle-panel" class="card border border-dashed border-base-300 bg-base-200/60" aria-live="polite" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
+    return `<article id="oracle-panel" class="card border border-dashed border-base-300 bg-base-200/40" aria-live="polite" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
       <div class="card-body">
-        <h3 class="card-title">${escapeHtml(messages.aiPlayground.cardTitle)}</h3>
-        <p>${escapeHtml(messages.aiPlayground.idleHint)}</p>
+        <div class="empty-state">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+          <div>
+            <h3 class="font-semibold text-base-content/70">${escapeHtml(messages.aiPlayground.cardTitle)}</h3>
+            <p class="text-sm">${escapeHtml(messages.aiPlayground.idleHint)}</p>
+          </div>
+        </div>
       </div>
     </article>`;
   }
 
   if (panelState.state === "success") {
-    return `<article id="oracle-panel" class="card border border-success/30 bg-success/10" role="status" aria-live="polite" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
-      <div class="card-body">
-        <h3 class="card-title text-success">${escapeHtml(messages.aiPlayground.successTitle)}</h3>
-        <p class="leading-relaxed">${escapeHtml(panelState.answer)}</p>
+    return `<article id="oracle-panel" class="card border border-success/30 bg-success/5" role="status" aria-live="polite" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
+      <div class="card-body gap-3">
+        <h3 class="card-title text-success text-sm">${escapeHtml(messages.aiPlayground.successTitle)}</h3>
+        <div class="chat chat-start">
+          <div class="chat-bubble chat-bubble-primary">${escapeHtml(panelState.question)}</div>
+        </div>
+        <div class="chat chat-end">
+          <div class="chat-bubble chat-bubble-success whitespace-pre-wrap">${escapeHtml(panelState.answer)}</div>
+        </div>
       </div>
     </article>`;
   }
@@ -181,43 +198,4 @@ export const renderOraclePanel = (messages: Messages, panelState: OraclePanelSta
       </div>
     </div>
   </article>`;
-};
-
-const renderModeOptions = (messages: Messages, mode: OracleMode): string => {
-  const options = oracleModes.map((oracleMode) => ({
-    value: oracleMode,
-    label: modeLabelFor(messages, oracleMode),
-  }));
-
-  return options
-    .map((option) => {
-      const selected = option.value === mode ? " selected" : "";
-      return `<option value="${option.value}"${selected}>${escapeHtml(option.label)}</option>`;
-    })
-    .join("");
-};
-
-const modeLabelFor = (messages: Messages, mode: OracleMode): string => {
-  if (mode === "auto") {
-    return messages.aiPlayground.modeAuto;
-  }
-
-  if (mode === "force-empty") {
-    return messages.aiPlayground.modeForceEmpty;
-  }
-
-  if (mode === "force-retryable-error") {
-    return messages.aiPlayground.modeForceRetryableError;
-  }
-
-  if (mode === "force-fatal-error") {
-    return messages.aiPlayground.modeForceFatalError;
-  }
-
-  if (mode === "force-unauthorized") {
-    return messages.aiPlayground.modeForceUnauthorized;
-  }
-
-  const unreachableMode: never = mode;
-  return unreachableMode;
 };

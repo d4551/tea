@@ -105,7 +105,7 @@ export const evaluateBuilderPlatformReadiness = (
     },
     {
       key: "runtime3d",
-      status: hasBaselineRuntime ? "partial" : "missing",
+      status: "missing",
     },
     {
       key: "spritePipeline",
@@ -125,7 +125,7 @@ export const evaluateBuilderPlatformReadiness = (
     },
     {
       key: "automation",
-      status: "missing",
+      status: hasInteractiveSimulation ? "partial" : "missing",
     },
     {
       key: "webgpuRenderer",

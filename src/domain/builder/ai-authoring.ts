@@ -1,4 +1,5 @@
 import { createLogger } from "../../lib/logger.ts";
+import { safeJsonParse } from "../../shared/utils/safe-json.ts";
 import type { AiProvider } from "../ai/providers/provider-types.ts";
 
 const logger = createLogger("builder.ai-authoring");
@@ -90,10 +91,10 @@ export interface CutsceneScriptContext {
  * @param raw AI response text.
  * @returns Parsed JSON value or null on failure.
  */
-const extractJson = (raw: string): unknown => {
+const extractJson = (raw: string): unknown | null => {
   const fencedMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const jsonStr = fencedMatch ? fencedMatch[1]!.trim() : raw.trim();
-  return JSON.parse(jsonStr) as unknown;
+  const jsonStr = fencedMatch ? (fencedMatch[1]?.trim() ?? "") : raw.trim();
+  return safeJsonParse(jsonStr, null);
 };
 
 /**

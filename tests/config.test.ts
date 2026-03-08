@@ -66,8 +66,21 @@ describe("environment parsing", () => {
     expect(appConfig.staticAssets.assetsDirectory.length).toBeGreaterThan(0);
     expect(appConfig.staticAssets.rmmzPackDirectory.length).toBeGreaterThan(0);
     expect(appConfig.builder.workerPollIntervalMs).toBeGreaterThanOrEqual(100);
-    expect(appConfig.builder.localAutomationOrigin).toBe("http://127.0.0.1:3000");
+    expect(appConfig.builder.localAutomationOrigin).toBe("http://127.0.0.1:3088");
     expect(appConfig.builder.automationProbeTimeoutMs).toBeGreaterThanOrEqual(100);
+    expect(appConfig.ui.defaultTheme.length).toBeGreaterThan(0);
+    expect(
+      typeof appConfig.ui.socialLinks.githubUrl === "string" ||
+        appConfig.ui.socialLinks.githubUrl === null,
+    ).toBe(true);
+    expect(
+      typeof appConfig.ui.socialLinks.discordUrl === "string" ||
+        appConfig.ui.socialLinks.discordUrl === null,
+    ).toBe(true);
+    expect(
+      typeof appConfig.ui.socialLinks.twitterUrl === "string" ||
+        appConfig.ui.socialLinks.twitterUrl === null,
+    ).toBe(true);
   });
 
   test("playable game mounts and sprite output are config-driven", () => {

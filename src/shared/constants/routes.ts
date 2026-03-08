@@ -57,7 +57,6 @@ export const appRoutes = {
   builderMechanics: "/builder/mechanics",
   builderAutomation: "/builder/automation",
   builderAi: "/builder/ai",
-  builderAnimations: "/builder/animations",
   builderApiProjects: "/api/builder/projects",
   builderApiScenes: "/api/builder/scenes",
   builderApiSceneNodes: "/api/builder/scenes/:sceneId/nodes",

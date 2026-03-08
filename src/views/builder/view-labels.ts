@@ -118,6 +118,10 @@ export const getTriggerEventLabel = (messages: Messages, event: TriggerEventType
       return messages.builder.triggerEventChat;
     case "dialogue-confirmed":
       return messages.builder.triggerEventDialogueConfirmed;
+    case "combat-victory":
+      return messages.builder.triggerEventCombatVictory;
+    case "item-acquired":
+      return messages.builder.triggerEventItemAcquired;
     default:
       return String(event);
   }
@@ -192,12 +196,34 @@ export const getAutomationStepActionLabel = (
  */
 export const getAutomationStepSummaryLabel = (messages: Messages, summary: string): string => {
   switch (summary) {
-    case "automation.step.capture-review-context":
-      return messages.builder.automationSummaryCaptureReviewContext;
-    case "automation.step.prepare-draft-plan":
-      return messages.builder.automationSummaryPrepareDraftPlan;
-    case "automation.step.attach-review-evidence":
-      return messages.builder.automationSummaryAttachReviewEvidence;
+    case "automation.step.browser.goto":
+      return messages.builder.automationSummaryBrowserGoto;
+    case "automation.step.browser.click":
+      return messages.builder.automationSummaryBrowserClick;
+    case "automation.step.browser.fill":
+      return messages.builder.automationSummaryBrowserFill;
+    case "automation.step.browser.assert-text":
+      return messages.builder.automationSummaryBrowserAssertText;
+    case "automation.step.browser.screenshot":
+      return messages.builder.automationSummaryBrowserScreenshot;
+    case "automation.step.http.request":
+      return messages.builder.automationSummaryHttpRequest;
+    case "automation.step.builder.create-scene":
+      return messages.builder.automationSummaryBuilderCreateScene;
+    case "automation.step.builder.create-trigger":
+      return messages.builder.automationSummaryBuilderCreateTrigger;
+    case "automation.step.builder.create-quest":
+      return messages.builder.automationSummaryBuilderCreateQuest;
+    case "automation.step.builder.create-dialogue-graph":
+      return messages.builder.automationSummaryBuilderCreateDialogueGraph;
+    case "automation.step.builder.create-asset":
+      return messages.builder.automationSummaryBuilderCreateAsset;
+    case "automation.step.builder.create-animation-clip":
+      return messages.builder.automationSummaryBuilderCreateAnimationClip;
+    case "automation.step.builder.queue-generation-job":
+      return messages.builder.automationSummaryBuilderQueueGenerationJob;
+    case "automation.step.attach-generated-artifact":
+      return messages.builder.automationSummaryAttachGeneratedArtifact;
     default:
       return summary;
   }
@@ -224,6 +250,12 @@ export const getArtifactSummaryLabel = (messages: Messages, summary: string): st
   switch (summary) {
     case "automation.artifact.captured-review-evidence":
       return messages.builder.automationArtifactSummaryCapturedReviewEvidence;
+    case "automation.artifact.captured-project-context":
+      return messages.builder.automationArtifactSummaryCapturedProjectContext;
+    case "automation.artifact.generated-tool-plan":
+      return messages.builder.automationArtifactSummaryGeneratedToolPlan;
+    case "automation.artifact.attached-execution-bundle":
+      return messages.builder.automationArtifactSummaryAttachedExecutionBundle;
     default:
       return summary;
   }
@@ -239,6 +271,15 @@ export const getArtifactSummaryLabel = (messages: Messages, summary: string): st
 export const getArtifactLabel = (messages: Messages, artifact: GenerationArtifact): string => {
   if (artifact.label === "automation.artifact.label.evidence") {
     return messages.builder.automationEvidenceLabel;
+  }
+  if (artifact.label === "automation.artifact.label.context") {
+    return messages.builder.automationContextLabel;
+  }
+  if (artifact.label === "automation.artifact.label.plan") {
+    return messages.builder.automationPlanArtifactLabel;
+  }
+  if (artifact.label === "automation.artifact.label.bundle") {
+    return messages.builder.automationBundleArtifactLabel;
   }
 
   const reviewPrefix = "generation.artifact.label.review:";
@@ -294,6 +335,8 @@ export const getAutomationStatusMessageLabel = (
     case "automation.plan-ready-for-review":
     case "automation-plan-ready-for-review":
       return messages.builder.automationStatusPlanReadyForReview;
+    case "automation-origin-unreachable":
+      return messages.builder.automationStatusOriginUnavailable;
     case "automation.capturing-fallback-review-evidence":
     case "capturing-fallback-review-evidence":
       return messages.builder.automationStatusCapturingFallbackEvidence;

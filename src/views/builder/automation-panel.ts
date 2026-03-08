@@ -1,9 +1,11 @@
 import type { LocaleCode } from "../../config/environment.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
-import type { AutomationRun } from "../../shared/contracts/game.ts";
+import type { AutomationRun, GenerationArtifact } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 import {
+  getArtifactLabel,
+  getArtifactSummaryLabel,
   getAutomationStatusMessageLabel,
   getAutomationStepActionLabel,
   getAutomationStepSummaryLabel,
@@ -17,6 +19,7 @@ import {
  * @param locale Active locale.
  * @param projectId Active project identifier.
  * @param runs Automation runs for the project.
+ * @param artifacts Reviewable artifacts for the project.
  * @returns HTML for the automation workspace.
  */
 export const renderAutomationPanel = (
@@ -24,8 +27,10 @@ export const renderAutomationPanel = (
   locale: LocaleCode,
   projectId: string,
   runs: readonly AutomationRun[],
+  artifacts: readonly GenerationArtifact[],
 ): string => {
   const createRunAction = `${appRoutes.builderApiAutomationRuns}/create/form`;
+  const artifactLookup = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
   const runCards = runs
     .map((run) => {
       const reviewAction = withQueryParameters(
@@ -36,6 +41,9 @@ export const renderAutomationPanel = (
         },
       );
       const runSpinnerId = `automation-run-${run.id.replace(/[^a-zA-Z0-9_.-]/g, "-")}-spinner`;
+      const linkedArtifacts = run.artifactIds
+        .map((artifactId) => artifactLookup.get(artifactId))
+        .filter((artifact): artifact is GenerationArtifact => Boolean(artifact));
       const reviewActions =
         run.status === "blocked_for_approval"
           ? `<div class="card-actions justify-end gap-2">
@@ -71,10 +79,35 @@ export const renderAutomationPanel = (
               .map(
                 (step) => `<div class="rounded-box bg-base-200/70 px-3 py-2 text-sm">
                   <span class="font-medium">${escapeHtml(getAutomationStepActionLabel(messages, step.action))}</span>: ${escapeHtml(getAutomationStepSummaryLabel(messages, step.summary))}
+                  ${
+                    step.evidenceSource
+                      ? `<div class="mt-2">
+                          <a class="link link-primary text-xs" href="${escapeHtml(step.evidenceSource)}" target="_blank" rel="noreferrer" aria-label="${escapeHtml(messages.builder.openAutomationEvidence)}: ${escapeHtml(getAutomationStepSummaryLabel(messages, step.summary))}">${escapeHtml(messages.builder.openAutomationEvidence)}</a>
+                        </div>`
+                      : ""
+                  }
                 </div>`,
               )
               .join("")}
           </div>
+          ${
+            linkedArtifacts.length > 0
+              ? `<div class="space-y-2">
+                  <h4 class="text-sm font-semibold">${escapeHtml(messages.builder.automationArtifactsLabel)}</h4>
+                  ${linkedArtifacts
+                    .map(
+                      (
+                        artifact,
+                      ) => `<div class="rounded-box bg-base-200/70 px-3 py-2 text-sm" data-summary="${escapeHtml(artifact.summary)}">
+                        <div class="font-medium">${escapeHtml(getArtifactLabel(messages, artifact))}</div>
+                        <div class="text-base-content/75">${escapeHtml(getArtifactSummaryLabel(messages, artifact.summary))}</div>
+                        <a class="link link-primary text-xs" href="${escapeHtml(artifact.previewSource)}" target="_blank" rel="noreferrer" aria-label="${escapeHtml(messages.builder.openAutomationEvidence)}: ${escapeHtml(getArtifactLabel(messages, artifact))}">${escapeHtml(messages.builder.openAutomationEvidence)}</a>
+                      </div>`,
+                    )
+                    .join("")}
+                </div>`
+              : ""
+          }
           ${reviewActions}
         </div>
       </article>`;
@@ -92,6 +125,19 @@ export const renderAutomationPanel = (
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.automationGoalLabel)}</legend>
           <textarea name="goal" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.automationGoalPlaceholder)}" aria-required="true" required></textarea>
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.automationStepsJsonLabel)}</legend>
+          <textarea
+            name="stepsJson"
+            class="textarea w-full font-mono text-xs min-h-40"
+            rows="8"
+            placeholder="${escapeHtml(messages.builder.automationStepsJsonPlaceholder)}"
+            aria-describedby="automation-steps-json-help"
+          ></textarea>
+          <p id="automation-steps-json-help" class="label text-xs text-base-content/60">
+            ${escapeHtml(messages.builder.automationStepsJsonHelp)}
+          </p>
         </fieldset>
         <div class="flex items-center gap-2">
           <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.createAutomationRun)}</button>

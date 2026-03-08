@@ -580,57 +580,15 @@ const executeAttachArtifactStep = async (
   step: AutomationRunStep,
   spec: AutomationAttachFileStepSpec,
 ): Promise<AutomationRunStep> => {
-  if (spec.kind === "attach-generated-artifact") {
-    const artifact = context.artifactsByStepId.get(spec.sourceStepId);
-    if (!artifact) {
-      throw new Error(`automation-artifact-missing:${spec.sourceStepId}`);
-    }
-    return {
-      ...step,
-      status: "completed" as const,
-      evidenceSource: artifact.previewSource,
-    };
+  const artifact = context.artifactsByStepId.get(spec.sourceStepId);
+  if (!artifact) {
+    throw new Error(`automation-artifact-missing:${spec.sourceStepId}`);
   }
-
-  const collectedArtifacts = spec.sourceStepIds
-    .map((id) => context.artifactsByStepId.get(id))
-    .filter((a): a is GenerationArtifact => Boolean(a));
-
-  const markdown = [
-    `# Automation Execution Bundle`,
-    ``,
-    `- Run: ${context.run.id}`,
-    `- Goal: ${context.run.goal}`,
-    `- Generated At: ${new Date().toISOString()}`,
-    ``,
-    `## Steps`,
-    ...context.run.steps.map(
-      (s) =>
-        `- [${s.status}] ${s.action}: ${s.summary}${s.evidenceSource ? ` (${s.evidenceSource})` : ""}`,
-    ),
-    ``,
-    `## Artifacts`,
-    ...collectedArtifacts.map((a) => `- ${a.label}: ${a.previewSource}`),
-    ``,
-  ].join("\n");
-
-  const bundleArtifact = await createAutomationArtifact(
-    context.projectId,
-    context.run.id,
-    "bundle",
-    new TextEncoder().encode(markdown),
-    `automation-bundle.${context.run.id}.md`,
-    "text/markdown",
-    "automation.artifact.label.bundle",
-    "automation.artifact.attached-execution-bundle",
-  );
-  context.artifacts.push(bundleArtifact);
-  context.artifactsByStepId.set(step.id, bundleArtifact);
 
   return {
     ...step,
     status: "completed" as const,
-    evidenceSource: bundleArtifact.previewSource,
+    evidenceSource: artifact.previewSource,
   };
 };
 
@@ -670,71 +628,7 @@ const executeAutomationStep = async (
       case "queue-generation-job":
         return executeBuilderAutomationStep(context, step, spec);
       case "attach-generated-artifact":
-      case "attach-execution-bundle":
         return executeAttachArtifactStep(context, step, spec);
-      case "capture-project-context": {
-        const payload = JSON.stringify(
-          {
-            projectId: context.projectId,
-            runId: context.run.id,
-            goal: context.run.goal,
-            stepCount: context.run.steps.length,
-            capturedAtMs: Date.now(),
-          },
-          null,
-          2,
-        );
-        const contextArtifact = await createAutomationArtifact(
-          context.projectId,
-          context.run.id,
-          "context",
-          new TextEncoder().encode(payload),
-          `automation-context.${context.run.id}.json`,
-          "application/json",
-          "automation.artifact.label.context",
-          "automation.artifact.captured-project-context",
-        );
-        context.artifacts.push(contextArtifact);
-        context.artifactsByStepId.set(step.id, contextArtifact);
-        return {
-          ...step,
-          status: "completed" as const,
-          evidenceSource: contextArtifact.previewSource,
-        };
-      }
-      case "generate-tool-plan": {
-        const planPayload = JSON.stringify(
-          {
-            source: "deterministic-run-steps",
-            steps: context.run.steps.map((s, index) => ({
-              id: s.id,
-              ordinal: index,
-              title: s.summary,
-              kind: s.action === "attach-file" ? "review" : s.action,
-              detail: context.run.goal,
-            })),
-          },
-          null,
-          2,
-        );
-        const planArtifact = await createAutomationArtifact(
-          context.projectId,
-          context.run.id,
-          "plan",
-          new TextEncoder().encode(planPayload),
-          `automation-plan.${context.run.id}.json`,
-          "application/json",
-          "automation.artifact.label.plan",
-          "automation.artifact.generated-tool-plan",
-        );
-        context.artifacts.push(planArtifact);
-        context.artifactsByStepId.set(step.id, planArtifact);
-        return {
-          ...step,
-          status: "completed" as const,
-          evidenceSource: planArtifact.previewSource,
-        };
-      }
       default:
         return assertUnreachable(spec);
     }

@@ -2,12 +2,28 @@ import { Prisma } from "@prisma/client";
 import { appConfig, type LocaleCode, normalizeLocale } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
 import { prismaBase } from "../../shared/services/db.ts";
+import {
+  extractKnowledgeSearchTerms,
+  type KnowledgeSearchTerm,
+  normalizeKnowledgeSearchText,
+  tokenizeKnowledgeSearchTerms,
+} from "./knowledge-search-text.ts";
 import { ProviderRegistry } from "./providers/provider-registry.ts";
 import { vectorStore } from "./vector-store.ts";
 
 const logger = createLogger("ai.knowledge-base");
 let embeddingFallbackUntilMs = 0;
 const embeddingFallbackCooldownMs = (): number => appConfig.ai.pipelineTimeoutMs * 4;
+
+/**
+ * Resets the sticky embedding fallback timer.
+ *
+ * This ensures that test scopes using mocked embedding generation
+ * are not polluted by earlier provider failures in the same process.
+ */
+export const resetEmbeddingFallback = (): void => {
+  embeddingFallbackUntilMs = 0;
+};
 
 /**
  * Input payload for knowledge-document ingestion.
@@ -97,58 +113,25 @@ interface ChunkSeed {
   readonly tokenEstimate: number;
 }
 
-interface ChunkTermSeed {
-  readonly term: string;
-  readonly occurrenceCount: number;
-}
-
 interface EmbeddedChunkSeed extends ChunkSeed {
   readonly chunkId: string;
   readonly embedding: readonly number[];
   readonly searchText: string;
-  readonly terms: readonly ChunkTermSeed[];
+  readonly terms: readonly KnowledgeSearchTerm[];
 }
 
 interface KnowledgeChunkCandidateRow {
   readonly id: string;
 }
 
+interface RankedKnowledgeSearchMatch extends KnowledgeSearchMatch {
+  readonly candidateRank: number;
+}
+
 const estimateTokenCount = (value: string): number =>
   Math.max(1, Math.ceil(value.trim().length / 4));
 
 const trimNormalized = (value: string): string => value.replace(/\s+/gu, " ").trim();
-
-const normalizeSearchText = (value: string): string =>
-  trimNormalized(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fff\s]+/gu, " ");
-
-const tokenizeSearchTerms = (value: string): readonly string[] =>
-  Array.from(
-    new Set(
-      normalizeSearchText(value)
-        .split(/\s+/u)
-        .map((term) => term.trim())
-        .filter((term) => term.length >= 2),
-    ),
-  );
-
-const extractSearchTerms = (value: string): readonly ChunkTermSeed[] => {
-  const counts = new Map<string, number>();
-  for (const term of normalizeSearchText(value)
-    .split(/\s+/u)
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length >= 2)) {
-    counts.set(term, (counts.get(term) ?? 0) + 1);
-  }
-
-  return [...counts.entries()]
-    .sort((left, right) => left[0].localeCompare(right[0]))
-    .map(([term, occurrenceCount]) => ({
-      term,
-      occurrenceCount,
-    }));
-};
 
 const createContentHash = async (value: string): Promise<string> => {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -395,8 +378,8 @@ export class KnowledgeBaseService {
         ...chunk,
         chunkId: `${crypto.randomUUID()}:chunk:${chunk.ordinal}`,
         embedding: toEmbeddingArray(embedding),
-        searchText: normalizeSearchText(chunk.text),
-        terms: extractSearchTerms(chunk.text),
+        searchText: normalizeKnowledgeSearchText(chunk.text),
+        terms: extractKnowledgeSearchTerms(chunk.text),
       });
     }
 
@@ -572,7 +555,7 @@ export class KnowledgeBaseService {
       readonly limit: number;
     },
   ): Promise<readonly string[]> {
-    const searchTerms = tokenizeSearchTerms(query);
+    const searchTerms = tokenizeKnowledgeSearchTerms(query);
     if (searchTerms.length === 0) {
       const rows = await prismaBase.aiKnowledgeChunk.findMany({
         where: {
@@ -703,11 +686,15 @@ export class KnowledgeBaseService {
     });
 
     const distanceMap = new Map(vecResults.map((r) => [r.chunkId, r.distance]));
+    const candidateRankMap = new Map(
+      candidateIds.map((candidateId, index) => [candidateId, index]),
+    );
 
     const ranked = rows
       .map((row) => {
         const vecDistance = distanceMap.get(row.id);
         const score = vecDistance !== undefined ? 1 - vecDistance : 0;
+        const candidateRank = candidateRankMap.get(row.id) ?? Number.MAX_SAFE_INTEGER;
 
         return {
           documentId: row.documentId,
@@ -718,9 +705,25 @@ export class KnowledgeBaseService {
           ordinal: row.ordinal,
           text: row.text,
           score,
-        } satisfies KnowledgeSearchMatch;
+          candidateRank,
+        } satisfies RankedKnowledgeSearchMatch;
       })
-      .sort((left, right) => right.score - left.score)
+      .sort((left, right) => {
+        if (right.score !== left.score) {
+          return right.score - left.score;
+        }
+
+        if (left.candidateRank !== right.candidateRank) {
+          return left.candidateRank - right.candidateRank;
+        }
+
+        if (left.ordinal !== right.ordinal) {
+          return left.ordinal - right.ordinal;
+        }
+
+        return left.chunkId.localeCompare(right.chunkId);
+      })
+      .map(({ candidateRank: _candidateRank, ...match }) => match)
       .slice(0, effectiveLimit);
 
     return ranked;

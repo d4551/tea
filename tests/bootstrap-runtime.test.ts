@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { runDoctorWorkflow, runSetupWorkflow } from "../scripts/runtime-bootstrap.ts";
 import { collectRuntimeReadinessReport } from "../src/bootstrap/runtime-readiness.ts";
 
@@ -44,8 +47,7 @@ describe("runtime bootstrap", () => {
   });
 
   test("setup workflow creates .env when missing and runs canonical Bun steps", async () => {
-    const tempDirectory = await Bun.$`mktemp -d`.text();
-    const cwd = tempDirectory.trim();
+    const cwd = await mkdtemp(join(tmpdir(), "bun-test-"));
     await Bun.write(`${cwd}/.env.example`, "TEST_VALUE=from-example\n");
 
     const commands: string[] = [];
@@ -67,21 +69,20 @@ describe("runtime bootstrap", () => {
       "bun install",
       "created .env from .env.example",
       "bun run prisma:generate",
-      "bun run prisma:apply-schema",
+      "bun run prisma:migrate",
       "bun run build:assets",
     ]);
     expect(commands).toEqual([
       "bun install",
       "bun run prisma:generate",
-      "bun run prisma:apply-schema",
+      "bun run prisma:migrate",
       "bun run build:assets",
     ]);
     expect(await Bun.file(`${cwd}/.env`).text()).toBe("TEST_VALUE=from-example\n");
   });
 
   test("setup workflow preserves existing .env files", async () => {
-    const tempDirectory = await Bun.$`mktemp -d`.text();
-    const cwd = tempDirectory.trim();
+    const cwd = await mkdtemp(join(tmpdir(), "bun-test-"));
     await Bun.write(`${cwd}/.env.example`, "TEST_VALUE=from-example\n");
     await Bun.write(`${cwd}/.env`, "TEST_VALUE=preserved\n");
 

@@ -586,6 +586,7 @@ const renderAutomationWorkspace = async (
     locale,
     projectId,
     Array.from(project?.automationRuns.values() ?? []),
+    Array.from(project?.artifacts.values() ?? []),
   );
 };
 
@@ -3310,6 +3311,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
           t.Literal("npc-interact"),
           t.Literal("chat"),
           t.Literal("dialogue-confirmed"),
+          t.Literal("combat-victory"),
+          t.Literal("item-acquired"),
         ]),
         sceneId: t.Optional(t.String()),
         npcId: t.Optional(t.String()),
@@ -3366,6 +3369,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
       const mutation = await builderService.createAutomationRun(projectId, {
         goal: body.goal,
+        stepsJson: body.stepsJson,
       } satisfies BuilderAutomationRunCreatePayload);
       if (!mutation) {
         return status(
@@ -3386,6 +3390,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
         goal: t.String(),
+        stepsJson: t.Optional(t.String()),
       }),
       response: {
         [httpStatus.ok]: t.String(),

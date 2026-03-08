@@ -1,10 +1,11 @@
 import { PrismaLibSql } from "@prisma/adapter-libsql";
-import { Prisma, PrismaClient } from "@prisma/client";
+import { type Prisma, PrismaClient } from "@prisma/client";
 import type { LocaleCode } from "../../config/environment.ts";
 import { appConfig } from "../../config/environment.ts";
 import { getLevel } from "../../domain/game/progression.ts";
 import type {
   AnimationClip,
+  AnimationTimeline,
   AutomationRun,
   BuilderAsset,
   DialogueGraph,
@@ -14,7 +15,6 @@ import type {
   QuestDefinition,
   SceneDefinition,
   TriggerDefinition,
-  AnimationTimeline,
 } from "../contracts/game.ts";
 
 declare global {
@@ -410,7 +410,6 @@ export type BuilderProjectSpriteAtlasRow = Prisma.BuilderProjectSpriteAtlasGetPa
   select: typeof builderProjectSpriteAtlasRowSelect;
 }>;
 
-
 /**
  * Canonical builder dialogue-graph row shape used by domain services.
  */
@@ -741,6 +740,7 @@ export const builderProjectAutomationRunRowSelect = {
       action: true,
       summary: true,
       status: true,
+      specJson: true,
       evidenceSource: true,
     },
   },
@@ -765,6 +765,7 @@ export const builderProjectAutomationRunStepRowSelect = {
   action: true,
   summary: true,
   status: true,
+  specJson: true,
   evidenceSource: true,
 } satisfies Prisma.BuilderProjectAutomationRunStepSelect;
 
@@ -980,7 +981,7 @@ const toAnimationClipCreateManyInput = (
     updatedAt: new Date(clip.updatedAtMs),
   }));
 
-const toAnimationTimelineCreateManyInput = (
+const _toAnimationTimelineCreateManyInput = (
   projectId: string,
   timelines: readonly AnimationTimeline[],
 ): Prisma.BuilderProjectAnimationTimelineCreateManyInput[] =>
@@ -997,7 +998,7 @@ const toAnimationTimelineCreateManyInput = (
     updatedAt: new Date(timeline.updatedAtMs),
   }));
 
-const toAnimationTrackCreateManyInput = (
+const _toAnimationTrackCreateManyInput = (
   projectId: string,
   timelines: readonly AnimationTimeline[],
 ): Prisma.BuilderProjectAnimationTrackCreateManyInput[] =>
@@ -1285,6 +1286,7 @@ const toAutomationRunStepCreateManyInput = (
   readonly action: string;
   readonly summary: string;
   readonly status: string;
+  readonly specJson?: string;
   readonly evidenceSource?: string;
 }> =>
   automationRuns.flatMap((run) =>
@@ -1296,6 +1298,7 @@ const toAutomationRunStepCreateManyInput = (
       action: step.action,
       summary: step.summary,
       status: step.status,
+      specJson: step.spec ? JSON.stringify(step.spec) : undefined,
       evidenceSource: step.evidenceSource,
     })),
   );
@@ -1909,9 +1912,7 @@ const withBuilderCoreExtensions = (base: PrismaClient) =>
 
 // ── $extends — builder row-list methods ───────────────────────────────────────
 
-const withBuilderRowExtensions = (
-  base: ReturnType<typeof withBuilderCoreExtensions>,
-) =>
+const withBuilderRowExtensions = (base: ReturnType<typeof withBuilderCoreExtensions>) =>
   base.$extends({
     model: {
       /**
@@ -2116,9 +2117,7 @@ const withBuilderRowExtensions = (
        */
       builderProjectSpriteAtlas: {
         /** Lists draft sprite-atlas rows for one project. */
-        async listProjectRows(
-          projectId: string,
-        ): Promise<readonly BuilderProjectSpriteAtlasRow[]> {
+        async listProjectRows(projectId: string): Promise<readonly BuilderProjectSpriteAtlasRow[]> {
           return base.builderProjectSpriteAtlas.findMany({
             where: { projectId },
             select: builderProjectSpriteAtlasRowSelect,
@@ -2350,9 +2349,7 @@ const withBuilderRowExtensions = (
 
 // ── $extends — game & oracle domain methods ───────────────────────────────────
 
-const withGameExtensions = (
-  base: ReturnType<typeof withBuilderRowExtensions>,
-) =>
+const withGameExtensions = (base: ReturnType<typeof withBuilderRowExtensions>) =>
   base.$extends({
     model: {
       /**

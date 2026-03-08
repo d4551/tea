@@ -5,9 +5,7 @@ import { AnimationTimelineService } from "../animation-timeline.ts";
 describe("AnimationTimelineService", () => {
   const service = new AnimationTimelineService();
 
-  const makeTimeline = (
-    overrides: Partial<AnimationTimeline> = {},
-  ): AnimationTimeline => ({
+  const makeTimeline = (overrides: Partial<AnimationTimeline> = {}): AnimationTimeline => ({
     id: "tl-1",
     assetId: "asset-1",
     label: "Walk Down",

@@ -808,6 +808,7 @@ model BuilderProjectAutomationRunStep {
   action         String
   summary        String
   status         String
+  specJson       String?
   evidenceSource String?
 
   @@id([projectId, runId, id])

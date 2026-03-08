@@ -197,7 +197,7 @@ export interface AppConfig {
   };
 }
 
-const DEFAULT_PORT = 3000;
+const DEFAULT_PORT = 3088;
 const DEFAULT_RESPONSE_DELAY_MS = 180;
 const DEFAULT_MAX_QUESTION_LENGTH = 240;
 const DEFAULT_GAME_SESSION_STORE = "prisma";

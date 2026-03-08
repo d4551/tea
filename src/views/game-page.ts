@@ -102,6 +102,9 @@ const renderInactiveState = (
   return `<section class="mx-auto grid max-w-3xl gap-6 pt-8">
     <article class="card card-border bg-base-100 shadow-xl">
       <div class="card-body gap-4">
+        <div class="empty-state py-6">
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-16 text-warning/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.692-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+        </div>
         <span class="badge badge-warning badge-soft w-max">${escapeHtml(messages.game.publishedProjectLabel)}</span>
         <h1 class="card-title text-3xl">${escapeHtml(title)}</h1>
         <p class="text-base-content/75">${escapeHtml(description)}</p>
@@ -283,10 +286,12 @@ export function GamePage(props: GamePageProps) {
               data-runtime-active="false"
               data-runtime-focus-active-label="${escapeHtml(messages.game.runtimeSurfaceActive)}"
               data-runtime-focus-inactive-label="${escapeHtml(messages.game.runtimeSurfaceInactive)}"
+              data-spectator-control-denied-label="${escapeHtml(messages.game.spectatorControlDenied)}"
             ></div>
 
             <div
               class="pointer-events-none absolute inset-0 flex flex-col justify-between p-6"
+              style="backdrop-filter:blur(1px)"
             >
               <div class="flex justify-between items-start pt-2">
                 <div id="hud-scene" sse-swap="scene-badge" hx-swap="outerHTML" aria-live="polite" role="status" class="pointer-events-auto rounded-full border border-base-content/10 bg-base-100/80 px-6 py-2 text-lg font-bold shadow backdrop-blur">

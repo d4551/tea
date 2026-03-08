@@ -556,6 +556,179 @@ export type AutomationRunStatus =
   | "canceled";
 
 /**
+ * Browser-automation instruction executed with Playwright against the local app origin.
+ */
+export type AutomationBrowserStepSpec =
+  | {
+      /** Navigate to one app-relative path. */
+      readonly kind: "goto";
+      /** App-relative path beginning with `/`. */
+      readonly path: string;
+    }
+  | {
+      /** Click one accessible element by role/name. */
+      readonly kind: "click";
+      /** Accessible role target. */
+      readonly role: "button" | "link" | "tab" | "checkbox" | "radio" | "textbox";
+      /** Accessible name target. */
+      readonly name: string;
+    }
+  | {
+      /** Fill one accessible form field by role/name. */
+      readonly kind: "fill";
+      /** Accessible role target. */
+      readonly role: "textbox" | "searchbox" | "combobox";
+      /** Accessible name target. */
+      readonly name: string;
+      /** Value written into the control. */
+      readonly value: string;
+    }
+  | {
+      /** Assert that visible text appears on the page. */
+      readonly kind: "assert-text";
+      /** Visible text expected after the prior step. */
+      readonly text: string;
+    }
+  | {
+      /** Capture one screenshot artifact. */
+      readonly kind: "screenshot";
+      /** Stable file stem used for the persisted artifact. */
+      readonly fileStem: string;
+      /** Whether to capture the full page. */
+      readonly fullPage?: boolean;
+    };
+
+/**
+ * HTTP-automation instruction executed against the local app origin.
+ */
+export interface AutomationHttpStepSpec {
+  /** Perform one HTTP request. */
+  readonly kind: "request";
+  /** Request method. */
+  readonly method: "GET" | "POST";
+  /** App-relative path beginning with `/`. */
+  readonly path: string;
+  /** Optional URL-encoded form payload. */
+  readonly form?: Readonly<Record<string, string>>;
+  /** Optional expected status code. */
+  readonly expectedStatus?: number;
+  /** Optional evidence file stem for persisted response capture. */
+  readonly responseFileStem?: string;
+}
+
+/**
+ * Builder-mutation instruction executed through canonical builder form endpoints.
+ */
+export type AutomationBuilderStepSpec =
+  | {
+      /** Create one authored scene via the builder API. */
+      readonly kind: "create-scene";
+      /** Stable scene identifier. */
+      readonly id: string;
+      /** Localized title key. */
+      readonly titleKey: string;
+      /** Background asset path. */
+      readonly background: string;
+      /** Target scene mode. */
+      readonly sceneMode: "2d" | "3d";
+    }
+  | {
+      /** Create one authored trigger via the builder API. */
+      readonly kind: "create-trigger";
+      /** Stable trigger identifier. */
+      readonly id: string;
+      /** Human-readable trigger label. */
+      readonly label: string;
+      /** Trigger event type. */
+      readonly event: TriggerEventType;
+      /** Optional scene scope. */
+      readonly sceneId?: string;
+      /** Optional NPC scope. */
+      readonly npcId?: string;
+    }
+  | {
+      /** Create one authored quest via the builder API. */
+      readonly kind: "create-quest";
+      /** Stable quest identifier. */
+      readonly id: string;
+      /** Human-readable quest title. */
+      readonly title: string;
+      /** Authored quest description. */
+      readonly description: string;
+      /** Trigger that advances the first step. */
+      readonly triggerId: string;
+    }
+  | {
+      /** Create one authored dialogue graph via the builder API. */
+      readonly kind: "create-dialogue-graph";
+      /** Stable graph identifier. */
+      readonly id: string;
+      /** Human-readable graph title. */
+      readonly title: string;
+      /** Root dialogue line. */
+      readonly line: string;
+      /** Optional owning NPC identifier. */
+      readonly npcId?: string;
+    }
+  | {
+      /** Create one authored asset via the builder API. */
+      readonly kind: "create-asset";
+      /** Stable asset identifier. */
+      readonly id: string;
+      /** Human-readable asset label. */
+      readonly label: string;
+      /** Asset kind. */
+      readonly assetKind: BuilderAssetKind;
+      /** Runtime scene mode. */
+      readonly sceneMode: SceneMode;
+      /** Canonical source path or URL. */
+      readonly source: string;
+    }
+  | {
+      /** Create one authored animation clip via the builder API. */
+      readonly kind: "create-animation-clip";
+      /** Stable clip identifier. */
+      readonly id: string;
+      /** Owning asset identifier. */
+      readonly assetId: string;
+      /** State tag such as idle or walk. */
+      readonly stateTag: string;
+      /** Playback rate in frames per second. */
+      readonly playbackFps?: number;
+      /** Number of frames in the clip. */
+      readonly frameCount?: number;
+    }
+  | {
+      /** Queue one generated media job via the builder API. */
+      readonly kind: "queue-generation-job";
+      /** Requested generation job kind. */
+      readonly jobKind: GenerationJob["kind"];
+      /** Prompt sent to the generation worker. */
+      readonly prompt: string;
+      /** Optional target entity or asset identifier. */
+      readonly targetId?: string;
+    };
+
+/**
+ * Evidence-linking instruction that attaches one earlier artifact to the run output.
+ */
+export type AutomationAttachFileStepSpec = {
+  /** Attach one previously generated artifact into the final run payload. */
+  readonly kind: "attach-generated-artifact";
+  /** Step identifier that produced the artifact. */
+  readonly sourceStepId: string;
+};
+
+/**
+ * Typed automation-step execution specification.
+ */
+export type AutomationStepSpec =
+  | AutomationBrowserStepSpec
+  | AutomationHttpStepSpec
+  | AutomationBuilderStepSpec
+  | AutomationAttachFileStepSpec;
+
+/**
  * Single auditable automation step.
  */
 export interface AutomationRunStep {
@@ -567,6 +740,8 @@ export interface AutomationRunStep {
   readonly summary: string;
   /** Step status. */
   readonly status: "pending" | "running" | "completed" | "failed";
+  /** Optional typed execution contract for the step runner. */
+  readonly spec?: AutomationStepSpec;
   /** Optional evidence URL produced by the step. */
   readonly evidenceSource?: string;
 }

@@ -1,7 +1,6 @@
 import type {
   CombatantStats,
   EquipmentLoadout,
-  EquipmentSlotType,
   InventorySlot,
   ItemDefinition,
   PlayerInventoryState, // Contains max capacity, slots, equipment, currency
@@ -107,7 +106,8 @@ export class InventoryService {
       const slot = newSlots[i];
       if (slot && slot.itemId === itemId) {
         const toRemove = Math.min(remainingToRemove, slot.quantity);
-        newSlots[i]!.quantity -= toRemove;
+        // Update the slot quantity directly on the cloned slot object
+        slot.quantity -= toRemove;
         remainingToRemove -= toRemove;
 
         if (remainingToRemove <= 0) break;

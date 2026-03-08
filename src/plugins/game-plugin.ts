@@ -13,10 +13,6 @@ import {
   interpolateRoutePath,
   withQueryParameters,
 } from "../shared/constants/routes.ts";
-import {
-  WS_CLOSE_SESSION_MISSING,
-  WS_CLOSE_TOKEN_EXPIRED,
-} from "../shared/contracts/game.ts";
 import type {
   GameHudState,
   GameSession,
@@ -24,6 +20,7 @@ import type {
   GameSseCloseFrame,
   GameSseCloseReason,
 } from "../shared/contracts/game.ts";
+import { WS_CLOSE_SESSION_MISSING, WS_CLOSE_TOKEN_EXPIRED } from "../shared/contracts/game.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
 import { safeJsonParse } from "../shared/utils/safe-json.ts";
 import { escapeHtml } from "../views/layout.ts";

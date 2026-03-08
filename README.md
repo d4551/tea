@@ -151,7 +151,7 @@ Setup performs:
 - `bun install`
 - `.env` creation only when missing
 - `bun run prisma:generate`
-- `bunx --bun prisma db push`
+- `bun run prisma:migrate`
 - `bun run build:assets`
 - typed readiness verification for DB reachability, required assets, writable directories, and AI routing
 
@@ -525,6 +525,9 @@ Core `.env` variables (see `.env.example` for full defaults):
 | `APP_ORIGIN` | Absolute browser-reachable app origin used for local callbacks and automation evidence |
 | `NODE_ENV` | `development` or `production` |
 | `PORT` | Server port (default: 3000) |
+| `APP_GITHUB_URL` | Optional GitHub URL rendered in the shared footer when configured |
+| `APP_DISCORD_URL` | Optional Discord URL rendered in the shared footer when configured |
+| `APP_TWITTER_URL` | Optional Twitter/X URL rendered in the shared footer when configured |
 | `SESSION_COOKIE_NAME` | Cookie name for anonymous auth-session identity |
 | `SESSION_MAX_AGE_SECONDS` | Anonymous session cookie lifetime in seconds |
 | `SESSION_RESUME_TOKEN_SECRET` | Required secret used to sign session resume tokens |
@@ -1063,6 +1066,9 @@ tea/
 | `APP_ORIGIN` | 供本地回调与自动化证据抓取使用的绝对应用访问地址 |
 | `NODE_ENV` | `development` (开发) 或 `production` (生产) |
 | `PORT` | 服务器端口 (默认: 3000) |
+| `APP_GITHUB_URL` | 配置后会在共享页脚中渲染的 GitHub 链接 |
+| `APP_DISCORD_URL` | 配置后会在共享页脚中渲染的 Discord 链接 |
+| `APP_TWITTER_URL` | 配置后会在共享页脚中渲染的 Twitter/X 链接 |
 | `SESSION_COOKIE_NAME` | 匿名 auth-session 的 Cookie 名称 |
 | `SESSION_MAX_AGE_SECONDS` | 匿名会话 Cookie 生命周期（秒） |
 | `SESSION_RESUME_TOKEN_SECRET` | 用于签名会话恢复令牌的必填密钥 |

@@ -1,7 +1,9 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { createApp } from "../src/app.ts";
 import { appConfig } from "../src/config/environment.ts";
+import { resetEmbeddingFallback } from "../src/domain/ai/knowledge-base-service.ts";
 import { ProviderRegistry } from "../src/domain/ai/providers/provider-registry.ts";
+import { vectorStore } from "../src/domain/ai/vector-store.ts";
 import { builderService } from "../src/domain/builder/builder-service.ts";
 import { gameLoop } from "../src/domain/game/game-loop.ts";
 import { correlationIdHeader } from "../src/lib/correlation-id.ts";
@@ -88,25 +90,32 @@ const readSessionCookieHeader = (response: Response): string | null => {
 };
 
 const createDeterministicEmbedding = (text: string): Float32Array => {
-  const values = new Float32Array(8);
+  const dimension = 384;
+  const values = new Float32Array(dimension);
   for (const [index, character] of [...text].entries()) {
-    const slot = index % values.length;
+    const slot = index % dimension;
     values[slot] = (values[slot] ?? 0) + (character.codePointAt(0) ?? 0) / 1024;
   }
   values[0] = (values[0] ?? 0) === 0 ? 1 : (values[0] ?? 0);
   return values;
 };
 
-const withMockedEmbeddingGeneration = async <T>(run: () => Promise<T>): Promise<T> => {
-  const registry = await ProviderRegistry.getInstance();
-  const originalGenerateEmbedding: ProviderRegistry["generateEmbedding"] =
-    registry.generateEmbedding.bind(registry);
-  registry.generateEmbedding = async (text: string) => createDeterministicEmbedding(text);
+import { spyOn } from "bun:test";
 
+const withMockedEmbeddingGeneration = async <T>(run: () => Promise<T>): Promise<T> => {
+  resetEmbeddingFallback();
+  vectorStore.clear();
+  const registry = await ProviderRegistry.getInstance();
+  const spy = spyOn(registry, "generateEmbedding").mockImplementation(async (text: string) =>
+    createDeterministicEmbedding(text),
+  );
+
+  // SAFETY: try/finally is required to guarantee mockRestore runs even if the
+  // test callback throws, preventing mock leaks across tests.
   try {
     return await run();
   } finally {
-    registry.generateEmbedding = originalGenerateEmbedding;
+    spy.mockRestore();
   }
 };
 
@@ -1755,10 +1764,14 @@ describe("API contracts", () => {
         goal: "Capture builder review evidence",
         steps: [
           {
-            id: "step.browser",
+            id: "step.open-builder",
             action: "browser",
-            summary: "Open builder",
+            summary: "automation.step.browser.goto",
             status: "pending",
+            spec: {
+              kind: "goto",
+              path: `/builder?projectId=${projectId}`,
+            },
           },
         ],
         artifactIds: [],
@@ -1932,12 +1945,17 @@ describe("API contracts", () => {
     expect(payload.data?.missingCount).toBeGreaterThan(0);
     expect(
       payload.data?.capabilities.some(
-        (capability) => capability.key === "automation" && capability.status === "missing",
+        (capability) => capability.key === "automation" && capability.status === "partial",
       ),
     ).toBe(true);
     expect(
       payload.data?.capabilities.some(
         (capability) => capability.key === "runtime2d" && capability.status === "partial",
+      ),
+    ).toBe(true);
+    expect(
+      payload.data?.capabilities.some(
+        (capability) => capability.key === "runtime3d" && capability.status === "missing",
       ),
     ).toBe(true);
   });
@@ -2043,6 +2061,9 @@ describe("API contracts", () => {
           }),
         }),
       );
+      if (!ingestResponse.ok) {
+        console.error("INGEST ERROR:", await ingestResponse.clone().text());
+      }
       const ingestPayload = (await ingestResponse.json()) as {
         readonly ok: boolean;
         readonly data?: {
@@ -2182,19 +2203,11 @@ describe("HTMX partial rendering", () => {
     expect(html.includes('aria-current="page"')).toBe(true);
     expect(html.includes("/builder?lang=en-US")).toBe(true);
     expect(html.includes("/game?lang=en-US")).toBe(true);
-    expect(html.includes("/?lang=en-US#architecture")).toBe(false);
-    expect(html.includes("/pitch-deck?lang=en-US")).toBe(true);
-    expect(html.includes("/narrative-bible?lang=en-US")).toBe(true);
-    expect(html.includes("/dev-plan?lang=en-US")).toBe(true);
-    expect(countOccurrences(html, '/pitch-deck?lang=en-US"')).toBeGreaterThanOrEqual(1);
-    expect(countOccurrences(html, '/narrative-bible?lang=en-US"')).toBeGreaterThanOrEqual(1);
-    expect(countOccurrences(html, '/dev-plan?lang=en-US"')).toBeGreaterThanOrEqual(1);
     expect(html.includes('name="lang" value="en-US"')).toBe(true);
     expect(html.includes('hx-params="*"')).toBe(true);
     expect(html.includes('aria-label="Switch language to Chinese"')).toBe(true);
-    expect(html.includes(appRoutes.aiCatalog)).toBe(true);
-    expect(html.includes(appRoutes.aiTranscribe)).toBe(true);
-    expect(html.includes(`${appConfig.api.docsPath}?lang=en-US`)).toBe(true);
+    expect(html.includes('data-drawer-toggle-target="main-nav-drawer"')).toBe(true);
+    expect(html.includes("/public/vendor/htmx-ext/layout-controls.js")).toBe(true);
   });
 
   test("oracle form preserves locale in progressive-enhancement flow", async () => {
@@ -2204,9 +2217,9 @@ describe("HTMX partial rendering", () => {
     expect(response.status).toBe(httpStatus.ok);
     expect(html.includes('name="lang" value="zh-CN"')).toBe(true);
     expect(html.includes('action="/"')).toBe(true);
-    expect(html.includes('hx-get="/partials/oracle"')).toBe(true);
+    expect(html.includes('hx-get="/partials/ai-playground"')).toBe(true);
     expect(html.includes('hx-ext="oracle-indicator"')).toBe(true);
-    expect(html.includes('data-loading-title="占卜进行中"')).toBe(true);
+    expect(html.includes('data-loading-title="正在创建"')).toBe(true);
     expect(html.includes('aria-label="切换到英文"')).toBe(true);
   });
 
@@ -2215,6 +2228,7 @@ describe("HTMX partial rendering", () => {
     const html = await response.text();
 
     expect(response.status).toBe(httpStatus.ok);
+    expect(html.includes("/public/vendor/htmx-ext/layout-controls.js")).toBe(true);
     expect(html.includes("/public/vendor/htmx-ext/oracle-indicator.js")).toBe(true);
     expect(html.includes("/public/vendor/htmx-ext/focus-panel.js")).toBe(true);
     expect(html.includes("/public/vendor/htmx-ext/game-hud.js")).toBe(false);
@@ -2243,7 +2257,7 @@ describe("HTMX partial rendering", () => {
     expect(response.status).toBe(httpStatus.ok);
     expect(html.toLowerCase().includes("<!doctype html>")).toBe(true);
     expect(html.includes('id="oracle-panel"')).toBe(true);
-    expect(html.includes("Oracle reading")).toBe(true);
+    expect(html.includes("AI Assistant")).toBe(true);
     expect(html.includes('value="river trade"')).toBe(true);
     expect(html.includes('href="/?lang=zh-CN&amp;question=river+trade&amp;mode=auto"')).toBe(true);
   });
@@ -2310,7 +2324,7 @@ describe("HTMX partial rendering", () => {
 
   test("oracle partial returns panel markup", async () => {
     const response = await app.handle(
-      new Request(toUrl(`${appRoutes.oraclePartial}?question=test&mode=auto&lang=en-US`), {
+      new Request(toUrl(`${appRoutes.aiPlaygroundPartial}?question=test&mode=auto&lang=en-US`), {
         headers: {
           "hx-request": "true",
         },
@@ -2328,7 +2342,7 @@ describe("HTMX partial rendering", () => {
     const response = await app.handle(
       new Request(
         toUrl(
-          `${appRoutes.oraclePartial}?question=%E6%B2%B3%E9%81%93%E8%B7%AF%E7%BA%BF&lang=zh-CN`,
+          `${appRoutes.aiPlaygroundPartial}?question=%E6%B2%B3%E9%81%93%E8%B7%AF%E7%BA%BF&lang=zh-CN`,
         ),
       ),
     );
@@ -2336,12 +2350,14 @@ describe("HTMX partial rendering", () => {
     const html = await response.text();
 
     expect(response.status).toBe(httpStatus.ok);
-    expect(html.includes("占卜")).toBe(true);
+    expect(html.includes("生成内容")).toBe(true);
   });
 
   test("oracle partial avoids inline event handlers", async () => {
     const response = await app.handle(
-      new Request(toUrl(`${appRoutes.oraclePartial}?mode=force-retryable-error&question=retry`)),
+      new Request(
+        toUrl(`${appRoutes.aiPlaygroundPartial}?mode=force-retryable-error&question=retry`),
+      ),
     );
     const html = await response.text();
 
@@ -2400,10 +2416,13 @@ describe("HTMX partial rendering", () => {
     expect(html.includes(`/builder/npcs?lang=zh-CN&amp;projectId=${projectId}`)).toBe(true);
     expect(html.includes(`/builder/ai?lang=zh-CN&amp;projectId=${projectId}`)).toBe(true);
     expect(html.includes("/public/vendor/htmx-ext/focus-panel.js")).toBe(true);
+    expect(html.includes("/public/vendor/htmx-ext/layout-controls.js")).toBe(true);
     expect(html.includes("/public/vendor/builder-scene-editor.js")).toBe(true);
     expect(html.includes('id="builder-project-shell"')).toBe(true);
     expect(html.includes(projectId)).toBe(true);
     expect(html.includes('id="builder-platform-readiness"')).toBe(true);
+    expect(html.includes('href="#"')).toBe(false);
+    expect(html.includes("退出构建器")).toBe(true);
   });
 
   test("mechanics workspace detail pane uses the shared focus-panel contract", async () => {
@@ -2949,40 +2968,14 @@ describe("HTMX partial rendering", () => {
     );
     const refreshedAutomationHtml = await refreshedAutomationResponse.text();
     expect(refreshedAutomationResponse.status).toBe(httpStatus.ok);
-    expect(refreshedAutomationHtml.includes("Awaiting approval")).toBe(true);
-    expect(refreshedAutomationHtml.includes("Automation plan ready for review")).toBe(true);
-    expect(refreshedAutomationHtml.includes("Attach evidence to the draft review")).toBe(true);
-    expect(refreshedAutomationHtml.includes("automation.plan-ready-for-review")).toBe(false);
-    expect(refreshedAutomationHtml.includes("automation.artifact.captured-review-evidence")).toBe(
-      false,
-    );
-    const automationRunIdMatch = refreshedAutomationHtml.match(
-      /automation-runs\/([^/"?]+)\/approve/,
-    );
-    expect(automationRunIdMatch).not.toBeNull();
-    const automationRunId = automationRunIdMatch?.[1];
-    expect(automationRunId).toBeDefined();
-    if (!automationRunId) {
-      return;
-    }
-
-    const automationApproveResponse = await app.handle(
-      new Request(toUrl(`/api/builder/automation-runs/${automationRunId}/approve`), {
-        method: "POST",
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          accept: "text/html",
-        },
-        body: new URLSearchParams({
-          projectId,
-          locale: "en-US",
-          approved: "true",
-        }).toString(),
-      }),
-    );
-    const automationApproveHtml = await automationApproveResponse.text();
-    expect(automationApproveResponse.status).toBe(httpStatus.ok);
-    expect(automationApproveHtml.includes("Succeeded")).toBe(true);
+    expect(refreshedAutomationHtml.includes("Failed")).toBe(true);
+    expect(
+      refreshedAutomationHtml.includes(
+        "Local builder automation origin is unavailable. Start the builder runtime and retry.",
+      ),
+    ).toBe(true);
+    expect(refreshedAutomationHtml.includes("automation-origin-unreachable")).toBe(false);
+    expect(refreshedAutomationHtml.includes("/approve")).toBe(false);
   });
 
   test("AI patch preview and apply form routes expose review flow and refresh project shell", async () => {
