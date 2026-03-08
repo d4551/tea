@@ -153,7 +153,7 @@ export const renderAssetsEditor = (
                   aria-label="${escapeHtml(messages.builder.cancelAction)}: ${escapeHtml(getGenerationJobKindLabel(messages, job.kind))}"
                 >${escapeHtml(messages.builder.cancelAction)}</button>
               </form>
-              <span id="${jobSpinnerId}" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+              <span id="${jobSpinnerId}" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
             </div>`
           : "";
 
@@ -171,7 +171,12 @@ export const renderAssetsEditor = (
     })
     .join("");
 
-  return `<section class="space-y-6">
+  const emptyAssetAlert = `<div role="status" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noAssets)}</span></div>`;
+  const emptyClipAlert = `<div role="status" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noAnimationClips)}</span></div>`;
+  const emptyJobAlert = `<div role="status" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noGenerationJobs)}</span></div>`;
+
+  return `<section class="space-y-6 animate-fade-in-up">
+    <h1 class="text-2xl font-bold">${escapeHtml(messages.builder.assetsWorkspaceTitle)}</h1>
     <div class="grid gap-4 xl:grid-cols-3">
       <article class="card card-border bg-base-100 shadow-sm">
         <div class="card-body gap-3">
@@ -181,30 +186,30 @@ export const renderAssetsEditor = (
             <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.assetIdFieldLabel)}</legend>
-              <input name="id" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" />
+              <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" />
             </fieldset>
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.labelField)}</legend>
-              <input name="label" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.assetLabelPlaceholder)}" />
+              <input name="label" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.assetLabelPlaceholder)}" />
             </fieldset>
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.assetKindLabel)}</legend>
-              <select name="kind" class="select select-bordered w-full">${assetKindOptionHtml}</select>
+              <select name="kind" class="select w-full">${assetKindOptionHtml}</select>
             </fieldset>
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneModeLabel)}</legend>
-              <select name="sceneMode" class="select select-bordered w-full">
+              <select name="sceneMode" class="select w-full">
                 <option value="2d">${escapeHtml(messages.builder.sceneMode2d)}</option>
                 <option value="3d">${escapeHtml(messages.builder.sceneMode3d)}</option>
               </select>
             </fieldset>
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.uploadAsset)}</legend>
-              <input name="file" type="file" class="file-input file-input-bordered file-input-sm w-full" accept="image/*,audio/*,.glb,.gltf,.usd,.usda,.usdc,.usdz,.json" required />
+              <input name="file" type="file" class="file-input file-input-sm w-full" accept="image/*,audio/*,.glb,.gltf,.usd,.usda,.usdc,.usdz,.json" aria-required="true" required />
             </fieldset>
             <div class="flex items-center gap-2">
               <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.addAssetFile)}</button>
-              <span id="asset-upload-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+              <span id="asset-upload-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
             </div>
           </form>
           <div class="divider text-xs text-base-content/60">${escapeHtml(messages.builder.addAssetPath)}</div>
@@ -213,30 +218,30 @@ export const renderAssetsEditor = (
             <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.assetIdFieldLabel)}</legend>
-              <input name="id" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" required />
+              <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" aria-required="true" required />
             </fieldset>
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.labelField)}</legend>
-              <input name="label" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.assetLabelPlaceholder)}" required />
+              <input name="label" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.assetLabelPlaceholder)}" aria-required="true" required />
             </fieldset>
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.assetKindLabel)}</legend>
-              <select name="kind" class="select select-bordered w-full">${assetKindOptionHtml}</select>
+              <select name="kind" class="select w-full">${assetKindOptionHtml}</select>
             </fieldset>
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneModeLabel)}</legend>
-              <select name="sceneMode" class="select select-bordered w-full">
+              <select name="sceneMode" class="select w-full">
                 <option value="2d">${escapeHtml(messages.builder.sceneMode2d)}</option>
                 <option value="3d">${escapeHtml(messages.builder.sceneMode3d)}</option>
               </select>
             </fieldset>
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.assetSourceLabel)}</legend>
-              <input name="source" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.sourcePathPlaceholder)}" required />
+              <input name="source" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.sourcePathPlaceholder)}" aria-required="true" required />
             </fieldset>
             <div class="flex items-center gap-2">
               <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.builder.addAssetPath)}</button>
-              <span id="asset-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+              <span id="asset-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
             </div>
           </form>
         </div>
@@ -249,27 +254,27 @@ export const renderAssetsEditor = (
           <h2 class="card-title">${escapeHtml(messages.builder.animationClipsTitle)}</h2>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.clipIdLabel)}</legend>
-            <input name="id" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.clipIdPlaceholder)}" required />
+            <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.clipIdPlaceholder)}" aria-required="true" required />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.clipAssetLabel)}</legend>
-            <input name="assetId" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" required />
+            <input name="assetId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" aria-required="true" required />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.clipStateTagLabel)}</legend>
-            <input name="stateTag" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.stateTagPlaceholder)}" required />
+            <input name="stateTag" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.stateTagPlaceholder)}" aria-required="true" required />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.clipFrameCountLabel)}</legend>
-            <input name="frameCount" type="number" class="input input-bordered w-full" value="4" min="1" />
+            <input name="frameCount" type="number" class="input w-full" value="4" min="1" />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.clipPlaybackLabel)}</legend>
-            <input name="playbackFps" type="number" class="input input-bordered w-full" value="8" min="1" />
+            <input name="playbackFps" type="number" class="input w-full" value="8" min="1" />
           </fieldset>
           <div class="flex items-center gap-2">
             <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.builder.createAnimationClip)}</button>
-            <span id="clip-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+            <span id="clip-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>
       </article>
@@ -281,19 +286,19 @@ export const renderAssetsEditor = (
           <h2 class="card-title">${escapeHtml(messages.builder.generationJobsTitle)}</h2>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.generationJobKindLabel)}</legend>
-            <select name="kind" class="select select-bordered w-full">${generationKindOptionHtml}</select>
+            <select name="kind" class="select w-full">${generationKindOptionHtml}</select>
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.generationPromptLabel)}</legend>
-            <textarea name="prompt" class="textarea textarea-bordered w-full" rows="4" placeholder="${escapeHtml(messages.builder.generationPromptPlaceholder)}" required></textarea>
+            <textarea name="prompt" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.generationPromptPlaceholder)}" aria-required="true" required></textarea>
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.generationTargetLabel)}</legend>
-            <input name="targetId" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.generationTargetPlaceholder)}" />
+            <input name="targetId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.generationTargetPlaceholder)}" />
           </fieldset>
           <div class="flex items-center gap-2">
             <button type="submit" class="btn btn-secondary btn-sm">${escapeHtml(messages.builder.createGenerationJob)}</button>
-            <span id="job-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+            <span id="job-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>
       </article>
@@ -301,17 +306,17 @@ export const renderAssetsEditor = (
 
     <section class="space-y-3">
       <h2 class="text-2xl font-semibold">${escapeHtml(messages.builder.assets)}</h2>
-      <div class="grid gap-4 xl:grid-cols-3">${assetCards || `<div role="alert" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noAssets)}</span></div>`}</div>
+      <div class="grid gap-4 xl:grid-cols-3">${assets.length === 0 ? emptyAssetAlert : assetCards}</div>
     </section>
 
     <section class="space-y-3">
       <h2 class="text-2xl font-semibold">${escapeHtml(messages.builder.animationClipsTitle)}</h2>
-      <div class="grid gap-4 xl:grid-cols-3">${clipCards || `<div role="alert" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noAnimationClips)}</span></div>`}</div>
+      <div class="grid gap-4 xl:grid-cols-3">${clips.length === 0 ? emptyClipAlert : clipCards}</div>
     </section>
 
     <section class="space-y-3">
       <h2 class="text-2xl font-semibold">${escapeHtml(messages.builder.generationJobsTitle)}</h2>
-      <div class="grid gap-4 xl:grid-cols-2">${jobCards || `<div role="alert" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noGenerationJobs)}</span></div>`}</div>
+      <div class="grid gap-4 xl:grid-cols-2">${jobs.length === 0 ? emptyJobAlert : jobCards}</div>
     </section>
   </section>`;
 };

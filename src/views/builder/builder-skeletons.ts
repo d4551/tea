@@ -72,3 +72,44 @@ export const renderListSkeleton = (rowCount = 5): string => {
     </div>
   </div>`;
 };
+
+/**
+ * Renders a stats strip skeleton matching the dashboard layout.
+ *
+ * @param statCount Number of stat placeholders.
+ * @returns HTML string with stat skeletons.
+ */
+export const renderStatsSkeleton = (statCount = 4): string => {
+  const stats = Array.from(
+    { length: statCount },
+    () => `<div class="stat">
+      <div class="skeleton h-3 w-16"></div>
+      <div class="skeleton h-8 w-12 mt-2"></div>
+    </div>`,
+  ).join("");
+
+  return `<div class="stats stats-vertical border border-base-300/50 bg-base-100/50 lg:stats-horizontal w-full" aria-busy="true">
+    ${stats}
+  </div>`;
+};
+
+/**
+ * Renders a quick action grid skeleton.
+ *
+ * @param cardCount Number of quick action card placeholders.
+ * @returns HTML string with quick action skeletons.
+ */
+export const renderQuickActionsSkeleton = (cardCount = 4): string => {
+  const cards = Array.from(
+    { length: cardCount },
+    () => `<div class="card card-border bg-base-100">
+      <div class="card-body gap-3 p-4" aria-busy="true">
+        <div class="skeleton size-10 rounded-btn"></div>
+        <div class="skeleton h-4 w-3/4"></div>
+        <div class="skeleton h-3 w-1/2"></div>
+      </div>
+    </div>`,
+  ).join("");
+
+  return `<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">${cards}</div>`;
+};

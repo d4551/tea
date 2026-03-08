@@ -104,7 +104,7 @@ export const renderDialogueEditor = (
               >
                 <span aria-hidden="true">✨</span> ${escapeHtml(messages.builder.generateDialogue)}
               </button>
-              <span id="dialogue-generate-${npcId.replace(/[^a-zA-Z0-9_.-]/g, "-")}-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+              <span id="dialogue-generate-${npcId.replace(/[^a-zA-Z0-9_.-]/g, "-")}-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
             </span>
           </div>
           <div class="space-y-3">${lineRows}</div>
@@ -114,7 +114,7 @@ export const renderDialogueEditor = (
     .join("");
 
   return `
-    <section class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+    <section class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr] animate-fade-in-up">
       <div class="space-y-4">
         <article class="card card-border bg-base-100 shadow-sm">
           <div class="card-body gap-4">
@@ -128,7 +128,7 @@ export const renderDialogueEditor = (
               <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueSearchLabel)}</legend>
-                <input name="search" type="text" class="input input-bordered w-full" value="${escapeHtml(search)}" placeholder="${escapeHtml(messages.builder.dialogueSearchPlaceholder)}" />
+                <input name="search" type="text" class="input w-full" value="${escapeHtml(search)}" placeholder="${escapeHtml(messages.builder.dialogueSearchPlaceholder)}" />
               </fieldset>
               <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.builder.filterAction)}</button>
             </form>
@@ -145,15 +145,15 @@ export const renderDialogueEditor = (
               <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueKey)}</legend>
-                <input name="key" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.dialogueKeyPlaceholder)}" required />
+                <input name="key" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.dialogueKeyPlaceholder)}" aria-required="true" required />
               </fieldset>
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueLine)}</legend>
-                <textarea name="text" class="textarea textarea-bordered w-full" rows="3" placeholder="${escapeHtml(messages.builder.addLinePlaceholder)}" required></textarea>
+                <textarea name="text" class="textarea w-full" rows="3" placeholder="${escapeHtml(messages.builder.addLinePlaceholder)}" aria-required="true" required></textarea>
               </fieldset>
               <div class="flex items-center gap-2">
                 <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.addDialogue)}</button>
-                <span id="dialogue-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+                <span id="dialogue-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
               </div>
             </form>
           </div>
@@ -229,19 +229,19 @@ export const renderDialogueDetail = (
             hx-indicator="#dialogue-delete-spinner"
             hx-disabled-elt="this"
         >${escapeHtml(messages.builder.delete)}</button>
-          <span id="dialogue-delete-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+          <span id="dialogue-delete-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueLine)}</legend>
           <textarea
             name="text"
-            class="textarea textarea-bordered w-full min-h-28"
+            class="textarea w-full min-h-28"
             required
           >${escapeHtml(text)}</textarea>
         </fieldset>
         <div class="flex items-center justify-end gap-2">
           <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
-          <span id="dialogue-detail-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+          <span id="dialogue-detail-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
       </form>
     </div>`;

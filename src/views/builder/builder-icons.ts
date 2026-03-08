@@ -29,13 +29,7 @@ export const iconDashboard = (cls?: string): string =>
 
 /** Scenes / map icon. */
 export const iconScenes = (cls?: string): string =>
-  icon(
-    [
-      "M9 6.75V15m0 0-3-3m3 3 3-3",
-      "M3.75 3.75h16.5v16.5H3.75V3.75Z",
-    ],
-    cls,
-  );
+  icon(["M9 6.75V15m0 0-3-3m3 3 3-3", "M3.75 3.75h16.5v16.5H3.75V3.75Z"], cls);
 
 /** NPCs / user-group icon. */
 export const iconNpcs = (cls?: string): string =>

@@ -55,7 +55,7 @@ export const renderAutomationPanel = (
                   aria-label="${escapeHtml(messages.builder.cancelAction)}: ${escapeHtml(run.goal)}"
                 >${escapeHtml(messages.builder.cancelAction)}</button>
               </form>
-              <span id="${runSpinnerId}" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+              <span id="${runSpinnerId}" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
             </div>`
           : "";
 
@@ -81,7 +81,9 @@ export const renderAutomationPanel = (
     })
     .join("");
 
-  return `<section class="space-y-6">
+  const emptyRunAlert = `<div role="status" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noAutomationRuns)}</span></div>`;
+
+  return `<section class="space-y-6 animate-fade-in-up">
     <article class="card card-border bg-base-100 shadow-sm">
       <form class="card-body gap-3" hx-post="${escapeHtml(createRunAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#automation-create-spinner" hx-disabled-elt="button, input, select, textarea">
         <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
@@ -89,11 +91,11 @@ export const renderAutomationPanel = (
         <h1 class="card-title text-2xl">${escapeHtml(messages.builder.automationWorkspaceTitle)}</h1>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.automationGoalLabel)}</legend>
-          <textarea name="goal" class="textarea textarea-bordered w-full" rows="4" placeholder="${escapeHtml(messages.builder.automationGoalPlaceholder)}" required></textarea>
+          <textarea name="goal" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.automationGoalPlaceholder)}" aria-required="true" required></textarea>
         </fieldset>
         <div class="flex items-center gap-2">
           <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.createAutomationRun)}</button>
-          <span id="automation-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+          <span id="automation-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
       </form>
     </article>
@@ -103,7 +105,7 @@ export const renderAutomationPanel = (
         <h2 class="text-2xl font-semibold">${escapeHtml(messages.builder.automation)}</h2>
         <span class="badge badge-outline">${runs.length}</span>
       </div>
-      <div class="grid gap-4 xl:grid-cols-2">${runCards || `<div role="alert" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noAutomationRuns)}</span></div>`}</div>
+      <div class="grid gap-4 xl:grid-cols-2">${runs.length === 0 ? emptyRunAlert : runCards}</div>
     </section>
   </section>`;
 };

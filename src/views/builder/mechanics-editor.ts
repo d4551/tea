@@ -63,19 +63,19 @@ export const renderQuestEditForm = (
         <input type="hidden" name="id" value="${escapeHtml(quest.id)}" />
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.titleLabel)}</legend>
-          <input name="title" type="text" class="input input-bordered w-full" value="${escapeHtml(quest.title)}" required />
+          <input name="title" type="text" class="input w-full" value="${escapeHtml(quest.title)}" aria-required="true" required />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.descriptionLabel)}</legend>
-          <textarea name="description" class="textarea textarea-bordered w-full" rows="3" required>${escapeHtml(quest.description)}</textarea>
+          <textarea name="description" class="textarea w-full" rows="3" aria-required="true" required>${escapeHtml(quest.description)}</textarea>
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.triggerIdLabel)}</legend>
-          <input name="triggerId" type="text" class="input input-bordered w-full" value="${escapeHtml(firstStep?.triggerId ?? "")}" required />
+          <input name="triggerId" type="text" class="input w-full" value="${escapeHtml(firstStep?.triggerId ?? "")}" aria-required="true" required />
         </fieldset>
         <div class="flex items-center gap-2">
           <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
-          <span id="quest-edit-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+          <span id="quest-edit-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
       </form>
     </div>
@@ -119,23 +119,23 @@ export const renderTriggerEditForm = (
         <input type="hidden" name="id" value="${escapeHtml(trigger.id)}" />
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.labelField)}</legend>
-          <input name="label" type="text" class="input input-bordered w-full" value="${escapeHtml(trigger.label)}" required />
+          <input name="label" type="text" class="input w-full" value="${escapeHtml(trigger.label)}" aria-required="true" required />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.triggerEventLabel)}</legend>
-          <select name="event" class="select select-bordered w-full">${renderTriggerEventOptions(messages, trigger.event)}</select>
+          <select name="event" class="select w-full">${renderTriggerEventOptions(messages, trigger.event)}</select>
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneId)}</legend>
-          <input name="sceneId" type="text" class="input input-bordered w-full" value="${escapeHtml(trigger.sceneId ?? "")}" />
+          <input name="sceneId" type="text" class="input w-full" value="${escapeHtml(trigger.sceneId ?? "")}" />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.npcIdLabel)}</legend>
-          <input name="npcId" type="text" class="input input-bordered w-full" value="${escapeHtml(trigger.npcId ?? "")}" placeholder="${escapeHtml(messages.builder.dialogueNpcIdPlaceholder)}" />
+          <input name="npcId" type="text" class="input w-full" value="${escapeHtml(trigger.npcId ?? "")}" placeholder="${escapeHtml(messages.builder.dialogueNpcIdPlaceholder)}" />
         </fieldset>
         <div class="flex items-center gap-2">
           <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
-          <span id="trigger-edit-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+          <span id="trigger-edit-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
       </form>
     </div>
@@ -182,19 +182,19 @@ export const renderDialogueGraphEditForm = (
         <input type="hidden" name="id" value="${escapeHtml(graph.id)}" />
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.titleLabel)}</legend>
-          <input name="title" type="text" class="input input-bordered w-full" value="${escapeHtml(graph.title)}" required />
+          <input name="title" type="text" class="input w-full" value="${escapeHtml(graph.title)}" aria-required="true" required />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.npcIdLabel)}</legend>
-          <input name="npcId" type="text" class="input input-bordered w-full" value="${escapeHtml(graph.npcId ?? "")}" placeholder="${escapeHtml(messages.builder.dialogueNpcIdPlaceholder)}" />
+          <input name="npcId" type="text" class="input w-full" value="${escapeHtml(graph.npcId ?? "")}" placeholder="${escapeHtml(messages.builder.dialogueNpcIdPlaceholder)}" />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueLine)}</legend>
-          <textarea name="line" class="textarea textarea-bordered w-full" rows="3" required>${escapeHtml(line)}</textarea>
+          <textarea name="line" class="textarea w-full" rows="3" aria-required="true" required>${escapeHtml(line)}</textarea>
         </fieldset>
         <div class="flex items-center gap-2">
           <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
-          <span id="graph-edit-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+          <span id="graph-edit-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
       </form>
     </div>
@@ -318,7 +318,12 @@ export const renderMechanicsEditor = (
     )
     .join("");
 
-  return `<section class="space-y-6">
+  const emptyQuestAlert = `<div role="status" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noQuests)}</span></div>`;
+  const emptyTriggerAlert = `<div role="status" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noTriggers)}</span></div>`;
+  const emptyGraphAlert = `<div role="status" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noDialogueGraphs)}</span></div>`;
+
+  return `<section class="space-y-6 animate-fade-in-up">
+    <h1 class="text-2xl font-bold">${escapeHtml(messages.builder.mechanics)}</h1>
     <div class="grid gap-4 xl:grid-cols-3">
       <article class="card card-border bg-base-100 shadow-sm">
         <form class="card-body gap-3" hx-post="${escapeHtml(createQuestAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#quest-create-spinner" hx-disabled-elt="button, input, select, textarea">
@@ -327,23 +332,23 @@ export const renderMechanicsEditor = (
           <h2 class="card-title">${escapeHtml(messages.builder.questsTitle)}</h2>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.questIdLabel)}</legend>
-            <input name="id" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.questIdPlaceholder)}" required />
+            <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.questIdPlaceholder)}" aria-required="true" required />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.titleLabel)}</legend>
-            <input name="title" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.questTitlePlaceholder)}" required />
+            <input name="title" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.questTitlePlaceholder)}" aria-required="true" required />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.descriptionLabel)}</legend>
-            <textarea name="description" class="textarea textarea-bordered w-full" rows="3" placeholder="${escapeHtml(messages.builder.questDescriptionPlaceholder)}" required></textarea>
+            <textarea name="description" class="textarea w-full" rows="3" placeholder="${escapeHtml(messages.builder.questDescriptionPlaceholder)}" aria-required="true" required></textarea>
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.triggerIdLabel)}</legend>
-            <input name="triggerId" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.triggerIdPlaceholder)}" required />
+            <input name="triggerId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.triggerIdPlaceholder)}" aria-required="true" required />
           </fieldset>
           <div class="flex items-center gap-2">
             <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.createQuest)}</button>
-            <span id="quest-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+            <span id="quest-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>
       </article>
@@ -355,27 +360,27 @@ export const renderMechanicsEditor = (
           <h2 class="card-title">${escapeHtml(messages.builder.triggersTitle)}</h2>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.triggerIdLabel)}</legend>
-            <input name="id" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.triggerIdPlaceholder)}" required />
+            <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.triggerIdPlaceholder)}" aria-required="true" required />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.labelField)}</legend>
-            <input name="label" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.triggerLabelPlaceholder)}" required />
+            <input name="label" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.triggerLabelPlaceholder)}" aria-required="true" required />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.triggerEventLabel)}</legend>
-            <select name="event" class="select select-bordered w-full">${renderTriggerEventOptions(messages)}</select>
+            <select name="event" class="select w-full">${renderTriggerEventOptions(messages)}</select>
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneId)}</legend>
-            <input name="sceneId" type="text" class="input input-bordered w-full" />
+            <input name="sceneId" type="text" class="input w-full" />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.npcIdLabel)}</legend>
-            <input name="npcId" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.dialogueNpcIdPlaceholder)}" />
+            <input name="npcId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.dialogueNpcIdPlaceholder)}" />
           </fieldset>
           <div class="flex items-center gap-2">
             <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.builder.createTrigger)}</button>
-            <span id="trigger-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+            <span id="trigger-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>
       </article>
@@ -387,23 +392,23 @@ export const renderMechanicsEditor = (
           <h2 class="card-title">${escapeHtml(messages.builder.dialogueGraphsTitle)}</h2>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.graphIdLabel)}</legend>
-            <input name="id" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.graphIdPlaceholder)}" required />
+            <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.graphIdPlaceholder)}" aria-required="true" required />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.titleLabel)}</legend>
-            <input name="title" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.graphTitlePlaceholder)}" required />
+            <input name="title" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.graphTitlePlaceholder)}" aria-required="true" required />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.npcIdLabel)}</legend>
-            <input name="npcId" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.dialogueNpcIdPlaceholder)}" />
+            <input name="npcId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.dialogueNpcIdPlaceholder)}" />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueLine)}</legend>
-            <textarea name="line" class="textarea textarea-bordered w-full" rows="3" placeholder="${escapeHtml(messages.builder.addLinePlaceholder)}" required></textarea>
+            <textarea name="line" class="textarea w-full" rows="3" placeholder="${escapeHtml(messages.builder.addLinePlaceholder)}" aria-required="true" required></textarea>
           </fieldset>
           <div class="flex items-center gap-2">
             <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.builder.createDialogueGraph)}</button>
-            <span id="graph-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+            <span id="graph-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>
       </article>
@@ -414,7 +419,7 @@ export const renderMechanicsEditor = (
         <h2 class="text-2xl font-semibold">${escapeHtml(messages.builder.questsTitle)}</h2>
         <span class="badge badge-outline">${quests.length}</span>
       </div>
-      <div class="grid gap-4 xl:grid-cols-2">${questCards || `<div role="alert" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noQuests)}</span></div>`}</div>
+      <div class="grid gap-4 xl:grid-cols-2">${quests.length === 0 ? emptyQuestAlert : questCards}</div>
     </section>
 
     <section class="space-y-3">
@@ -422,7 +427,7 @@ export const renderMechanicsEditor = (
         <h2 class="text-2xl font-semibold">${escapeHtml(messages.builder.triggersTitle)}</h2>
         <span class="badge badge-outline">${triggers.length}</span>
       </div>
-      <div class="grid gap-4 xl:grid-cols-2">${triggerCards || `<div role="alert" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noTriggers)}</span></div>`}</div>
+      <div class="grid gap-4 xl:grid-cols-2">${triggers.length === 0 ? emptyTriggerAlert : triggerCards}</div>
     </section>
 
     <section class="space-y-3">
@@ -430,7 +435,7 @@ export const renderMechanicsEditor = (
         <h2 class="text-2xl font-semibold">${escapeHtml(messages.builder.dialogueGraphsTitle)}</h2>
         <span class="badge badge-outline">${dialogueGraphs.length}</span>
       </div>
-      <div class="grid gap-4 xl:grid-cols-2">${graphCards || `<div role="alert" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noDialogueGraphs)}</span></div>`}</div>
+      <div class="grid gap-4 xl:grid-cols-2">${dialogueGraphs.length === 0 ? emptyGraphAlert : graphCards}</div>
     </section>
 
     <section class="card card-border bg-base-100 shadow-sm">

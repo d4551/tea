@@ -161,40 +161,40 @@ const renderNodeForm = (
         <div class="grid gap-3 md:grid-cols-2">
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.nodeTypeLabel)}</legend>
-            <select name="nodeType" class="select select-bordered w-full">${renderSceneNodeTypeOptions(messages, "2d", node.nodeType)}</select>
+            <select name="nodeType" class="select w-full">${renderSceneNodeTypeOptions(messages, "2d", node.nodeType)}</select>
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.layerLabel)}</legend>
-            <input name="layer" type="text" class="input input-bordered w-full" value="${escapeHtml(node.layer)}" />
+            <input name="layer" type="text" class="input w-full" value="${escapeHtml(node.layer)}" />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.assetIdFieldLabel)}</legend>
-            <input name="assetId" type="text" class="input input-bordered w-full" value="${escapeHtml(node.assetId ?? "")}" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" />
+            <input name="assetId" type="text" class="input w-full" value="${escapeHtml(node.assetId ?? "")}" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.animationClipIdFieldLabel)}</legend>
-            <input name="animationClipId" type="text" class="input input-bordered w-full" value="${escapeHtml(node.animationClipId ?? "")}" placeholder="${escapeHtml(messages.builder.clipIdPlaceholder)}" />
+            <input name="animationClipId" type="text" class="input w-full" value="${escapeHtml(node.animationClipId ?? "")}" placeholder="${escapeHtml(messages.builder.clipIdPlaceholder)}" />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.xLabel)}</legend>
-            <input name="positionX" type="number" class="input input-bordered w-full" value="${node.position.x}" />
+            <input name="positionX" type="number" class="input w-full" value="${node.position.x}" />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.yLabel)}</legend>
-            <input name="positionY" type="number" class="input input-bordered w-full" value="${node.position.y}" />
+            <input name="positionY" type="number" class="input w-full" value="${node.position.y}" />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.widthLabel)}</legend>
-            <input name="sizeWidth" type="number" class="input input-bordered w-full" value="${node.size.width}" min="1" />
+            <input name="sizeWidth" type="number" class="input w-full" value="${node.size.width}" min="1" />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.heightLabel)}</legend>
-            <input name="sizeHeight" type="number" class="input input-bordered w-full" value="${node.size.height}" min="1" />
+            <input name="sizeHeight" type="number" class="input w-full" value="${node.size.height}" min="1" />
           </fieldset>
         </div>
         <div class="card-actions justify-end gap-2">
           <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
-          <span id="${nodeSpinnerId}" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+          <span id="${nodeSpinnerId}" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
       </form>
       <div class="px-6 pb-6">
@@ -220,56 +220,56 @@ const renderNodeForm = (
       <div class="grid gap-3 md:grid-cols-3">
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.nodeTypeLabel)}</legend>
-          <select name="nodeType" class="select select-bordered w-full">${renderSceneNodeTypeOptions(messages, "3d", node.nodeType)}</select>
+          <select name="nodeType" class="select w-full">${renderSceneNodeTypeOptions(messages, "3d", node.nodeType)}</select>
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.assetIdFieldLabel)}</legend>
-          <input name="assetId" type="text" class="input input-bordered w-full" value="${escapeHtml(node.assetId ?? "")}" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" />
+          <input name="assetId" type="text" class="input w-full" value="${escapeHtml(node.assetId ?? "")}" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.animationClipIdFieldLabel)}</legend>
-          <input name="animationClipId" type="text" class="input input-bordered w-full" value="${escapeHtml(node.animationClipId ?? "")}" placeholder="${escapeHtml(messages.builder.clipIdPlaceholder)}" />
+          <input name="animationClipId" type="text" class="input w-full" value="${escapeHtml(node.animationClipId ?? "")}" placeholder="${escapeHtml(messages.builder.clipIdPlaceholder)}" />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.xLabel)}</legend>
-          <input name="positionX" type="number" class="input input-bordered w-full" value="${node.position.x}" step="0.1" />
+          <input name="positionX" type="number" class="input w-full" value="${node.position.x}" step="0.1" />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.yLabel)}</legend>
-          <input name="positionY" type="number" class="input input-bordered w-full" value="${node.position.y}" step="0.1" />
+          <input name="positionY" type="number" class="input w-full" value="${node.position.y}" step="0.1" />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.zLabel)}</legend>
-          <input name="positionZ" type="number" class="input input-bordered w-full" value="${node.position.z}" step="0.1" />
+          <input name="positionZ" type="number" class="input w-full" value="${node.position.z}" step="0.1" />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.rotationXLabel)}</legend>
-          <input name="rotationX" type="number" class="input input-bordered w-full" value="${node.rotation.x}" step="0.1" />
+          <input name="rotationX" type="number" class="input w-full" value="${node.rotation.x}" step="0.1" />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.rotationYLabel)}</legend>
-          <input name="rotationY" type="number" class="input input-bordered w-full" value="${node.rotation.y}" step="0.1" />
+          <input name="rotationY" type="number" class="input w-full" value="${node.rotation.y}" step="0.1" />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.rotationZLabel)}</legend>
-          <input name="rotationZ" type="number" class="input input-bordered w-full" value="${node.rotation.z}" step="0.1" />
+          <input name="rotationZ" type="number" class="input w-full" value="${node.rotation.z}" step="0.1" />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.scaleXLabel)}</legend>
-          <input name="scaleX" type="number" class="input input-bordered w-full" value="${node.scale.x}" step="0.1" />
+          <input name="scaleX" type="number" class="input w-full" value="${node.scale.x}" step="0.1" />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.scaleYLabel)}</legend>
-          <input name="scaleY" type="number" class="input input-bordered w-full" value="${node.scale.y}" step="0.1" />
+          <input name="scaleY" type="number" class="input w-full" value="${node.scale.y}" step="0.1" />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.scaleZLabel)}</legend>
-          <input name="scaleZ" type="number" class="input input-bordered w-full" value="${node.scale.z}" step="0.1" />
+          <input name="scaleZ" type="number" class="input w-full" value="${node.scale.z}" step="0.1" />
         </fieldset>
       </div>
       <div class="card-actions justify-end gap-2">
         <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
-        <span id="${nodeSpinnerId}" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+        <span id="${nodeSpinnerId}" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
       </div>
     </form>
   </article>`;
@@ -354,19 +354,19 @@ export const renderSceneEditor = (
             <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneId)}</legend>
-            <input name="id" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.sceneIdPlaceholder)}" required />
+            <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.sceneIdPlaceholder)}" aria-required="true" required />
             </fieldset>
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneTitle)}</legend>
-              <input name="titleKey" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.sceneCreateTitlePlaceholder)}" required />
+              <input name="titleKey" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.sceneCreateTitlePlaceholder)}" aria-required="true" required />
             </fieldset>
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneBackgroundLabel)}</legend>
-              <input name="background" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.sceneBackgroundPlaceholder)}" required />
+              <input name="background" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.sceneBackgroundPlaceholder)}" aria-required="true" required />
             </fieldset>
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneModeLabel)}</legend>
-              <select name="sceneMode" class="select select-bordered w-full">
+              <select name="sceneMode" class="select w-full">
                 <option value="2d">${escapeHtml(messages.builder.sceneMode2d)}</option>
                 <option value="3d">${escapeHtml(messages.builder.sceneMode3d)}</option>
               </select>
@@ -377,7 +377,7 @@ export const renderSceneEditor = (
             <input type="hidden" name="spawnY" value="180" />
             <div class="flex items-center gap-2">
               <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.addScene)}</button>
-              <span id="scene-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+              <span id="scene-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
             </div>
           </form>
         </article>
@@ -450,6 +450,7 @@ export const renderSceneDetail = (
   const nodeCards = (scene.nodes ?? [])
     .map((node) => renderNodeForm(messages, locale, projectId, scene.id, node))
     .join("");
+  const emptyNodesAlert = `<div role="status" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noSceneNodes)}</span></div>`;
   const scenePayload = escapeHtml(JSON.stringify({ scene }));
 
   return `
@@ -466,7 +467,7 @@ export const renderSceneDetail = (
             <form hx-delete="${escapeHtml(deleteAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#scene-delete-spinner" hx-disabled-elt="button">
               <span class="flex items-center gap-2">
                 <button type="submit" class="btn btn-error btn-outline btn-sm">${escapeHtml(messages.builder.delete)}</button>
-                <span id="scene-delete-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+                <span id="scene-delete-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
               </span>
             </form>
           </div>
@@ -519,52 +520,52 @@ export const renderSceneDetail = (
               <h3 class="card-title text-base">${escapeHtml(messages.builder.sceneNodes)}</h3>
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.nodeIdLabel)}</legend>
-                <input name="id" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.nodeIdPlaceholder)}" required />
+                <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.nodeIdPlaceholder)}" aria-required="true" required />
               </fieldset>
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.assetIdFieldLabel)}</legend>
-                <input name="assetId" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" />
+                <input name="assetId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" />
               </fieldset>
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.animationClipIdFieldLabel)}</legend>
-                <input name="animationClipId" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.clipIdPlaceholder)}" />
+                <input name="animationClipId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.clipIdPlaceholder)}" />
               </fieldset>
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.layerLabel)}</legend>
-                <input name="layer" type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.layerPlaceholder)}" />
+                <input name="layer" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.layerPlaceholder)}" />
               </fieldset>
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.nodeTypeLabel)}</legend>
-                <select name="nodeType" class="select select-bordered w-full">${renderSceneNodeTypeOptions(messages, scene.sceneMode)}</select>
+                <select name="nodeType" class="select w-full">${renderSceneNodeTypeOptions(messages, scene.sceneMode)}</select>
               </fieldset>
               <div class="grid gap-2 md:grid-cols-2">
                 <fieldset class="fieldset">
                   <legend class="fieldset-legend">${escapeHtml(messages.builder.xLabel)}</legend>
-                  <input name="positionX" type="number" class="input input-bordered w-full" value="0" step="0.1" />
+                  <input name="positionX" type="number" class="input w-full" value="0" step="0.1" />
                 </fieldset>
                 <fieldset class="fieldset">
                   <legend class="fieldset-legend">${escapeHtml(messages.builder.yLabel)}</legend>
-                  <input name="positionY" type="number" class="input input-bordered w-full" value="0" step="0.1" />
+                  <input name="positionY" type="number" class="input w-full" value="0" step="0.1" />
                 </fieldset>
                 ${
                   scene.sceneMode === "3d"
                     ? `<fieldset class="fieldset md:col-span-2">
                          <legend class="fieldset-legend">${escapeHtml(messages.builder.zLabel)}</legend>
-                         <input name="positionZ" type="number" class="input input-bordered w-full" value="0" step="0.1" />
+                         <input name="positionZ" type="number" class="input w-full" value="0" step="0.1" />
                        </fieldset>`
                     : `<fieldset class="fieldset">
                          <legend class="fieldset-legend">${escapeHtml(messages.builder.widthLabel)}</legend>
-                         <input name="sizeWidth" type="number" class="input input-bordered w-full" value="64" min="1" />
+                         <input name="sizeWidth" type="number" class="input w-full" value="64" min="1" />
                        </fieldset>
                        <fieldset class="fieldset">
                          <legend class="fieldset-legend">${escapeHtml(messages.builder.heightLabel)}</legend>
-                         <input name="sizeHeight" type="number" class="input input-bordered w-full" value="64" min="1" />
+                         <input name="sizeHeight" type="number" class="input w-full" value="64" min="1" />
                        </fieldset>`
                 }
               </div>
               <div class="flex items-center gap-2">
                 <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.builder.createSceneNode)}</button>
-                <span id="scene-node-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+                <span id="scene-node-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
               </div>
             </form>
           </article>
@@ -581,17 +582,17 @@ export const renderSceneDetail = (
           <div class="space-y-4">
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneTitle)}</legend>
-              <input id="scene-title-key" name="titleKey" type="text" class="input input-bordered w-full" value="${escapeHtml(scene.titleKey)}" required />
+              <input id="scene-title-key" name="titleKey" type="text" class="input w-full" value="${escapeHtml(scene.titleKey)}" aria-required="true" required />
             </fieldset>
 
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneBackgroundLabel)}</legend>
-              <input id="scene-background" name="background" type="text" class="input input-bordered w-full" value="${escapeHtml(scene.background)}" required />
+              <input id="scene-background" name="background" type="text" class="input w-full" value="${escapeHtml(scene.background)}" aria-required="true" required />
             </fieldset>
 
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneModeLabel)}</legend>
-              <select id="scene-mode" name="sceneMode" class="select select-bordered w-full">
+              <select id="scene-mode" name="sceneMode" class="select w-full">
                 <option value="2d"${scene.sceneMode !== "3d" ? " selected" : ""}>${escapeHtml(messages.builder.sceneMode2d)}</option>
                 <option value="3d"${scene.sceneMode === "3d" ? " selected" : ""}>${escapeHtml(messages.builder.sceneMode3d)}</option>
               </select>
@@ -602,23 +603,23 @@ export const renderSceneDetail = (
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.geometry)}</legend>
               <label class="label" for="scene-width">${escapeHtml(messages.builder.widthLabel)}</label>
-              <input id="scene-width" name="geometryWidth" type="number" class="input input-bordered w-full" value="${scene.geometry.width}" min="1" step="1" required />
+              <input id="scene-width" name="geometryWidth" type="number" class="input w-full" value="${scene.geometry.width}" min="1" step="1" aria-required="true" required />
               <label class="label" for="scene-height">${escapeHtml(messages.builder.heightLabel)}</label>
-              <input id="scene-height" name="geometryHeight" type="number" class="input input-bordered w-full" value="${scene.geometry.height}" min="1" step="1" required />
+              <input id="scene-height" name="geometryHeight" type="number" class="input w-full" value="${scene.geometry.height}" min="1" step="1" aria-required="true" required />
             </fieldset>
 
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.spawnPoint)}</legend>
               <label class="label" for="spawn-x">${escapeHtml(messages.builder.xLabel)}</label>
-              <input id="spawn-x" name="spawnX" type="number" class="input input-bordered w-full" value="${scene.spawn.x}" step="1" required />
+              <input id="spawn-x" name="spawnX" type="number" class="input w-full" value="${scene.spawn.x}" step="1" aria-required="true" required />
               <label class="label" for="spawn-y">${escapeHtml(messages.builder.yLabel)}</label>
-              <input id="spawn-y" name="spawnY" type="number" class="input input-bordered w-full" value="${scene.spawn.y}" step="1" required />
+              <input id="spawn-y" name="spawnY" type="number" class="input w-full" value="${scene.spawn.y}" step="1" aria-required="true" required />
             </fieldset>
           </div>
 
           <div class="lg:col-span-2 flex items-center justify-end gap-2">
             <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
-            <span id="scene-detail-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+            <span id="scene-detail-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>
       </div>
@@ -642,7 +643,7 @@ export const renderSceneDetail = (
             <h3 class="card-title text-base">${escapeHtml(messages.builder.sceneNodes)} (${scene.nodes?.length ?? 0})</h3>
             <span class="badge badge-soft">${escapeHtml(scene.sceneMode === "3d" ? messages.builder.sceneMode3d : messages.builder.sceneMode2d)}</span>
           </div>
-          <div class="grid gap-4 xl:grid-cols-2">${nodeCards || `<div role="alert" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noSceneNodes)}</span></div>`}</div>
+          <div class="grid gap-4 xl:grid-cols-2">${(scene.nodes ?? []).length === 0 ? emptyNodesAlert : nodeCards}</div>
           <div class="rounded-box border border-dashed border-base-300 bg-base-200/50 p-3 text-sm text-base-content/70">
             ${escapeHtml(messages.builder.selectNode)}
           </div>
