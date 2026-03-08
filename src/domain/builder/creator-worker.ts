@@ -2,10 +2,12 @@ import { chromium } from "playwright";
 import sharp from "sharp";
 import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
-import { appRoutes } from "../../shared/constants/routes.ts";
+import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type {
+  AutomationAttachFileStepSpec,
   AutomationRun,
   AutomationRunStep,
+  AutomationStepSpec,
   GenerationArtifact,
   GenerationJob,
 } from "../../shared/contracts/game.ts";
@@ -22,6 +24,10 @@ interface WorkerFailure {
 }
 
 type WorkerResult<TPayload> = WorkerSuccess<TPayload> | WorkerFailure;
+
+const assertUnreachable = (_value: never): never => {
+  throw new Error("automation-step-kind-unsupported");
+};
 
 const workerLogger = createLogger("builder.creator-worker");
 
@@ -132,6 +138,39 @@ const toArtifactSummary = (job: GenerationJob): string =>
   job.targetId
     ? `generation.artifact.summary.target:${job.targetId}`
     : "generation.artifact.summary.prompt";
+
+const createAutomationArtifact = async (
+  projectId: string,
+  runId: string,
+  artifactIdSuffix: string,
+  content: Uint8Array,
+  fileName: string,
+  mimeType: string,
+  label: GenerationArtifact["label"],
+  summary: GenerationArtifact["summary"],
+): Promise<GenerationArtifact> => {
+  const artifactId = `artifact.${runId}.${artifactIdSuffix}`;
+  const persisted = await persistBuilderFile(
+    projectId,
+    "automation",
+    artifactId,
+    content,
+    fileName,
+    mimeType,
+  );
+
+  return {
+    id: artifactId,
+    jobId: runId,
+    kind: "automation-evidence",
+    label,
+    previewSource: persisted.publicUrl,
+    summary,
+    mimeType,
+    approved: false,
+    createdAtMs: Date.now(),
+  };
+};
 
 const toWorkerFailure = (error: unknown): WorkerFailure => ({
   ok: false,
@@ -269,84 +308,449 @@ const buildGenerationArtifact = async (
   };
 };
 
-const attemptPlaywrightEvidence = async (
+interface AutomationExecutionContext {
+  readonly projectId: string;
+  readonly run: AutomationRun;
+  readonly artifactsByStepId: Map<string, GenerationArtifact>;
+  readonly artifacts: GenerationArtifact[];
+  browser: Awaited<ReturnType<typeof chromium.launch>> | null;
+  page: Awaited<ReturnType<Awaited<ReturnType<typeof chromium.launch>>["newPage"]>> | null;
+}
+
+const buildAutomationUrl = (path: string): URL =>
+  new URL(path, appConfig.builder.localAutomationOrigin);
+
+const ensureBrowserPage = async (
+  context: AutomationExecutionContext,
+): Promise<Awaited<ReturnType<Awaited<ReturnType<typeof chromium.launch>>["newPage"]>>> => {
+  if (context.page) {
+    return context.page;
+  }
+
+  if (!context.browser) {
+    context.browser = await chromium.launch({ headless: true });
+  }
+
+  context.page = await context.browser.newPage();
+  return context.page;
+};
+
+const resolveRoleLocator = (
+  page: Awaited<ReturnType<Awaited<ReturnType<typeof chromium.launch>>["newPage"]>>,
+  role: "button" | "link" | "tab" | "checkbox" | "radio" | "textbox" | "searchbox" | "combobox",
+  name: string,
+) => page.getByRole(role, { name });
+
+const persistAutomationResponseArtifact = async (
   projectId: string,
   runId: string,
-): Promise<string | null> => {
-  const targetUrl = new URL(appRoutes.builder, appConfig.builder.localAutomationOrigin);
-  targetUrl.searchParams.set("projectId", projectId);
+  stepId: string,
+  fileStem: string,
+  payload: string,
+  mimeType: "application/json" | "text/plain",
+): Promise<GenerationArtifact> =>
+  createAutomationArtifact(
+    projectId,
+    runId,
+    stepId.replace(/[^a-zA-Z0-9_.-]/gu, "-"),
+    new TextEncoder().encode(payload),
+    `${fileStem}.${mimeType === "application/json" ? "json" : "txt"}`,
+    mimeType,
+    "automation.artifact.label.evidence",
+    "automation.artifact.captured-review-evidence",
+  );
 
-  const originReachable = await probeAutomationOrigin(targetUrl);
-  if (!originReachable) {
-    return null;
-  }
+const executeBrowserAutomationStep = async (
+  context: AutomationExecutionContext,
+  step: AutomationRunStep,
+  spec: Extract<
+    AutomationStepSpec,
+    { readonly kind: "goto" | "click" | "fill" | "assert-text" | "screenshot" }
+  >,
+): Promise<AutomationRunStep> => {
+  const page = await ensureBrowserPage(context);
 
-  const browserResult = await runWorkerStep(() => chromium.launch({ headless: true }));
-  if (!browserResult.ok) {
-    workerLogger.warn("automation.playwright.launch-failed", {
-      message: browserResult.error,
-      targetUrl: targetUrl.toString(),
-    });
-    return null;
-  }
-  const browser = browserResult.data;
-
-  const processPage = async (): Promise<string | null> => {
-    const pageResult = await runWorkerStep(() => browser.newPage());
-    if (!pageResult.ok) {
-      workerLogger.warn("automation.playwright.page-failed", {
-        message: pageResult.error,
-        targetUrl: targetUrl.toString(),
-      });
-      return null;
-    }
-
-    const screenshotResult = await runWorkerStep(async () => {
-      await pageResult.data.goto(targetUrl.toString(), {
+  switch (spec.kind) {
+    case "goto": {
+      const targetUrl = buildAutomationUrl(spec.path);
+      await page.goto(targetUrl.toString(), {
         waitUntil: "domcontentloaded",
         timeout: appConfig.ai.requestTimeoutMs,
       });
-      return new Uint8Array(await pageResult.data.screenshot({ fullPage: true, type: "png" }));
-    });
-    if (!screenshotResult.ok) {
-      workerLogger.warn("automation.playwright.capture-failed", {
-        message: screenshotResult.error,
-        targetUrl: targetUrl.toString(),
-      });
-      return null;
+      return { ...step, status: "completed" };
     }
-
-    const persistedResult = await runWorkerStep(() =>
-      persistBuilderFile(
-        projectId,
-        "automation",
-        `evidence.${runId}`,
-        screenshotResult.data,
-        `evidence.${runId}.png`,
+    case "click": {
+      await resolveRoleLocator(page, spec.role, spec.name).click();
+      return { ...step, status: "completed" };
+    }
+    case "fill": {
+      await resolveRoleLocator(page, spec.role, spec.name).fill(spec.value);
+      return { ...step, status: "completed" };
+    }
+    case "assert-text": {
+      await page.getByText(spec.text).waitFor();
+      return { ...step, status: "completed" };
+    }
+    case "screenshot": {
+      const screenshot = new Uint8Array(
+        await page.screenshot({
+          fullPage: spec.fullPage ?? true,
+          type: "png",
+        }),
+      );
+      const artifact = await createAutomationArtifact(
+        context.projectId,
+        context.run.id,
+        step.id,
+        screenshot,
+        `${spec.fileStem}.png`,
         "image/png",
-      ),
-    );
-    if (!persistedResult.ok) {
-      workerLogger.warn("automation.playwright.persist-failed", {
-        message: persistedResult.error,
-        targetUrl: targetUrl.toString(),
-      });
-      return null;
+        "automation.artifact.label.evidence",
+        "automation.artifact.captured-review-evidence",
+      );
+      context.artifacts.push(artifact);
+      context.artifactsByStepId.set(step.id, artifact);
+      return {
+        ...step,
+        status: "completed",
+        evidenceSource: artifact.previewSource,
+      };
     }
+  }
+};
 
-    return persistedResult.data.publicUrl;
-  };
+const executeHttpAutomationStep = async (
+  context: AutomationExecutionContext,
+  step: AutomationRunStep,
+  spec: Extract<AutomationStepSpec, { readonly kind: "request" }>,
+): Promise<AutomationRunStep> => {
+  const response = await fetch(buildAutomationUrl(spec.path), {
+    method: spec.method,
+    headers:
+      spec.method === "POST"
+        ? {
+            "content-type": "application/x-www-form-urlencoded;charset=UTF-8",
+          }
+        : undefined,
+    body:
+      spec.method === "POST" && spec.form ? new URLSearchParams(spec.form).toString() : undefined,
+    signal: AbortSignal.timeout(appConfig.ai.requestTimeoutMs),
+  });
 
-  const publicUrl = await processPage();
-
-  const closeResult = await runWorkerStep(() => browser.close());
-  if (!closeResult.ok) {
-    workerLogger.warn("automation.playwright.close-failed", {
-      message: closeResult.error,
-    });
+  if (spec.expectedStatus !== undefined && response.status !== spec.expectedStatus) {
+    throw new Error(`automation-http-unexpected-status:${response.status}`);
   }
 
-  return publicUrl;
+  if (response.status >= 400) {
+    throw new Error(`automation-http-failed:${response.status}`);
+  }
+
+  let evidenceSource: string | undefined;
+  if (spec.responseFileStem) {
+    const contentType = response.headers.get("content-type") ?? "";
+    const isJson = contentType.includes("application/json");
+    const payload = await response.text();
+    const artifact = await persistAutomationResponseArtifact(
+      context.projectId,
+      context.run.id,
+      step.id,
+      spec.responseFileStem,
+      payload,
+      isJson ? "application/json" : "text/plain",
+    );
+    context.artifacts.push(artifact);
+    context.artifactsByStepId.set(step.id, artifact);
+    evidenceSource = artifact.previewSource;
+  }
+
+  return {
+    ...step,
+    status: "completed",
+    evidenceSource,
+  };
+};
+
+const executeBuilderAutomationStep = async (
+  context: AutomationExecutionContext,
+  step: AutomationRunStep,
+  spec: Extract<
+    AutomationStepSpec,
+    | { readonly kind: "create-scene" }
+    | { readonly kind: "create-trigger" }
+    | { readonly kind: "create-quest" }
+    | { readonly kind: "create-dialogue-graph" }
+    | { readonly kind: "create-asset" }
+    | { readonly kind: "create-animation-clip" }
+    | { readonly kind: "queue-generation-job" }
+  >,
+): Promise<AutomationRunStep> => {
+  const baseForm = new URLSearchParams({
+    projectId: context.projectId,
+  });
+
+  let path = "";
+
+  switch (spec.kind) {
+    case "create-scene":
+      path = `${appRoutes.builderApiScenes}/create/form`;
+      baseForm.set("id", spec.id);
+      baseForm.set("titleKey", spec.titleKey);
+      baseForm.set("background", spec.background);
+      baseForm.set("sceneMode", spec.sceneMode);
+      break;
+    case "create-trigger":
+      path = `${appRoutes.builderApiTriggers}/create/form`;
+      baseForm.set("id", spec.id);
+      baseForm.set("label", spec.label);
+      baseForm.set("event", spec.event);
+      if (spec.sceneId) {
+        baseForm.set("sceneId", spec.sceneId);
+      }
+      if (spec.npcId) {
+        baseForm.set("npcId", spec.npcId);
+      }
+      break;
+    case "create-quest":
+      path = `${appRoutes.builderApiQuests}/create/form`;
+      baseForm.set("id", spec.id);
+      baseForm.set("title", spec.title);
+      baseForm.set("description", spec.description);
+      baseForm.set("triggerId", spec.triggerId);
+      break;
+    case "create-dialogue-graph":
+      path = `${appRoutes.builderApiDialogueGraphs}/create/form`;
+      baseForm.set("id", spec.id);
+      baseForm.set("title", spec.title);
+      baseForm.set("line", spec.line);
+      if (spec.npcId) {
+        baseForm.set("npcId", spec.npcId);
+      }
+      break;
+    case "create-asset":
+      path = `${appRoutes.builderApiAssets}/create/form`;
+      baseForm.set("id", spec.id);
+      baseForm.set("label", spec.label);
+      baseForm.set("kind", spec.assetKind);
+      baseForm.set("sceneMode", spec.sceneMode);
+      baseForm.set("source", spec.source);
+      break;
+    case "create-animation-clip":
+      path = `${appRoutes.builderApiAnimationClips}/create/form`;
+      baseForm.set("id", spec.id);
+      baseForm.set("assetId", spec.assetId);
+      baseForm.set("stateTag", spec.stateTag);
+      if (spec.playbackFps !== undefined) {
+        baseForm.set("playbackFps", String(spec.playbackFps));
+      }
+      if (spec.frameCount !== undefined) {
+        baseForm.set("frameCount", String(spec.frameCount));
+      }
+      break;
+    case "queue-generation-job":
+      path = `${appRoutes.builderApiGenerationJobs}/create/form`;
+      baseForm.set("kind", spec.jobKind);
+      baseForm.set("prompt", spec.prompt);
+      if (spec.targetId) {
+        baseForm.set("targetId", spec.targetId);
+      }
+      break;
+  }
+
+  const response = await fetch(buildAutomationUrl(path), {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded;charset=UTF-8",
+    },
+    body: baseForm.toString(),
+    signal: AbortSignal.timeout(appConfig.ai.requestTimeoutMs),
+  });
+
+  if (response.status >= 400) {
+    throw new Error(`automation-builder-step-failed:${response.status}`);
+  }
+
+  return {
+    ...step,
+    status: "completed",
+  };
+};
+
+const executeAttachArtifactStep = async (
+  context: AutomationExecutionContext,
+  step: AutomationRunStep,
+  spec: AutomationAttachFileStepSpec,
+): Promise<AutomationRunStep> => {
+  if (spec.kind === "attach-generated-artifact") {
+    const artifact = context.artifactsByStepId.get(spec.sourceStepId);
+    if (!artifact) {
+      throw new Error(`automation-artifact-missing:${spec.sourceStepId}`);
+    }
+    return {
+      ...step,
+      status: "completed" as const,
+      evidenceSource: artifact.previewSource,
+    };
+  }
+
+  const collectedArtifacts = spec.sourceStepIds
+    .map((id) => context.artifactsByStepId.get(id))
+    .filter((a): a is GenerationArtifact => Boolean(a));
+
+  const markdown = [
+    `# Automation Execution Bundle`,
+    ``,
+    `- Run: ${context.run.id}`,
+    `- Goal: ${context.run.goal}`,
+    `- Generated At: ${new Date().toISOString()}`,
+    ``,
+    `## Steps`,
+    ...context.run.steps.map(
+      (s) =>
+        `- [${s.status}] ${s.action}: ${s.summary}${s.evidenceSource ? ` (${s.evidenceSource})` : ""}`,
+    ),
+    ``,
+    `## Artifacts`,
+    ...collectedArtifacts.map((a) => `- ${a.label}: ${a.previewSource}`),
+    ``,
+  ].join("\n");
+
+  const bundleArtifact = await createAutomationArtifact(
+    context.projectId,
+    context.run.id,
+    "bundle",
+    new TextEncoder().encode(markdown),
+    `automation-bundle.${context.run.id}.md`,
+    "text/markdown",
+    "automation.artifact.label.bundle",
+    "automation.artifact.attached-execution-bundle",
+  );
+  context.artifacts.push(bundleArtifact);
+  context.artifactsByStepId.set(step.id, bundleArtifact);
+
+  return {
+    ...step,
+    status: "completed" as const,
+    evidenceSource: bundleArtifact.previewSource,
+  };
+};
+
+const executeAutomationStep = async (
+  context: AutomationExecutionContext,
+  step: AutomationRunStep,
+): Promise<
+  WorkerResult<{
+    readonly step: AutomationRunStep;
+    readonly artifacts: readonly GenerationArtifact[];
+  }>
+> => {
+  if (!step.spec) {
+    return {
+      ok: false,
+      error: `automation-step-spec-missing:${step.id}`,
+    };
+  }
+
+  const { spec } = step;
+  const executedStep = await runWorkerStep(async () => {
+    switch (spec.kind) {
+      case "goto":
+      case "click":
+      case "fill":
+      case "assert-text":
+      case "screenshot":
+        return executeBrowserAutomationStep(context, step, spec);
+      case "request":
+        return executeHttpAutomationStep(context, step, spec);
+      case "create-scene":
+      case "create-trigger":
+      case "create-quest":
+      case "create-dialogue-graph":
+      case "create-asset":
+      case "create-animation-clip":
+      case "queue-generation-job":
+        return executeBuilderAutomationStep(context, step, spec);
+      case "attach-generated-artifact":
+      case "attach-execution-bundle":
+        return executeAttachArtifactStep(context, step, spec);
+      case "capture-project-context": {
+        const payload = JSON.stringify(
+          {
+            projectId: context.projectId,
+            runId: context.run.id,
+            goal: context.run.goal,
+            stepCount: context.run.steps.length,
+            capturedAtMs: Date.now(),
+          },
+          null,
+          2,
+        );
+        const contextArtifact = await createAutomationArtifact(
+          context.projectId,
+          context.run.id,
+          "context",
+          new TextEncoder().encode(payload),
+          `automation-context.${context.run.id}.json`,
+          "application/json",
+          "automation.artifact.label.context",
+          "automation.artifact.captured-project-context",
+        );
+        context.artifacts.push(contextArtifact);
+        context.artifactsByStepId.set(step.id, contextArtifact);
+        return {
+          ...step,
+          status: "completed" as const,
+          evidenceSource: contextArtifact.previewSource,
+        };
+      }
+      case "generate-tool-plan": {
+        const planPayload = JSON.stringify(
+          {
+            source: "deterministic-run-steps",
+            steps: context.run.steps.map((s, index) => ({
+              id: s.id,
+              ordinal: index,
+              title: s.summary,
+              kind: s.action === "attach-file" ? "review" : s.action,
+              detail: context.run.goal,
+            })),
+          },
+          null,
+          2,
+        );
+        const planArtifact = await createAutomationArtifact(
+          context.projectId,
+          context.run.id,
+          "plan",
+          new TextEncoder().encode(planPayload),
+          `automation-plan.${context.run.id}.json`,
+          "application/json",
+          "automation.artifact.label.plan",
+          "automation.artifact.generated-tool-plan",
+        );
+        context.artifacts.push(planArtifact);
+        context.artifactsByStepId.set(step.id, planArtifact);
+        return {
+          ...step,
+          status: "completed" as const,
+          evidenceSource: planArtifact.previewSource,
+        };
+      }
+      default:
+        return assertUnreachable(spec);
+    }
+  });
+
+  if (!executedStep.ok) {
+    return executedStep;
+  }
+
+  return {
+    ok: true,
+    data: {
+      step: executedStep.data,
+      artifacts: [...context.artifacts],
+    },
+  };
 };
 
 /**
@@ -385,55 +789,63 @@ export const executeAutomationRun = async (
   projectId: string,
   run: AutomationRun,
 ): Promise<WorkerResult<AutomationRunExecution>> => {
-  const fallbackJob: GenerationJob = {
-    id: `automation.${run.id}`,
-    kind: "portrait",
-    status: "running",
-    prompt: run.goal,
-    artifactIds: [],
-    statusMessage: "automation.capturing-fallback-review-evidence",
-    createdAtMs: run.createdAtMs,
-    updatedAtMs: run.updatedAtMs,
+  const context: AutomationExecutionContext = {
+    projectId,
+    run,
+    artifactsByStepId: new Map<string, GenerationArtifact>(),
+    artifacts: [],
+    browser: null,
+    page: null,
   };
-  const evidenceUrl = await attemptPlaywrightEvidence(projectId, run.id);
-  const fallbackArtifactResult =
-    evidenceUrl === null
-      ? await runWorkerStep(() => buildGenerationArtifact(projectId, fallbackJob))
-      : null;
-  if (fallbackArtifactResult && !fallbackArtifactResult.ok) {
-    return fallbackArtifactResult;
+  const completedSteps: AutomationRunStep[] = [];
+
+  if (run.steps.some((step) => step.action === "browser")) {
+    const targetUrl = buildAutomationUrl(withQueryParameters(appRoutes.builder, { projectId }));
+    const originReachable = await probeAutomationOrigin(targetUrl);
+    if (!originReachable) {
+      return {
+        ok: false,
+        error: "automation-origin-unreachable",
+      };
+    }
   }
 
-  const artifact: GenerationArtifact = fallbackArtifactResult?.data
-    ? {
-        ...fallbackArtifactResult.data,
-        kind: "automation-evidence",
-        label: "automation.artifact.label.evidence",
-        summary: "automation.artifact.captured-review-evidence",
+  for (const step of run.steps) {
+    const executed = await executeAutomationStep(context, step);
+    if (!executed.ok) {
+      if (context.browser) {
+        const closeResult = await runWorkerStep(
+          () => context.browser?.close() ?? Promise.resolve(),
+        );
+        if (!closeResult.ok) {
+          workerLogger.warn("automation.playwright.close-failed", {
+            message: closeResult.error,
+          });
+        }
       }
-    : {
-        id: `artifact.${run.id}`,
-        jobId: run.id,
-        kind: "automation-evidence",
-        label: "automation.artifact.label.evidence",
-        previewSource: evidenceUrl ?? "",
-        summary: "automation.artifact.captured-review-evidence",
-        mimeType: "image/png",
-        approved: false,
-        createdAtMs: Date.now(),
+      return {
+        ok: false,
+        error: executed.error,
       };
+    }
 
-  const completedSteps = run.steps.map((step, index) => ({
-    ...step,
-    status: "completed",
-    evidenceSource: index === 0 ? artifact.previewSource : undefined,
-  })) satisfies readonly AutomationRunStep[];
+    completedSteps.push(executed.data.step);
+  }
+
+  if (context.browser) {
+    const closeResult = await runWorkerStep(() => context.browser?.close() ?? Promise.resolve());
+    if (!closeResult.ok) {
+      workerLogger.warn("automation.playwright.close-failed", {
+        message: closeResult.error,
+      });
+    }
+  }
 
   return {
     ok: true,
     data: {
       steps: completedSteps,
-      artifacts: [artifact],
+      artifacts: [...context.artifacts],
       statusMessage: "automation.plan-ready-for-review",
     },
   };

@@ -21,6 +21,9 @@ export interface Messages {
   readonly common: {
     readonly openMenu: string;
     readonly closeMenu: string;
+    readonly closeSidebar: string;
+    readonly closeAiChat: string;
+    readonly openAiAssistant: string;
     readonly mobileNavigation: string;
     readonly primaryNavigation: string;
     readonly skipToContent: string;
@@ -30,38 +33,51 @@ export interface Messages {
     readonly themeLabel: string;
     readonly themeSilk: string;
     readonly themeAutumn: string;
-    readonly themeLotfk: string;
-    readonly themeLotfkLight: string;
+    readonly themeForgeDark: string;
+    readonly themeForgeLight: string;
+    readonly breadcrumbLabel: string;
+    readonly socialNavLabel: string;
+    readonly githubLabel: string;
+    readonly discordLabel: string;
+    readonly twitterLabel: string;
+    readonly projectConfigured: string;
+    readonly noProjectBound: string;
+    readonly contextLabel: string;
   };
   readonly pages: {
     readonly home: {
       readonly title: string;
       readonly heroTitle: string;
       readonly heroDescription: string;
+      readonly welcomeBack: string;
       readonly builderCardTitle: string;
       readonly builderCardDescription: string;
       readonly builderCardCta: string;
+      readonly openUnifiedBuilder: string;
+      readonly talkToAiOracle: string;
       readonly playerCardTitle: string;
       readonly playerCardDescription: string;
       readonly playerCardCta: string;
+      readonly playtestBuild: string;
+      readonly playtestBuildDescription: string;
+      readonly statusUnpublishedDraft: string;
+      readonly launchPlayerSurface: string;
+      readonly projectActivity: string;
+      readonly projectCreatedInWorkspace: string;
+      readonly waitingForInitialSceneDraft: string;
+      readonly awaitingPublication: string;
+      readonly statsScenes: string;
+      readonly statsNpcs: string;
+      readonly statsGenerations: string;
       readonly loopTitle: string;
       readonly loopDescription: string;
       readonly loopSteps: readonly string[];
-      readonly statusTitle: string;
       readonly architectureTitle: string;
       readonly architectureDescription: string;
       readonly reliabilityTitle: string;
       readonly reliabilityDescription: string;
       readonly progressiveEnhancementTitle: string;
       readonly progressiveEnhancementDescription: string;
-      readonly builderOptionsTitle: string;
-      readonly builderOptionsDescription: string;
-      readonly userFlowTitle: string;
-      readonly userFlowSteps: readonly string[];
-      readonly apiSurfaceTitle: string;
-      readonly apiSurfaceDescription: string;
-      readonly supportingDocsTitle: string;
-      readonly supportingDocsDescription: string;
       readonly docsCta: string;
     };
   };
@@ -70,15 +86,10 @@ export interface Messages {
     readonly cardDescription: string;
     readonly promptLabel: string;
     readonly promptPlaceholder: string;
-    readonly modeLabel: string;
     readonly submit: string;
     readonly loadingTitle: string;
     readonly loadingDescription: string;
     readonly modeAuto: string;
-    readonly modeForceEmpty: string;
-    readonly modeForceRetryableError: string;
-    readonly modeForceFatalError: string;
-    readonly modeForceUnauthorized: string;
     readonly idleHint: string;
     readonly emptyTitle: string;
     readonly emptyDescription: string;
@@ -203,7 +214,32 @@ export interface Messages {
     readonly saveCooldownActive: string;
     readonly inventoryAction: string;
     readonly inventoryClose: string;
+    readonly inventoryTitle: string;
+    readonly inventoryCapacity: string;
+    readonly inventoryStorage: string;
+    readonly inventoryItems: string;
+    readonly inventoryEmpty: string;
+    readonly inventoryWeight: string;
+    readonly inventoryGold: string;
+    readonly inventoryManageHint: string;
+    readonly inventorySessionIdLabel: string;
     readonly cutsceneSkip: string;
+    readonly cutsceneAdvanceHint: string;
+    readonly cutsceneInProgress: string;
+    readonly cutsceneBadge: string;
+    readonly combatTitle: string;
+    readonly combatPhaseLabel: string;
+    readonly combatTurnLabel: string;
+    readonly combatPartyLabel: string;
+    readonly combatHostilesLabel: string;
+    readonly combatLogEmpty: string;
+    readonly combatActionHint: string;
+    readonly combatPhaseIntro: string;
+    readonly combatPhasePlayerTurn: string;
+    readonly combatPhaseEnemyTurn: string;
+    readonly combatPhaseVictory: string;
+    readonly combatPhaseDefeat: string;
+    readonly hitPointsShortLabel: string;
   };
   readonly builder: {
     readonly projectNotFound: string;
@@ -216,6 +252,8 @@ export interface Messages {
     readonly noDialogues: string;
     readonly title: string;
     readonly dashboard: string;
+    readonly workspaceTitle: string;
+    readonly workspaceJumpBack: string;
     readonly scenes: string;
     readonly npcs: string;
     readonly dialogue: string;
@@ -319,6 +357,7 @@ export interface Messages {
     readonly projectStatusUnpublished: string;
     readonly createProject: string;
     readonly switchProject: string;
+    readonly exitBuilder: string;
     readonly publishProject: string;
     readonly unpublishProject: string;
     readonly playPublishedBuild: string;
@@ -355,6 +394,18 @@ export interface Messages {
     readonly transformModeScale: string;
     readonly createSceneNode: string;
     readonly continueAuthoring: string;
+    readonly quickActionScene: string;
+    readonly quickActionSceneDesc: string;
+    readonly quickActionNpc: string;
+    readonly quickActionNpcDesc: string;
+    readonly quickActionDialogue: string;
+    readonly quickActionDialogueDesc: string;
+    readonly quickActionAi: string;
+    readonly quickActionAiDesc: string;
+    readonly statusBarProject: string;
+    readonly statusBarAi: string;
+    readonly statusBarJobs: string;
+    readonly aiAssistFab: string;
     readonly nodeIdLabel: string;
     readonly nodeTypeLabel: string;
     readonly layerLabel: string;
@@ -386,6 +437,8 @@ export interface Messages {
     readonly triggerEventNpcInteract: string;
     readonly triggerEventChat: string;
     readonly triggerEventDialogueConfirmed: string;
+    readonly triggerEventCombatVictory: string;
+    readonly triggerEventItemAcquired: string;
     readonly rotationXLabel: string;
     readonly rotationYLabel: string;
     readonly rotationZLabel: string;
@@ -415,10 +468,11 @@ export interface Messages {
     readonly localRuntimeDescription: string;
     readonly runtimeLabel: string;
     readonly modelLabel: string;
+    readonly taskLabel: string;
     readonly configKeyLabel: string;
+    readonly aiConfigOverrideHelp: string;
     readonly docsLabel: string;
     readonly runtimeStackValue: string;
-    readonly aiConfigPatternValue: string;
     readonly sceneLibraryTitle: string;
     readonly sceneCreateDescription: string;
     readonly sceneCreateTitlePlaceholder: string;
@@ -488,6 +542,9 @@ export interface Messages {
     readonly automationWorkspaceTitle: string;
     readonly automationGoalLabel: string;
     readonly automationGoalPlaceholder: string;
+    readonly automationStepsJsonLabel: string;
+    readonly automationStepsJsonPlaceholder: string;
+    readonly automationStepsJsonHelp: string;
     readonly createAutomationRun: string;
     readonly approveAction: string;
     readonly cancelAction: string;
@@ -504,6 +561,11 @@ export interface Messages {
     readonly generatedArtifactSummaryFromPrompt: string;
     readonly generatedArtifactSummaryTargetPrefix: string;
     readonly automationEvidenceLabel: string;
+    readonly automationContextLabel: string;
+    readonly automationPlanArtifactLabel: string;
+    readonly automationBundleArtifactLabel: string;
+    readonly automationArtifactsLabel: string;
+    readonly openAutomationEvidence: string;
     readonly automationStepBrowser: string;
     readonly automationStepHttp: string;
     readonly automationStepBuilder: string;
@@ -511,7 +573,24 @@ export interface Messages {
     readonly automationSummaryCaptureReviewContext: string;
     readonly automationSummaryPrepareDraftPlan: string;
     readonly automationSummaryAttachReviewEvidence: string;
+    readonly automationSummaryBrowserGoto: string;
+    readonly automationSummaryBrowserClick: string;
+    readonly automationSummaryBrowserFill: string;
+    readonly automationSummaryBrowserAssertText: string;
+    readonly automationSummaryBrowserScreenshot: string;
+    readonly automationSummaryHttpRequest: string;
+    readonly automationSummaryBuilderCreateScene: string;
+    readonly automationSummaryBuilderCreateTrigger: string;
+    readonly automationSummaryBuilderCreateQuest: string;
+    readonly automationSummaryBuilderCreateDialogueGraph: string;
+    readonly automationSummaryBuilderCreateAsset: string;
+    readonly automationSummaryBuilderCreateAnimationClip: string;
+    readonly automationSummaryBuilderQueueGenerationJob: string;
+    readonly automationSummaryAttachGeneratedArtifact: string;
     readonly automationArtifactSummaryCapturedReviewEvidence: string;
+    readonly automationArtifactSummaryCapturedProjectContext: string;
+    readonly automationArtifactSummaryGeneratedToolPlan: string;
+    readonly automationArtifactSummaryAttachedExecutionBundle: string;
     readonly automationStatusQueuedForProcessing: string;
     readonly automationStatusApprovedForApply: string;
     readonly automationStatusCanceledByReview: string;
@@ -582,6 +661,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
     common: {
       openMenu: "Open navigation menu",
       closeMenu: "Close navigation menu",
+      closeSidebar: "Close sidebar",
+      closeAiChat: "Close AI chat",
+      openAiAssistant: "Open AI Assistant",
       mobileNavigation: "Mobile navigation",
       primaryNavigation: "Primary navigation",
       skipToContent: "Skip to main content",
@@ -591,8 +673,16 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       themeLabel: "Theme",
       themeSilk: "Silk",
       themeAutumn: "Autumn",
-      themeLotfk: "Dark",
-      themeLotfkLight: "Light",
+      themeForgeDark: "Dark",
+      themeForgeLight: "Light",
+      breadcrumbLabel: "Breadcrumb",
+      socialNavLabel: "Social links",
+      githubLabel: "GitHub",
+      discordLabel: "Discord",
+      twitterLabel: "Twitter / X",
+      projectConfigured: "Project configured",
+      noProjectBound: "No project bound",
+      contextLabel: "Context",
     },
     pages: {
       home: {
@@ -600,24 +690,33 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         heroTitle: "Build your world with AI",
         heroDescription:
           "Create scenes, characters, and stories — powered by local AI models. Design, publish, and play your game from a single creative workspace.",
+        welcomeBack: "Welcome back. Here's an overview of your current project workspace.",
         builderCardTitle: "Build Worlds",
         builderCardDescription:
           "Design environments, place objects, and craft the spaces your players will explore. AI helps generate terrain, lighting, and atmosphere.",
         builderCardCta: "Start creating",
+        openUnifiedBuilder: "Open Unified Builder",
+        talkToAiOracle: "Talk to AI Oracle",
         playerCardTitle: "Play Your Game",
         playerCardDescription:
           "Launch your published game and experience it as a player. Test gameplay, refine mechanics, and share with others.",
         playerCardCta: "Play now",
+        playtestBuild: "Playtest Build",
+        playtestBuildDescription:
+          "Validate your scenes, dialogues, and mechanics by dropping directly into the runtime surface.",
+        statusUnpublishedDraft: "Status: Unpublished Draft",
+        launchPlayerSurface: "Launch Player Surface",
+        projectActivity: "Project Activity",
+        projectCreatedInWorkspace: "Project created in workspace",
+        waitingForInitialSceneDraft: "Waiting for initial scene draft",
+        awaitingPublication: "Awaiting publication",
+        statsScenes: "Scenes",
+        statsNpcs: "NPCs",
+        statsGenerations: "Generations",
         loopTitle: "Creation flow",
         loopDescription:
           "From first idea to playable game — AI assists at every step of the creative process.",
-        loopSteps: [
-          "Design your world",
-          "Create with AI",
-          "Test and refine",
-          "Publish and play",
-        ],
-        statusTitle: "AI models",
+        loopSteps: ["Design your world", "Create with AI", "Publish and play"],
         architectureTitle: "Build Worlds",
         architectureDescription:
           "Design rich environments with scenes, terrain, and interactive objects. AI generates descriptions, layouts, and atmospheric details.",
@@ -627,23 +726,6 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         progressiveEnhancementTitle: "AI Assistant",
         progressiveEnhancementDescription:
           "Local AI models generate dialogue, critique your designs, and automate repetitive tasks — all running on your machine.",
-        builderOptionsTitle: "Creative tools",
-        builderOptionsDescription:
-          "All the tools you need to create, from scene design to character dialogue to AI-powered generation.",
-        userFlowTitle: "Your creative journey",
-        userFlowSteps: [
-          "Choose a canvas",
-          "Create with AI",
-          "Design assets",
-          "Test your game",
-          "Publish and share",
-        ],
-        apiSurfaceTitle: "AI Generation",
-        apiSurfaceDescription:
-          "Leverage local AI models for dialogue, scene descriptions, character backstories, and automated game design assistance.",
-        supportingDocsTitle: "Resources",
-        supportingDocsDescription:
-          "Explore the API documentation to discover advanced features and integrations for your game projects.",
         docsCta: "API reference",
       },
     },
@@ -652,16 +734,12 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       cardDescription:
         "Generate dialogue, scene descriptions, character backstories, and more. Your local AI creates content for your game in seconds.",
       promptLabel: "What would you like to create?",
-      promptPlaceholder: "Describe a scene, generate character dialogue, or brainstorm game mechanics",
-      modeLabel: "Generation mode",
+      promptPlaceholder:
+        "Describe a scene, generate character dialogue, or brainstorm game mechanics",
       submit: "Generate",
       loadingTitle: "Creating",
       loadingDescription: "Your AI assistant is generating content.",
       modeAuto: "Auto",
-      modeForceEmpty: "Force empty",
-      modeForceRetryableError: "Force retryable error",
-      modeForceFatalError: "Force non-retryable error",
-      modeForceUnauthorized: "Force unauthorized",
       idleHint: "Describe what you want to create and the AI will generate it for you.",
       emptyTitle: "Nothing to generate",
       emptyDescription: "Tell the AI what you want to create.",
@@ -669,7 +747,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       retryableErrorTitle: "AI temporarily busy",
       retryableErrorDescription: "The AI model is busy. Try again in a moment.",
       nonRetryableErrorTitle: "Generation failed",
-      nonRetryableErrorDescription: "This request could not be processed. Try rephrasing your prompt.",
+      nonRetryableErrorDescription:
+        "This request could not be processed. Try rephrasing your prompt.",
       unauthorizedTitle: "Sign in required",
       unauthorizedDescription: "Please sign in to use the AI assistant.",
       networkErrorDescription: "Could not reach the AI model. Check your connection and try again.",
@@ -801,7 +880,32 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       saveCooldownActive: "Save is cooling down.",
       inventoryAction: "Item action",
       inventoryClose: "Close inventory",
+      inventoryTitle: "Inventory",
+      inventoryCapacity: "Capacity",
+      inventoryStorage: "Storage",
+      inventoryItems: "Items",
+      inventoryEmpty: "Empty",
+      inventoryWeight: "Weight",
+      inventoryGold: "Gold",
+      inventoryManageHint: "Use inventory commands to manage items.",
+      inventorySessionIdLabel: "ID",
+      cutsceneAdvanceHint: "Use advance cutscene (Space/Enter) to continue.",
+      cutsceneInProgress: "Cinematic in progress...",
+      cutsceneBadge: "Cinematic",
       cutsceneSkip: "Skip cutscene",
+      combatTitle: "Combat engagement",
+      combatPhaseLabel: "Phase",
+      combatTurnLabel: "Turn",
+      combatPartyLabel: "Party",
+      combatHostilesLabel: "Hostiles",
+      combatLogEmpty: "Combat initiated...",
+      combatActionHint: "Use combat commands to resolve this encounter.",
+      combatPhaseIntro: "Intro",
+      combatPhasePlayerTurn: "Player turn",
+      combatPhaseEnemyTurn: "Enemy turn",
+      combatPhaseVictory: "Victory",
+      combatPhaseDefeat: "Defeat",
+      hitPointsShortLabel: "HP",
     },
     builder: {
       projectNotFound: "Project not found",
@@ -814,6 +918,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       noDialogues: "No dialogue entries found",
       title: "Game Builder",
       dashboard: "Dashboard",
+      workspaceTitle: "Builder Workspace",
+      workspaceJumpBack:
+        "Jump back into your world or start crafting something new with the help of your AI co-pilot.",
       scenes: "Scenes",
       npcs: "NPCs",
       dialogue: "Dialogue",
@@ -913,7 +1020,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       closeSidebar: "Close sidebar",
       currentProject: "Current project",
       projectIdLabel: "Project ID",
-      projectIdPlaceholder: "tea-house-release",
+      projectIdPlaceholder: "adventure-quest",
       projectDraftVersion: "Draft version",
       projectPublishedVersion: "Published release",
       projectStatus: "Status",
@@ -923,6 +1030,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       projectStatusUnpublished: "Unpublished",
       createProject: "Create project",
       switchProject: "Switch project",
+      exitBuilder: "Exit builder",
       publishProject: "Publish release",
       unpublishProject: "Unpublish release",
       playPublishedBuild: "Play published build",
@@ -960,6 +1068,18 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       transformModeScale: "Scale",
       createSceneNode: "Create scene node",
       continueAuthoring: "Continue authoring",
+      quickActionScene: "New Scene",
+      quickActionSceneDesc: "Create a new environment for your game world.",
+      quickActionNpc: "Add Character",
+      quickActionNpcDesc: "Bring a new NPC to life with AI-powered dialogue.",
+      quickActionDialogue: "Write Dialogue",
+      quickActionDialogueDesc: "Craft conversations and story branches.",
+      quickActionAi: "Generate with AI",
+      quickActionAiDesc: "Use AI to create scenes, dialogue, or assets.",
+      statusBarProject: "Project",
+      statusBarAi: "AI Engine",
+      statusBarJobs: "Jobs",
+      aiAssistFab: "AI Assist",
       nodeIdLabel: "Node ID",
       nodeTypeLabel: "Node type",
       layerLabel: "Layer",
@@ -991,6 +1111,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       triggerEventNpcInteract: "NPC interact",
       triggerEventChat: "Chat",
       triggerEventDialogueConfirmed: "Dialogue confirmed",
+      triggerEventCombatVictory: "Combat victory",
+      triggerEventItemAcquired: "Item acquired",
       rotationXLabel: "Rotation X",
       rotationYLabel: "Rotation Y",
       rotationZLabel: "Rotation Z",
@@ -999,55 +1121,53 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       scaleZLabel: "Scale Z",
       sceneWidthDesc: "Scene width in pixels",
       sceneHeightDesc: "Scene height in pixels",
-      assetPlaceholder: "Runtime-mounted asset inventory for scenes and sprites.",
-      testNpcPlaceholder: "teaMonk",
-      testMessagePlaceholder: "Tell me about the five elements...",
-      assistPromptPlaceholder: "How should I balance the tea trader NPC dialogue...",
-      flowTitle: "Guided flow",
-      flowDescription:
-        "Move from platform choice to publishable output with one SSR-first builder sequence.",
+      assetPlaceholder: "Your asset inventory for scenes and characters.",
+      testNpcPlaceholder: "forestGuide",
+      testMessagePlaceholder: "Tell me about the ancient ruins...",
+      assistPromptPlaceholder: "How should I balance the quest guide NPC dialogue...",
+      flowTitle: "Creation steps",
+      flowDescription: "Follow these steps to bring your game idea to life.",
       flowSteps: [
-        "Choose the runtime lane",
-        "Compose or test AI behavior",
-        "Author scenes, NPCs, and dialogue",
-        "Validate contracts and runtime health",
-        "Publish the project",
+        "Pick your game engine",
+        "Add AI-powered characters",
+        "Build worlds and stories",
+        "Preview and polish",
+        "Publish your game",
       ],
-      engineOptionsTitle: "Engine options",
-      engineOptionsDescription:
-        "Choose the delivery path that matches the current milestone without splitting the content model.",
-      runtimeLaneTitle: "Browser runtime",
+      engineOptionsTitle: "Creation paths",
+      engineOptionsDescription: "Choose the workspace that fits your current creative goal.",
+      runtimeLaneTitle: "Scene Studio",
       runtimeLaneDescription:
-        "Server-authoritative web runtime for live scene validation, HUD testing, and session contract checks.",
-      pluginLaneTitle: "RMMZ plugin pack",
+        "Design and preview game scenes, test character interactions, and fine-tune your worlds in real time.",
+      pluginLaneTitle: "Character Workshop",
       pluginLaneDescription:
-        "Structured plugin output for RPG Maker authoring with the same scene and dialogue source of truth.",
-      aiLaneTitle: "Local AI stack",
+        "Create memorable NPCs, write branching dialogue, and shape character personalities.",
+      aiLaneTitle: "AI Forge",
       aiLaneDescription:
-        "Configurable Hugging Face + ONNX targets for dialogue fallback, embeddings, speech recognition, and speech synthesis.",
-      apiSurfaceTitle: "API surface",
-      apiSurfaceDescription:
-        "Use the builder CRUD endpoints, AI catalog, and Swagger docs as the operating surface for tools and automations.",
-      localRuntimeTitle: "Local runtime",
+        "AI-powered tools for generating dialogue, sprites, voices, and game assets.",
+      apiSurfaceTitle: "Capabilities",
+      apiSurfaceDescription: "Check which AI features are available and view integration details.",
+      localRuntimeTitle: "AI Engine",
       localRuntimeDescription:
-        "The builder reads from the same Transformers.js, Hugging Face, and ONNX settings used by the API routes.",
-      runtimeLabel: "Runtime",
-      modelLabel: "Model",
-      configKeyLabel: "Config Key",
+        "Your local AI engine powers characters, generates assets, and assists with game design.",
+      runtimeLabel: "Engine",
+      modelLabel: "AI Model",
+      taskLabel: "Task",
+      configKeyLabel: "Config",
+      aiConfigOverrideHelp:
+        "Override any model through its config-key environment variable, then restart the server.",
       docsLabel: "Docs",
-      runtimeStackValue: "Bun + Elysia + HTMX",
-      aiConfigPatternValue: "AI_LOCAL_* / OLLAMA_*",
+      runtimeStackValue: "Game Forge Engine",
       sceneLibraryTitle: "Scene library",
-      sceneCreateDescription:
-        "Create or select a scene, then refine its layout and runtime preview.",
-      sceneCreateTitlePlaceholder: "teaHouseAnnex",
-      sceneBackgroundPlaceholder: "/assets/images/backgrounds/tea-house-annex.png",
+      sceneCreateDescription: "Create or select a scene, then refine its layout and preview.",
+      sceneCreateTitlePlaceholder: "enchantedForest",
+      sceneBackgroundPlaceholder: "/assets/images/backgrounds/enchanted-forest.png",
       npcRosterTitle: "NPC roster",
       npcCreateDescription:
-        "Add NPCs into a scene, then tune movement, dialogue, and greet behavior.",
+        "Add NPCs into a scene, then tune movement, dialogue, and greeting behavior.",
       npcCreateSceneLabel: "Owning scene",
-      npcCreateKeyPlaceholder: "teaMonk",
-      npcCreateLabelPlaceholder: "npc.teaMonk.label",
+      npcCreateKeyPlaceholder: "forestGuide",
+      npcCreateLabelPlaceholder: "npc.forestGuide.label",
       assetsWorkspaceTitle: "Asset workspace",
       assetKindLabel: "Asset kind",
       assetSourceLabel: "Asset source",
@@ -1067,7 +1187,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       dialogueWorkspaceTitle: "Dialogue workspace",
       dialogueCreateDescription:
         "Keep dialogue grouped by NPC and use AI to draft new lines before saving.",
-      dialogueKeyPlaceholder: "npc.teaMonk.greet",
+      dialogueKeyPlaceholder: "npc.forestGuide.greet",
       addLinePlaceholder: "Welcome, traveler. The leaves have been expecting you.",
       mechanicsWorkspaceTitle: "Mechanics workspace",
       questsTitle: "Quests",
@@ -1098,7 +1218,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       layerPlaceholder: "foreground",
       stateTagPlaceholder: "idle-down",
       sourcePathPlaceholder: "/assets/images/custom.png",
-      dialogueNpcIdPlaceholder: "teaMonk",
+      dialogueNpcIdPlaceholder: "forestGuide",
       operationsJsonPlaceholder:
         '[{"op":"replace","path":"/dialogues/en-US/npc.guide.greet","value":"..."}]',
       assetStatusApproved: "approved",
@@ -1111,6 +1231,11 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       automationGoalLabel: "Automation goal",
       automationGoalPlaceholder:
         "Collect review evidence for the current scene, queue attachments, and prepare a draft apply plan.",
+      automationStepsJsonLabel: "Executable steps JSON",
+      automationStepsJsonPlaceholder:
+        '[{"kind":"goto","path":"/builder?projectId=demo"},{"kind":"screenshot","fileStem":"demo-review","fullPage":true},{"kind":"attach-generated-artifact","sourceStepId":"step.capture-workspace"}]',
+      automationStepsJsonHelp:
+        "Provide an optional JSON array of executable browser, HTTP, builder, or attach-file steps. Leave blank to use the default workspace review run.",
       createAutomationRun: "Queue automation run",
       approveAction: "Approve",
       cancelAction: "Cancel",
@@ -1127,14 +1252,36 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       generatedArtifactSummaryFromPrompt: "Generated draft from builder prompt",
       generatedArtifactSummaryTargetPrefix: "Generated draft for",
       automationEvidenceLabel: "Automation evidence",
+      automationContextLabel: "Project context",
+      automationPlanArtifactLabel: "Automation plan",
+      automationBundleArtifactLabel: "Execution bundle",
+      automationArtifactsLabel: "Automation artifacts",
+      openAutomationEvidence: "Open artifact",
       automationStepBrowser: "Browser",
       automationStepHttp: "HTTP",
       automationStepBuilder: "Builder",
       automationStepAttachFile: "Attach file",
       automationSummaryCaptureReviewContext: "Capture builder review context",
-      automationSummaryPrepareDraftPlan: "Prepare draft mutation plan",
-      automationSummaryAttachReviewEvidence: "Attach evidence to the draft review",
+      automationSummaryPrepareDraftPlan: "Generate structured execution plan",
+      automationSummaryAttachReviewEvidence: "Attach execution bundle for review",
+      automationSummaryBrowserGoto: "Navigate to URL",
+      automationSummaryBrowserClick: "Click element",
+      automationSummaryBrowserFill: "Fill form field",
+      automationSummaryBrowserAssertText: "Assert page text",
+      automationSummaryBrowserScreenshot: "Capture screenshot",
+      automationSummaryHttpRequest: "Send HTTP request",
+      automationSummaryBuilderCreateScene: "Create scene",
+      automationSummaryBuilderCreateTrigger: "Create trigger",
+      automationSummaryBuilderCreateQuest: "Create quest",
+      automationSummaryBuilderCreateDialogueGraph: "Create dialogue graph",
+      automationSummaryBuilderCreateAsset: "Create asset",
+      automationSummaryBuilderCreateAnimationClip: "Create animation clip",
+      automationSummaryBuilderQueueGenerationJob: "Queue generation job",
+      automationSummaryAttachGeneratedArtifact: "Attach generated artifact",
       automationArtifactSummaryCapturedReviewEvidence: "Captured builder review evidence",
+      automationArtifactSummaryCapturedProjectContext: "Captured project review context",
+      automationArtifactSummaryGeneratedToolPlan: "Generated structured tool plan",
+      automationArtifactSummaryAttachedExecutionBundle: "Attached execution bundle",
       automationStatusQueuedForProcessing: "Queued for processing",
       automationStatusApprovedForApply: "Approved for apply",
       automationStatusCanceledByReview: "Canceled by review",
@@ -1172,7 +1319,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         "A narrow browser runtime exists for one baseline content model, but there is no broad 2D world editor or reusable game-authoring pipeline yet.",
       capability3dRuntimeTitle: "3D runtime",
       capability3dRuntimeDescription:
-        "Three.js is only used for atmosphere and lighting under the sprite scene. There is no 3D scene graph, asset pipeline, or builder workflow.",
+        "Three.js is only used for atmosphere and lighting under the sprite scene. There is still no real 3D scene graph, asset pipeline, or builder authoring workflow, so 3D should be treated as missing rather than partial.",
       capabilitySpritePipelineTitle: "Sprite pipeline",
       capabilitySpritePipelineDescription:
         "The builder now supports upload, manual registration, and reviewable generated artifacts, but spritesheet parsing, packing, and reusable asset management are still incomplete.",
@@ -1187,7 +1334,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         "Dialogue, scene description, critique, and patch review are wired, but AI-driven asset generation and mechanics authoring are only partial today.",
       capabilityAutomationTitle: "Automation / RPA",
       capabilityAutomationDescription:
-        "A lifecycle-managed worker now drains queued automation runs and can capture Playwright review evidence, but multi-step tool orchestration and production-grade RPA are still partial.",
+        "A lifecycle-managed worker now executes real review-context capture, structured planning, and execution-bundle attachment steps, but broader browser and tool orchestration are still partial.",
       capabilityWebgpuRendererTitle: "WebGPU Renderer",
       capabilityWebgpuRendererDescription:
         "PixiJS can auto-detect and prefer WebGPU for 2D rendering when supported, falling back to WebGL seamlessly.",
@@ -1214,6 +1361,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
     common: {
       openMenu: "打开导航菜单",
       closeMenu: "关闭导航菜单",
+      closeSidebar: "关闭侧边栏",
+      closeAiChat: "关闭 AI 对话",
+      openAiAssistant: "打开 AI 助手",
       mobileNavigation: "移动端导航",
       primaryNavigation: "主导航",
       skipToContent: "跳转到主要内容",
@@ -1223,8 +1373,16 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       themeLabel: "主题",
       themeSilk: "丝绸",
       themeAutumn: "秋色",
-      themeLotfk: "深色",
-      themeLotfkLight: "浅色",
+      themeForgeDark: "深色",
+      themeForgeLight: "浅色",
+      breadcrumbLabel: "面包屑导航",
+      socialNavLabel: "社交链接",
+      githubLabel: "GitHub",
+      discordLabel: "Discord",
+      twitterLabel: "Twitter / X",
+      projectConfigured: "已配置项目",
+      noProjectBound: "未绑定项目",
+      contextLabel: "上下文",
     },
     pages: {
       home: {
@@ -1232,17 +1390,31 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         heroTitle: "用 AI 构建你的世界",
         heroDescription:
           "创建场景、角色和故事 —— 由本地 AI 模型驱动。在同一个创意工作空间中设计、发布并游玩你的游戏。",
+        welcomeBack: "欢迎回来。这是你当前项目工作区的概览。",
         builderCardTitle: "构建世界",
-        builderCardDescription: "设计环境、放置物体，打造玩家将要探索的空间。AI 帮助生成地形、光照和氛围。",
+        builderCardDescription:
+          "设计环境、放置物体，打造玩家将要探索的空间。AI 帮助生成地形、光照和氛围。",
         builderCardCta: "开始创作",
+        openUnifiedBuilder: "打开统一构建器",
+        talkToAiOracle: "与 AI 助手对话",
         playerCardTitle: "游玩你的游戏",
         playerCardDescription:
           "启动已发布的游戏，以玩家视角体验。测试玩法、调整机制，并与他人分享。",
         playerCardCta: "立即游玩",
+        playtestBuild: "试玩构建",
+        playtestBuildDescription: "直接进入运行时界面，验证场景、对话和机制。",
+        statusUnpublishedDraft: "状态：未发布草稿",
+        launchPlayerSurface: "启动玩家界面",
+        projectActivity: "项目动态",
+        projectCreatedInWorkspace: "项目已在工作区创建",
+        waitingForInitialSceneDraft: "等待初始场景草稿",
+        awaitingPublication: "等待发布",
+        statsScenes: "场景",
+        statsNpcs: "NPC",
+        statsGenerations: "生成",
         loopTitle: "创作流程",
         loopDescription: "从第一个想法到可玩的游戏 —— AI 在创意过程的每一步都提供协助。",
-        loopSteps: ["设计你的世界", "用 AI 创作", "测试与完善", "发布与游玩"],
-        statusTitle: "AI 模型",
+        loopSteps: ["设计你的世界", "用 AI 创作", "发布与游玩"],
         architectureTitle: "构建世界",
         architectureDescription:
           "设计丰富的环境，包含场景、地形和交互物体。AI 生成描述、布局和氛围细节。",
@@ -1252,17 +1424,6 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         progressiveEnhancementTitle: "AI 助手",
         progressiveEnhancementDescription:
           "本地 AI 模型生成对话、审阅你的设计并自动化重复性任务 —— 全部在你的机器上运行。",
-        builderOptionsTitle: "创意工具",
-        builderOptionsDescription:
-          "从场景设计到角色对话再到 AI 生成，创作所需的一切工具。",
-        userFlowTitle: "你的创意之旅",
-        userFlowSteps: ["选择画布", "用 AI 创作", "设计资源", "测试游戏", "发布与分享"],
-        apiSurfaceTitle: "AI 生成",
-        apiSurfaceDescription:
-          "利用本地 AI 模型生成对话、场景描述、角色背景故事以及自动化游戏设计辅助。",
-        supportingDocsTitle: "资源",
-        supportingDocsDescription:
-          "探索 API 文档，发现更多高级功能和游戏项目集成。",
         docsCta: "API 参考",
       },
     },
@@ -1272,15 +1433,10 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         "生成对话、场景描述、角色背景故事等内容。本地 AI 在数秒内为你的游戏创建内容。",
       promptLabel: "你想创建什么？",
       promptPlaceholder: "描述一个场景、生成角色对话，或头脑风暴游戏机制",
-      modeLabel: "生成模式",
       submit: "生成",
       loadingTitle: "正在创建",
       loadingDescription: "AI 助手正在生成内容。",
       modeAuto: "自动",
-      modeForceEmpty: "强制空状态",
-      modeForceRetryableError: "强制可重试错误",
-      modeForceFatalError: "强制不可重试错误",
-      modeForceUnauthorized: "强制未授权",
       idleHint: "描述你想创建的内容，AI 会为你生成。",
       emptyTitle: "无内容可生成",
       emptyDescription: "告诉 AI 你想创建什么。",
@@ -1406,7 +1562,32 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       saveCooldownActive: "保存仍在冷却中。",
       inventoryAction: "物品操作",
       inventoryClose: "关闭背包",
+      inventoryTitle: "背包",
+      inventoryCapacity: "容量",
+      inventoryStorage: "仓储",
+      inventoryItems: "物品",
+      inventoryEmpty: "空",
+      inventoryWeight: "重量",
+      inventoryGold: "金币",
+      inventoryManageHint: "使用背包指令来管理物品。",
+      inventorySessionIdLabel: "ID",
+      cutsceneAdvanceHint: "使用推进过场指令（空格 / 回车）继续。",
+      cutsceneInProgress: "过场动画进行中……",
+      cutsceneBadge: "过场",
       cutsceneSkip: "跳过过场动画",
+      combatTitle: "战斗交锋",
+      combatPhaseLabel: "阶段",
+      combatTurnLabel: "回合",
+      combatPartyLabel: "我方",
+      combatHostilesLabel: "敌方",
+      combatLogEmpty: "战斗已开始……",
+      combatActionHint: "使用战斗指令来推进当前遭遇战。",
+      combatPhaseIntro: "开场",
+      combatPhasePlayerTurn: "玩家回合",
+      combatPhaseEnemyTurn: "敌方回合",
+      combatPhaseVictory: "胜利",
+      combatPhaseDefeat: "失败",
+      hitPointsShortLabel: "生命值",
     },
     builder: {
       projectNotFound: "项目未找到",
@@ -1419,6 +1600,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       noDialogues: "未找到对话条目",
       title: "游戏构建器",
       dashboard: "仪表盘",
+      workspaceTitle: "构建器工作区",
+      workspaceJumpBack: "回到你的世界继续创作，或借助 AI 助手开始新的创作。",
       scenes: "场景",
       npcs: "NPC",
       dialogue: "对话",
@@ -1515,7 +1698,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       closeSidebar: "关闭侧边栏",
       currentProject: "当前项目",
       projectIdLabel: "项目 ID",
-      projectIdPlaceholder: "tea-house-release",
+      projectIdPlaceholder: "adventure-quest",
       projectDraftVersion: "草稿版本",
       projectPublishedVersion: "发布版本",
       projectStatus: "状态",
@@ -1525,6 +1708,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       projectStatusUnpublished: "未发布",
       createProject: "创建项目",
       switchProject: "切换项目",
+      exitBuilder: "退出构建器",
       publishProject: "发布版本",
       unpublishProject: "取消发布",
       playPublishedBuild: "游玩已发布版本",
@@ -1561,6 +1745,18 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       transformModeScale: "缩放",
       createSceneNode: "创建场景节点",
       continueAuthoring: "继续创作",
+      quickActionScene: "新建场景",
+      quickActionSceneDesc: "为你的游戏世界创建新的环境。",
+      quickActionNpc: "添加角色",
+      quickActionNpcDesc: "用 AI 驱动的对话赋予新 NPC 生命。",
+      quickActionDialogue: "编写对话",
+      quickActionDialogueDesc: "书写对话和故事分支。",
+      quickActionAi: "AI 生成",
+      quickActionAiDesc: "用 AI 创建场景、对话或素材。",
+      statusBarProject: "项目",
+      statusBarAi: "AI 引擎",
+      statusBarJobs: "任务",
+      aiAssistFab: "AI 助手",
       nodeIdLabel: "节点 ID",
       nodeTypeLabel: "节点类型",
       layerLabel: "图层",
@@ -1592,6 +1788,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       triggerEventNpcInteract: "与 NPC 互动",
       triggerEventChat: "聊天",
       triggerEventDialogueConfirmed: "确认对话",
+      triggerEventCombatVictory: "战斗胜利",
+      triggerEventItemAcquired: "获得物品",
       rotationXLabel: "旋转 X",
       rotationYLabel: "旋转 Y",
       rotationZLabel: "旋转 Z",
@@ -1600,48 +1798,41 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       scaleZLabel: "缩放 Z",
       sceneWidthDesc: "场景宽度（像素）",
       sceneHeightDesc: "场景高度（像素）",
-      assetPlaceholder: "场景与精灵的运行时资源清单。",
-      testNpcPlaceholder: "teaMonk",
-      testMessagePlaceholder: "请告诉我关于五行的事情...",
-      assistPromptPlaceholder: "如何平衡茶商 NPC 的对话...",
-      flowTitle: "引导流程",
-      flowDescription: "从平台选择到可发布输出，统一走同一条 SSR 优先的构建路径。",
-      flowSteps: [
-        "选择运行时通道",
-        "编排或测试 AI 行为",
-        "创作场景、NPC 与对话",
-        "校验契约与运行时健康状态",
-        "发布项目",
-      ],
-      engineOptionsTitle: "引擎选项",
-      engineOptionsDescription: "在不拆分内容模型的前提下，根据当前里程碑选择最合适的交付路径。",
-      runtimeLaneTitle: "浏览器运行时",
-      runtimeLaneDescription: "用于实时场景验证、HUD 测试与会话契约检查的服务端权威 Web 运行时。",
-      pluginLaneTitle: "RMMZ 插件包",
-      pluginLaneDescription: "面向 RPG Maker 的结构化插件输出，复用同一套场景与对话源数据。",
-      aiLaneTitle: "本地 AI 栈",
-      aiLaneDescription:
-        "通过可配置的 Hugging Face + ONNX 目标提供对话兜底、嵌入、语音识别与语音合成能力。",
-      apiSurfaceTitle: "API 接口面",
-      apiSurfaceDescription: "把构建器 CRUD、AI 目录与 Swagger 文档作为工具和自动化的正式操作面。",
-      localRuntimeTitle: "本地运行时",
-      localRuntimeDescription:
-        "构建器直接读取与 API 路由相同的 Transformers.js、Hugging Face 与 ONNX 配置。",
-      runtimeLabel: "运行时",
-      modelLabel: "模型",
-      configKeyLabel: "配置键",
+      assetPlaceholder: "场景与角色的资源清单。",
+      testNpcPlaceholder: "forestGuide",
+      testMessagePlaceholder: "请告诉我关于古代遗迹的事情...",
+      assistPromptPlaceholder: "如何平衡任务向导 NPC 的对话...",
+      flowTitle: "创作步骤",
+      flowDescription: "按照以下步骤，将你的游戏创意变为现实。",
+      flowSteps: ["选择游戏引擎", "添加 AI 角色", "构建世界和故事", "预览和打磨", "发布你的游戏"],
+      engineOptionsTitle: "创作路径",
+      engineOptionsDescription: "选择适合当前创作目标的工作区。",
+      runtimeLaneTitle: "场景工坊",
+      runtimeLaneDescription: "设计和预览游戏场景，测试角色交互，实时调整你的世界。",
+      pluginLaneTitle: "角色工坊",
+      pluginLaneDescription: "创建令人难忘的 NPC，编写分支对话，塑造角色个性。",
+      aiLaneTitle: "AI 锻造炉",
+      aiLaneDescription: "AI 驱动的工具，用于生成对话、精灵、语音和游戏素材。",
+      apiSurfaceTitle: "功能面板",
+      apiSurfaceDescription: "检查哪些 AI 功能可用，查看集成详情。",
+      localRuntimeTitle: "AI 引擎",
+      localRuntimeDescription: "本地 AI 引擎为角色赋能，生成素材，并协助游戏设计。",
+      runtimeLabel: "引擎",
+      modelLabel: "AI 模型",
+      taskLabel: "任务",
+      configKeyLabel: "配置",
+      aiConfigOverrideHelp: "可通过对应的配置键环境变量覆盖模型，修改后请重启服务器。",
       docsLabel: "文档",
-      runtimeStackValue: "Bun + Elysia + HTMX",
-      aiConfigPatternValue: "AI_LOCAL_* / OLLAMA_*",
+      runtimeStackValue: "Game Forge 引擎",
       sceneLibraryTitle: "场景库",
-      sceneCreateDescription: "先创建或选择场景，再细化布局与运行时预览。",
-      sceneCreateTitlePlaceholder: "teaHouseAnnex",
-      sceneBackgroundPlaceholder: "/assets/images/backgrounds/tea-house-annex.png",
+      sceneCreateDescription: "先创建或选择场景，再细化布局与预览。",
+      sceneCreateTitlePlaceholder: "enchantedForest",
+      sceneBackgroundPlaceholder: "/assets/images/backgrounds/enchanted-forest.png",
       npcRosterTitle: "NPC 阵列",
       npcCreateDescription: "先把 NPC 放进场景，再调节移动、对话与接近问候行为。",
       npcCreateSceneLabel: "所属场景",
-      npcCreateKeyPlaceholder: "teaMonk",
-      npcCreateLabelPlaceholder: "npc.teaMonk.label",
+      npcCreateKeyPlaceholder: "forestGuide",
+      npcCreateLabelPlaceholder: "npc.forestGuide.label",
       assetsWorkspaceTitle: "资源工作区",
       assetKindLabel: "资源类型",
       assetSourceLabel: "资源来源",
@@ -1660,7 +1851,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       dialogueSearchPlaceholder: "按 NPC 或对话键搜索",
       dialogueWorkspaceTitle: "对话工作区",
       dialogueCreateDescription: "按 NPC 管理对话，并先用 AI 起草再保存。",
-      dialogueKeyPlaceholder: "npc.teaMonk.greet",
+      dialogueKeyPlaceholder: "npc.forestGuide.greet",
       addLinePlaceholder: "旅人，欢迎你。茶叶早已预见你的到来。",
       mechanicsWorkspaceTitle: "机制工作区",
       questsTitle: "任务",
@@ -1691,7 +1882,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       layerPlaceholder: "foreground",
       stateTagPlaceholder: "idle-down",
       sourcePathPlaceholder: "/assets/images/custom.png",
-      dialogueNpcIdPlaceholder: "teaMonk",
+      dialogueNpcIdPlaceholder: "forestGuide",
       operationsJsonPlaceholder:
         '[{"op":"replace","path":"/dialogues/zh-CN/npc.guide.greet","value":"..."}]',
       assetStatusApproved: "已批准",
@@ -1703,6 +1894,11 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       automationWorkspaceTitle: "自动化工作区",
       automationGoalLabel: "自动化目标",
       automationGoalPlaceholder: "收集当前场景的审查证据，排队附件，并准备草稿应用计划。",
+      automationStepsJsonLabel: "可执行步骤 JSON",
+      automationStepsJsonPlaceholder:
+        '[{"kind":"goto","path":"/builder?projectId=demo"},{"kind":"screenshot","fileStem":"demo-review","fullPage":true},{"kind":"attach-generated-artifact","sourceStepId":"step.capture-workspace"}]',
+      automationStepsJsonHelp:
+        "可选填写可执行的 JSON 步骤数组，支持浏览器、HTTP、构建器与附加文件步骤；留空则使用默认工作区审查流程。",
       createAutomationRun: "加入自动化队列",
       approveAction: "批准",
       cancelAction: "取消",
@@ -1719,14 +1915,36 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       generatedArtifactSummaryFromPrompt: "已根据构建器提示生成草稿",
       generatedArtifactSummaryTargetPrefix: "已为以下目标生成草稿：",
       automationEvidenceLabel: "自动化证据",
+      automationContextLabel: "项目上下文",
+      automationPlanArtifactLabel: "自动化方案",
+      automationBundleArtifactLabel: "执行包",
+      automationArtifactsLabel: "自动化产物",
+      openAutomationEvidence: "打开产物",
       automationStepBrowser: "浏览器",
       automationStepHttp: "HTTP",
       automationStepBuilder: "构建器",
       automationStepAttachFile: "附加文件",
       automationSummaryCaptureReviewContext: "采集构建器审查上下文",
-      automationSummaryPrepareDraftPlan: "准备草稿变更方案",
-      automationSummaryAttachReviewEvidence: "将证据附加到草稿审查",
+      automationSummaryPrepareDraftPlan: "生成结构化执行方案",
+      automationSummaryAttachReviewEvidence: "附加可审查执行包",
+      automationSummaryBrowserGoto: "导航至链接",
+      automationSummaryBrowserClick: "点击元素",
+      automationSummaryBrowserFill: "填写表单字段",
+      automationSummaryBrowserAssertText: "断言页面文本",
+      automationSummaryBrowserScreenshot: "截图",
+      automationSummaryHttpRequest: "发送HTTP请求",
+      automationSummaryBuilderCreateScene: "创建场景",
+      automationSummaryBuilderCreateTrigger: "创建触发器",
+      automationSummaryBuilderCreateQuest: "创建任务",
+      automationSummaryBuilderCreateDialogueGraph: "创建对话图",
+      automationSummaryBuilderCreateAsset: "创建资源",
+      automationSummaryBuilderCreateAnimationClip: "创建动画片段",
+      automationSummaryBuilderQueueGenerationJob: "加入生成队列",
+      automationSummaryAttachGeneratedArtifact: "附加生成产物",
       automationArtifactSummaryCapturedReviewEvidence: "已采集构建器审查证据",
+      automationArtifactSummaryCapturedProjectContext: "已采集项目审查上下文",
+      automationArtifactSummaryGeneratedToolPlan: "已生成结构化工具方案",
+      automationArtifactSummaryAttachedExecutionBundle: "已附加执行包",
       automationStatusQueuedForProcessing: "已加入处理队列",
       automationStatusApprovedForApply: "已批准应用",
       automationStatusCanceledByReview: "已在审查中取消",
@@ -1762,7 +1980,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         "当前只有一套较窄的浏览器运行时可验证基线内容模型，还没有通用的 2D 世界编辑器或复用型游戏创作流水线。",
       capability3dRuntimeTitle: "3D 运行时",
       capability3dRuntimeDescription:
-        "Three.js 目前只承担精灵场景下方的氛围与光照效果，并没有 3D 场景图、资源管线或对应的构建流程。",
+        "Three.js 目前只承担精灵场景下方的氛围与光照效果。仍然没有真正的 3D 场景图、资源管线或构建器创作工作流，因此 3D 应视为缺失而非部分实现。",
       capabilitySpritePipelineTitle: "精灵资源管线",
       capabilitySpritePipelineDescription:
         "构建器现在已经支持上传、手动登记以及可审查的生成产物，但精灵表解析、打包与可复用资源管理仍未完整实现。",
@@ -1777,7 +1995,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         "对话、场景描述、资源评审与补丁审查已经接通，但 AI 驱动的资源生成与机制创作目前仍只是部分实现。",
       capabilityAutomationTitle: "自动化 / RPA",
       capabilityAutomationDescription:
-        "系统现在已有生命周期托管的后台 worker，并可抓取 Playwright 审查证据，但多步骤工具编排与生产级 RPA 仍只是部分实现。",
+        "系统现在已有生命周期托管的后台 worker，会执行真实的审查上下文采集、结构化规划与执行包附加步骤，但更广泛的浏览器与工具编排仍只是部分实现。",
       capabilityWebgpuRendererTitle: "WebGPU 渲染器",
       capabilityWebgpuRendererDescription:
         "PixiJS 可在支持 WebGPU 时自动检测并优先使用 WebGPU 进行 2D 渲染，否则无缝回退至 WebGL。",

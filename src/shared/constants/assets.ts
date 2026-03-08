@@ -8,6 +8,7 @@ export const assetRelativePaths = {
   htmxExtensionsOutputDirectory: "vendor/htmx-ext",
   htmxExtensionOracleIndicatorFile: "vendor/htmx-ext/oracle-indicator.js",
   htmxExtensionFocusPanelFile: "vendor/htmx-ext/focus-panel.js",
+  htmxExtensionLayoutControlsFile: "vendor/htmx-ext/layout-controls.js",
   builderSceneEditorEntryFile: "src/builder-scene-editor/client.ts",
   builderSceneEditorBundleFile: "vendor/builder-scene-editor.js",
   onnxPublicDirectory: "onnx",
@@ -23,6 +24,8 @@ export const htmxExtensionEntryFiles = [
   "oracle-indicator.ts",
   "focus-panel.ts",
   "server-toast.ts",
+  "layout-controls.ts",
+  "game-hud.ts",
 ] as const;
 
 /**

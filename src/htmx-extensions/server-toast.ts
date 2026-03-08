@@ -7,6 +7,7 @@
  * @example Server response header:
  *   HX-Trigger: {"showToast": {"message": "Project saved", "type": "success"}}
  */
+import { escapeHtml } from "./shared.ts";
 
 const CONTAINER_ID = "toast-container";
 const DISMISS_MS = 4000;
@@ -46,13 +47,6 @@ const alertIcon = (type: string): string => {
   }
 };
 
-/** Escapes text for safe HTML insertion. */
-const escapeText = (text: string): string => {
-  const d = document.createElement("div");
-  d.textContent = text;
-  return d.innerHTML;
-};
-
 /** Renders and auto-dismisses a toast notification. */
 const showToast = (payload: ToastPayload): void => {
   const container = document.getElementById(CONTAINER_ID);
@@ -63,7 +57,7 @@ const showToast = (payload: ToastPayload): void => {
   el.className = `alert ${alertClass(type)} alert-soft shadow-lg transition-opacity duration-300`;
   el.setAttribute("role", "alert");
   el.setAttribute("aria-live", "assertive");
-  el.innerHTML = `${alertIcon(type)}<span>${escapeText(payload.message)}</span>`;
+  el.innerHTML = `${alertIcon(type)}<span>${escapeHtml(payload.message)}</span>`;
 
   container.appendChild(el);
 

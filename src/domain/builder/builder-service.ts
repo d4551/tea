@@ -1,7 +1,11 @@
-import type { LocaleCode } from "../../config/environment.ts";
+import { readFileSync } from "node:fs";
+import { appConfig, type LocaleCode } from "../../config/environment.ts";
+import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type {
   AnimationClip,
   AutomationRun,
+  AutomationRunStep,
+  AutomationStepSpec,
   BuilderAnimationClipPayload,
   BuilderArtifactPatch,
   BuilderAsset,
@@ -281,6 +285,8 @@ export interface BuilderGenerationJobCreatePayload {
 export interface BuilderAutomationRunCreatePayload {
   /** Human-readable automation goal. */
   readonly goal: string;
+  /** Optional JSON-encoded executable step plan. */
+  readonly stepsJson?: string;
 }
 
 /**
@@ -589,6 +595,240 @@ const trimOrFallback = (value: string | undefined, fallback: string): string => 
   const trimmed = trimOptionalField(value);
   return trimmed ?? fallback;
 };
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const toAutomationStepSummary = (spec: AutomationStepSpec): string => {
+  switch (spec.kind) {
+    case "goto":
+      return "automation.step.browser.goto";
+    case "click":
+      return "automation.step.browser.click";
+    case "fill":
+      return "automation.step.browser.fill";
+    case "assert-text":
+      return "automation.step.browser.assert-text";
+    case "screenshot":
+      return "automation.step.browser.screenshot";
+    case "request":
+      return "automation.step.http.request";
+    case "create-scene":
+      return "automation.step.builder.create-scene";
+    case "create-trigger":
+      return "automation.step.builder.create-trigger";
+    case "create-quest":
+      return "automation.step.builder.create-quest";
+    case "create-dialogue-graph":
+      return "automation.step.builder.create-dialogue-graph";
+    case "create-asset":
+      return "automation.step.builder.create-asset";
+    case "create-animation-clip":
+      return "automation.step.builder.create-animation-clip";
+    case "queue-generation-job":
+      return "automation.step.builder.queue-generation-job";
+    case "attach-generated-artifact":
+      return "automation.step.attach-generated-artifact";
+  }
+};
+
+const inferAutomationStepAction = (spec: AutomationStepSpec): AutomationRunStep["action"] => {
+  switch (spec.kind) {
+    case "goto":
+    case "click":
+    case "fill":
+    case "assert-text":
+    case "screenshot":
+      return "browser";
+    case "request":
+      return "http";
+    case "create-scene":
+    case "create-trigger":
+    case "create-quest":
+    case "create-dialogue-graph":
+    case "create-asset":
+    case "create-animation-clip":
+    case "queue-generation-job":
+      return "builder";
+    case "attach-generated-artifact":
+      return "attach-file";
+  }
+};
+
+const isAutomationStepSpec = (value: unknown): value is AutomationStepSpec => {
+  if (!isRecord(value) || typeof value.kind !== "string") {
+    return false;
+  }
+
+  switch (value.kind) {
+    case "goto":
+      return typeof value.path === "string";
+    case "click":
+      return (
+        (value.role === "button" ||
+          value.role === "link" ||
+          value.role === "tab" ||
+          value.role === "checkbox" ||
+          value.role === "radio" ||
+          value.role === "textbox") &&
+        typeof value.name === "string"
+      );
+    case "fill":
+      return (
+        (value.role === "textbox" || value.role === "searchbox" || value.role === "combobox") &&
+        typeof value.name === "string" &&
+        typeof value.value === "string"
+      );
+    case "assert-text":
+      return typeof value.text === "string";
+    case "screenshot":
+      return typeof value.fileStem === "string";
+    case "request":
+      return (
+        (value.method === "GET" || value.method === "POST") &&
+        typeof value.path === "string" &&
+        (value.form === undefined ||
+          (isRecord(value.form) &&
+            Object.values(value.form).every((entry) => typeof entry === "string"))) &&
+        (value.expectedStatus === undefined || typeof value.expectedStatus === "number") &&
+        (value.responseFileStem === undefined || typeof value.responseFileStem === "string")
+      );
+    case "create-scene":
+      return (
+        typeof value.id === "string" &&
+        typeof value.titleKey === "string" &&
+        typeof value.background === "string" &&
+        (value.sceneMode === "2d" || value.sceneMode === "3d")
+      );
+    case "create-trigger":
+      return (
+        typeof value.id === "string" &&
+        typeof value.label === "string" &&
+        typeof value.event === "string"
+      );
+    case "create-quest":
+      return (
+        typeof value.id === "string" &&
+        typeof value.title === "string" &&
+        typeof value.description === "string" &&
+        typeof value.triggerId === "string"
+      );
+    case "create-dialogue-graph":
+      return (
+        typeof value.id === "string" &&
+        typeof value.title === "string" &&
+        typeof value.line === "string" &&
+        (value.npcId === undefined || typeof value.npcId === "string")
+      );
+    case "create-asset":
+      return (
+        typeof value.id === "string" &&
+        typeof value.label === "string" &&
+        typeof value.assetKind === "string" &&
+        (value.sceneMode === "2d" || value.sceneMode === "3d") &&
+        typeof value.source === "string"
+      );
+    case "create-animation-clip":
+      return (
+        typeof value.id === "string" &&
+        typeof value.assetId === "string" &&
+        typeof value.stateTag === "string" &&
+        (value.playbackFps === undefined || typeof value.playbackFps === "number") &&
+        (value.frameCount === undefined || typeof value.frameCount === "number")
+      );
+    case "queue-generation-job":
+      return (
+        typeof value.jobKind === "string" &&
+        typeof value.prompt === "string" &&
+        (value.targetId === undefined || typeof value.targetId === "string")
+      );
+    case "attach-generated-artifact":
+      return typeof value.sourceStepId === "string";
+    default:
+      return false;
+  }
+};
+
+const parseAutomationStepSpecs = (value: string | undefined): readonly AutomationStepSpec[] => {
+  const parsed = safeJsonParse<unknown>(value ?? "", []);
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+
+  return parsed.filter(isAutomationStepSpec);
+};
+
+const buildDefaultAutomationStepSpecs = (projectId: string): readonly AutomationStepSpec[] => [
+  {
+    kind: "goto",
+    path: withQueryParameters(appRoutes.builder, { projectId }),
+  },
+  {
+    kind: "assert-text",
+    text: projectId,
+  },
+  {
+    kind: "screenshot",
+    fileStem: `automation-${projectId}-workspace`,
+    fullPage: true,
+  },
+  {
+    kind: "attach-generated-artifact",
+    sourceStepId: "step.capture-workspace",
+  },
+];
+
+interface SuggestedAnimationPlanClip {
+  readonly id: string;
+  readonly stateTag: string;
+  readonly frameCount: number;
+  readonly playbackFps: number;
+}
+
+interface SuggestedAnimationPlanPayload {
+  readonly targetId?: string;
+  readonly suggestedClips: readonly SuggestedAnimationPlanClip[];
+}
+
+const isSuggestedAnimationPlanClip = (value: unknown): value is SuggestedAnimationPlanClip =>
+  isRecord(value) &&
+  typeof value.id === "string" &&
+  typeof value.stateTag === "string" &&
+  typeof value.frameCount === "number" &&
+  Number.isFinite(value.frameCount) &&
+  typeof value.playbackFps === "number" &&
+  Number.isFinite(value.playbackFps);
+
+const parseSuggestedAnimationPlanPayload = (
+  source: string,
+): SuggestedAnimationPlanPayload | null => {
+  const parsed = safeJsonParse<unknown>(source, null);
+  if (!isRecord(parsed) || !Array.isArray(parsed.suggestedClips)) {
+    return null;
+  }
+
+  const suggestedClips = parsed.suggestedClips.filter(isSuggestedAnimationPlanClip);
+  if (suggestedClips.length === 0) {
+    return null;
+  }
+
+  return {
+    targetId: typeof parsed.targetId === "string" ? parsed.targetId : undefined,
+    suggestedClips,
+  };
+};
+
+const resolvePublicAssetFilePath = (publicUrl: string): string | null => {
+  if (!publicUrl.startsWith(appConfig.staticAssets.publicPrefix)) {
+    return null;
+  }
+
+  return `${appConfig.staticAssets.publicDirectory}${publicUrl.slice(appConfig.staticAssets.publicPrefix.length)}`;
+};
+
+const toGeneratedAssetKind = (
+  kind: Exclude<GenerationJob["kind"], "voice-line" | "animation-plan">,
+): BuilderAsset["kind"] => (kind === "tiles" ? "tile-set" : kind);
 
 const inferAssetSourceFormat = (source: string): string => {
   const normalized = source.trim().toLowerCase();
@@ -2054,6 +2294,9 @@ class PrismaBuilderService implements BuilderService {
         return { ok: false };
       }
 
+      let nextStatus: GenerationJob["status"] = approved ? "succeeded" : "canceled";
+      let nextStatusMessage = approved ? "job.approved-and-attached" : "job.canceled-by-review";
+
       if (approved) {
         const primaryArtifact = job.artifactIds
           .map((artifactId) => state.artifacts[artifactId])
@@ -2067,13 +2310,53 @@ class PrismaBuilderService implements BuilderService {
             };
           }
         }
-        if (job.kind !== "voice-line" && primaryArtifact?.previewSource) {
+        if (job.kind === "animation-plan" && primaryArtifact?.previewSource) {
+          const artifactFilePath = resolvePublicAssetFilePath(primaryArtifact.previewSource);
+          const animationPlan =
+            artifactFilePath === null
+              ? null
+              : parseSuggestedAnimationPlanPayload(readFileSync(artifactFilePath, "utf8"));
+          const targetAssetId =
+            trimOptionalField(job.targetId) ?? trimOptionalField(animationPlan?.targetId);
+          const targetAsset = targetAssetId ? state.assets[targetAssetId] : undefined;
+
+          if (!animationPlan || !targetAssetId || !targetAsset) {
+            nextStatus = "failed";
+            nextStatusMessage = "job.animation-plan-target-missing";
+          } else {
+            const now = Date.now();
+            for (const clip of animationPlan.suggestedClips) {
+              if (state.animationClips[clip.id]) {
+                continue;
+              }
+
+              state.animationClips[clip.id] = {
+                id: clip.id,
+                assetId: targetAssetId,
+                label: clip.id,
+                sceneMode: targetAsset.sceneMode,
+                stateTag: clip.stateTag,
+                playbackFps: Math.max(1, Math.floor(clip.playbackFps)),
+                startFrame: 0,
+                frameCount: Math.max(1, Math.floor(clip.frameCount)),
+                loop: true,
+                direction: inferClipDirection(clip.stateTag),
+                createdAtMs: now,
+                updatedAtMs: now,
+              };
+            }
+          }
+        } else if (
+          job.kind !== "voice-line" &&
+          job.kind !== "animation-plan" &&
+          primaryArtifact?.previewSource
+        ) {
           const generatedAssetId = `asset.generated.${job.id}`;
           if (!state.assets[generatedAssetId]) {
             state.assets[generatedAssetId] = {
               id: generatedAssetId,
-              kind: job.kind === "animation-plan" ? "sprite-sheet" : job.kind,
-              label: `generation.asset.label.generated:${job.kind === "animation-plan" ? "sprite-sheet" : job.kind}:${job.id}`,
+              kind: toGeneratedAssetKind(job.kind),
+              label: `generation.asset.label.generated:${job.kind}:${job.id}`,
               sceneMode: "2d",
               source: primaryArtifact.previewSource,
               sourceFormat: primaryArtifact.mimeType?.split("/")[1] ?? "dat",
@@ -2098,8 +2381,8 @@ class PrismaBuilderService implements BuilderService {
 
       state.generationJobs[jobId] = {
         ...job,
-        status: approved ? "succeeded" : "canceled",
-        statusMessage: approved ? "job.approved-and-attached" : "job.canceled-by-review",
+        status: nextStatus,
+        statusMessage: nextStatusMessage,
         updatedAtMs: Date.now(),
       };
 
@@ -2170,32 +2453,33 @@ class PrismaBuilderService implements BuilderService {
   ): Promise<BuilderMutation<AutomationRun> | null> {
     const runId = `run.${crypto.randomUUID()}`;
     const now = Date.now();
+    const parsedSpecs = parseAutomationStepSpecs(payload.stepsJson);
+    const resolvedSpecs =
+      parsedSpecs.length > 0 ? parsedSpecs : buildDefaultAutomationStepSpecs(projectId);
+    const steps: readonly AutomationRunStep[] = resolvedSpecs.map((spec, index) => ({
+      id:
+        spec.kind === "attach-generated-artifact"
+          ? `step.attach-${index + 1}`
+          : spec.kind === "goto"
+            ? "step.open-builder"
+            : spec.kind === "assert-text"
+              ? "step.assert-context"
+              : spec.kind === "screenshot"
+                ? "step.capture-workspace"
+                : `${runId}.step.${index + 1}`,
+      action: inferAutomationStepAction(spec),
+      summary: toAutomationStepSummary(spec),
+      status: "pending",
+      spec,
+    }));
+
     return this.saveAutomationRun(projectId, {
       id: runId,
       run: {
         id: runId,
         status: "queued",
         goal: payload.goal.trim(),
-        steps: [
-          {
-            id: `${runId}.browser`,
-            action: "browser",
-            summary: "automation.step.capture-review-context",
-            status: "pending",
-          },
-          {
-            id: `${runId}.builder`,
-            action: "builder",
-            summary: "automation.step.prepare-draft-plan",
-            status: "pending",
-          },
-          {
-            id: `${runId}.attach`,
-            action: "attach-file",
-            summary: "automation.step.attach-review-evidence",
-            status: "pending",
-          },
-        ],
+        steps,
         artifactIds: [],
         statusMessage: "automation.queued-for-processing",
         createdAtMs: now,
