@@ -71,6 +71,7 @@ export const appRoutes = {
   builderApiGenerationJobs: "/api/builder/generation-jobs",
   builderApiGenerationJobStream: "/api/builder/generation-jobs/:jobId/stream",
   builderApiAutomationRuns: "/api/builder/automation-runs",
+  builderApiAutomationRunStream: "/api/builder/automation-runs/:runId/stream",
 } as const;
 
 /**

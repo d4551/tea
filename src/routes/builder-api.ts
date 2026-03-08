@@ -3582,6 +3582,60 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       },
     },
   )
+  .get(
+    "/automation-runs/:runId/stream",
+    async function* ({
+      params,
+      query,
+      request,
+      set,
+      status,
+      sse,
+      builderLocale,
+      builderProjectId,
+      builderCurrentPath,
+    }) {
+      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+        { builderLocale, builderProjectId, builderCurrentPath },
+        { query },
+      );
+      const run = (await builderService.listAutomationRuns(projectId)).find(
+        (candidate) => candidate.id === params.runId,
+      );
+      if (!run) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+
+      const artifacts = (await builderService.listArtifacts(projectId)).filter((artifact) =>
+        run.artifactIds.includes(artifact.id),
+      );
+      const payload = JSON.stringify({
+        ok: true,
+        data: {
+          run,
+          artifacts,
+        },
+      });
+      set.headers["cache-control"] = "no-cache, no-transform";
+      set.headers.connection = "keep-alive";
+      set.headers["content-type"] = "text/event-stream; charset=utf-8";
+      yield sse.event("status", payload);
+    },
+    {
+      params: t.Object({ runId: t.String() }),
+      query: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
   .post(
     "/dialogue/generate",
     async ({ body, builderLocale, builderProjectId, builderCurrentPath }) => {
