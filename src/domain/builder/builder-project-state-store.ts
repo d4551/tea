@@ -172,8 +172,10 @@ const asRecord = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 
-const cloneRecord = <T>(input: Record<string, T>): Record<string, T> =>
-  structuredClone(input) as Record<string, T>;
+const toStringValue = (value: unknown): string | null => (typeof value === "string" ? value : null);
+
+const toBooleanValue = (value: unknown): boolean | null =>
+  typeof value === "boolean" ? value : null;
 
 const toBuilderAssetKind = (value: string): BuilderAsset["kind"] | null => {
   switch (value) {
@@ -1413,6 +1415,367 @@ const normalizeBuilderAsset = (asset: BuilderAsset): BuilderAsset => {
   };
 };
 
+const parseSceneDefinitionRecord = (sceneId: string, value: unknown): SceneDefinition | null => {
+  const record = asRecord(value);
+  const titleKey = toStringValue(record.titleKey);
+  const background = toStringValue(record.background);
+  const geometry = _toSceneGeometry(record.geometry);
+  const spawn = _toVector2(record.spawn);
+  if (!titleKey || !background || !geometry || !spawn) {
+    return null;
+  }
+
+  const sceneMode =
+    typeof record.sceneMode === "string" ? (toSceneMode(record.sceneMode) ?? undefined) : undefined;
+
+  return {
+    id: sceneId,
+    sceneMode,
+    titleKey,
+    background,
+    geometry,
+    spawn,
+    npcs: _toSceneNpcs(record.npcs),
+    nodes: _toSceneNodes(record.nodes, sceneMode),
+    collisions: toCollisionMasks(record.collisions),
+  };
+};
+
+const parseBuilderAssetRecord = (assetId: string, value: unknown): BuilderAsset | null => {
+  const record = asRecord(value);
+  const kind = toBuilderAssetKind(toStringValue(record.kind) ?? "");
+  const label = toStringValue(record.label);
+  const sceneMode = toSceneMode(toStringValue(record.sceneMode) ?? "");
+  const source = toStringValue(record.source);
+  const sourceFormat = toStringValue(record.sourceFormat);
+  const approved = toBooleanValue(record.approved);
+  const createdAtMs = toNumberValue(record.createdAtMs);
+  const updatedAtMs = toNumberValue(record.updatedAtMs);
+  const tags =
+    Array.isArray(record.tags) && record.tags.every((entry) => typeof entry === "string")
+      ? [...record.tags]
+      : null;
+
+  if (
+    !kind ||
+    !label ||
+    !sceneMode ||
+    !source ||
+    !sourceFormat ||
+    approved === null ||
+    createdAtMs === null ||
+    updatedAtMs === null ||
+    tags === null
+  ) {
+    return null;
+  }
+
+  return normalizeBuilderAsset({
+    id: assetId,
+    kind,
+    label,
+    sceneMode,
+    source,
+    sourceFormat,
+    sourceMimeType: toStringValue(record.sourceMimeType) ?? undefined,
+    tags,
+    variants: toAssetVariantArray(record.variants),
+    approved,
+    createdAtMs,
+    updatedAtMs,
+  });
+};
+
+const parseAnimationClipRecord = (clipId: string, value: unknown): AnimationClip | null => {
+  const record = asRecord(value);
+  const assetId = toStringValue(record.assetId);
+  const label = toStringValue(record.label);
+  const sceneMode = toSceneMode(toStringValue(record.sceneMode) ?? "");
+  const stateTag = toStringValue(record.stateTag);
+  const playbackFps = toNumberValue(record.playbackFps);
+  const startFrame = toNumberValue(record.startFrame);
+  const frameCount = toNumberValue(record.frameCount);
+  const loop = toBooleanValue(record.loop);
+  const createdAtMs = toNumberValue(record.createdAtMs);
+  const updatedAtMs = toNumberValue(record.updatedAtMs);
+  const direction = toStringValue(record.direction);
+
+  if (
+    !assetId ||
+    !label ||
+    !sceneMode ||
+    !stateTag ||
+    playbackFps === null ||
+    startFrame === null ||
+    frameCount === null ||
+    loop === null ||
+    createdAtMs === null ||
+    updatedAtMs === null
+  ) {
+    return null;
+  }
+
+  return {
+    id: clipId,
+    assetId,
+    label,
+    sceneMode,
+    stateTag,
+    playbackFps,
+    startFrame,
+    frameCount,
+    loop,
+    direction:
+      direction === "up" || direction === "down" || direction === "left" || direction === "right"
+        ? direction
+        : undefined,
+    createdAtMs,
+    updatedAtMs,
+  };
+};
+
+const parseDialogueGraphRecord = (graphId: string, value: unknown): DialogueGraph | null => {
+  const record = asRecord(value);
+  const title = toStringValue(record.title);
+  const rootNodeId = toStringValue(record.rootNodeId);
+  const createdAtMs = toNumberValue(record.createdAtMs);
+  const updatedAtMs = toNumberValue(record.updatedAtMs);
+  if (!title || !rootNodeId || createdAtMs === null || updatedAtMs === null) {
+    return null;
+  }
+
+  return {
+    id: graphId,
+    title,
+    npcId: toStringValue(record.npcId) ?? undefined,
+    rootNodeId,
+    nodes: toDialogueGraphNodes(record.nodes),
+    createdAtMs,
+    updatedAtMs,
+  };
+};
+
+const parseQuestRecord = (questId: string, value: unknown): QuestDefinition | null => {
+  const record = asRecord(value);
+  const title = toStringValue(record.title);
+  const description = toStringValue(record.description);
+  if (!title || !description) {
+    return null;
+  }
+
+  return {
+    id: questId,
+    title,
+    description,
+    steps: toQuestSteps(record.steps),
+  };
+};
+
+const parseTriggerRecord = (triggerId: string, value: unknown): TriggerDefinition | null => {
+  const record = asRecord(value);
+  const label = toStringValue(record.label);
+  const event = toStringValue(record.event);
+  if (
+    !label ||
+    (event !== "scene-enter" &&
+      event !== "npc-interact" &&
+      event !== "chat" &&
+      event !== "dialogue-confirmed" &&
+      event !== "combat-victory" &&
+      event !== "item-acquired" &&
+      event !== "cutscene-completed")
+  ) {
+    return null;
+  }
+
+  return {
+    id: triggerId,
+    label,
+    event,
+    sceneId: toStringValue(record.sceneId) ?? undefined,
+    npcId: toStringValue(record.npcId) ?? undefined,
+    nodeId: toStringValue(record.nodeId) ?? undefined,
+    cutsceneId: toStringValue(record.cutsceneId) ?? undefined,
+    requiredFlags: toFlagValueRecord(record.requiredFlags),
+    setFlags: toFlagValueRecord(record.setFlags),
+    questId: toStringValue(record.questId) ?? undefined,
+    questStepId: toStringValue(record.questStepId) ?? undefined,
+  };
+};
+
+const parseFlagRecord = (flagKey: string, value: unknown): GameFlagDefinition | null => {
+  const record = asRecord(value);
+  const label = toStringValue(record.label);
+  const initialValue = record.initialValue;
+  if (
+    !label ||
+    (typeof initialValue !== "string" &&
+      typeof initialValue !== "number" &&
+      typeof initialValue !== "boolean")
+  ) {
+    return null;
+  }
+
+  return {
+    key: flagKey,
+    label,
+    initialValue,
+  };
+};
+
+const parseGenerationJobRecord = (jobId: string, value: unknown): GenerationJob | null => {
+  const record = asRecord(value);
+  const kind = toGenerationJobKind(toStringValue(record.kind) ?? "");
+  const status = toGenerationJobStatus(toStringValue(record.status) ?? "");
+  const prompt = toStringValue(record.prompt);
+  const statusMessage = toStringValue(record.statusMessage);
+  const createdAtMs = toNumberValue(record.createdAtMs);
+  const updatedAtMs = toNumberValue(record.updatedAtMs);
+  const artifactIds =
+    Array.isArray(record.artifactIds) &&
+    record.artifactIds.every((entry) => typeof entry === "string")
+      ? [...record.artifactIds]
+      : null;
+  if (
+    !kind ||
+    !status ||
+    !prompt ||
+    !statusMessage ||
+    createdAtMs === null ||
+    updatedAtMs === null ||
+    artifactIds === null
+  ) {
+    return null;
+  }
+
+  return {
+    id: jobId,
+    kind,
+    status,
+    prompt,
+    targetId: toStringValue(record.targetId) ?? undefined,
+    artifactIds,
+    statusMessage,
+    createdAtMs,
+    updatedAtMs,
+  };
+};
+
+const parseGenerationArtifactRecord = (
+  artifactId: string,
+  value: unknown,
+): GenerationArtifact | null => {
+  const record = asRecord(value);
+  const jobId = toStringValue(record.jobId);
+  const kind = toGenerationArtifactKind(toStringValue(record.kind) ?? "");
+  const label = toStringValue(record.label);
+  const previewSource = toStringValue(record.previewSource);
+  const summary = toStringValue(record.summary);
+  const approved = toBooleanValue(record.approved);
+  const createdAtMs = toNumberValue(record.createdAtMs);
+  if (
+    !jobId ||
+    !kind ||
+    !label ||
+    !previewSource ||
+    !summary ||
+    approved === null ||
+    createdAtMs === null
+  ) {
+    return null;
+  }
+
+  return {
+    id: artifactId,
+    jobId,
+    kind,
+    label,
+    previewSource,
+    summary,
+    mimeType: toStringValue(record.mimeType) ?? undefined,
+    approved,
+    createdAtMs,
+  };
+};
+
+const parseAutomationRunRecord = (runId: string, value: unknown): AutomationRun | null => {
+  const record = asRecord(value);
+  const goal = toStringValue(record.goal);
+  const status = toStringValue(record.status);
+  const statusMessage = toStringValue(record.statusMessage);
+  const createdAtMs = toNumberValue(record.createdAtMs);
+  const updatedAtMs = toNumberValue(record.updatedAtMs);
+  const artifactIds =
+    Array.isArray(record.artifactIds) &&
+    record.artifactIds.every((entry) => typeof entry === "string")
+      ? [...record.artifactIds]
+      : null;
+  const stepRecords = Array.isArray(record.steps) ? record.steps : null;
+  if (
+    !goal ||
+    (status !== "queued" &&
+      status !== "running" &&
+      status !== "blocked_for_approval" &&
+      status !== "succeeded" &&
+      status !== "failed" &&
+      status !== "canceled") ||
+    !statusMessage ||
+    createdAtMs === null ||
+    updatedAtMs === null ||
+    artifactIds === null ||
+    stepRecords === null
+  ) {
+    return null;
+  }
+
+  const steps = stepRecords.flatMap((stepValue) => {
+    const stepRecord = asRecord(stepValue);
+    const id = toStringValue(stepRecord.id);
+    const action = toStringValue(stepRecord.action);
+    const summary = toStringValue(stepRecord.summary);
+    const stepStatus = toStringValue(stepRecord.status);
+    if (
+      !id ||
+      (action !== "browser" &&
+        action !== "http" &&
+        action !== "builder" &&
+        action !== "attach-file") ||
+      !summary ||
+      (stepStatus !== "pending" &&
+        stepStatus !== "running" &&
+        stepStatus !== "completed" &&
+        stepStatus !== "failed")
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        id,
+        action,
+        summary,
+        status: stepStatus,
+        spec:
+          stepRecord.spec && typeof stepRecord.spec === "object" && !Array.isArray(stepRecord.spec)
+            ? (stepRecord.spec as AutomationStepSpec)
+            : undefined,
+        evidenceSource: toStringValue(stepRecord.evidenceSource) ?? undefined,
+      } satisfies AutomationRunStep,
+    ];
+  });
+
+  return {
+    id: runId,
+    status,
+    goal,
+    steps,
+    artifactIds,
+    statusMessage,
+    createdAtMs,
+    updatedAtMs,
+  };
+};
+
 const parseProjectState = (state: Prisma.JsonValue): BuilderProjectState => {
   const parsed = safeJsonParse<unknown>(JSON.stringify(state), {});
   const record = asRecord(parsed);
@@ -1429,9 +1792,13 @@ const parseProjectState = (state: Prisma.JsonValue): BuilderProjectState => {
   const automationRunsRecord = asRecord(record.automationRuns);
 
   const scenes = Object.fromEntries(
-    Object.entries(scenesRecord)
-      .filter((entry): entry is [string, SceneDefinition] => entry[0].length > 0)
-      .map(([sceneId, scene]) => [sceneId, structuredClone(scene as SceneDefinition)]),
+    Object.entries(scenesRecord).flatMap(([sceneId, scene]) => {
+      if (sceneId.length === 0) {
+        return [];
+      }
+      const parsedScene = parseSceneDefinitionRecord(sceneId, scene);
+      return parsedScene ? [[sceneId, parsedScene] as const] : [];
+    }),
   ) as Record<string, SceneDefinition>;
 
   const dialogues: BuilderProjectState["dialogues"] = {
@@ -1451,23 +1818,88 @@ const parseProjectState = (state: Prisma.JsonValue): BuilderProjectState => {
     scenes,
     dialogues,
     assets: Object.fromEntries(
-      Object.entries(assetsRecord)
-        .filter((entry): entry is [string, BuilderAsset] => entry[0].length > 0)
-        .map(([assetId, asset]) => [
-          assetId,
-          normalizeBuilderAsset(structuredClone(asset as BuilderAsset)),
-        ]),
+      Object.entries(assetsRecord).flatMap(([assetId, asset]) => {
+        if (assetId.length === 0) {
+          return [];
+        }
+        const parsedAsset = parseBuilderAssetRecord(assetId, asset);
+        return parsedAsset ? [[assetId, parsedAsset] as const] : [];
+      }),
     ) as Record<string, BuilderAsset>,
-    animationClips: cloneRecord(animationClipsRecord as Record<string, AnimationClip>),
+    animationClips: Object.fromEntries(
+      Object.entries(animationClipsRecord).flatMap(([clipId, clip]) => {
+        if (clipId.length === 0) {
+          return [];
+        }
+        const parsedClip = parseAnimationClipRecord(clipId, clip);
+        return parsedClip ? [[clipId, parsedClip] as const] : [];
+      }),
+    ) as Record<string, AnimationClip>,
     animationTimelines: {},
     spriteAtlases: {},
-    dialogueGraphs: cloneRecord(dialogueGraphsRecord as Record<string, DialogueGraph>),
-    quests: cloneRecord(questsRecord as Record<string, QuestDefinition>),
-    triggers: cloneRecord(triggersRecord as Record<string, TriggerDefinition>),
-    flags: cloneRecord(flagsRecord as Record<string, GameFlagDefinition>),
-    generationJobs: cloneRecord(generationJobsRecord as Record<string, GenerationJob>),
-    artifacts: cloneRecord(artifactsRecord as Record<string, GenerationArtifact>),
-    automationRuns: cloneRecord(automationRunsRecord as Record<string, AutomationRun>),
+    dialogueGraphs: Object.fromEntries(
+      Object.entries(dialogueGraphsRecord).flatMap(([graphId, graph]) => {
+        if (graphId.length === 0) {
+          return [];
+        }
+        const parsedGraph = parseDialogueGraphRecord(graphId, graph);
+        return parsedGraph ? [[graphId, parsedGraph] as const] : [];
+      }),
+    ) as Record<string, DialogueGraph>,
+    quests: Object.fromEntries(
+      Object.entries(questsRecord).flatMap(([questId, quest]) => {
+        if (questId.length === 0) {
+          return [];
+        }
+        const parsedQuest = parseQuestRecord(questId, quest);
+        return parsedQuest ? [[questId, parsedQuest] as const] : [];
+      }),
+    ) as Record<string, QuestDefinition>,
+    triggers: Object.fromEntries(
+      Object.entries(triggersRecord).flatMap(([triggerId, trigger]) => {
+        if (triggerId.length === 0) {
+          return [];
+        }
+        const parsedTrigger = parseTriggerRecord(triggerId, trigger);
+        return parsedTrigger ? [[triggerId, parsedTrigger] as const] : [];
+      }),
+    ) as Record<string, TriggerDefinition>,
+    flags: Object.fromEntries(
+      Object.entries(flagsRecord).flatMap(([flagKey, flag]) => {
+        if (flagKey.length === 0) {
+          return [];
+        }
+        const parsedFlag = parseFlagRecord(flagKey, flag);
+        return parsedFlag ? [[flagKey, parsedFlag] as const] : [];
+      }),
+    ) as Record<string, GameFlagDefinition>,
+    generationJobs: Object.fromEntries(
+      Object.entries(generationJobsRecord).flatMap(([jobId, job]) => {
+        if (jobId.length === 0) {
+          return [];
+        }
+        const parsedJob = parseGenerationJobRecord(jobId, job);
+        return parsedJob ? [[jobId, parsedJob] as const] : [];
+      }),
+    ) as Record<string, GenerationJob>,
+    artifacts: Object.fromEntries(
+      Object.entries(artifactsRecord).flatMap(([artifactId, artifact]) => {
+        if (artifactId.length === 0) {
+          return [];
+        }
+        const parsedArtifact = parseGenerationArtifactRecord(artifactId, artifact);
+        return parsedArtifact ? [[artifactId, parsedArtifact] as const] : [];
+      }),
+    ) as Record<string, GenerationArtifact>,
+    automationRuns: Object.fromEntries(
+      Object.entries(automationRunsRecord).flatMap(([runId, run]) => {
+        if (runId.length === 0) {
+          return [];
+        }
+        const parsedRun = parseAutomationRunRecord(runId, run);
+        return parsedRun ? [[runId, parsedRun] as const] : [];
+      }),
+    ) as Record<string, AutomationRun>,
   };
 };
 

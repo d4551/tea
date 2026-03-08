@@ -106,3 +106,56 @@ document.addEventListener("DOMContentLoaded", () => {
 document.addEventListener("htmx:afterSwap", () => {
   syncAllDrawerControls();
 });
+
+// ── Theme persistence ────────────────────────────────────────────────────────
+
+const themeStorageKey = "app-theme-preference";
+
+/**
+ * Persists the selected theme to localStorage when a theme-controller changes.
+ */
+const persistThemeSelection = (event: Event): void => {
+  if (
+    !(event.target instanceof HTMLInputElement) ||
+    !event.target.classList.contains("theme-controller")
+  ) {
+    return;
+  }
+
+  const theme = event.target.value;
+  // SAFETY: localStorage writes can throw when quota is exceeded or storage is blocked.
+  try {
+    localStorage.setItem(themeStorageKey, theme);
+  } catch {
+    /* silently ignore storage failures */
+  }
+};
+
+/**
+ * Restores the persisted theme selection to the matching radio input.
+ */
+const restoreThemeSelection = (): void => {
+  // SAFETY: localStorage access can throw when browser privacy settings block site data.
+  let savedTheme: string | null = null;
+  try {
+    savedTheme = localStorage.getItem(themeStorageKey);
+  } catch {
+    /* silently ignore storage failures */
+  }
+
+  if (!savedTheme) {
+    return;
+  }
+
+  const radio = document.querySelector<HTMLInputElement>(
+    `input.theme-controller[value="${CSS.escape(savedTheme)}"]`,
+  );
+  if (radio && !radio.checked) {
+    radio.checked = true;
+    radio.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+};
+
+document.addEventListener("change", persistThemeSelection);
+document.addEventListener("DOMContentLoaded", restoreThemeSelection);
+document.addEventListener("htmx:afterSwap", restoreThemeSelection);

@@ -134,6 +134,7 @@ export const renderLayout = (input: LayoutInput): string => {
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700&display=swap" />
     <link rel="stylesheet" href="${escapeHtml(appConfig.stylesheetPath)}" />
+    <script>/* Theme flash prevention */(function(){try{var t=localStorage.getItem("app-theme-preference");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}})()</script>
     <script src="${escapeHtml(appConfig.htmxScriptPath)}" defer></script>
   </head>
   <body class="min-h-screen bg-base-100 text-base-content" hx-boost="${boostEnabled}">
