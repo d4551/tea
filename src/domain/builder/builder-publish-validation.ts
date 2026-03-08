@@ -4,6 +4,8 @@ import type {
   BuilderAssetKind,
   SceneDefinition,
   SceneMode,
+  SceneNode2D,
+  SceneNode3D,
 } from "../../shared/contracts/game.ts";
 import type { BuilderProjectState } from "./builder-project-state-store.ts";
 

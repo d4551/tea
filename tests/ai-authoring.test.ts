@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { AiAuthoringService } from "../src/domain/builder/ai-authoring.ts";
 import type {
   AiCapability,
   AiChatParams,
@@ -14,6 +13,7 @@ import type {
   AiTranscriptionParams,
   AiTranscriptionResult,
 } from "../src/domain/ai/providers/provider-types.ts";
+import { AiAuthoringService } from "../src/domain/builder/ai-authoring.ts";
 
 class StubAiProvider implements AiProvider {
   public readonly name = "stub";
@@ -61,9 +61,7 @@ class StubAiProvider implements AiProvider {
     return null;
   }
 
-  public async transcribeAudio(
-    _params: AiTranscriptionParams,
-  ): Promise<AiTranscriptionResult> {
+  public async transcribeAudio(_params: AiTranscriptionParams): Promise<AiTranscriptionResult> {
     return {
       ok: false,
       error: "unsupported",

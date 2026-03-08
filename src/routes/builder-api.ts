@@ -1609,6 +1609,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       response: {
         [httpStatus.ok]: t.Union([builderOkResponse, t.String()]),
         [httpStatus.badRequest]: builderErrorResponse,
+        [httpStatus.unprocessableEntity]: builderErrorResponse,
         [httpStatus.notFound]: builderErrorResponse,
       },
     },
@@ -1753,6 +1754,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         [httpStatus.ok]: t.Union([builderOkResponse, t.String()]),
         [httpStatus.badRequest]: builderErrorResponse,
         [httpStatus.notFound]: builderErrorResponse,
+        [httpStatus.unprocessableEntity]: builderErrorResponse,
       },
     },
   )
@@ -2097,6 +2099,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       response: {
         [httpStatus.ok]: t.Union([builderOkResponse, t.String()]),
         [httpStatus.badRequest]: builderErrorResponse,
+        [httpStatus.unprocessableEntity]: builderErrorResponse,
         [httpStatus.notFound]: builderErrorResponse,
       },
     },
