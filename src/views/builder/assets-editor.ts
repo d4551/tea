@@ -92,8 +92,16 @@ export const renderAssetsEditor = (
     .join("");
 
   const clipCards = clips
-    .map(
-      (clip) => `<article class="card card-border bg-base-100 shadow-sm">
+    .map((clip) => {
+      const durationMs = clip.frameCount > 0 && clip.playbackFps > 0
+        ? Math.round((clip.frameCount / clip.playbackFps) * 1000)
+        : 0;
+      const durationLabel = durationMs > 0 ? `${(durationMs / 1000).toFixed(2)}s` : "—";
+      const loopLabel = clip.loop
+        ? messages.builder.clipTimelineLoop
+        : messages.builder.clipTimelineNoLoop;
+
+      return `<article class="card card-border bg-base-100 shadow-sm">
         <div class="card-body gap-2">
           <div class="flex items-center justify-between gap-3">
             <div>
@@ -107,9 +115,21 @@ export const renderAssetsEditor = (
             <div>${escapeHtml(messages.builder.clipStateTagLabel)}: ${escapeHtml(clip.stateTag)}</div>
             <div>${escapeHtml(messages.builder.clipFrameCountLabel)}: ${clip.frameCount}</div>
           </div>
+          <div class="mt-2 rounded-box bg-base-200/60 p-3" role="img" aria-label="${escapeHtml(messages.builder.clipTimelineDuration)}: ${durationLabel}">
+            <div class="flex items-center justify-between text-xs text-base-content/70 mb-2">
+              <span>${escapeHtml(messages.builder.clipTimelineDuration)}: ${escapeHtml(durationLabel)}</span>
+              <span>${clip.playbackFps} FPS</span>
+            </div>
+            <progress class="progress progress-primary w-full" value="100" max="100" aria-hidden="true"></progress>
+            <div class="flex items-center justify-between gap-2 mt-2">
+              <span class="badge badge-xs badge-outline">0</span>
+              <span class="badge badge-xs ${clip.loop ? "badge-success" : "badge-warning"} badge-soft">${escapeHtml(loopLabel)}</span>
+              <span class="badge badge-xs badge-outline">${clip.frameCount}</span>
+            </div>
+          </div>
         </div>
-      </article>`,
-    )
+      </article>`;
+    })
     .join("");
 
   const artifactLookup = new Map(artifacts.map((artifact) => [artifact.id, artifact]));

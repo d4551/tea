@@ -384,6 +384,12 @@ export interface Messages {
     readonly embeddingsLabel: string;
     readonly speechToTextLabel: string;
     readonly speechSynthesisLabel: string;
+    readonly voicePreviewTitle: string;
+    readonly voicePreviewDescription: string;
+    readonly synthesizeTextPlaceholder: string;
+    readonly synthesizeSubmit: string;
+    readonly transcribeSubmit: string;
+    readonly transcribeFileLabel: string;
     readonly localInferenceLabel: string;
     readonly idLabel: string;
     readonly titleLabel: string;
@@ -505,6 +511,9 @@ export interface Messages {
     readonly clipStateTagLabel: string;
     readonly clipFrameCountLabel: string;
     readonly clipPlaybackLabel: string;
+    readonly clipTimelineDuration: string;
+    readonly clipTimelineLoop: string;
+    readonly clipTimelineNoLoop: string;
     readonly clipIdLabel: string;
     readonly generationJobsTitle: string;
     readonly generationJobKindLabel: string;
@@ -1085,6 +1094,12 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       embeddingsLabel: "Embeddings",
       speechToTextLabel: "Speech to Text",
       speechSynthesisLabel: "Text to Speech",
+      voicePreviewTitle: "Voice Preview",
+      voicePreviewDescription: "Test speech synthesis and transcription capabilities using the configured AI providers.",
+      synthesizeTextPlaceholder: "Enter text to synthesize...",
+      synthesizeSubmit: "Synthesize",
+      transcribeSubmit: "Transcribe",
+      transcribeFileLabel: "Audio file",
       localInferenceLabel: "Local Inference",
       idLabel: "ID",
       titleLabel: "Title",
@@ -1218,6 +1233,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       clipStateTagLabel: "State tag",
       clipFrameCountLabel: "Frame count",
       clipPlaybackLabel: "Playback FPS",
+      clipTimelineDuration: "Duration",
+      clipTimelineLoop: "Loops",
+      clipTimelineNoLoop: "One-shot",
       clipIdLabel: "Clip ID",
       generationJobsTitle: "Generation jobs",
       generationJobKindLabel: "Job kind",
@@ -1787,6 +1805,12 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       embeddingsLabel: "嵌入向量",
       speechToTextLabel: "语音转文本",
       speechSynthesisLabel: "文本转语音",
+      voicePreviewTitle: "语音预览",
+      voicePreviewDescription: "使用已配置的 AI 提供程序测试语音合成和转录功能。",
+      synthesizeTextPlaceholder: "输入要合成的文本...",
+      synthesizeSubmit: "合成",
+      transcribeSubmit: "转录",
+      transcribeFileLabel: "音频文件",
       localInferenceLabel: "本地推理",
       idLabel: "ID",
       titleLabel: "标题",
@@ -1908,6 +1932,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       clipStateTagLabel: "状态标签",
       clipFrameCountLabel: "帧数",
       clipPlaybackLabel: "播放 FPS",
+      clipTimelineDuration: "时长",
+      clipTimelineLoop: "循环",
+      clipTimelineNoLoop: "单次播放",
       clipIdLabel: "片段 ID",
       generationJobsTitle: "生成任务",
       generationJobKindLabel: "任务类型",

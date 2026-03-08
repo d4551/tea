@@ -668,6 +668,67 @@ export const renderAiPanel = (
       </details>
 
       <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
+        <summary class="collapse-title font-semibold">${escapeHtml(messages.builder.voicePreviewTitle)}</summary>
+        <div class="collapse-content">
+          <p class="text-sm text-base-content/70 mb-4">${escapeHtml(messages.builder.voicePreviewDescription)}</p>
+          <div class="grid gap-4 xl:grid-cols-2">
+            <div class="card card-border bg-base-100 shadow-sm">
+              <div class="card-body">
+                <h2 class="card-title">${escapeHtml(messages.builder.speechSynthesisLabel)}</h2>
+                <form
+                  hx-post="${escapeHtml(withQueryParameters(appRoutes.aiSynthesize, { projectId, locale }))}"
+                  hx-target="#voice-synthesize-result"
+                  hx-swap="innerHTML"
+                  hx-indicator="#voice-synthesize-spinner"
+                  hx-disabled-elt="button, input, select, textarea"
+                  class="space-y-3"
+                >
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.promptLabel)}</legend>
+                    <textarea id="voice-synthesize-text" name="text" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.synthesizeTextPlaceholder)}" required aria-required="true"></textarea>
+                  </fieldset>
+                  <div class="flex items-center gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.synthesizeSubmit)}">
+                      ${escapeHtml(messages.builder.synthesizeSubmit)}
+                    </button>
+                    <span id="voice-synthesize-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+                  </div>
+                </form>
+                <div id="voice-synthesize-result" class="mt-3" aria-live="polite"></div>
+              </div>
+            </div>
+
+            <div class="card card-border bg-base-100 shadow-sm">
+              <div class="card-body">
+                <h2 class="card-title">${escapeHtml(messages.builder.speechToTextLabel)}</h2>
+                <form
+                  hx-post="${escapeHtml(withQueryParameters(appRoutes.aiTranscribe, { projectId, locale }))}"
+                  hx-target="#voice-transcribe-result"
+                  hx-swap="innerHTML"
+                  hx-indicator="#voice-transcribe-spinner"
+                  hx-disabled-elt="button, input, select, textarea"
+                  hx-encoding="multipart/form-data"
+                  class="space-y-3"
+                >
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.transcribeFileLabel)}</legend>
+                    <input id="voice-transcribe-file" name="file" type="file" class="file-input file-input-sm w-full" accept="audio/*" required aria-required="true" />
+                  </fieldset>
+                  <div class="flex items-center gap-2">
+                    <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.transcribeSubmit)}">
+                      ${escapeHtml(messages.builder.transcribeSubmit)}
+                    </button>
+                    <span id="voice-transcribe-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+                  </div>
+                </form>
+                <div id="voice-transcribe-result" class="mt-3" aria-live="polite"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
         <summary class="collapse-title font-semibold">${escapeHtml(messages.builder.knowledgeWorkspaceTitle)}</summary>
         <div class="collapse-content">
           <div class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
