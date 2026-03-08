@@ -228,6 +228,7 @@ export const renderDialogueDetail = (
             hx-swap="innerHTML"
             hx-indicator="#dialogue-delete-spinner"
             hx-disabled-elt="this"
+            aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(key)}"
         >${escapeHtml(messages.builder.delete)}</button>
           <span id="dialogue-delete-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>

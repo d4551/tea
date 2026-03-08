@@ -251,6 +251,7 @@ export function GamePage(props: GamePageProps) {
             id="game-reconnect"
             type="button"
             class="btn btn-xs btn-warning hidden"
+            aria-label="${escapeHtml(messages.game.reconnectAction)}"
             data-reconnect-label="${escapeHtml(messages.game.reconnectAction)}"
           >${escapeHtml(messages.game.reconnectAction)}</button>
           <div
@@ -439,15 +440,17 @@ export function GamePage(props: GamePageProps) {
                 ${
                   participantRole === "owner"
                     ? `<div class="space-y-3">
-                        <form hx-post="${escapeHtml(inviteAction)}" hx-target="#game-multiplayer-share-result" hx-swap="outerHTML" class="flex flex-wrap gap-2">
+                        <form hx-post="${escapeHtml(inviteAction)}" hx-target="#game-multiplayer-share-result" hx-swap="outerHTML" hx-disabled-elt="button" hx-indicator="#invite-controller-spinner" class="flex flex-wrap items-center gap-2">
                           <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
                           <input type="hidden" name="role" value="controller" />
-                          <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.game.inviteControllerAction)}</button>
+                          <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.game.inviteControllerAction)}">${escapeHtml(messages.game.inviteControllerAction)}</button>
+                          <span id="invite-controller-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
                         </form>
-                        <form hx-post="${escapeHtml(inviteAction)}" hx-target="#game-multiplayer-share-result" hx-swap="outerHTML" class="flex flex-wrap gap-2">
+                        <form hx-post="${escapeHtml(inviteAction)}" hx-target="#game-multiplayer-share-result" hx-swap="outerHTML" hx-disabled-elt="button" hx-indicator="#invite-spectator-spinner" class="flex flex-wrap items-center gap-2">
                           <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
                           <input type="hidden" name="role" value="spectator" />
-                          <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.game.inviteSpectatorAction)}</button>
+                          <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.game.inviteSpectatorAction)}">${escapeHtml(messages.game.inviteSpectatorAction)}</button>
+                          <span id="invite-spectator-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
                         </form>
                         <div id="game-multiplayer-share-result" class="hidden"></div>
                       </div>`

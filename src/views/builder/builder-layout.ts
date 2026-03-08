@@ -175,13 +175,14 @@ export const renderBuilderProjectShell = (
   const publishForm =
     project === null || publishAction === null
       ? ""
-      : `<form hx-patch="${escapeHtml(publishAction)}" hx-target="#builder-project-shell" hx-swap="outerHTML" class="contents">
+      : `<form hx-patch="${escapeHtml(publishAction)}" hx-target="#builder-project-shell" hx-swap="outerHTML" hx-disabled-elt="button" hx-indicator="#publish-spinner" class="contents">
           <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
           <input type="hidden" name="currentPath" value="${escapeHtml(currentPath)}" />
           <input type="hidden" name="published" value="${project.publishedReleaseVersion === null ? "true" : "false"}" />
           <button type="submit" class="btn ${project.publishedReleaseVersion === null ? "btn-primary" : "btn-warning"} btn-xs" aria-label="${escapeHtml(project.publishedReleaseVersion === null ? messages.builder.publishProject : messages.builder.unpublishProject)}">
             ${escapeHtml(project.publishedReleaseVersion === null ? messages.builder.publishProject : messages.builder.unpublishProject)}
           </button>
+          <span id="publish-spinner" class="loading loading-spinner loading-xs htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </form>`;
 
   const playBtn =

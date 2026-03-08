@@ -199,7 +199,7 @@ const renderNodeForm = (
       </form>
       <div class="px-6 pb-6">
         <form hx-delete="${escapeHtml(deleteAction)}" hx-target="#scene-detail" hx-swap="innerHTML" hx-indicator="#${nodeSpinnerId}" hx-disabled-elt="button" class="flex justify-end">
-          <button type="submit" class="btn btn-error btn-outline btn-sm">${escapeHtml(messages.builder.delete)}</button>
+          <button type="submit" class="btn btn-error btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(node.id)}">${escapeHtml(messages.builder.delete)}</button>
         </form>
       </div>
     </article>`;
