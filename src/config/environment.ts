@@ -58,6 +58,11 @@ export interface AppConfig {
   readonly ui: {
     readonly defaultTheme: string;
     readonly maxContentWidthClass: string;
+    readonly socialLinks: {
+      readonly githubUrl: string | null;
+      readonly discordUrl: string | null;
+      readonly twitterUrl: string | null;
+    };
   };
   readonly playableGame: {
     readonly mountPath: string;
@@ -101,6 +106,9 @@ export interface AppConfig {
     readonly socketReconnectDelayMs: number;
     readonly restoreRequestTimeoutMs: number;
     readonly restoreMaxAttempts: number;
+    readonly worldTimeWrapMs: number;
+    readonly combatDamageMultiplier: number;
+    readonly spriteAtlasMaxWidth: number;
   };
   readonly ai: {
     readonly warmupOnBoot: boolean;
@@ -140,6 +148,9 @@ export interface AppConfig {
     readonly localSpeechToTextEnabled: boolean;
     readonly localTextToSpeechEnabled: boolean;
     readonly localEmbeddingsEnabled: boolean;
+    readonly embeddingDimension: number;
+    readonly circuitBreakerThreshold: number;
+    readonly circuitBreakerCooldownMultiplier: number;
     readonly openAiCompatible: {
       readonly local: {
         readonly enabled: boolean;
@@ -211,6 +222,12 @@ const DEFAULT_GAME_SOCKET_RECONNECT_DELAY_MS = 1000;
 const DEFAULT_GAME_RESTORE_REQUEST_TIMEOUT_MS = 5_000;
 const DEFAULT_GAME_RESTORE_MAX_ATTEMPTS = 2;
 const DEFAULT_GAME_DEFAULT_SCENE_ID = "teaHouse";
+const DEFAULT_GAME_WORLD_TIME_WRAP_MS = 86_400_007;
+const DEFAULT_GAME_COMBAT_DAMAGE_MULTIPLIER = 1.5;
+const DEFAULT_GAME_SPRITE_ATLAS_MAX_WIDTH = 2048;
+const DEFAULT_AI_EMBEDDING_DIMENSION = 384;
+const DEFAULT_AI_CIRCUIT_BREAKER_THRESHOLD = 2;
+const DEFAULT_AI_CIRCUIT_BREAKER_COOLDOWN_MULTIPLIER = 4;
 const DEFAULT_AI_WARMUP_ON_BOOT = false;
 const DEFAULT_AI_MODEL_WARMUP_TIMEOUT_MS = 5000;
 const DEFAULT_AI_PIPELINE_TIMEOUT_MS = 2500;
@@ -401,6 +418,18 @@ const parseConfiguredAbsoluteUrl = (
   fallback: string,
   variableName: string,
 ): string => parseAbsoluteUrl(value ?? fallback, variableName);
+
+const parseOptionalAbsoluteUrl = (
+  value: string | undefined,
+  variableName: string,
+): string | null => {
+  const normalized = parseOptionalString(value);
+  if (!normalized) {
+    return null;
+  }
+
+  return parseAbsoluteUrl(normalized, variableName);
+};
 
 const resolveLocalDatabaseDirectory = (databaseUrl: string): string | null => {
   const normalized = databaseUrl.trim();
@@ -643,6 +672,11 @@ export const appConfig: AppConfig = {
   ui: {
     defaultTheme: Bun.env.APP_THEME ?? DEFAULT_THEME,
     maxContentWidthClass: Bun.env.MAX_CONTENT_WIDTH_CLASS ?? DEFAULT_MAX_CONTENT_WIDTH_CLASS,
+    socialLinks: {
+      githubUrl: parseOptionalAbsoluteUrl(Bun.env.APP_GITHUB_URL, "APP_GITHUB_URL"),
+      discordUrl: parseOptionalAbsoluteUrl(Bun.env.APP_DISCORD_URL, "APP_DISCORD_URL"),
+      twitterUrl: parseOptionalAbsoluteUrl(Bun.env.APP_TWITTER_URL, "APP_TWITTER_URL"),
+    },
   },
   playableGame: {
     mountPath: resolvedPlayableGameMountPath,
@@ -808,6 +842,21 @@ export const appConfig: AppConfig = {
       DEFAULT_GAME_RESTORE_MAX_ATTEMPTS,
       1,
       "GAME_RESTORE_MAX_ATTEMPTS",
+    ),
+    worldTimeWrapMs: parseInteger(
+      Bun.env.GAME_WORLD_TIME_WRAP_MS,
+      DEFAULT_GAME_WORLD_TIME_WRAP_MS,
+      1,
+      "GAME_WORLD_TIME_WRAP_MS",
+    ),
+    combatDamageMultiplier: Number(
+      Bun.env.GAME_COMBAT_DAMAGE_MULTIPLIER ?? String(DEFAULT_GAME_COMBAT_DAMAGE_MULTIPLIER),
+    ),
+    spriteAtlasMaxWidth: parseInteger(
+      Bun.env.GAME_SPRITE_ATLAS_MAX_WIDTH,
+      DEFAULT_GAME_SPRITE_ATLAS_MAX_WIDTH,
+      1,
+      "GAME_SPRITE_ATLAS_MAX_WIDTH",
     ),
   },
   ai: {
@@ -1049,5 +1098,23 @@ export const appConfig: AppConfig = {
     ),
     textToSpeechSpeakerEmbeddings:
       Bun.env.AI_LOCAL_TTS_SPEAKER_EMBEDDINGS ?? DEFAULT_AI_LOCAL_TTS_SPEAKER_EMBEDDINGS,
+    embeddingDimension: parseInteger(
+      Bun.env.AI_EMBEDDING_DIMENSION,
+      DEFAULT_AI_EMBEDDING_DIMENSION,
+      1,
+      "AI_EMBEDDING_DIMENSION",
+    ),
+    circuitBreakerThreshold: parseInteger(
+      Bun.env.AI_CIRCUIT_BREAKER_THRESHOLD,
+      DEFAULT_AI_CIRCUIT_BREAKER_THRESHOLD,
+      1,
+      "AI_CIRCUIT_BREAKER_THRESHOLD",
+    ),
+    circuitBreakerCooldownMultiplier: parseInteger(
+      Bun.env.AI_CIRCUIT_BREAKER_COOLDOWN_MULTIPLIER,
+      DEFAULT_AI_CIRCUIT_BREAKER_COOLDOWN_MULTIPLIER,
+      1,
+      "AI_CIRCUIT_BREAKER_COOLDOWN_MULTIPLIER",
+    ),
   },
 };

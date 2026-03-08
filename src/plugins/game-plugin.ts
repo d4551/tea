@@ -8,7 +8,15 @@ import { createLogger } from "../lib/logger.ts";
 import { authSessionGuard } from "../plugins/auth-session.ts";
 import { defaultGameConfig } from "../shared/config/game-config.ts";
 import { httpStatus } from "../shared/constants/http.ts";
-import { appRoutes, withQueryParameters } from "../shared/constants/routes.ts";
+import {
+  appRoutes,
+  interpolateRoutePath,
+  withQueryParameters,
+} from "../shared/constants/routes.ts";
+import {
+  WS_CLOSE_SESSION_MISSING,
+  WS_CLOSE_TOKEN_EXPIRED,
+} from "../shared/contracts/game.ts";
 import type {
   GameHudState,
   GameSession,
@@ -322,8 +330,8 @@ const commandResponse = t.Object({
 type SupportedLocale = "en-US" | "zh-CN";
 const getGameMessages = (locale: string) => getMessages(normalizeLocale(locale));
 const wsCloseCode = {
-  sessionNotFound: 4404,
-  sessionExpired: 4408,
+  sessionNotFound: WS_CLOSE_SESSION_MISSING,
+  sessionExpired: WS_CLOSE_TOKEN_EXPIRED,
 } as const;
 
 const buildCloseFrame = (
@@ -485,6 +493,7 @@ const createHudStream = async function* ({
   signal: AbortSignal;
 }): AsyncGenerator<string> {
   const sessionId = session.sessionId;
+  const commandPath = interpolateRoutePath(appRoutes.gameApiSessionCommand, { id: sessionId });
   const catalog =
     gameTextByLocale[session.locale as keyof typeof gameTextByLocale] ?? gameTextByLocale["en-US"];
   const messages = getMessages(session.locale as "en-US" | "zh-CN");
@@ -531,6 +540,22 @@ const createHudStream = async function* ({
         </div>`,
       )
       .join("")}</div>`;
+  const renderCombatPhaseLabel = (phase: string): string => {
+    switch (phase) {
+      case "intro":
+        return messages.game.combatPhaseIntro;
+      case "player_turn":
+        return messages.game.combatPhasePlayerTurn;
+      case "enemy_turn":
+        return messages.game.combatPhaseEnemyTurn;
+      case "victory":
+        return messages.game.combatPhaseVictory;
+      case "defeat":
+        return messages.game.combatPhaseDefeat;
+      default:
+        return phase;
+    }
+  };
 
   const initialObjectiveTitle = messages.game.objectiveDescription;
 
@@ -684,7 +709,7 @@ const createHudStream = async function* ({
               `<li class="flex items-center justify-between bg-base-100 p-2 rounded-box border border-base-200">
              <span class="font-bold text-primary truncate max-w-[120px]">${escapeHtml(c.label)}</span>
              <div class="flex items-center gap-2">
-               <span class="text-xs font-mono w-16 text-right">${c.stats.hp}/${c.stats.maxHp} HP</span>
+               <span class="text-xs font-mono w-16 text-right">${c.stats.hp}/${c.stats.maxHp} ${escapeHtml(messages.game.hitPointsShortLabel)}</span>
                <progress class="progress progress-success w-24 border border-base-content/20" value="${c.stats.hp}" max="${c.stats.maxHp}"></progress>
              </div>
            </li>`,
@@ -698,7 +723,7 @@ const createHudStream = async function* ({
               `<li class="flex items-center justify-between bg-base-100 p-2 rounded-box border border-base-200">
              <span class="font-bold text-error truncate max-w-[120px]">${escapeHtml(c.label)}</span>
              <div class="flex items-center gap-2">
-               <span class="text-xs font-mono w-16 text-right">${c.stats.hp}/${c.stats.maxHp} HP</span>
+               <span class="text-xs font-mono w-16 text-right">${c.stats.hp}/${c.stats.maxHp} ${escapeHtml(messages.game.hitPointsShortLabel)}</span>
                <progress class="progress progress-error w-24 border border-base-content/20" value="${c.stats.hp}" max="${c.stats.maxHp}"></progress>
              </div>
            </li>`,
@@ -714,30 +739,30 @@ const createHudStream = async function* ({
                     `<div><span class="text-base-content/50">></span> ${escapeHtml(l.logEntry)}</div>`,
                 )
                 .join("")
-            : '<div class="text-base-content/50 italic">Combat initiated...</div>';
+            : `<div class="text-base-content/50 italic">${escapeHtml(messages.game.combatLogEmpty)}</div>`;
 
         const html = `
           <div id="hud-combat" class="card bg-base-300/95 backdrop-blur shadow-2xl p-6 w-full max-w-4xl opacity-100 pointer-events-auto transition-all duration-300 scale-100 border border-base-content/10">
             
             <div class="flex justify-between items-center mb-6 border-b border-base-content/10 pb-4">
               <h3 class="text-2xl font-black text-base-content uppercase tracking-widest flex items-center gap-2">
-                <span class="text-error">⚔</span> Combat Engagement
+                <span class="text-error">⚔</span> ${escapeHtml(messages.game.combatTitle)}
               </h3>
               <div class="flex gap-2">
-                <span class="badge badge-error badge-outline font-mono">PHASE: ${escapeHtml(combat.phase.toUpperCase())}</span>
-                <span class="badge badge-neutral font-mono shadow-sm">TURN ${combat.turnIndex + 1}</span>
+                <span class="badge badge-error badge-outline font-mono">${escapeHtml(messages.game.combatPhaseLabel)}: ${escapeHtml(renderCombatPhaseLabel(combat.phase))}</span>
+                <span class="badge badge-neutral font-mono shadow-sm">${escapeHtml(messages.game.combatTurnLabel)} ${combat.turnIndex + 1}</span>
               </div>
             </div>
             
             <div class="grid grid-cols-2 gap-8 mb-6">
               <div class="space-y-3">
-                <h4 class="text-sm font-bold uppercase tracking-wider text-base-content/70">Party</h4>
+                <h4 class="text-sm font-bold uppercase tracking-wider text-base-content/70">${escapeHtml(messages.game.combatPartyLabel)}</h4>
                 <ul class="space-y-2">
                   ${playerRows}
                 </ul>
               </div>
               <div class="space-y-3">
-                <h4 class="text-sm font-bold uppercase tracking-wider text-base-content/70">Hostiles</h4>
+                <h4 class="text-sm font-bold uppercase tracking-wider text-base-content/70">${escapeHtml(messages.game.combatHostilesLabel)}</h4>
                 <ul class="space-y-2">
                   ${enemyRows}
                 </ul>
@@ -747,9 +772,9 @@ const createHudStream = async function* ({
             <div class="bg-base-100/50 rounded-box p-3 font-mono text-sm h-28 overflow-y-auto border border-base-content/5 shadow-inner flex flex-col justify-end">
               ${logs}
             </div>
-            
+
             <div class="mt-6 flex gap-2 justify-center">
-              <p class="text-xs text-base-content/50 font-mono">Use standard 'combatAction' commands via CLI / Game API to proceed.</p>
+              <p class="text-xs text-base-content/50 font-mono">${escapeHtml(messages.game.combatActionHint)}</p>
             </div>
           </div>
         `;
@@ -772,7 +797,7 @@ const createHudStream = async function* ({
       if (inventory) {
         const capacityHTML = `
           <div class="flex justify-between text-xs text-base-content/70 mt-1 mb-4 font-mono">
-            <span>Capacity</span>
+            <span>${escapeHtml(messages.game.inventoryCapacity)}</span>
             <span>${inventory.slots.length} / ${inventory.capacity}</span>
           </div>
           <progress class="progress progress-primary w-full h-1" value="${inventory.slots.length}" max="${inventory.capacity}"></progress>
@@ -791,7 +816,7 @@ const createHudStream = async function* ({
                 <span class="text-xs text-base-content/50">${s.quantity}x</span>
               </div>
             </div>
-            <button class="btn btn-xs btn-ghost text-base-content/40 hover:text-primary" aria-label="${escapeHtml(messages.game.inventoryAction)}">Action</button>
+            <button class="btn btn-xs btn-ghost text-base-content/40 hover:text-primary" aria-label="${escapeHtml(messages.game.inventoryAction)}">${escapeHtml(messages.game.inventoryAction)}</button>
           </div>
         `,
           )
@@ -801,35 +826,35 @@ const createHudStream = async function* ({
           <div id="hud-inventory" class="card bg-base-300/95 backdrop-blur shadow-2xl p-6 w-full max-w-3xl opacity-100 pointer-events-auto transition-all duration-300 scale-100 border border-base-content/10">
             <div class="flex justify-between items-center mb-4 border-b border-base-content/10 pb-4">
               <h3 class="text-2xl font-black text-base-content uppercase tracking-widest flex items-center gap-2">
-                <span class="text-primary">🎒</span> Inventory
+                <span class="text-primary">🎒</span> ${escapeHtml(messages.game.inventoryTitle)}
               </h3>
               <div class="flex gap-2">
-                <span class="badge badge-neutral font-mono shadow-sm">ID: ${escapeHtml(hudState.sessionId.substring(0, 8))}</span>
+                <span class="badge badge-neutral font-mono shadow-sm">${escapeHtml(messages.game.inventorySessionIdLabel)}: ${escapeHtml(hudState.sessionId.substring(0, 8))}</span>
               </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div class="col-span-1 border-r border-base-content/10 pr-6">
-                <h4 class="text-sm font-bold uppercase tracking-wider text-base-content/70 mb-2">Storage</h4>
+                <h4 class="text-sm font-bold uppercase tracking-wider text-base-content/70 mb-2">${escapeHtml(messages.game.inventoryStorage)}</h4>
                 ${capacityHTML}
                 <div class="divider my-2"></div>
                 <div class="text-xs font-mono text-base-content/50">
-                  <p>Weight: 0.0kg</p>
-                  <p>Gold: 0</p>
+                  <p>${escapeHtml(messages.game.inventoryWeight)}: 0.0kg</p>
+                  <p>${escapeHtml(messages.game.inventoryGold)}: 0</p>
                 </div>
               </div>
               
               <div class="col-span-2">
-                <h4 class="text-sm font-bold uppercase tracking-wider text-base-content/70 mb-4">Items</h4>
+                <h4 class="text-sm font-bold uppercase tracking-wider text-base-content/70 mb-4">${escapeHtml(messages.game.inventoryItems)}</h4>
                 <div class="space-y-2 max-h-64 overflow-y-auto pr-2 rounded-box p-1 custom-scrollbar">
-                  ${slotsHTML.length > 0 ? slotsHTML : '<div class="text-center p-8 text-base-content/30 italic">Empty</div>'}
+                  ${slotsHTML.length > 0 ? slotsHTML : `<div class="text-center p-8 text-base-content/30 italic">${escapeHtml(messages.game.inventoryEmpty)}</div>`}
                 </div>
               </div>
             </div>
             
             <div class="mt-6 pt-4 border-t border-base-content/10 flex justify-between items-center">
-              <p class="text-xs text-base-content/50 font-mono">Use 'inventoryAction' to manage items.</p>
-              <button class="btn btn-sm btn-outline shadow-sm" hx-post="/api/game/command" hx-vals='{"action":"close_inventory"}' hx-swap="none" aria-label="${escapeHtml(messages.game.inventoryClose)}">Close</button>
+              <p class="text-xs text-base-content/50 font-mono">${escapeHtml(messages.game.inventoryManageHint)}</p>
+              <button class="btn btn-sm btn-outline shadow-sm" hx-post="${escapeHtml(commandPath)}" hx-vals='{"type":"closeInventory"}' hx-swap="none" aria-label="${escapeHtml(messages.game.inventoryClose)}">${escapeHtml(messages.game.inventoryClose)}</button>
             </div>
           </div>
         `;
@@ -861,21 +886,21 @@ const createHudStream = async function* ({
             <div class="card bg-base-200/95 shadow-2xl p-6 w-full max-w-2xl backdrop-blur relative border border-base-content/10">
               <p class="font-bold text-primary mb-2 text-lg uppercase tracking-wider">${escapeHtml(step.speakerKey ?? "")}</p>
               <p class="text-lg text-base-content">${escapeHtml(step.dialogueKey ?? "")}</p>
-              <div class="absolute bottom-3 right-6 text-xs text-base-content/50 font-mono animate-pulse">Use 'advanceCutscene' (Space/Enter) to continue</div>
+              <div class="absolute bottom-3 right-6 text-xs text-base-content/50 font-mono animate-pulse">${escapeHtml(messages.game.cutsceneAdvanceHint)}</div>
             </div>
           `;
         } else if (step?.action === "camera_pan" || step?.action === "wait") {
-          contentHtml = `<div class="text-xl font-mono text-base-content/50 uppercase tracking-[0.2em] italic animate-pulse">Cinematic in progress...</div>`;
+          contentHtml = `<div class="text-xl font-mono text-base-content/50 uppercase tracking-[0.2em] italic animate-pulse">${escapeHtml(messages.game.cutsceneInProgress)}</div>`;
         }
 
         const html = `
           <div id="hud-cutscene" class="fixed inset-0 z-50 flex flex-col items-center justify-end pb-[15vh] bg-black/70 backdrop-blur-sm pointer-events-auto transition-all duration-500">
             <div class="absolute top-6 right-6">
-              <span class="badge badge-neutral shadow-sm font-mono text-xs tracking-widest px-3 py-2">CINEMATIC</span>
+              <span class="badge badge-neutral shadow-sm font-mono text-xs tracking-widest px-3 py-2">${escapeHtml(messages.game.cutsceneBadge)}</span>
             </div>
             ${contentHtml}
             <div class="absolute top-6 left-6">
-               <button class="btn btn-sm btn-ghost text-base-content/40 hover:text-base-content" hx-post="/api/game/command" hx-vals='{"type":"skipCutscene"}' hx-swap="none" aria-label="${escapeHtml(messages.game.cutsceneSkip)}">Skip [ESC]</button>
+               <button class="btn btn-sm btn-ghost text-base-content/40 hover:text-base-content" hx-post="${escapeHtml(commandPath)}" hx-vals='{"type":"skipCutscene"}' hx-swap="none" aria-label="${escapeHtml(messages.game.cutsceneSkip)}">${escapeHtml(messages.game.cutsceneSkip)}</button>
             </div>
           </div>
         `;
@@ -1416,6 +1441,9 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
             );
           }
 
+          // After the guard above, TypeScript still needs reassurance
+          const resolvedCommandType = result.commandType;
+
           return {
             ok: true,
             data: {
@@ -1423,7 +1451,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
               commandId: result.commandId ?? "unknown",
               sequenceId: result.sequenceId,
               state: result.state,
-              commandType: result.commandType!,
+              commandType: resolvedCommandType,
               errorCode: result.errorCode,
               errorReason: result.errorReason,
               commandState: result.commandState,

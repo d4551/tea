@@ -46,7 +46,7 @@ import type { Mutable, MutableGameSceneState } from "./types.ts";
 import { buildSessionSceneState } from "./utils/session-state.ts";
 
 // Wrap worldTimeMs at ~1 day to prevent float precision loss in NPC PRNG
-const WORLD_TIME_WRAP_MS = 86_400_007;
+const WORLD_TIME_WRAP_MS = defaultGameConfig.worldTimeWrapMs;
 const MULTIPLAYER_PRESENCE_OFFSETS: readonly Readonly<{
   readonly x: number;
   readonly y: number;
@@ -1596,7 +1596,9 @@ export class GameLoopService {
                 1,
               );
               if (removeResult.ok) {
-                state.inventory = structuredClone(removeResult.state) as Mutable<PlayerInventoryState>;
+                state.inventory = structuredClone(
+                  removeResult.state,
+                ) as Mutable<PlayerInventoryState>;
                 // Apply healing effects to active combatant if in combat
                 if (state.combat) {
                   const playerCombatant = state.combat.combatants.find((c) => c.isPlayer);
@@ -1633,7 +1635,9 @@ export class GameLoopService {
                 itemDef,
               );
               if (equipResult.ok) {
-                state.inventory = structuredClone(equipResult.state) as Mutable<PlayerInventoryState>;
+                state.inventory = structuredClone(
+                  equipResult.state,
+                ) as Mutable<PlayerInventoryState>;
               }
             }
           }
@@ -1652,7 +1656,9 @@ export class GameLoopService {
                 itemDef,
               );
               if (unequipResult.ok) {
-                state.inventory = structuredClone(unequipResult.state) as Mutable<PlayerInventoryState>;
+                state.inventory = structuredClone(
+                  unequipResult.state,
+                ) as Mutable<PlayerInventoryState>;
               }
             }
           }

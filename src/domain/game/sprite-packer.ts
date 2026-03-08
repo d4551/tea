@@ -1,7 +1,8 @@
+import { defaultGameConfig } from "../../shared/config/game-config.ts";
 import type { SpriteAtlasFrame } from "../../shared/contracts/game.ts";
 
 /** Maximum atlas strip width before wrapping to a new row. */
-const MAX_STRIP_WIDTH = 2048;
+const MAX_STRIP_WIDTH = defaultGameConfig.spriteAtlasMaxWidth;
 
 /**
  * Input descriptor for a single frame to be packed.

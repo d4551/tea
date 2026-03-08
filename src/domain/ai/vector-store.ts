@@ -6,8 +6,9 @@ const logger = createLogger("ai.vector-store");
 
 /**
  * Embedding dimension used by the default local embedding model (all-MiniLM-L6-v2).
+ * Controlled by AI_EMBEDDING_DIMENSION env var.
  */
-const EMBEDDING_DIMENSION = 384;
+const EMBEDDING_DIMENSION = appConfig.ai.embeddingDimension;
 
 /**
  * Resolves the path for the dedicated vector index database file.
@@ -287,6 +288,21 @@ class VectorStore {
       .query<{ count: number }, []>("SELECT count(*) as count FROM vec_knowledge_chunks")
       .get();
     return row?.count ?? 0;
+  }
+
+  /**
+   * Removes all indexed embeddings from the vector store.
+   *
+   * Intended for test isolation to prevent stale entries from prior
+   * test scopes polluting ANN search results. No-op when the vector
+   * store is unavailable.
+   */
+  clear(): void {
+    if (!this._initialized || !this.db) {
+      return;
+    }
+
+    this.db.run("DELETE FROM vec_knowledge_chunks");
   }
 
   /**

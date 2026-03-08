@@ -62,6 +62,12 @@ export interface RuntimeGameConfig {
   readonly restoreRequestTimeoutMs: number;
   /** Maximum restore attempts before marking the session expired. */
   readonly restoreMaxAttempts: number;
+  /** World time wrapping point in milliseconds to prevent float precision loss. */
+  readonly worldTimeWrapMs: number;
+  /** Damage multiplier applied to attacker stat in combat formula. */
+  readonly combatDamageMultiplier: number;
+  /** Maximum sprite atlas strip width in pixels before row wrapping. */
+  readonly spriteAtlasMaxWidth: number;
 }
 
 /**
@@ -99,6 +105,9 @@ export const defaultGameConfig: RuntimeGameConfig = {
   socketReconnectDelayMs: appConfig.game.socketReconnectDelayMs,
   restoreRequestTimeoutMs: appConfig.game.restoreRequestTimeoutMs,
   restoreMaxAttempts: appConfig.game.restoreMaxAttempts,
+  worldTimeWrapMs: appConfig.game.worldTimeWrapMs,
+  combatDamageMultiplier: appConfig.game.combatDamageMultiplier,
+  spriteAtlasMaxWidth: appConfig.game.spriteAtlasMaxWidth,
 };
 
 /**

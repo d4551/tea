@@ -11,6 +11,12 @@ import {
 } from "pixi.js";
 import { gameSpriteManifests } from "../domain/game/data/sprite-data.ts";
 import { appRoutes, interpolateRoutePath } from "../shared/constants/routes.ts";
+import {
+  GAME_SESSION_STORAGE_KEY,
+  WS_CLOSE_SESSION_MISSING,
+  WS_CLOSE_TOKEN_EXPIRED,
+  validateGameRealtimeFrame,
+} from "../shared/contracts/game.ts";
 import type {
   EntityState,
   GameCommand,
@@ -21,7 +27,6 @@ import type {
   SpriteAnimationConfig,
   SpriteManifest,
 } from "../shared/contracts/game.ts";
-import { validateGameRealtimeFrame } from "../shared/contracts/game.ts";
 import { readLocalStorage, writeLocalStorage } from "../shared/utils/browser-storage.ts";
 import { safeJsonParse } from "../shared/utils/safe-json.ts";
 import { ThreeLayer } from "./three-layer.ts";
@@ -81,7 +86,7 @@ type GameClientLabels = {
   readonly runtimeFocusInactive: string;
 };
 
-const SESSION_META_KEY = "lotfk:game:session-meta";
+const SESSION_META_KEY = GAME_SESSION_STORAGE_KEY;
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 const readMeta = (selector: string): HTMLMetaElement | null =>
@@ -871,7 +876,7 @@ const initGameClient = async (): Promise<void> => {
         return;
       }
 
-      if (event.code === 4404) {
+      if (event.code === WS_CLOSE_SESSION_MISSING) {
         connectionMode = "missing";
         setConnectionStatus(statusBadge, labels, "missing", event.code);
         setReconnectVisible(true);
@@ -879,7 +884,7 @@ const initGameClient = async (): Promise<void> => {
         return;
       }
 
-      const tokenExpired = event.code === 4408 || runtimeSessionMeta.expiresAtMs <= Date.now();
+      const tokenExpired = event.code === WS_CLOSE_TOKEN_EXPIRED || runtimeSessionMeta.expiresAtMs <= Date.now();
       if (tokenExpired) {
         connectionMode = "reconnecting";
         setConnectionStatus(statusBadge, labels, "reconnecting", event.code);

@@ -2,6 +2,23 @@ import type { LocaleCode } from "../../config/environment.ts";
 import { safeJsonParse } from "../utils/safe-json.ts";
 
 /**
+ * Application-defined WebSocket close code: session not found.
+ * Signals the client to stop reconnecting and show a session-missing error.
+ */
+export const WS_CLOSE_SESSION_MISSING = 4404 as const;
+
+/**
+ * Application-defined WebSocket close code: resume token expired or invalid.
+ * Signals the client to clear stored session metadata and redirect.
+ */
+export const WS_CLOSE_TOKEN_EXPIRED = 4408 as const;
+
+/**
+ * localStorage key for persisting game session metadata across reconnects.
+ */
+export const GAME_SESSION_STORAGE_KEY = "lotfk:game:session-meta" as const;
+
+/**
  * Supported locales for game engine behavior and UI copy.
  */
 export type GameLocale = LocaleCode;
@@ -2040,7 +2057,7 @@ export const validateGameCommandInput = (
     const candidate = payload as Record<string, unknown>;
     const locale = candidate.locale;
     const source = candidate.source;
-    const commandPayload = candidate.command as unknown;
+    const commandPayload = candidate.command;
 
     const commandValidation = validateGameCommand(
       commandPayload,

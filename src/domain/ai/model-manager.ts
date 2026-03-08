@@ -169,14 +169,18 @@ export class ModelManager {
       throw new Error("AI_PROVIDER_FAILURE");
     }
 
-    const loaded = await withTimeout(
-      this._loadPipeline(key),
-      appConfig.ai.pipelineTimeoutMs,
-      `pipeline:${key}`,
-    ).catch((error: unknown) => {
+    let loaded: AnyPipeline;
+    // SAFETY: ONNX runtime pipeline load may throw on native dep failures or timeout.
+    try {
+      loaded = await withTimeout(
+        this._loadPipeline(key),
+        appConfig.ai.pipelineTimeoutMs,
+        `pipeline:${key}`,
+      );
+    } catch (error: unknown) {
       this._registerFailure(error);
       throw error;
-    });
+    }
 
     this._consecutiveFailures = 0;
     return loaded;
@@ -186,18 +190,24 @@ export class ModelManager {
    * Classifies text sentiment.
    */
   async analyzeSentiment(text: string): Promise<SentimentResult | null> {
-    const pipe = await this.getPipeline("sentiment").catch((error: unknown) => {
+    let pipe: AnyPipeline;
+    // SAFETY: ONNX runtime pipeline acquisition may throw on native FFI failures.
+    try {
+      pipe = await this.getPipeline("sentiment");
+    } catch (error: unknown) {
       logger.error("model.sentiment.failed", { err: String(error) });
       return null;
-    });
+    }
     if (!pipe) return null;
 
-    const result = await (pipe as (t: string) => Promise<SentimentResult[]>)(text).catch(
-      (error: unknown) => {
-        logger.error("model.sentiment.failed", { err: String(error) });
-        return null;
-      },
-    );
+    let result: SentimentResult[] | null = null;
+    // SAFETY: ONNX model inference call may throw on invalid input or runtime errors.
+    try {
+      result = await (pipe as (t: string) => Promise<SentimentResult[]>)(text);
+    } catch (error: unknown) {
+      logger.error("model.sentiment.failed", { err: String(error) });
+      return null;
+    }
 
     return result?.[0] ?? null;
   }
@@ -223,28 +233,36 @@ export class ModelManager {
     prompt: string,
     stripPrefix?: string,
   ): Promise<string | null> {
-    const pipe = await this.getPipeline(modelKey).catch((error: unknown) => {
+    let pipe: AnyPipeline;
+    // SAFETY: ONNX runtime pipeline acquisition may throw on native FFI failures.
+    try {
+      pipe = await this.getPipeline(modelKey);
+    } catch (error: unknown) {
       logger.error(`model.${modelKey}.failed`, { err: String(error) });
       return null;
-    });
+    }
     if (!pipe) {
       return null;
     }
 
     const entry = MODEL_REGISTRY[modelKey];
-    const result = await withTimeout(
-      (
-        pipe as (
-          text: string,
-          opts: Record<string, unknown>,
-        ) => Promise<Array<{ generated_text: string }>>
-      )(prompt, entry.generationConfig ?? {}),
-      appConfig.ai.pipelineTimeoutMs,
-      `${modelKey}:generate`,
-    ).catch((error: unknown) => {
+    let result: Array<{ generated_text: string }> | null = null;
+    // SAFETY: Text generation crosses ONNX runtime FFI boundary with timeout.
+    try {
+      result = await withTimeout(
+        (
+          pipe as (
+            text: string,
+            opts: Record<string, unknown>,
+          ) => Promise<Array<{ generated_text: string }>>
+        )(prompt, entry.generationConfig ?? {}),
+        appConfig.ai.pipelineTimeoutMs,
+        `${modelKey}:generate`,
+      );
+    } catch (error: unknown) {
       logger.error(`model.${modelKey}.failed`, { err: String(error) });
       return null;
-    });
+    }
 
     if (!result) {
       return null;
@@ -269,23 +287,31 @@ export class ModelManager {
    * @returns Embedding vector or null when the model fails.
    */
   async generateEmbedding(text: string): Promise<Float32Array | null> {
-    const pipe = await this.getPipeline("embeddings").catch((error: unknown) => {
+    let pipe: AnyPipeline;
+    // SAFETY: ONNX runtime pipeline acquisition may throw on native FFI failures.
+    try {
+      pipe = await this.getPipeline("embeddings");
+    } catch (error: unknown) {
       logger.error("model.embeddings.failed", { err: String(error) });
       return null;
-    });
+    }
     if (!pipe) return null;
 
-    const result = await withTimeout(
-      (pipe as (input: string, options: Record<string, unknown>) => Promise<TensorLike>)(text, {
-        pooling: "mean",
-        normalize: true,
-      }),
-      appConfig.ai.pipelineTimeoutMs,
-      "embedding:generate",
-    ).catch((error: unknown) => {
+    let result: TensorLike | null = null;
+    // SAFETY: Embedding generation crosses ONNX runtime FFI boundary with timeout.
+    try {
+      result = await withTimeout(
+        (pipe as (input: string, options: Record<string, unknown>) => Promise<TensorLike>)(text, {
+          pooling: "mean",
+          normalize: true,
+        }),
+        appConfig.ai.pipelineTimeoutMs,
+        "embedding:generate",
+      );
+    } catch (error: unknown) {
       logger.error("model.embeddings.failed", { err: String(error) });
       return null;
-    });
+    }
 
     if (!result) {
       return null;
@@ -308,25 +334,33 @@ export class ModelManager {
    * @returns Recognized text or null on failure.
    */
   async transcribeAudio(audio: Float32Array): Promise<string | null> {
-    const pipe = await this.getPipeline("speechToText").catch((error: unknown) => {
+    let pipe: AnyPipeline;
+    // SAFETY: ONNX runtime pipeline acquisition may throw on native FFI failures.
+    try {
+      pipe = await this.getPipeline("speechToText");
+    } catch (error: unknown) {
       logger.error("model.stt.failed", { err: String(error) });
       return null;
-    });
+    }
     if (!pipe) return null;
 
-    const result = await withTimeout(
-      (
-        pipe as (
-          input: Float32Array,
-          options: Record<string, unknown>,
-        ) => Promise<AsrOutput | string>
-      )(audio, {}),
-      appConfig.ai.pipelineTimeoutMs * 4,
-      "speech-to-text:transcribe",
-    ).catch((error: unknown) => {
+    let result: AsrOutput | string | null = null;
+    // SAFETY: Speech-to-text inference crosses ONNX runtime FFI boundary with timeout.
+    try {
+      result = await withTimeout(
+        (
+          pipe as (
+            input: Float32Array,
+            options: Record<string, unknown>,
+          ) => Promise<AsrOutput | string>
+        )(audio, {}),
+        appConfig.ai.pipelineTimeoutMs * 4,
+        "speech-to-text:transcribe",
+      );
+    } catch (error: unknown) {
       logger.error("model.stt.failed", { err: String(error) });
       return null;
-    });
+    }
 
     if (typeof result === "string") {
       return result.trim();
@@ -344,22 +378,30 @@ export class ModelManager {
   async synthesizeSpeech(
     text: string,
   ): Promise<{ readonly audio: Float32Array; readonly sampleRate: number } | null> {
-    const pipe = await this.getPipeline("textToSpeech").catch((error: unknown) => {
+    let pipe: AnyPipeline;
+    // SAFETY: ONNX runtime pipeline acquisition may throw on native FFI failures.
+    try {
+      pipe = await this.getPipeline("textToSpeech");
+    } catch (error: unknown) {
       logger.error("model.tts.failed", { err: String(error) });
       return null;
-    });
+    }
     if (!pipe) return null;
 
-    const result = await withTimeout(
-      (pipe as (input: string, options: Record<string, unknown>) => Promise<TtsOutput>)(text, {
-        speaker_embeddings: appConfig.ai.textToSpeechSpeakerEmbeddings,
-      }),
-      appConfig.ai.pipelineTimeoutMs * 4,
-      "text-to-speech:synthesize",
-    ).catch((error: unknown) => {
+    let result: TtsOutput | null = null;
+    // SAFETY: TTS synthesis crosses ONNX runtime FFI boundary with timeout.
+    try {
+      result = await withTimeout(
+        (pipe as (input: string, options: Record<string, unknown>) => Promise<TtsOutput>)(text, {
+          speaker_embeddings: appConfig.ai.textToSpeechSpeakerEmbeddings,
+        }),
+        appConfig.ai.pipelineTimeoutMs * 4,
+        "text-to-speech:synthesize",
+      );
+    } catch (error: unknown) {
       logger.error("model.tts.failed", { err: String(error) });
       return null;
-    });
+    }
 
     if (!result) {
       return null;
@@ -404,15 +446,27 @@ export class ModelManager {
     }
     logger.info("model.loading", { key, model: entry.model });
 
-    const pipeResult = await pipeline(entry.task as Parameters<typeof pipeline>[0], entry.model, {
-      dtype: entry.dtype,
-      device: entry.device,
-    }).catch((error: unknown) => {
+    let pipeResult: AnyPipeline;
+    // SAFETY: Pipeline loading downloads models and calls ONNX native runtime; may throw on corrupted cache.
+    try {
+      // The pipeline function has task-specific overloads; we use a typed cast
+      // based on the registry entry's declared task type
+      const taskPipeline = pipeline as (
+        task: typeof entry.task,
+        model: string,
+        options: { dtype?: string; device?: string },
+      ) => Promise<AnyPipeline>;
+      pipeResult = await taskPipeline(entry.task, entry.model, {
+        dtype: entry.dtype,
+        device: entry.device,
+      });
+    } catch (error: unknown) {
       if (allowCacheRecovery && isCorruptedCacheError(error)) {
-        return this._purgeModelCache(key).then(() => this._loadPipeline(key, false));
+        await this._purgeModelCache(key);
+        return this._loadPipeline(key, false);
       }
-      return Promise.reject(error);
-    });
+      throw error;
+    }
 
     this._pipelines.set(key, pipeResult);
     logger.info("model.loaded", { key, model: entry.model });
@@ -423,15 +477,18 @@ export class ModelManager {
    * Performs a single warmup attempt with timeout safeguards.
    */
   private async _warmup(): Promise<void> {
-    const result = await withTimeout(
-      this._loadPipeline("sentiment"),
-      appConfig.ai.modelWarmupTimeoutMs,
-      "warmup:sentiment",
-    ).catch((error: unknown) => {
+    let result: unknown = null;
+    // SAFETY: Warmup runs a quick inference to trigger JIT compilation; may throw on ONNX failures.
+    try {
+      result = await withTimeout(
+        this._loadPipeline("sentiment"),
+        appConfig.ai.modelWarmupTimeoutMs,
+        "warmup:sentiment",
+      );
+    } catch (error: unknown) {
       this._registerFailure(error);
       logger.warn("model.warmup.failed", { err: String(error) });
-      return null;
-    });
+    }
 
     if (result !== null) {
       this._ready = true;
@@ -445,8 +502,13 @@ export class ModelManager {
    */
   private _registerFailure(error: unknown): void {
     this._consecutiveFailures += 1;
-    if (this._consecutiveFailures >= 2) {
-      this._circuitOpenUntilMs = Date.now() + Math.max(appConfig.ai.pipelineTimeoutMs * 4, 2_000);
+    if (this._consecutiveFailures >= appConfig.ai.circuitBreakerThreshold) {
+      this._circuitOpenUntilMs =
+        Date.now() +
+        Math.max(
+          appConfig.ai.pipelineTimeoutMs * appConfig.ai.circuitBreakerCooldownMultiplier,
+          2_000,
+        );
     }
 
     logger.warn("model.failure.recorded", {

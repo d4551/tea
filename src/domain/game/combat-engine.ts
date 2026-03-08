@@ -1,9 +1,9 @@
+import { defaultGameConfig } from "../../shared/config/game-config.ts";
 import type {
   CombatAction,
   Combatant,
   CombatDamageResult,
   CombatEncounterState,
-  DamageType,
 } from "../../shared/contracts/game";
 
 /**
@@ -48,7 +48,7 @@ export class CombatEngine {
         const def = target.stats.defense;
 
         // Simple damage formula
-        const rawDamage = Math.max(1, Math.floor(atk * 1.5 - def));
+        const rawDamage = Math.max(1, Math.floor(atk * defaultGameConfig.combatDamageMultiplier - def));
 
         // Critical hit check
         const isCritical = Math.random() < actor.stats.critRate;
