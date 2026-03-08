@@ -72,6 +72,53 @@ export const builderProjectSceneRowSelect = {
   geometryHeight: true,
   spawnX: true,
   spawnY: true,
+  npcs: {
+    select: {
+      characterKey: true,
+      ordinal: true,
+      x: true,
+      y: true,
+      labelKey: true,
+      interactRadius: true,
+      wanderRadius: true,
+      wanderSpeed: true,
+      idlePauseMinMs: true,
+      idlePauseMaxMs: true,
+      greetOnApproach: true,
+      greetLineKey: true,
+      dialogueKeys: { select: { ordinal: true, key: true } },
+    },
+  },
+  nodes: {
+    select: {
+      id: true,
+      ordinal: true,
+      nodeType: true,
+      assetId: true,
+      animationClipId: true,
+      positionX: true,
+      positionY: true,
+      positionZ: true,
+      sizeWidth: true,
+      sizeHeight: true,
+      layer: true,
+      rotationX: true,
+      rotationY: true,
+      rotationZ: true,
+      scaleX: true,
+      scaleY: true,
+      scaleZ: true,
+    },
+  },
+  collisions: {
+    select: {
+      ordinal: true,
+      x: true,
+      y: true,
+      width: true,
+      height: true,
+    },
+  },
 } satisfies Prisma.BuilderProjectSceneSelect;
 
 /**
@@ -211,6 +258,17 @@ export const builderProjectAssetRowSelect = {
   approved: true,
   createdAt: true,
   updatedAt: true,
+  tags: { select: { ordinal: true, value: true } },
+  variants: {
+    select: {
+      id: true,
+      ordinal: true,
+      format: true,
+      source: true,
+      usage: true,
+      mimeType: true,
+    },
+  },
 } satisfies Prisma.BuilderProjectAssetSelect;
 
 /**
@@ -298,6 +356,13 @@ export const builderProjectAnimationTimelineRowSelect = {
   loop: true,
   createdAt: true,
   updatedAt: true,
+  tracks: {
+    select: {
+      id: true,
+      property: true,
+      keyframes: true,
+    },
+  },
 } satisfies Prisma.BuilderProjectAnimationTimelineSelect;
 
 /**
@@ -326,6 +391,27 @@ export type BuilderProjectAnimationTrackRow = Prisma.BuilderProjectAnimationTrac
 }>;
 
 /**
+ * Canonical builder sprite-atlas row shape used by domain services.
+ */
+export const builderProjectSpriteAtlasRowSelect = {
+  projectId: true,
+  id: true,
+  imagePath: true,
+  atlasWidth: true,
+  atlasHeight: true,
+  frames: true,
+  createdAt: true,
+} satisfies Prisma.BuilderProjectSpriteAtlasSelect;
+
+/**
+ * Selected builder sprite-atlas row contract shared across persistence helpers.
+ */
+export type BuilderProjectSpriteAtlasRow = Prisma.BuilderProjectSpriteAtlasGetPayload<{
+  select: typeof builderProjectSpriteAtlasRowSelect;
+}>;
+
+
+/**
  * Canonical builder dialogue-graph row shape used by domain services.
  */
 export const builderProjectDialogueGraphRowSelect = {
@@ -336,6 +422,22 @@ export const builderProjectDialogueGraphRowSelect = {
   rootNodeId: true,
   createdAt: true,
   updatedAt: true,
+  nodes: {
+    select: {
+      id: true,
+      ordinal: true,
+      line: true,
+      edges: {
+        select: {
+          nodeId: true,
+          ordinal: true,
+          toNodeId: true,
+          requiredFlag: true,
+          advanceQuestStepId: true,
+        },
+      },
+    },
+  },
 } satisfies Prisma.BuilderProjectDialogueGraphSelect;
 
 /**
@@ -401,6 +503,15 @@ export const builderProjectQuestRowSelect = {
   id: true,
   title: true,
   description: true,
+  steps: {
+    select: {
+      id: true,
+      ordinal: true,
+      title: true,
+      description: true,
+      triggerId: true,
+    },
+  },
 } satisfies Prisma.BuilderProjectQuestSelect;
 
 /**
@@ -449,6 +560,24 @@ export const builderProjectTriggerRowSelect = {
   nodeId: true,
   questId: true,
   questStepId: true,
+  requiredFlags: {
+    select: {
+      key: true,
+      valueType: true,
+      stringValue: true,
+      numberValue: true,
+      boolValue: true,
+    },
+  },
+  setFlags: {
+    select: {
+      key: true,
+      valueType: true,
+      stringValue: true,
+      numberValue: true,
+      boolValue: true,
+    },
+  },
 } satisfies Prisma.BuilderProjectTriggerSelect;
 
 /**
@@ -543,6 +672,7 @@ export const builderProjectGenerationJobRowSelect = {
   statusMessage: true,
   createdAt: true,
   updatedAt: true,
+  artifacts: { select: { ordinal: true, artifactId: true } },
 } satisfies Prisma.BuilderProjectGenerationJobSelect;
 
 /**
@@ -604,6 +734,17 @@ export const builderProjectAutomationRunRowSelect = {
   statusMessage: true,
   createdAt: true,
   updatedAt: true,
+  steps: {
+    select: {
+      id: true,
+      ordinal: true,
+      action: true,
+      summary: true,
+      status: true,
+      evidenceSource: true,
+    },
+  },
+  artifacts: { select: { ordinal: true, artifactId: true } },
 } satisfies Prisma.BuilderProjectAutomationRunSelect;
 
 /**
@@ -1193,7 +1334,7 @@ export class DomainError extends Error {
 
 // ── $extends — domain methods ─────────────────────────────────────────────────
 
-const withDomainExtensions = (base: PrismaClient) =>
+const withBuilderCoreExtensions = (base: PrismaClient) =>
   base.$extends({
     model: {
       /**
@@ -1763,7 +1904,16 @@ const withDomainExtensions = (base: PrismaClient) =>
           });
         },
       },
+    },
+  });
 
+// ── $extends — builder row-list methods ───────────────────────────────────────
+
+const withBuilderRowExtensions = (
+  base: ReturnType<typeof withBuilderCoreExtensions>,
+) =>
+  base.$extends({
+    model: {
       /**
        * BuilderProjectRelease persistence helpers.
        */
@@ -2180,7 +2330,16 @@ const withDomainExtensions = (base: PrismaClient) =>
           });
         },
       },
+    },
+  });
 
+// ── $extends — game & oracle domain methods ───────────────────────────────────
+
+const withGameExtensions = (
+  base: ReturnType<typeof withBuilderRowExtensions>,
+) =>
+  base.$extends({
+    model: {
       /**
        * GameSession domain methods.
        */
@@ -2272,6 +2431,12 @@ const withDomainExtensions = (base: PrismaClient) =>
       },
     },
   });
+
+/**
+ * Chains all three extension layers into the final extended Prisma client.
+ */
+const withDomainExtensions = (base: PrismaClient) =>
+  withGameExtensions(withBuilderRowExtensions(withBuilderCoreExtensions(base)));
 
 type ExtendedPrismaClient = ReturnType<typeof withDomainExtensions>;
 

@@ -216,6 +216,9 @@ export interface Messages {
     readonly chatRateLimited: string;
     readonly commandTypeMissing: string;
     readonly saveCooldownActive: string;
+    readonly inventoryAction: string;
+    readonly inventoryClose: string;
+    readonly cutsceneSkip: string;
   };
   readonly builder: {
     readonly projectNotFound: string;
@@ -845,6 +848,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       chatRateLimited: "Chat commands are temporarily rate limited.",
       commandTypeMissing: "Command type was not resolved for the accepted command.",
       saveCooldownActive: "Save is cooling down.",
+      inventoryAction: "Item action",
+      inventoryClose: "Close inventory",
+      cutsceneSkip: "Skip cutscene",
     },
     builder: {
       projectNotFound: "Project not found",
@@ -1479,6 +1485,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       chatRateLimited: "聊天命令触发了限流，请稍后重试。",
       commandTypeMissing: "已接受命令缺少解析后的命令类型。",
       saveCooldownActive: "保存仍在冷却中。",
+      inventoryAction: "物品操作",
+      inventoryClose: "关闭背包",
+      cutsceneSkip: "跳过过场动画",
     },
     builder: {
       projectNotFound: "项目未找到",

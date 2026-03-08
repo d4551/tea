@@ -120,7 +120,7 @@ export class CutsceneEngine {
     definition: CutsceneDefinition,
   ): CutsceneTickResult {
     if (!definition.skippable) {
-      return { type: playback.phase as any, state: playback };
+      return { type: playback.phase, state: playback };
     }
 
     return {

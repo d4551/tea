@@ -495,27 +495,27 @@ const createHudStream = async function* ({
       sceneTitle,
     )}</div>`;
   const renderSceneHeading = (sceneTitle: string): string =>
-    `<h1 id="game-scene-title-heading" sse-swap="scene-title-heading" hx-swap="outerHTML" class="text-3xl font-semibold">${escapeHtml(
+    `<h1 id="game-scene-title-heading" sse-swap="scene-title-heading" hx-swap="outerHTML" aria-live="polite" role="heading" class="text-3xl font-semibold">${escapeHtml(
       sceneTitle,
     )}</h1>`;
   const renderSceneValue = (sceneTitle: string): string =>
-    `<span id="game-scene-title-value" sse-swap="scene-title-value" hx-swap="outerHTML" class="font-medium">${escapeHtml(
+    `<span id="game-scene-title-value" sse-swap="scene-title-value" hx-swap="outerHTML" aria-live="polite" role="status" class="font-medium">${escapeHtml(
       sceneTitle,
     )}</span>`;
   const renderObjectiveSummary = (title: string): string =>
-    `<p id="game-objective-summary" sse-swap="objective-summary" hx-swap="outerHTML" class="text-sm text-base-content/70">${escapeHtml(
+    `<p id="game-objective-summary" sse-swap="objective-summary" hx-swap="outerHTML" aria-live="polite" role="status" class="text-sm text-base-content/70">${escapeHtml(
       title,
     )}</p>`;
   const renderObjectiveCard = (title: string): string =>
-    `<p id="game-objective-card" sse-swap="objective-card" hx-swap="outerHTML" class="text-sm text-base-content/75">${escapeHtml(
+    `<p id="game-objective-card" sse-swap="objective-card" hx-swap="outerHTML" aria-live="polite" role="status" class="text-sm text-base-content/75">${escapeHtml(
       title,
     )}</p>`;
   const renderSceneMode = (sceneMode: GameHudState["sceneMode"]): string =>
-    `<span id="game-scene-mode-value" sse-swap="scene-mode" hx-swap="outerHTML" class="font-medium">${escapeHtml(
+    `<span id="game-scene-mode-value" sse-swap="scene-mode" hx-swap="outerHTML" aria-live="polite" role="status" class="font-medium">${escapeHtml(
       sceneMode === "3d" ? messages.game.sceneMode3d : messages.game.sceneMode2d,
     )}</span>`;
   const renderParticipants = (participants: GameHudState["participants"]): string =>
-    `<div id="game-participants-list" sse-swap="participants" hx-swap="outerHTML" class="space-y-2">${participants
+    `<div id="game-participants-list" sse-swap="participants" hx-swap="outerHTML" aria-live="polite" role="list" class="space-y-2">${participants
       .map(
         (
           participant,
@@ -791,7 +791,7 @@ const createHudStream = async function* ({
                 <span class="text-xs text-base-content/50">${s.quantity}x</span>
               </div>
             </div>
-            <button class="btn btn-xs btn-ghost text-base-content/40 hover:text-primary">Action</button>
+            <button class="btn btn-xs btn-ghost text-base-content/40 hover:text-primary" aria-label="${escapeHtml(messages.game.inventoryAction)}">Action</button>
           </div>
         `,
           )
@@ -829,7 +829,7 @@ const createHudStream = async function* ({
             
             <div class="mt-6 pt-4 border-t border-base-content/10 flex justify-between items-center">
               <p class="text-xs text-base-content/50 font-mono">Use 'inventoryAction' to manage items.</p>
-              <button class="btn btn-sm btn-outline shadow-sm" hx-post="/api/game/command" hx-vals='{"action":"close_inventory"}' hx-swap="none">Close</button>
+              <button class="btn btn-sm btn-outline shadow-sm" hx-post="/api/game/command" hx-vals='{"action":"close_inventory"}' hx-swap="none" aria-label="${escapeHtml(messages.game.inventoryClose)}">Close</button>
             </div>
           </div>
         `;
@@ -875,7 +875,7 @@ const createHudStream = async function* ({
             </div>
             ${contentHtml}
             <div class="absolute top-6 left-6">
-               <button class="btn btn-sm btn-ghost text-base-content/40 hover:text-base-content" hx-post="/api/game/command" hx-vals='{"type":"skipCutscene"}' hx-swap="none">Skip [ESC]</button>
+               <button class="btn btn-sm btn-ghost text-base-content/40 hover:text-base-content" hx-post="/api/game/command" hx-vals='{"type":"skipCutscene"}' hx-swap="none" aria-label="${escapeHtml(messages.game.cutsceneSkip)}">Skip [ESC]</button>
             </div>
           </div>
         `;

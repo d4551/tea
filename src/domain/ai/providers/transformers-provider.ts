@@ -104,7 +104,7 @@ export class TransformersProvider implements AiProvider {
         capabilities: taskToCapabilities(entry.task),
         maxContextLength: entry.maxContextLength,
         supportsStreaming: false,
-        runtime: "onnx-wasm",
+        runtime: `onnx-${appConfig.ai.onnxDevice}`,
         integration: "huggingface",
         local: true,
         configurable: true,

@@ -40,7 +40,7 @@ export interface AiModelCapabilities {
   /** Whether the model supports streaming responses. */
   readonly supportsStreaming: boolean;
   /** Runtime backend used to execute the model. */
-  readonly runtime: "onnx-wasm" | "ollama-http" | "openai-http";
+  readonly runtime: "onnx-wasm" | "onnx-cpu" | "onnx-webgpu" | "ollama-http" | "openai-http";
   /** Model integration source. */
   readonly integration: "huggingface" | "ollama" | "openai-compatible";
   /** Whether the model is executed locally on this machine. */

@@ -2,6 +2,9 @@ import type { Prisma } from "@prisma/client";
 import type { LocaleCode } from "../../config/environment.ts";
 import type {
   AnimationClip,
+  AnimationKeyframe,
+  AnimationTimeline,
+  SpriteAtlasManifest,
   AssetVariant,
   AutomationRun,
   AutomationRunStep,
@@ -18,6 +21,7 @@ import type {
 } from "../../shared/contracts/game.ts";
 import {
   type BuilderProjectAnimationClipRow,
+  type BuilderProjectAnimationTimelineRow,
   type BuilderProjectArtifactRow,
   type BuilderProjectAssetRow,
   type BuilderProjectAutomationRunRow,
@@ -58,6 +62,9 @@ export interface BuilderProjectState {
   readonly assets: Record<string, BuilderAsset>;
   /** Authored animation clips. */
   readonly animationClips: Record<string, AnimationClip>;
+  /** Authored animation timelines. */
+  readonly animationTimelines: Record<string, AnimationTimeline>;
+  readonly spriteAtlases: Record<string, SpriteAtlasManifest>;
   /** Authored dialogue graphs. */
   readonly dialogueGraphs: Record<string, DialogueGraph>;
   /** Authored quest definitions. */
@@ -88,6 +95,9 @@ export interface BuilderProjectSnapshot {
   readonly assets: Map<string, BuilderAsset>;
   /** Authored animation clips. */
   readonly animationClips: Map<string, AnimationClip>;
+  /** Authored animation timelines. */
+  readonly animationTimelines: Map<string, AnimationTimeline>;
+  readonly spriteAtlases: Map<string, SpriteAtlasManifest>;
   /** Authored dialogue graphs. */
   readonly dialogueGraphs: Map<string, DialogueGraph>;
   /** Authored quest definitions. */
@@ -347,6 +357,8 @@ const createBaselineState = (): BuilderProjectState => {
     dialogues,
     assets: buildBaselineAssets(),
     animationClips: buildBaselineAnimationClips(),
+    animationTimelines: {},
+    spriteAtlases: {},
     dialogueGraphs: buildBaselineDialogueGraphs(),
     quests: buildBaselineQuests(),
     triggers: buildBaselineTriggers(),
@@ -592,9 +604,12 @@ const toScenesFromRows = (
     rows.flatMap((row) => {
       const sceneMode =
         row.sceneMode === "2d" || row.sceneMode === "3d" ? row.sceneMode : undefined;
-      const geometry = toSceneGeometry(row.geometry);
-      const spawn = toVector2(row.spawn);
-      if (geometry === null || spawn === null) {
+      const geometry: SceneDefinition["geometry"] = {
+        width: row.geometryWidth,
+        height: row.geometryHeight,
+      };
+      const spawn = { x: row.spawnX, y: row.spawnY };
+      if (geometry.width <= 0 || geometry.height <= 0) {
         return [];
       }
 
@@ -682,10 +697,7 @@ const toBuilderAssetsFromRows = (
         source: row.source,
         sourceFormat: row.sourceFormat,
         sourceMimeType: row.sourceMimeType ?? undefined,
-        tags:
-          Array.isArray(row.tags) && row.tags.every((tag): tag is string => typeof tag === "string")
-            ? [...row.tags]
-            : [],
+        tags: row.tags.map((t) => t.value),
         variants: toAssetVariantArray(row.variants),
         approved: row.approved,
         createdAtMs: row.createdAt.getTime(),
@@ -723,14 +735,72 @@ const toAnimationClipsFromRows = (
     ]),
   ) as Record<string, AnimationClip>;
 
+/**
+ * Converts animation timeline rows (with nested track rows) into domain-level AnimationTimeline records.
+ * Track keyframes are stored as JSON strings in the database and parsed here.
+ */
+const toAnimationTimelinesFromRows = (
+  rows: readonly BuilderProjectAnimationTimelineRow[],
+): Record<string, AnimationTimeline> =>
+  Object.fromEntries(
+    rows.map((row) => [
+      row.id,
+      {
+        id: row.id,
+        assetId: row.assetId,
+        label: row.label,
+        stateTag: row.stateTag,
+        sceneMode: row.sceneMode === "2d" || row.sceneMode === "3d" ? row.sceneMode : "2d",
+        durationMs: row.durationMs,
+        loop: row.loop,
+        tracks: row.tracks.map((track: { id: string; property: string; keyframes: string }) => ({
+          id: track.id,
+          property: track.property,
+          keyframes: parseTrackKeyframes(track.keyframes),
+        })),
+        createdAtMs: row.createdAt.getTime(),
+        updatedAtMs: row.updatedAt.getTime(),
+      } satisfies AnimationTimeline,
+    ]),
+  ) as Record<string, AnimationTimeline>;
+
+/**
+ * Parses a JSON-serialized keyframe array string into typed AnimationKeyframe[].
+ * Returns an empty array on malformed input.
+ */
+const parseTrackKeyframes = (raw: string): AnimationTimeline["tracks"][number]["keyframes"] => {
+  const fallback: unknown[] = [];
+  const parsed = safeJsonParse<unknown[]>(raw, fallback);
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+  return parsed.flatMap((item: unknown) => {
+    if (
+      item !== null &&
+      typeof item === "object" &&
+      "timeMs" in item &&
+      "value" in item &&
+      "easing" in item &&
+      typeof (item as Record<string, unknown>).timeMs === "number" &&
+      typeof (item as Record<string, unknown>).value === "number" &&
+      typeof (item as Record<string, unknown>).easing === "string"
+    ) {
+      const kf = item as { timeMs: number; value: number; easing: AnimationKeyframe["easing"] };
+      return [{ timeMs: kf.timeMs, value: kf.value, easing: kf.easing } satisfies AnimationKeyframe];
+    }
+    return [];
+  });
+};
 const withDraftMedia = (
   state: BuilderProjectState,
   assets: Record<string, BuilderAsset>,
   animationClips: Record<string, AnimationClip>,
+  animationTimelines: Record<string, AnimationTimeline>,
 ): BuilderProjectState => ({
   ...state,
   assets,
   animationClips,
+  animationTimelines,
 });
 
 const toDialogueGraphNodes = (value: unknown): DialogueGraph["nodes"] =>
@@ -895,7 +965,12 @@ const toFlagsFromRows = (
 ): Record<string, GameFlagDefinition> =>
   Object.fromEntries(
     rows.flatMap((row) => {
-      const initialValue = row.initialValue;
+      const initialValue =
+        row.valueType === "boolean"
+          ? row.boolValue
+          : row.valueType === "number"
+            ? row.numberValue
+            : row.stringValue;
       if (
         typeof initialValue !== "string" &&
         typeof initialValue !== "number" &&
@@ -943,13 +1018,7 @@ const toGenerationJobsFromRows = (
         status: row.status as GenerationJob["status"],
         prompt: row.prompt,
         targetId: row.targetId ?? undefined,
-        artifactIds:
-          Array.isArray(row.artifactIds) &&
-          row.artifactIds.every(
-            (artifactId): artifactId is string => typeof artifactId === "string",
-          )
-            ? [...row.artifactIds]
-            : [],
+        artifactIds: row.artifacts.map((a) => a.artifactId),
         statusMessage: row.statusMessage,
         createdAtMs: row.createdAt.getTime(),
         updatedAtMs: row.updatedAt.getTime(),
@@ -1021,13 +1090,7 @@ const toAutomationRunsFromRows = (
         status: row.status as AutomationRun["status"],
         goal: row.goal,
         steps: toAutomationRunStepArray(row.steps),
-        artifactIds:
-          Array.isArray(row.artifactIds) &&
-          row.artifactIds.every(
-            (artifactId): artifactId is string => typeof artifactId === "string",
-          )
-            ? [...row.artifactIds]
-            : [],
+        artifactIds: row.artifacts.map((a) => a.artifactId),
         statusMessage: row.statusMessage,
         createdAtMs: row.createdAt.getTime(),
         updatedAtMs: row.updatedAt.getTime(),
@@ -1113,6 +1176,8 @@ const parseProjectState = (state: Prisma.JsonValue): BuilderProjectState => {
         ]),
     ) as Record<string, BuilderAsset>,
     animationClips: cloneRecord(animationClipsRecord as Record<string, AnimationClip>),
+    animationTimelines: {},
+    spriteAtlases: {},
     dialogueGraphs: cloneRecord(dialogueGraphsRecord as Record<string, DialogueGraph>),
     quests: cloneRecord(questsRecord as Record<string, QuestDefinition>),
     triggers: cloneRecord(triggersRecord as Record<string, TriggerDefinition>),
@@ -1138,6 +1203,12 @@ const toProjectSnapshot = (
   assets: new Map(Object.entries(state.assets).map(([id, asset]) => [id, structuredClone(asset)])),
   animationClips: new Map(
     Object.entries(state.animationClips).map(([id, clip]) => [id, structuredClone(clip)]),
+  ),
+  animationTimelines: new Map(
+    Object.entries(state.animationTimelines).map(([id, tl]) => [id, structuredClone(tl)]),
+  ),
+  spriteAtlases: new Map(
+    Object.entries(state.spriteAtlases).map(([id, sa]) => [id, structuredClone(sa)]),
   ),
   dialogueGraphs: new Map(
     Object.entries(state.dialogueGraphs).map(([id, graph]) => [id, structuredClone(graph)]),
@@ -1243,15 +1314,18 @@ export class BuilderProjectStateStore {
   private async readDraftMedia(projectId: string): Promise<{
     readonly assets: Record<string, BuilderAsset>;
     readonly animationClips: Record<string, AnimationClip>;
+    readonly animationTimelines: Record<string, AnimationTimeline>;
   }> {
-    const [assetRows, animationClipRows] = await Promise.all([
+    const [assetRows, animationClipRows, animationTimelineRows] = await Promise.all([
       prisma.builderProjectAsset.listProjectRows(projectId),
       prisma.builderProjectAnimationClip.listProjectRows(projectId),
+      prisma.builderProjectAnimationTimeline.listProjectRows(projectId),
     ]);
 
     return {
       assets: toBuilderAssetsFromRows(assetRows),
       animationClips: toAnimationClipsFromRows(animationClipRows),
+      animationTimelines: toAnimationTimelinesFromRows(animationTimelineRows),
     };
   }
 
@@ -1410,6 +1484,7 @@ export class BuilderProjectStateStore {
             withDraftContent(draftState, content.scenes, content.dialogues),
             media.assets,
             media.animationClips,
+            media.animationTimelines,
           ),
           mechanics.dialogueGraphs,
           mechanics.quests,
@@ -1605,6 +1680,7 @@ export class BuilderProjectStateStore {
                   ),
                   media.assets,
                   media.animationClips,
+                  media.animationTimelines,
                 ),
                 mechanics.dialogueGraphs,
                 mechanics.quests,

@@ -2,6 +2,7 @@ import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
 import { defaultGameConfig, resolveScene } from "../../shared/config/game-config.ts";
 import type {
+  CombatEncounterState,
   CutscenePlaybackState,
   CutsceneStep,
   GameActionState,
@@ -1562,7 +1563,7 @@ export class GameLoopService {
                 nextActionState = "idle";
                 state.player.position = { x: 50, y: 50 }; // Basic revive/respawn mechanic
               } else {
-                state.combat = nextCombatState as any;
+                state.combat = nextCombatState as Mutable<CombatEncounterState>;
                 nextActionState = "inCombat";
               }
             } else {
@@ -1596,7 +1597,7 @@ export class GameLoopService {
                 { sceneId: state.sceneId },
               );
             } else {
-              state.cutscene = result.state as any;
+              state.cutscene = result.state as Mutable<CutscenePlaybackState>;
               nextActionState = "inCutscene";
             }
           }
@@ -1617,7 +1618,7 @@ export class GameLoopService {
                 { sceneId: state.sceneId },
               );
             } else {
-              state.cutscene = result.state as any;
+              state.cutscene = result.state as Mutable<CutscenePlaybackState>;
               nextActionState = "inCutscene";
             }
           }
@@ -1655,7 +1656,7 @@ export class GameLoopService {
             { sceneId: state.sceneId },
           );
         } else {
-          state.cutscene = result.state as any;
+          state.cutscene = result.state as Mutable<CutscenePlaybackState>;
           nextActionState = "inCutscene";
         }
       } else {
