@@ -20,6 +20,7 @@ import type {
   GameSessionParticipantRole,
   GameSessionSnapshot,
   GameSessionState,
+  PlayerInventoryState,
   QuestDefinition,
   SceneNodeDefinition,
   TriggerDefinition,
@@ -31,6 +32,7 @@ import { builderService } from "../builder/builder-service.ts";
 import { generateNpcDialogue } from "./ai/game-ai-service.ts";
 import { combatEngine } from "./combat-engine.ts";
 import { cutsceneEngine } from "./cutscene-engine.ts";
+import { inventoryService } from "./inventory-service.ts";
 import { npcAiEngine } from "./npc-ai.ts";
 import { XP_CONFIG } from "./progression.ts";
 import { sceneEngine } from "./scene-engine.ts";
@@ -1581,6 +1583,81 @@ export class GameLoopService {
       } else if (commandType === "closeInventory") {
         commandApplied = true;
         nextActionState = "idle";
+      } else if (commandType === "useItem" && cmd.slotIndex !== undefined) {
+        commandApplied = true;
+        if (state.inventory) {
+          const slot = state.inventory.slots.find((s) => s.slotIndex === cmd.slotIndex);
+          if (slot) {
+            const itemDef = session.itemDefinitions?.find((d) => d.id === slot.itemId);
+            if (itemDef) {
+              const removeResult = inventoryService.removeItem(
+                structuredClone(state.inventory),
+                slot.itemId,
+                1,
+              );
+              if (removeResult.ok) {
+                state.inventory = structuredClone(removeResult.state) as Mutable<PlayerInventoryState>;
+                // Apply healing effects to active combatant if in combat
+                if (state.combat) {
+                  const playerCombatant = state.combat.combatants.find((c) => c.isPlayer);
+                  if (playerCombatant) {
+                    for (const effect of itemDef.useEffects) {
+                      if (effect.type === "heal_hp") {
+                        playerCombatant.stats.hp = Math.min(
+                          playerCombatant.stats.hp + effect.magnitude,
+                          playerCombatant.stats.maxHp,
+                        );
+                      } else if (effect.type === "heal_mp") {
+                        playerCombatant.stats.mp = Math.min(
+                          playerCombatant.stats.mp + effect.magnitude,
+                          playerCombatant.stats.maxMp,
+                        );
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        nextActionState = "inventoryOpen";
+      } else if (commandType === "equipItem" && cmd.slotIndex !== undefined) {
+        commandApplied = true;
+        if (state.inventory) {
+          const slot = state.inventory.slots.find((s) => s.slotIndex === cmd.slotIndex);
+          if (slot) {
+            const itemDef = session.itemDefinitions?.find((d) => d.id === slot.itemId);
+            if (itemDef) {
+              const equipResult = inventoryService.equipItem(
+                structuredClone(state.inventory),
+                itemDef,
+              );
+              if (equipResult.ok) {
+                state.inventory = structuredClone(equipResult.state) as Mutable<PlayerInventoryState>;
+              }
+            }
+          }
+        }
+        nextActionState = "inventoryOpen";
+      } else if (commandType === "unequipItem" && cmd.slot) {
+        commandApplied = true;
+        if (state.inventory) {
+          const equippedItemId =
+            state.inventory.equipment[cmd.slot as keyof typeof state.inventory.equipment];
+          if (equippedItemId) {
+            const itemDef = session.itemDefinitions?.find((d) => d.id === equippedItemId);
+            if (itemDef) {
+              const unequipResult = inventoryService.unequipItem(
+                structuredClone(state.inventory),
+                itemDef,
+              );
+              if (unequipResult.ok) {
+                state.inventory = structuredClone(unequipResult.state) as Mutable<PlayerInventoryState>;
+              }
+            }
+          }
+        }
+        nextActionState = "inventoryOpen";
       } else if (commandType === "advanceCutscene") {
         commandApplied = true;
         if (state.cutscene) {

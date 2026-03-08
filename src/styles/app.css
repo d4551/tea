@@ -4,7 +4,7 @@
 @source "../**/*.ts";
 
 @plugin "daisyui" {
-  themes: silk --default, autumn --prefersdark, lotfk;
+  themes: silk --default, autumn --prefersdark, lotfk, lotfk-light;
 }
 
 @layer base {
@@ -49,5 +49,132 @@
   .htmx-request .htmx-indicator,
   .htmx-request.htmx-indicator {
     display: inline-flex;
+  }
+
+  /* ── Glassmorphism ─────────────────────────────── */
+
+  .glass-card {
+    backdrop-filter: blur(12px);
+    background: color-mix(in oklab, var(--color-base-100) 70%, transparent);
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 8%, transparent);
+  }
+
+  .glass-header {
+    backdrop-filter: blur(16px) saturate(1.2);
+    background: color-mix(in oklab, var(--color-base-100) 80%, transparent);
+  }
+
+  /* ── Gradient backgrounds ──────────────────────── */
+
+  .gradient-card-primary {
+    background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 10%, var(--color-base-100)) 0%, var(--color-base-100) 100%);
+  }
+
+  .gradient-card-secondary {
+    background: linear-gradient(135deg, color-mix(in oklab, var(--color-secondary) 10%, var(--color-base-100)) 0%, var(--color-base-100) 100%);
+  }
+
+  .gradient-card-accent {
+    background: linear-gradient(135deg, color-mix(in oklab, var(--color-accent) 10%, var(--color-base-100)) 0%, var(--color-base-100) 100%);
+  }
+
+  /* ── Hover effects ─────────────────────────────── */
+
+  .hover-lift {
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px -8px color-mix(in oklab, var(--color-base-content) 12%, transparent);
+  }
+
+  .card-glow-primary {
+    transition: box-shadow 0.3s ease;
+  }
+
+  .card-glow-primary:hover {
+    box-shadow: 0 0 20px -4px color-mix(in oklab, var(--color-primary) 25%, transparent);
+  }
+
+  .card-glow-secondary {
+    transition: box-shadow 0.3s ease;
+  }
+
+  .card-glow-secondary:hover {
+    box-shadow: 0 0 20px -4px color-mix(in oklab, var(--color-secondary) 25%, transparent);
+  }
+
+  /* ── Micro-animations ──────────────────────────── */
+
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slide-in-left {
+    from {
+      opacity: 0;
+      transform: translateX(-16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: 0 0 8px 0 color-mix(in oklab, var(--color-primary) 20%, transparent);
+    }
+    50% {
+      box-shadow: 0 0 20px 4px color-mix(in oklab, var(--color-primary) 35%, transparent);
+    }
+  }
+
+  .animate-fade-in-up {
+    animation: fade-in-up 0.4s ease-out both;
+  }
+
+  .animate-slide-in-left {
+    animation: slide-in-left 0.35s ease-out both;
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  /* ── Staggered children ────────────────────────── */
+
+  .stagger-children > * {
+    animation: fade-in-up 0.4s ease-out both;
+  }
+
+  .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-children > *:nth-child(2) { animation-delay: 60ms; }
+  .stagger-children > *:nth-child(3) { animation-delay: 120ms; }
+  .stagger-children > *:nth-child(4) { animation-delay: 180ms; }
+  .stagger-children > *:nth-child(5) { animation-delay: 240ms; }
+  .stagger-children > *:nth-child(6) { animation-delay: 300ms; }
+
+  /* ── Accessibility: reduced motion ─────────────── */
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-fade-in-up,
+    .animate-slide-in-left,
+    .animate-pulse-glow,
+    .stagger-children > * {
+      animation: none;
+    }
+
+    .hover-lift:hover {
+      transform: none;
+    }
   }
 }

@@ -1,4 +1,5 @@
 import { appConfig, type LocaleCode } from "../config/environment.ts";
+import { assetRelativePaths, joinUrlPath } from "../shared/constants/assets.ts";
 import { appRoutes, withLocaleQuery, withQueryParameters } from "../shared/constants/routes.ts";
 import type { Messages } from "../shared/i18n/messages.ts";
 
@@ -123,6 +124,8 @@ export const renderLayout = (input: LayoutInput): string => {
       ${body}
     </main>
     ${renderFooter(messages, locale)}
+    <div id="toast-container" class="toast toast-end toast-bottom z-50" aria-live="polite"></div>
+    <script src="${escapeHtml(joinUrlPath(appConfig.staticAssets.publicPrefix, `${assetRelativePaths.htmxExtensionsOutputDirectory}/server-toast.js`))}" defer></script>
     ${pageScripts}
   </body>
 </html>`;
@@ -180,7 +183,7 @@ const renderNavigation = (
       : messages.navigation.switchToChinese;
   const localeSwitchHref = withLocaleQuery(currentPathWithQuery, languageSwitch);
 
-  return `<header class="sticky top-0 z-30 border-b border-base-300 bg-base-100/90 backdrop-blur" role="banner">
+  return `<header class="sticky top-0 z-30 border-b border-base-300/50 glass-header" role="banner">
     <div class="navbar mx-auto w-full ${escapeHtml(appConfig.ui.maxContentWidthClass)} px-4 lg:px-8">
       <div class="navbar-start">
         <details class="dropdown">
@@ -192,21 +195,66 @@ const renderNavigation = (
             </svg>
           </summary>
           <ul
-            class="menu menu-sm dropdown-content z-20 mt-3 w-56 rounded-box border border-base-300 bg-base-100 p-2 shadow"
+            class="menu menu-sm dropdown-content z-20 mt-3 w-56 rounded-box border border-base-300 bg-base-100 p-2 shadow-lg"
             aria-label="${escapeHtml(messages.common.mobileNavigation)}"
           >
             ${mobileItems}
           </ul>
         </details>
-        <a href="${withLocaleQuery(appRoutes.home, locale)}" class="btn btn-ghost text-lg font-semibold" aria-label="${escapeHtml(messages.metadata.appName)}">
+        <a href="${withLocaleQuery(appRoutes.home, locale)}" class="btn btn-ghost gap-1 text-lg font-semibold" aria-label="${escapeHtml(messages.metadata.appName)}">
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
           ${escapeHtml(messages.metadata.appName)}
         </a>
       </div>
       <nav aria-label="${escapeHtml(messages.common.primaryNavigation)}" class="navbar-center hidden lg:flex">
-        <ul class="menu menu-horizontal gap-2 rounded-box bg-base-200/80 px-2 py-1">${desktopItems}</ul>
+        <ul class="menu menu-horizontal gap-1 rounded-box bg-base-200/60 px-2 py-1">${desktopItems}</ul>
       </nav>
-      <div class="navbar-end">
-        <a href="${escapeHtml(localeSwitchHref)}" class="btn btn-outline btn-sm" aria-label="${escapeHtml(
+      <div class="navbar-end gap-2">
+        <div class="dropdown dropdown-end">
+          <div tabindex="0" role="button" class="btn btn-ghost btn-sm gap-1" aria-label="${escapeHtml(
+            messages.common.themeLabel,
+          )}">
+            <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+            </svg>
+            <span class="hidden sm:inline text-xs">${escapeHtml(messages.common.themeLabel)}</span>
+          </div>
+          <ul tabindex="-1" class="dropdown-content z-30 w-48 rounded-box border border-base-300 glass-card p-2 shadow-xl">
+            <li>
+              <input
+                type="radio"
+                name="theme-dropdown"
+                class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
+                aria-label="${escapeHtml(messages.common.themeSilk)}"
+                value="silk" />
+            </li>
+            <li>
+              <input
+                type="radio"
+                name="theme-dropdown"
+                class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
+                aria-label="${escapeHtml(messages.common.themeAutumn)}"
+                value="autumn" />
+            </li>
+            <li>
+              <input
+                type="radio"
+                name="theme-dropdown"
+                class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
+                aria-label="${escapeHtml(messages.common.themeLotfk)}"
+                value="lotfk" />
+            </li>
+            <li>
+              <input
+                type="radio"
+                name="theme-dropdown"
+                class="theme-controller w-full btn btn-sm btn-block btn-ghost justify-start"
+                aria-label="${escapeHtml(messages.common.themeLotfkLight)}"
+                value="lotfk-light" />
+            </li>
+          </ul>
+        </div>
+        <a href="${escapeHtml(localeSwitchHref)}" class="btn btn-outline btn-sm transition-all" aria-label="${escapeHtml(
           localeSwitchAriaLabel,
         )}">${escapeHtml(localeSwitchButtonText)}</a>
       </div>
@@ -215,18 +263,14 @@ const renderNavigation = (
 };
 
 const renderFooter = (messages: Messages, locale: LocaleCode): string => {
-  const secondaryLinks = [
+  const resourceLinks = [
     {
-      label: messages.navigation.pitchDeck,
-      href: withLocaleQuery(appRoutes.pitchDeck, locale),
+      label: messages.navigation.builder,
+      href: withLocaleQuery(appRoutes.builder, locale),
     },
     {
-      label: messages.navigation.narrativeBible,
-      href: withLocaleQuery(appRoutes.narrativeBible, locale),
-    },
-    {
-      label: messages.navigation.developmentPlan,
-      href: withLocaleQuery(appRoutes.developmentPlan, locale),
+      label: messages.navigation.game,
+      href: withLocaleQuery(appRoutes.game, locale),
     },
     {
       label: messages.pages.home.docsCta,
@@ -235,19 +279,21 @@ const renderFooter = (messages: Messages, locale: LocaleCode): string => {
   ]
     .map(
       (item) =>
-        `<a class="link link-hover text-sm" href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a>`,
+        `<a class="link link-hover" href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a>`,
     )
     .join("");
 
-  return `<footer class="border-t border-base-300 bg-base-200/70">
-    <div class="mx-auto flex w-full ${escapeHtml(appConfig.ui.maxContentWidthClass)} flex-col gap-4 px-4 py-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-      <div>
-        <p class="text-lg font-semibold">${escapeHtml(messages.footer.title)}</p>
-        <p class="text-sm opacity-80">${escapeHtml(messages.footer.copy)}</p>
+  return `<footer class="footer sm:footer-horizontal bg-neutral text-neutral-content border-t border-base-300/30 p-6 lg:p-10">
+    <nav class="mx-auto w-full ${escapeHtml(appConfig.ui.maxContentWidthClass)}">
+      <div class="grid w-full gap-8 sm:grid-cols-[1fr_auto]">
+        <aside>
+          <p class="footer-title opacity-100">${escapeHtml(messages.footer.title)}</p>
+          <p class="text-sm opacity-70">${escapeHtml(messages.footer.copy)}</p>
+        </aside>
+        <div class="flex flex-wrap items-start gap-x-6 gap-y-2 text-sm">
+          ${resourceLinks}
+        </div>
       </div>
-      <div class="flex flex-wrap items-center gap-4">
-        ${secondaryLinks}
-      </div>
-    </div>
+    </nav>
   </footer>`;
 };

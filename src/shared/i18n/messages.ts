@@ -10,9 +10,6 @@ export interface Messages {
   };
   readonly navigation: {
     readonly home: string;
-    readonly pitchDeck: string;
-    readonly narrativeBible: string;
-    readonly developmentPlan: string;
     readonly game: string;
     readonly builder: string;
     readonly localeLabel: string;
@@ -30,6 +27,11 @@ export interface Messages {
     readonly loading: string;
     readonly retry: string;
     readonly backToTop: string;
+    readonly themeLabel: string;
+    readonly themeSilk: string;
+    readonly themeAutumn: string;
+    readonly themeLotfk: string;
+    readonly themeLotfkLight: string;
   };
   readonly pages: {
     readonly home: {
@@ -62,28 +64,13 @@ export interface Messages {
       readonly supportingDocsDescription: string;
       readonly docsCta: string;
     };
-    readonly pitchDeck: {
-      readonly title: string;
-      readonly subtitle: string;
-      readonly sections: readonly string[];
-    };
-    readonly narrativeBible: {
-      readonly title: string;
-      readonly subtitle: string;
-      readonly sections: readonly string[];
-    };
-    readonly developmentPlan: {
-      readonly title: string;
-      readonly subtitle: string;
-      readonly sections: readonly string[];
-    };
   };
-  readonly oracle: {
+  readonly aiPlayground: {
     readonly cardTitle: string;
     readonly cardDescription: string;
-    readonly questionLabel: string;
-    readonly questionPlaceholder: string;
-    readonly stateModeLabel: string;
+    readonly promptLabel: string;
+    readonly promptPlaceholder: string;
+    readonly modeLabel: string;
     readonly submit: string;
     readonly loadingTitle: string;
     readonly loadingDescription: string;
@@ -104,8 +91,6 @@ export interface Messages {
     readonly unauthorizedDescription: string;
     readonly networkErrorDescription: string;
     readonly validationTooLong: string;
-    readonly fortunePrefixes: readonly string[];
-    readonly fortuneBodies: readonly string[];
   };
   readonly footer: {
     readonly title: string;
@@ -238,6 +223,7 @@ export interface Messages {
     readonly mechanics: string;
     readonly automation: string;
     readonly ai: string;
+    readonly animations: string;
     readonly addScene: string;
     readonly editScene: string;
     readonly addNpc: string;
@@ -580,16 +566,13 @@ export interface Messages {
 export const messagesByLocale: Record<LocaleCode, Messages> = {
   "en-US": {
     metadata: {
-      appName: "Leaves of the Fallen Kingdom",
-      appSubtitle: "Tea-first strategy worldbuilding toolkit",
+      appName: "Game Forge",
+      appSubtitle: "AI-powered video game creator",
     },
     navigation: {
-      home: "Start",
-      pitchDeck: "Pitch Deck",
-      narrativeBible: "Narrative Bible",
-      developmentPlan: "Dev Plan",
-      game: "Game Demo",
-      builder: "Builder",
+      home: "Home",
+      game: "Play",
+      builder: "Create",
       localeLabel: "Language",
       localeNameEnglish: "English",
       localeNameChinese: "中文",
@@ -605,129 +588,97 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       loading: "Loading",
       retry: "Retry",
       backToTop: "Back to top",
+      themeLabel: "Theme",
+      themeSilk: "Silk",
+      themeAutumn: "Autumn",
+      themeLotfk: "Dark",
+      themeLotfkLight: "Light",
     },
     pages: {
       home: {
-        title: "Builder / Player Workspace",
-        heroTitle: "Author, publish, and play from one server-rendered workspace",
+        title: "AI Game Creator",
+        heroTitle: "Build your world with AI",
         heroDescription:
-          "The primary loop is now builder-first: shape the world, publish an immutable release, then validate the live player experience against that release.",
-        builderCardTitle: "Author the world",
+          "Create scenes, characters, and stories — powered by local AI models. Design, publish, and play your game from a single creative workspace.",
+        builderCardTitle: "Build Worlds",
         builderCardDescription:
-          "Edit scenes, NPCs, dialogue, and AI-assisted changes from one project-aware builder shell.",
-        builderCardCta: "Open builder",
-        playerCardTitle: "Play the release",
+          "Design environments, place objects, and craft the spaces your players will explore. AI helps generate terrain, lighting, and atmosphere.",
+        builderCardCta: "Start creating",
+        playerCardTitle: "Play Your Game",
         playerCardDescription:
-          "Launch the published build, validate onboarding, and verify that runtime behavior matches the authored release.",
-        playerCardCta: "Open player",
-        loopTitle: "Primary loop",
+          "Launch your published game and experience it as a player. Test gameplay, refine mechanics, and share with others.",
+        playerCardCta: "Play now",
+        loopTitle: "Creation flow",
         loopDescription:
-          "Everything in the product now points at the same release cycle instead of separate pitch and operator surfaces.",
+          "From first idea to playable game — AI assists at every step of the creative process.",
         loopSteps: [
-          "Author in builder",
-          "Review AI changes",
-          "Publish release",
-          "Play published build",
+          "Design your world",
+          "Create with AI",
+          "Test and refine",
+          "Publish and play",
         ],
-        statusTitle: "Current workspace status",
-        architectureTitle: "Single-owner architecture",
+        statusTitle: "AI models",
+        architectureTitle: "Build Worlds",
         architectureDescription:
-          "Config, logging, routing, UI rendering, and domain behavior are now isolated by concern with clear contracts at each boundary.",
-        reliabilityTitle: "Reliability controls",
+          "Design rich environments with scenes, terrain, and interactive objects. AI generates descriptions, layouts, and atmospheric details.",
+        reliabilityTitle: "Create Characters",
         reliabilityDescription:
-          "Typed config, centralized error envelopes, request correlation IDs, and contract tests remove guesswork and improve incident traceability.",
-        progressiveEnhancementTitle: "Progressive enhancement",
+          "Bring NPCs to life with unique personalities, dialogue trees, and AI-generated conversations that respond to player choices.",
+        progressiveEnhancementTitle: "AI Assistant",
         progressiveEnhancementDescription:
-          "Forms and navigation work without JavaScript, while HTMX upgrades responses for faster interaction loops when available.",
-        builderOptionsTitle: "Builder lanes",
+          "Local AI models generate dialogue, critique your designs, and automate repetitive tasks — all running on your machine.",
+        builderOptionsTitle: "Creative tools",
         builderOptionsDescription:
-          "Author scenes, ship plugin packs, validate the browser runtime, and exercise local AI features from one contract-driven workflow.",
-        userFlowTitle: "Builder flow",
+          "All the tools you need to create, from scene design to character dialogue to AI-powered generation.",
+        userFlowTitle: "Your creative journey",
         userFlowSteps: [
-          "Choose the lane",
-          "Compose with AI",
-          "Author assets",
-          "Validate contracts",
-          "Publish the project",
+          "Choose a canvas",
+          "Create with AI",
+          "Design assets",
+          "Test your game",
+          "Publish and share",
         ],
-        apiSurfaceTitle: "Platform surface",
+        apiSurfaceTitle: "AI Generation",
         apiSurfaceDescription:
-          "Operational endpoints, builder mutations, and local AI runtime details are exposed through documented APIs instead of hidden implementation paths.",
-        supportingDocsTitle: "Supporting documents",
+          "Leverage local AI models for dialogue, scene descriptions, character backstories, and automated game design assistance.",
+        supportingDocsTitle: "Resources",
         supportingDocsDescription:
-          "Pitch, narrative, and delivery documents remain available as supporting material, but they are no longer the main product entrypoint.",
-        docsCta: "Open API docs",
-      },
-      pitchDeck: {
-        title: "Pitch Deck",
-        subtitle: "Investor-facing summary for market, product, and moat.",
-        sections: [
-          "Market thesis: tea strategy RPG with long-session retention mechanics.",
-          "Product loop: territory pressure, trade routes, faction trust, and elemental stance combat.",
-          "Moat: world bible + scenario tooling + modular plugin architecture.",
-          "Execution: incremental milestones, contract tests, and release gates.",
-        ],
-      },
-      narrativeBible: {
-        title: "Narrative Bible",
-        subtitle: "Story, factions, and timeline constraints for deterministic content production.",
-        sections: [
-          "Canon contract: every chapter maps to a route-state and faction-state transition.",
-          "Character voice matrix: each role owns intent, conflict posture, and dialogue constraints.",
-          "Continuity policy: no event can invalidate trade-route geography without migration notes.",
-          "Localization parity: all user-facing narrative text is locale-backed before release.",
-        ],
-      },
-      developmentPlan: {
-        title: "Development Plan",
-        subtitle: "Operational roadmap for performance, quality, and release confidence.",
-        sections: [
-          "Phase 1: baseline SSR routes, plugin registration, and static asset pipeline.",
-          "Phase 2: API contracts, typed error envelope, and end-to-end tests.",
-          "Phase 3: observability hardening, performance budgets, and preflight automation.",
-          "Phase 4: content cadence, localization rollout, and release governance.",
-        ],
+          "Explore the API documentation to discover advanced features and integrations for your game projects.",
+        docsCta: "API reference",
       },
     },
-    oracle: {
-      cardTitle: "Tea Oracle",
+    aiPlayground: {
+      cardTitle: "AI Assistant",
       cardDescription:
-        "Ask the oracle and receive a deterministic response generated from your question context.",
-      questionLabel: "Question",
-      questionPlaceholder: "Ask about alliances, routes, corruption, or harvest outcomes",
-      stateModeLabel: "State mode",
-      submit: "Consult",
-      loadingTitle: "Oracle in progress",
-      loadingDescription: "The leaves are being read. Your response is loading.",
+        "Generate dialogue, scene descriptions, character backstories, and more. Your local AI creates content for your game in seconds.",
+      promptLabel: "What would you like to create?",
+      promptPlaceholder: "Describe a scene, generate character dialogue, or brainstorm game mechanics",
+      modeLabel: "Generation mode",
+      submit: "Generate",
+      loadingTitle: "Creating",
+      loadingDescription: "Your AI assistant is generating content.",
       modeAuto: "Auto",
       modeForceEmpty: "Force empty",
       modeForceRetryableError: "Force retryable error",
       modeForceFatalError: "Force non-retryable error",
       modeForceUnauthorized: "Force unauthorized",
-      idleHint: "Submit a question to start the oracle flow.",
-      emptyTitle: "No question provided",
-      emptyDescription: "Enter a specific question so the oracle can resolve an outcome.",
-      successTitle: "Oracle reading",
-      retryableErrorTitle: "Temporary oracle disruption",
-      retryableErrorDescription: "The oracle can be retried safely.",
-      nonRetryableErrorTitle: "Oracle request rejected",
-      nonRetryableErrorDescription: "The request does not meet policy constraints.",
-      unauthorizedTitle: "Session required",
-      unauthorizedDescription: "Sign in before requesting protected oracle responses.",
-      networkErrorDescription: "The oracle could not be reached. Retry when the network recovers.",
-      validationTooLong: "Question exceeds maximum allowed length.",
-      fortunePrefixes: ["Steam reports", "Leaf pattern indicates", "Trade ledger predicts"],
-      fortuneBodies: [
-        "a stable alliance if you reinforce river checkpoints.",
-        "a profitable route once mountain caravans are escorted.",
-        "a corruption spike unless your faction trust is repaired.",
-        "a strategic opening if tea reserves are redistributed quickly.",
-      ],
+      idleHint: "Describe what you want to create and the AI will generate it for you.",
+      emptyTitle: "Nothing to generate",
+      emptyDescription: "Tell the AI what you want to create.",
+      successTitle: "Generated content",
+      retryableErrorTitle: "AI temporarily busy",
+      retryableErrorDescription: "The AI model is busy. Try again in a moment.",
+      nonRetryableErrorTitle: "Generation failed",
+      nonRetryableErrorDescription: "This request could not be processed. Try rephrasing your prompt.",
+      unauthorizedTitle: "Sign in required",
+      unauthorizedDescription: "Please sign in to use the AI assistant.",
+      networkErrorDescription: "Could not reach the AI model. Check your connection and try again.",
+      validationTooLong: "Your prompt is too long. Try shortening it.",
     },
     footer: {
-      title: "Built for deterministic delivery",
-      copy: "SSR-first, typed contracts, and progressive enhancement by default.",
-      ctaLabel: "Review architecture details",
+      title: "Game Forge",
+      copy: "Create video games with AI-powered tools.",
+      ctaLabel: "API reference",
     },
     api: {
       healthOk: "Service is healthy",
@@ -870,6 +821,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       mechanics: "Mechanics",
       automation: "Automation",
       ai: "AI Tools",
+      animations: "Animations",
       addScene: "Add Scene",
       editScene: "Edit Scene",
       addNpc: "Add NPC",
@@ -1246,16 +1198,13 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
   },
   "zh-CN": {
     metadata: {
-      appName: "落叶王朝",
-      appSubtitle: "以茶为核心的策略世界观工具集",
+      appName: "游戏锻造局",
+      appSubtitle: "AI 驱动的电子游戏创作工具",
     },
     navigation: {
-      home: "入口",
-      pitchDeck: "路演材料",
-      narrativeBible: "叙事圣经",
-      developmentPlan: "开发计划",
-      game: "游戏演示",
-      builder: "构建器",
+      home: "首页",
+      game: "游玩",
+      builder: "创作",
       localeLabel: "语言",
       localeNameEnglish: "English",
       localeNameChinese: "中文",
@@ -1271,114 +1220,84 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       loading: "加载中",
       retry: "重试",
       backToTop: "返回顶部",
+      themeLabel: "主题",
+      themeSilk: "丝绸",
+      themeAutumn: "秋色",
+      themeLotfk: "深色",
+      themeLotfkLight: "浅色",
     },
     pages: {
       home: {
-        title: "构建 / 游玩工作区",
-        heroTitle: "在同一个服务端渲染工作区中完成创作、发布与游玩",
+        title: "AI 游戏创作器",
+        heroTitle: "用 AI 构建你的世界",
         heroDescription:
-          "主循环现在以构建器为中心：先创作世界，发布不可变版本，再回到玩家视角验证真实运行效果。",
-        builderCardTitle: "创作世界",
-        builderCardDescription: "在具备项目上下文的构建器中编辑场景、NPC、对话与 AI 建议。",
-        builderCardCta: "打开构建器",
-        playerCardTitle: "游玩发布版本",
-        playerCardDescription: "启动已发布版本，从玩家视角验证引导、节奏与运行时表现。",
-        playerCardCta: "打开玩家视图",
-        loopTitle: "主循环",
-        loopDescription: "产品入口聚焦于同一条发布路径，而不再分散到路演与文档页面。",
-        loopSteps: ["在构建器中创作", "审查 AI 修改", "发布版本", "游玩已发布内容"],
-        statusTitle: "当前工作区状态",
-        architectureTitle: "单一职责架构",
+          "创建场景、角色和故事 —— 由本地 AI 模型驱动。在同一个创意工作空间中设计、发布并游玩你的游戏。",
+        builderCardTitle: "构建世界",
+        builderCardDescription: "设计环境、放置物体，打造玩家将要探索的空间。AI 帮助生成地形、光照和氛围。",
+        builderCardCta: "开始创作",
+        playerCardTitle: "游玩你的游戏",
+        playerCardDescription:
+          "启动已发布的游戏，以玩家视角体验。测试玩法、调整机制，并与他人分享。",
+        playerCardCta: "立即游玩",
+        loopTitle: "创作流程",
+        loopDescription: "从第一个想法到可玩的游戏 —— AI 在创意过程的每一步都提供协助。",
+        loopSteps: ["设计你的世界", "用 AI 创作", "测试与完善", "发布与游玩"],
+        statusTitle: "AI 模型",
+        architectureTitle: "构建世界",
         architectureDescription:
-          "配置、日志、路由、视图渲染与领域逻辑各自独立，边界通过类型契约约束。",
-        reliabilityTitle: "可靠性控制",
+          "设计丰富的环境，包含场景、地形和交互物体。AI 生成描述、布局和氛围细节。",
+        reliabilityTitle: "创建角色",
         reliabilityDescription:
-          "类型化配置、统一错误信封、请求关联 ID 与契约测试共同减少不确定性。",
-        progressiveEnhancementTitle: "渐进增强",
+          "赋予 NPC 独特的个性、对话树和 AI 生成的对话，让他们能回应玩家的选择。",
+        progressiveEnhancementTitle: "AI 助手",
         progressiveEnhancementDescription:
-          "在无 JavaScript 场景下功能可用；有 HTMX 时自动升级为更快的交互回路。",
-        builderOptionsTitle: "构建通道",
+          "本地 AI 模型生成对话、审阅你的设计并自动化重复性任务 —— 全部在你的机器上运行。",
+        builderOptionsTitle: "创意工具",
         builderOptionsDescription:
-          "在同一套契约驱动流程中完成场景创作、插件输出、浏览器运行时验证与本地 AI 能力测试。",
-        userFlowTitle: "构建流程",
-        userFlowSteps: ["选择通道", "使用 AI 编排", "创作资源", "校验契约", "发布项目"],
-        apiSurfaceTitle: "平台接口面",
+          "从场景设计到角色对话再到 AI 生成，创作所需的一切工具。",
+        userFlowTitle: "你的创意之旅",
+        userFlowSteps: ["选择画布", "用 AI 创作", "设计资源", "测试游戏", "发布与分享"],
+        apiSurfaceTitle: "AI 生成",
         apiSurfaceDescription:
-          "运维端点、构建器写接口与本地 AI 运行时细节都通过文档化 API 暴露，而不是隐藏在实现内部。",
-        supportingDocsTitle: "补充文档入口",
+          "利用本地 AI 模型生成对话、场景描述、角色背景故事以及自动化游戏设计辅助。",
+        supportingDocsTitle: "资源",
         supportingDocsDescription:
-          "路演材料、叙事文档与开发计划仍可查看，但它们只作为补充材料，不再作为产品主入口。",
-        docsCta: "打开 API 文档",
-      },
-      pitchDeck: {
-        title: "路演材料",
-        subtitle: "面向投资人的市场、产品与护城河摘要。",
-        sections: [
-          "市场假设：以茶文化策略 RPG 切入长时留存用户。",
-          "产品循环：领地压力、商路博弈、势力信任与五行战斗。",
-          "护城河：世界观圣经 + 场景化工具 + 模块化插件体系。",
-          "执行方式：里程碑递进、契约测试、发布门禁。",
-        ],
-      },
-      narrativeBible: {
-        title: "叙事圣经",
-        subtitle: "用于内容生产的角色、势力与时间线约束。",
-        sections: [
-          "正典契约：每个章节必须映射到路由状态与势力状态变迁。",
-          "角色语气矩阵：每个角色定义明确意图、冲突姿态与台词约束。",
-          "连续性策略：若修改商路地理必须提供迁移说明。",
-          "本地化一致性：所有用户文案发布前必须具备多语言映射。",
-        ],
-      },
-      developmentPlan: {
-        title: "开发计划",
-        subtitle: "面向性能、质量与发布稳定性的执行路线。",
-        sections: [
-          "阶段一：SSR 路由、插件注册、静态资源管线。",
-          "阶段二：API 契约、错误信封、端到端测试。",
-          "阶段三：可观测性加固、性能预算、预检自动化。",
-          "阶段四：内容迭代节奏、本地化扩展、发布治理。",
-        ],
+          "探索 API 文档，发现更多高级功能和游戏项目集成。",
+        docsCta: "API 参考",
       },
     },
-    oracle: {
-      cardTitle: "茶占师",
-      cardDescription: "输入问题后，系统会根据上下文返回确定性的占卜结果。",
-      questionLabel: "问题",
-      questionPlaceholder: "可询问结盟、商路、腐化或收成趋势",
-      stateModeLabel: "状态模式",
-      submit: "占卜",
-      loadingTitle: "占卜进行中",
-      loadingDescription: "茶叶纹路正在解析，请稍候。",
+    aiPlayground: {
+      cardTitle: "AI 助手",
+      cardDescription:
+        "生成对话、场景描述、角色背景故事等内容。本地 AI 在数秒内为你的游戏创建内容。",
+      promptLabel: "你想创建什么？",
+      promptPlaceholder: "描述一个场景、生成角色对话，或头脑风暴游戏机制",
+      modeLabel: "生成模式",
+      submit: "生成",
+      loadingTitle: "正在创建",
+      loadingDescription: "AI 助手正在生成内容。",
       modeAuto: "自动",
       modeForceEmpty: "强制空状态",
       modeForceRetryableError: "强制可重试错误",
       modeForceFatalError: "强制不可重试错误",
       modeForceUnauthorized: "强制未授权",
-      idleHint: "提交问题后开始占卜流程。",
-      emptyTitle: "未提供问题",
-      emptyDescription: "请输入明确的问题以便生成结果。",
-      successTitle: "占卜结果",
-      retryableErrorTitle: "占卜服务暂时不可用",
-      retryableErrorDescription: "该错误可安全重试。",
-      nonRetryableErrorTitle: "占卜请求被拒绝",
-      nonRetryableErrorDescription: "当前请求不符合策略约束。",
-      unauthorizedTitle: "需要会话权限",
-      unauthorizedDescription: "请先登录后再请求受保护的占卜结果。",
-      networkErrorDescription: "当前无法连接茶谕服务，请在网络恢复后重试。",
-      validationTooLong: "问题超过允许的最大长度。",
-      fortunePrefixes: ["茶雾显示", "叶纹提示", "账簿推演"],
-      fortuneBodies: [
-        "若加强河道关隘，联盟将趋于稳定。",
-        "护送山道商队后，贸易线路将明显增益。",
-        "若不修复势力信任，腐化将持续攀升。",
-        "若及时再分配茶储备，将出现战术窗口。",
-      ],
+      idleHint: "描述你想创建的内容，AI 会为你生成。",
+      emptyTitle: "无内容可生成",
+      emptyDescription: "告诉 AI 你想创建什么。",
+      successTitle: "生成内容",
+      retryableErrorTitle: "AI 暂时繁忙",
+      retryableErrorDescription: "AI 模型正忙，请稍后重试。",
+      nonRetryableErrorTitle: "生成失败",
+      nonRetryableErrorDescription: "此请求无法处理，请尝试重新描述你的提示。",
+      unauthorizedTitle: "需要登录",
+      unauthorizedDescription: "请先登录以使用 AI 助手。",
+      networkErrorDescription: "无法连接 AI 模型，请检查连接后重试。",
+      validationTooLong: "提示文本过长，请缩短内容。",
     },
     footer: {
-      title: "为确定性交付而构建",
-      copy: "默认 SSR、类型契约、渐进增强。",
-      ctaLabel: "查看架构细节",
+      title: "游戏锻造局",
+      copy: "用 AI 工具创建电子游戏。",
+      ctaLabel: "API 参考",
     },
     api: {
       healthOk: "服务状态正常",
@@ -1507,6 +1426,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       mechanics: "机制",
       automation: "自动化",
       ai: "AI 工具",
+      animations: "动画",
       addScene: "添加场景",
       editScene: "编辑场景",
       addNpc: "添加 NPC",

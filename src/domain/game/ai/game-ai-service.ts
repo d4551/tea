@@ -77,7 +77,7 @@ const buildNpcSystemPrompt = (npcId: string, locale: GameLocale, sceneId: string
       : "Respond entirely in English.";
 
   return [
-    `You are ${npcLabel}, a character in the game "Leaves of the Fallen Kingdom".`,
+    `You are ${npcLabel}, a character in the game world.`,
     `You are currently in the scene: ${sceneTitle}.`,
     "The game is set in ancient China along the Yangtze River during the tea-trade era.",
     "You are deeply knowledgeable about tea, the five elements (Wu Xing), and river trade routes.",
@@ -101,7 +101,7 @@ const buildSceneSystemPrompt = (sceneId: string, locale: GameLocale): string => 
       : "Respond entirely in English.";
 
   return [
-    "You are a narrator for 'Leaves of the Fallen Kingdom', a game set in ancient China.",
+    "You are a narrator for a role-playing game set in a richly detailed world.",
     `Describe the scene "${sceneId}" in vivid, atmospheric detail.`,
     "Focus on sensory details: the smell of tea, the sound of the river, the colours of silk.",
     "Keep the description to 2-4 sentences. Be poetic but concise.",
@@ -116,7 +116,7 @@ const buildSceneSystemPrompt = (sceneId: string, locale: GameLocale): string => 
  */
 const buildAssistSystemPrompt = (): string => {
   return [
-    "You are a game design assistant for 'Leaves of the Fallen Kingdom'.",
+    "You are a game design assistant for Game Forge.",
     "The game uses a Bun/Elysia/HTMX/PixiJS stack with server-driven AI.",
     "Help the game creator with design decisions, balancing, narrative, and implementation.",
     "Be specific, actionable, and reference the game's existing lore and mechanics.",

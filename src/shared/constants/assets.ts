@@ -19,7 +19,11 @@ export const assetRelativePaths = {
 /**
  * Canonical HTMX extension entrypoints bundled into the public asset tree.
  */
-export const htmxExtensionEntryFiles = ["oracle-indicator.ts", "focus-panel.ts"] as const;
+export const htmxExtensionEntryFiles = [
+  "oracle-indicator.ts",
+  "focus-panel.ts",
+  "server-toast.ts",
+] as const;
 
 /**
  * Minimal config shape required to derive static mount definitions.

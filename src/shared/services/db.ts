@@ -2112,6 +2112,21 @@ const withBuilderRowExtensions = (
       },
 
       /**
+       * BuilderProjectSpriteAtlas persistence helpers.
+       */
+      builderProjectSpriteAtlas: {
+        /** Lists draft sprite-atlas rows for one project. */
+        async listProjectRows(
+          projectId: string,
+        ): Promise<readonly BuilderProjectSpriteAtlasRow[]> {
+          return base.builderProjectSpriteAtlas.findMany({
+            where: { projectId },
+            select: builderProjectSpriteAtlasRowSelect,
+          });
+        },
+      },
+
+      /**
        * BuilderProjectDialogueGraph persistence helpers.
        */
       builderProjectDialogueGraph: {

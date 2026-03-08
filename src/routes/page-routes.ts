@@ -6,19 +6,14 @@ import { defaultOracleMode } from "../shared/constants/oracle.ts";
 import { appRoutes, resolveRequestPathWithQuery } from "../shared/constants/routes.ts";
 import type { LayoutContext } from "../views/layout.ts";
 import { type OraclePanelState, renderOraclePanel } from "../views/oracle.ts";
-import {
-  renderDevelopmentPlanPage,
-  renderHomePage,
-  renderNarrativeBiblePage,
-  renderPitchDeckPage,
-} from "../views/pages.ts";
+import { renderHomePage } from "../views/pages.ts";
 import { parseOracleMode } from "./oracle-input.ts";
 
 const createRouteLayoutContext = (
   request: Request,
   locale: LayoutContext["locale"],
   messages: LayoutContext["messages"],
-  activeRoute: "home" | "pitchDeck" | "narrativeBible" | "developmentPlan",
+  activeRoute: "home",
 ): LayoutContext => ({
   locale,
   messages,
@@ -32,12 +27,14 @@ const oracleQuerySchema = t.Object({
   mode: t.Optional(t.String()),
 });
 
-const localeQuerySchema = t.Object({
-  lang: t.Optional(t.String()),
-});
-
-const createOraclePageRoutes = (oracleService: OracleService) =>
-  new Elysia({ name: "page-oracle-routes" })
+/**
+ * Creates server-rendered page routes.
+ *
+ * @param oracleService Oracle domain service.
+ * @returns Elysia route group.
+ */
+export const createPageRoutes = (oracleService: OracleService) =>
+  new Elysia({ name: "page-routes" })
     .use(i18nContextPlugin)
     .use(authSessionContextPlugin)
     .guard(authSessionGuard, (app) =>
@@ -82,7 +79,7 @@ const createOraclePageRoutes = (oracleService: OracleService) =>
           },
         )
         .get(
-          appRoutes.oraclePartial,
+          appRoutes.aiPlaygroundPartial,
           async ({ query, locale, messages, authHasSession }) => {
             const mode = parseOracleMode(query.mode);
             const question = query.question ?? "";
@@ -108,50 +105,3 @@ const createOraclePageRoutes = (oracleService: OracleService) =>
         ),
     );
 
-const createStaticPageRoutes = () =>
-  new Elysia({ name: "page-static-routes" })
-    .use(i18nContextPlugin)
-    .get(
-      appRoutes.pitchDeck,
-      ({ request, locale, messages }) => {
-        return renderPitchDeckPage({
-          layout: createRouteLayoutContext(request, locale, messages, "pitchDeck"),
-        });
-      },
-      {
-        query: localeQuerySchema,
-      },
-    )
-    .get(
-      appRoutes.narrativeBible,
-      ({ request, locale, messages }) => {
-        return renderNarrativeBiblePage({
-          layout: createRouteLayoutContext(request, locale, messages, "narrativeBible"),
-        });
-      },
-      {
-        query: localeQuerySchema,
-      },
-    )
-    .get(
-      appRoutes.developmentPlan,
-      ({ request, locale, messages }) => {
-        return renderDevelopmentPlanPage({
-          layout: createRouteLayoutContext(request, locale, messages, "developmentPlan"),
-        });
-      },
-      {
-        query: localeQuerySchema,
-      },
-    );
-
-/**
- * Creates server-rendered page routes.
- *
- * @param oracleService Oracle domain service.
- * @returns Elysia route group.
- */
-export const createPageRoutes = (oracleService: OracleService) =>
-  new Elysia({ name: "page-routes" })
-    .use(createOraclePageRoutes(oracleService))
-    .use(createStaticPageRoutes());

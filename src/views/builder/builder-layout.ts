@@ -8,6 +8,20 @@ import { appConfig, type LocaleCode } from "../../config/environment.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
+import {
+  iconAi,
+  iconAnimations,
+  iconAssets,
+  iconAutomation,
+  iconDashboard,
+  iconDialogue,
+  iconDocs,
+  iconMechanics,
+  iconMenu,
+  iconNpcs,
+  iconPlay,
+  iconScenes,
+} from "./builder-icons.ts";
 
 /**
  * Project summary used by the persistent builder chrome.
@@ -50,32 +64,33 @@ export interface BuilderLayoutProps {
 /**
  * Sidebar navigation items for the builder.
  */
-const builderNavItems = (messages: Messages) =>
-  [
-    { key: "dashboard", label: messages.builder.dashboard, href: appRoutes.builder, icon: "📊" },
-    { key: "scenes", label: messages.builder.scenes, href: appRoutes.builderScenes, icon: "🏯" },
-    { key: "npcs", label: messages.builder.npcs, href: appRoutes.builderNpcs, icon: "👤" },
-    {
-      key: "dialogue",
-      label: messages.builder.dialogue,
-      href: appRoutes.builderDialogue,
-      icon: "💬",
-    },
-    { key: "assets", label: messages.builder.assets, href: appRoutes.builderAssets, icon: "🎨" },
-    {
-      key: "mechanics",
-      label: messages.builder.mechanics,
-      href: appRoutes.builderMechanics,
-      icon: "🧭",
-    },
-    {
-      key: "automation",
-      label: messages.builder.automation,
-      href: appRoutes.builderAutomation,
-      icon: "🛠️",
-    },
-    { key: "ai", label: messages.builder.ai, href: appRoutes.builderAi, icon: "🤖" },
-  ] as const;
+/**
+ * Sidebar navigation item descriptor.
+ */
+interface BuilderNavItem {
+  readonly key: string;
+  readonly label: string;
+  readonly href: string;
+  readonly icon: () => string;
+}
+
+/**
+ * Builds the ordered list of sidebar navigation items.
+ *
+ * @param messages Localized messages.
+ * @returns Array of navigation item descriptors.
+ */
+const builderNavItems = (messages: Messages): readonly BuilderNavItem[] => [
+  { key: "dashboard", label: messages.builder.dashboard, href: appRoutes.builder, icon: iconDashboard },
+  { key: "scenes", label: messages.builder.scenes, href: appRoutes.builderScenes, icon: iconScenes },
+  { key: "npcs", label: messages.builder.npcs, href: appRoutes.builderNpcs, icon: iconNpcs },
+  { key: "dialogue", label: messages.builder.dialogue, href: appRoutes.builderDialogue, icon: iconDialogue },
+  { key: "assets", label: messages.builder.assets, href: appRoutes.builderAssets, icon: iconAssets },
+  { key: "mechanics", label: messages.builder.mechanics, href: appRoutes.builderMechanics, icon: iconMechanics },
+  { key: "automation", label: messages.builder.automation, href: appRoutes.builderAutomation, icon: iconAutomation },
+  { key: "ai", label: messages.builder.ai, href: appRoutes.builderAi, icon: iconAi },
+  { key: "animations", label: messages.builder.animations, href: appRoutes.builderAnimations, icon: iconAnimations },
+];
 
 const withBuilderQuery = (path: string, locale: LocaleCode, projectId: string): string =>
   withQueryParameters(path, {
@@ -130,22 +145,28 @@ export const renderBuilderProjectShell = (
       ? `<div role="alert" class="alert alert-warning alert-soft">
           <span>${escapeHtml(messages.builder.activeProjectMissing)}</span>
         </div>`
-      : `<div class="grid gap-3 md:grid-cols-4">
-          <div class="rounded-box bg-base-200/70 p-3">
-            <div class="text-xs uppercase tracking-[0.2em] text-base-content/60">${escapeHtml(messages.builder.projectDraftVersion)}</div>
-            <div class="mt-1 text-2xl font-semibold">${project.version}</div>
+      : `<div class="stats stats-vertical sm:stats-horizontal shadow bg-base-100 border border-base-300 w-full">
+          <div class="stat">
+            <div class="stat-figure text-primary">
+              <svg xmlns="http://www.w3.org/2000/svg" class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            </div>
+            <div class="stat-title">${escapeHtml(messages.builder.projectDraftVersion)}</div>
+            <div class="stat-value text-primary">${project.version}</div>
           </div>
-          <div class="rounded-box bg-base-200/70 p-3">
-            <div class="text-xs uppercase tracking-[0.2em] text-base-content/60">${escapeHtml(messages.builder.projectPublishedVersion)}</div>
-            <div class="mt-1 text-2xl font-semibold">${project.publishedReleaseVersion ?? "—"}</div>
+          <div class="stat">
+            <div class="stat-figure text-secondary">
+              <svg xmlns="http://www.w3.org/2000/svg" class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+            </div>
+            <div class="stat-title">${escapeHtml(messages.builder.projectPublishedVersion)}</div>
+            <div class="stat-value text-secondary">${project.publishedReleaseVersion ?? "—"}</div>
           </div>
-          <div class="rounded-box bg-base-200/70 p-3">
-            <div class="text-xs uppercase tracking-[0.2em] text-base-content/60">${escapeHtml(messages.builder.projectStatus)}</div>
-            <div class="mt-2"><span class="badge ${projectStatusTone} badge-soft">${escapeHtml(projectStatusLabel)}</span></div>
+          <div class="stat">
+            <div class="stat-title">${escapeHtml(messages.builder.projectStatus)}</div>
+            <div class="stat-value text-lg"><span class="badge ${projectStatusTone} badge-soft">${escapeHtml(projectStatusLabel)}</span></div>
           </div>
-          <div class="rounded-box bg-base-200/70 p-3">
-            <div class="text-xs uppercase tracking-[0.2em] text-base-content/60">${escapeHtml(messages.builder.projectLastUpdated)}</div>
-            <div class="mt-1 text-sm font-medium">${escapeHtml(formatProjectTimestamp(locale, project.lastUpdatedAtMs))}</div>
+          <div class="stat">
+            <div class="stat-title">${escapeHtml(messages.builder.projectLastUpdated)}</div>
+            <div class="stat-value text-sm">${escapeHtml(formatProjectTimestamp(locale, project.lastUpdatedAtMs))}</div>
           </div>
         </div>`;
 
@@ -175,8 +196,8 @@ export const renderBuilderProjectShell = (
       ? `<button type="button" class="btn btn-secondary btn-sm btn-disabled" disabled aria-disabled="true">${escapeHtml(messages.builder.noPublishedRelease)}</button>`
       : `<a href="${escapeHtml(playHref)}" class="btn btn-secondary btn-sm">${escapeHtml(messages.builder.playPublishedBuild)}</a>`;
 
-  return `<section id="builder-project-shell" class="card card-border bg-base-100/95 shadow-sm">
-    <div class="card-body gap-5">
+  return `<section id="builder-project-shell" class="glass-card rounded-box shadow-lg">
+    <div class="p-5 space-y-5 lg:p-6">
       <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
         <div class="space-y-2">
           <div class="flex flex-wrap items-center gap-3">
@@ -197,7 +218,7 @@ export const renderBuilderProjectShell = (
         <form
           method="get"
           action="${escapeHtml(switchAction)}"
-          class="rounded-box border border-base-300 bg-base-200/40 p-4"
+          class="rounded-box border border-base-300/50 bg-base-200/30 p-4"
         >
           <div class="space-y-3">
             <label class="label" for="builder-project-switch">${escapeHtml(messages.builder.projectIdLabel)}</label>
@@ -218,7 +239,7 @@ export const renderBuilderProjectShell = (
           hx-post="${escapeHtml(createAction)}"
           hx-indicator="#builder-project-create-spinner"
           hx-disabled-elt="button, input, select, textarea"
-          class="rounded-box border border-base-300 bg-base-200/40 p-4"
+          class="rounded-box border border-base-300/50 bg-base-200/30 p-4"
         >
           <div class="space-y-3">
             <label class="label" for="builder-project-create">${escapeHtml(messages.builder.createProject)}</label>
@@ -238,7 +259,7 @@ export const renderBuilderProjectShell = (
           </div>
         </form>
 
-        <div class="rounded-box border border-base-300 bg-base-200/40 p-4 text-sm text-base-content/70">
+        <div class="rounded-box border border-base-300/50 bg-base-200/30 p-4 text-sm text-base-content/70">
           <div class="font-medium text-base-content">${escapeHtml(messages.builder.projectPlayHint)}</div>
           <div class="mt-2">${escapeHtml(messages.builder.localRuntimeTitle)}</div>
           <div class="mt-1 font-mono text-xs">${escapeHtml(appConfig.ai.transformersCacheDirectory)}</div>
@@ -261,14 +282,15 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
   const sidebarItems = navItems
     .map((item) => {
       const isActive = item.key === activeTab;
-      const activeClass = isActive ? "menu-active font-semibold" : "";
+      const activeClass = isActive ? "menu-active bg-primary/10 text-primary font-semibold" : "";
       const ariaCurrent = isActive ? ' aria-current="page"' : "";
       const href = withBuilderQuery(item.href, locale, project?.id ?? projectId);
       return `<li>
-        <a class="${activeClass}" href="${escapeHtml(href)}"${ariaCurrent}
-           aria-label="${escapeHtml(item.label)}"
+        <a class="${activeClass} is-drawer-close:tooltip is-drawer-close:tooltip-right" href="${escapeHtml(href)}"${ariaCurrent}
+           aria-label="${escapeHtml(item.label)}" data-tip="${escapeHtml(item.label)}"
            hx-get="${escapeHtml(href)}" hx-target="#builder-content" hx-push-url="true" hx-swap="innerHTML">
-          <span aria-hidden="true">${item.icon}</span> ${escapeHtml(item.label)}
+          ${item.icon()}
+          <span class="is-drawer-close:hidden">${escapeHtml(item.label)}</span>
         </a>
       </li>`;
     })
@@ -284,12 +306,10 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
       <input id="builder-drawer" type="checkbox" class="drawer-toggle" aria-label="${escapeHtml(messages.common.openMenu)}" />
 
       <div class="drawer-content flex min-h-screen flex-col">
-        <nav class="navbar border-b border-base-300 bg-base-100/90 backdrop-blur lg:hidden" role="navigation" aria-label="${escapeHtml(messages.builder.title)}">
+        <nav class="navbar border-b border-base-300/50 glass-header lg:hidden" role="navigation" aria-label="${escapeHtml(messages.builder.title)}">
           <div class="flex-none">
             <label for="builder-drawer" class="btn btn-square btn-ghost" aria-label="${escapeHtml(messages.common.openMenu)}">
-              <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16" />
-              </svg>
+              ${iconMenu()}
             </label>
           </div>
           <div class="flex-1">
@@ -297,14 +317,14 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
           </div>
           <div class="flex-none">
             <a href="${escapeHtml(playHref)}" class="btn btn-ghost btn-sm" aria-label="${escapeHtml(messages.navigation.game)}">
-              <span aria-hidden="true">🎮</span> ${escapeHtml(messages.navigation.game)}
+              ${iconPlay()} <span class="hidden sm:inline">${escapeHtml(messages.navigation.game)}</span>
             </a>
           </div>
         </nav>
 
         <div class="space-y-6 p-6">
           ${renderBuilderProjectShell(messages, locale, projectId, currentPath, project)}
-          <main id="builder-content" class="flex-1" role="main" aria-live="polite">
+          <main id="builder-content" class="flex-1 animate-fade-in-up" role="main" aria-live="polite">
             ${body}
           </main>
         </div>
@@ -312,29 +332,34 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
 
       <div class="drawer-side z-99">
         <label for="builder-drawer" class="drawer-overlay" aria-label="${escapeHtml(messages.builder.closeSidebar)}"></label>
-        <aside class="min-h-full w-72 border-r border-base-300 bg-base-200/85 backdrop-blur" role="complementary" aria-label="${escapeHtml(messages.builder.title)}">
-          <div class="border-b border-base-300 p-4">
+        <aside class="flex min-h-full flex-col border-r border-base-300/50 bg-base-200/80 backdrop-blur-sm transition-[width] duration-300 is-drawer-close:w-16 is-drawer-open:w-72" role="complementary" aria-label="${escapeHtml(messages.builder.title)}">
+          <div class="flex items-center gap-2 border-b border-base-300 p-4">
             <a href="${escapeHtml(withBuilderQuery(appRoutes.builder, locale, project?.id ?? projectId))}" class="flex items-center gap-2 text-xl font-bold" aria-label="${escapeHtml(messages.builder.title)}">
-              <span aria-hidden="true">🏗️</span> ${escapeHtml(messages.builder.title)}
+              ${iconDashboard()}
+              <span class="is-drawer-close:hidden">${escapeHtml(messages.builder.title)}</span>
             </a>
-            <p class="mt-2 text-sm text-base-content/65">${escapeHtml(messages.builder.flowDescription)}</p>
           </div>
-          <nav aria-label="${escapeHtml(messages.builder.title)}">
-            <ul class="menu gap-1 p-4">
+          <div class="is-drawer-close:hidden border-b border-base-300 px-4 py-2">
+            <p class="text-sm text-base-content/65">${escapeHtml(messages.builder.flowDescription)}</p>
+          </div>
+          <nav aria-label="${escapeHtml(messages.builder.title)}" class="flex-1 overflow-y-auto">
+            <ul class="menu gap-1 p-2 is-drawer-close:px-1">
               ${sidebarItems}
             </ul>
           </nav>
-          <div class="mt-auto space-y-3 border-t border-base-300 p-4">
-            <div class="rounded-box border border-base-300 bg-base-100/80 p-3 text-sm">
+          <div class="space-y-2 border-t border-base-300 p-2 is-drawer-close:p-1">
+            <div class="is-drawer-close:hidden rounded-box border border-base-300 bg-base-100/80 p-3 text-sm">
               <div class="font-medium">${escapeHtml(messages.builder.localRuntimeTitle)}</div>
               <div class="mt-1 text-base-content/65">${escapeHtml(appConfig.ai.transformersCacheDirectory)}</div>
             </div>
-            <div class="grid grid-cols-2 gap-2">
-              <a href="${escapeHtml(playHref)}" class="btn btn-primary btn-sm w-full" aria-label="${escapeHtml(messages.navigation.game)}">
-                <span aria-hidden="true">🎮</span> ${escapeHtml(messages.navigation.game)}
+            <div class="grid gap-1 is-drawer-close:grid-cols-1 is-drawer-open:grid-cols-2">
+              <a href="${escapeHtml(playHref)}" class="btn btn-primary btn-sm w-full is-drawer-close:btn-square is-drawer-close:tooltip is-drawer-close:tooltip-right" data-tip="${escapeHtml(messages.navigation.game)}" aria-label="${escapeHtml(messages.navigation.game)}">
+                ${iconPlay()}
+                <span class="is-drawer-close:hidden">${escapeHtml(messages.navigation.game)}</span>
               </a>
-              <a href="${escapeHtml(withQueryParameters(appConfig.api.docsPath, { lang: locale }))}" class="btn btn-outline btn-sm w-full" aria-label="${escapeHtml(messages.builder.docsLabel)}">
-                ${escapeHtml(messages.builder.docsLabel)}
+              <a href="${escapeHtml(withQueryParameters(appConfig.api.docsPath, { lang: locale }))}" class="btn btn-outline btn-sm w-full is-drawer-close:btn-square is-drawer-close:tooltip is-drawer-close:tooltip-right" data-tip="${escapeHtml(messages.builder.docsLabel)}" aria-label="${escapeHtml(messages.builder.docsLabel)}">
+                ${iconDocs()}
+                <span class="is-drawer-close:hidden">${escapeHtml(messages.builder.docsLabel)}</span>
               </a>
             </div>
           </div>

@@ -38,7 +38,7 @@ export const gameTextByLocale: Record<GameLocale, GameTextCatalog> = {
       "npc.merchant.lines.shipment":
         "Between us — a shipment of white silver needle is arriving at midnight. Interested?",
       "npc.merchant.greet": "Interested in something fine, traveller?",
-      "npc.riverPilot.label": "Tea Oracle",
+      "npc.riverPilot.label": "River Pilot",
       "npc.riverPilot.lines.oracle-intro":
         "I read the leaves for those brave enough to listen. Speak, and the tea shall answer.",
       "npc.riverPilot.lines.oracle-quote":

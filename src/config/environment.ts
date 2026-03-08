@@ -584,7 +584,7 @@ export const matchLocale = (value: string | undefined | null): LocaleCode | null
 /**
  * Fully resolved application configuration from environment variables.
  */
-const resolvedApplicationName = Bun.env.APP_NAME ?? "Leaves of the Fallen Kingdom";
+const resolvedApplicationName = Bun.env.APP_NAME ?? "Game Forge";
 const resolvedApplicationVersion = Bun.env.APP_VERSION ?? "1.0.0";
 
 export const appConfig: AppConfig = {

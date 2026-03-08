@@ -42,20 +42,20 @@ export const createOracleService = (): OracleService => ({
     const messages = getMessages(request.locale);
     const trimmedQuestion = request.question.trim();
 
-    const forcedOutcome = resolveForcedMode(request.mode, messages.oracle);
+    const forcedOutcome = resolveForcedMode(request.mode, messages.aiPlayground);
     if (forcedOutcome) return forcedOutcome;
 
     if (appConfig.oracle.requireSession && !request.hasSession) {
       return {
         state: "unauthorized",
-        message: messages.oracle.unauthorizedDescription,
+        message: messages.aiPlayground.unauthorizedDescription,
       } satisfies OracleUnauthorizedState;
     }
 
     if (trimmedQuestion.length === 0) {
       return {
         state: "empty",
-        message: messages.oracle.emptyDescription,
+        message: messages.aiPlayground.emptyDescription,
       } satisfies OracleEmptyState;
     }
 
@@ -63,11 +63,11 @@ export const createOracleService = (): OracleService => ({
       return {
         state: "error",
         retryable: false,
-        message: messages.oracle.validationTooLong,
+        message: messages.aiPlayground.validationTooLong,
       } satisfies OracleFatalErrorState;
     }
 
-    const answer = await buildAnswer(trimmedQuestion, messages.oracle);
+    const answer = await buildAnswer(trimmedQuestion, messages.aiPlayground);
 
     // Persist interaction with real sentiment from the AI model
     await persistInteraction(
@@ -91,7 +91,7 @@ export const createOracleService = (): OracleService => ({
  */
 const buildAnswer = async (
   question: string,
-  oracleMessages: ReturnType<typeof getMessages>["oracle"],
+  oracleMessages: ReturnType<typeof getMessages>["aiPlayground"],
 ): Promise<OracleAnswer> => {
   const registry = await ProviderRegistry.getInstance();
   const provider = registry.selectProvider("chat");
@@ -106,7 +106,7 @@ const buildAnswer = async (
     messages: [
       {
         role: "user",
-        content: `The Tea Oracle speaks of "${question}":`,
+        content: `Respond creatively and helpfully to this game design prompt: "${question}"`,
       },
     ],
     temperature: 0.85,
@@ -146,7 +146,7 @@ const persistInteraction = async (
 
 const resolveForcedMode = (
   mode: OracleMode,
-  oracleMessages: ReturnType<typeof getMessages>["oracle"],
+  oracleMessages: ReturnType<typeof getMessages>["aiPlayground"],
 ): OracleOutcome | null => {
   if (mode === "force-empty") {
     return { state: "empty", message: oracleMessages.emptyDescription } satisfies OracleEmptyState;
@@ -177,14 +177,10 @@ const resolveForcedMode = (
 // ── Deterministic fallback ────────────────────────────────────────────────────
 
 const buildDeterministicAnswer = (
-  question: string,
-  oracleMessages: ReturnType<typeof getMessages>["oracle"],
+  _question: string,
+  _oracleMessages: ReturnType<typeof getMessages>["aiPlayground"],
 ): string => {
-  const hash = Array.from(question).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  const prefix = oracleMessages.fortunePrefixes[hash % oracleMessages.fortunePrefixes.length];
-  const body =
-    oracleMessages.fortuneBodies[
-      (hash * appConfig.oracle.answerHashMultiplier) % oracleMessages.fortuneBodies.length
-    ];
-  return `${prefix} ${body}`;
+  const messages = getMessages("en-US");
+  return messages.ai.fallbackDialogue;
 };
+

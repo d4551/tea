@@ -11,7 +11,7 @@ export const swaggerDocsPlugin = swagger({
     info: {
       title: appConfig.applicationName,
       version: appConfig.applicationVersion,
-      description: "Typed API contracts for LOTFK runtime services.",
+      description: "Typed API contracts for Game Forge runtime services.",
     },
     tags: [
       {

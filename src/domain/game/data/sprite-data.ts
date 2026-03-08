@@ -7,7 +7,7 @@ import type {
 } from "../../../shared/contracts/game.ts";
 
 /**
- * Canonical sprite manifests sourced from the LOTFK baseline art set.
+ * Canonical sprite manifests sourced from the baseline art set.
  */
 export const gameSpriteManifests: Record<string, SpriteManifest> = {
   chaJiang: {
@@ -109,7 +109,7 @@ const teaHouseNpcAiTemplate: Readonly<NpcAiBlueprint> = {
 };
 
 /**
- * Canonical scene baseline data sourced from the LOTFK world configuration.
+ * Canonical scene baseline data sourced from the world configuration.
  */
 export const gameScenes: Record<string, SceneDefinition> = {
   teaHouse: {

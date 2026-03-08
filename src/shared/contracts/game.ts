@@ -1244,6 +1244,8 @@ export interface GameSession {
   readonly triggerDefinitions?: readonly TriggerDefinition[];
   /** Published cutscene definitions captured when the session was created. */
   readonly cutsceneDefinitions?: readonly CutsceneDefinition[];
+  /** Published item definitions captured when the session was created. */
+  readonly itemDefinitions?: readonly ItemDefinition[];
   /** Connected room participants authorized to observe or control the session. */
   readonly participants: readonly GameSessionParticipant[];
   /** Monotonic scene-state version used for optimistic persistence. */

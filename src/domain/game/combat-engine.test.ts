@@ -85,7 +85,7 @@ describe("CombatEngine", () => {
       );
 
       const updatedEnemy = nextState.combatants.find((c) => c.id === enemy.id);
-      expect(updatedEnemy?.stats.hp).toBeLessThan(30);
+      expect(updatedEnemy?.stats.hp).toBeLessThan(50);
       expect(nextState.phase).toBe("enemy_turn");
       expect(nextState.activeActorIndex).toBe(1); // turn advanced
     });

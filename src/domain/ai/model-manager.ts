@@ -206,7 +206,7 @@ export class ModelManager {
    * Generates an oracle fortune string from user prompt.
    */
   async generateOracle(question: string): Promise<string | null> {
-    const prompt = `The Tea Oracle speaks of "${question}": `;
+    const prompt = `Respond creatively to this game design prompt: "${question}" `;
     return this.generateText("oracle", prompt, prompt);
   }
 

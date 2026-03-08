@@ -22,6 +22,7 @@ import type {
 import {
   type BuilderProjectAnimationClipRow,
   type BuilderProjectAnimationTimelineRow,
+  type BuilderProjectSpriteAtlasRow,
   type BuilderProjectArtifactRow,
   type BuilderProjectAssetRow,
   type BuilderProjectAutomationRunRow,
@@ -765,6 +766,48 @@ const toAnimationTimelinesFromRows = (
   ) as Record<string, AnimationTimeline>;
 
 /**
+ * Converts sprite-atlas rows into domain-level SpriteAtlasManifest records.
+ * Frame arrays are stored as JSON strings in the database and parsed here.
+ */
+const toSpriteAtlasFromRows = (
+  rows: readonly BuilderProjectSpriteAtlasRow[],
+): Record<string, SpriteAtlasManifest> =>
+  Object.fromEntries(
+    rows.map((row) => [
+      row.id,
+      {
+        id: row.id,
+        imagePath: row.imagePath,
+        atlasWidth: row.atlasWidth,
+        atlasHeight: row.atlasHeight,
+        frames: parseSpriteAtlasFrames(row.frames),
+        createdAtMs: row.createdAt.getTime(),
+      } satisfies SpriteAtlasManifest,
+    ]),
+  ) as Record<string, SpriteAtlasManifest>;
+
+/**
+ * Parses a JSON-serialized sprite atlas frame array string into typed SpriteAtlasFrame[].
+ * Returns an empty array on malformed input.
+ */
+const parseSpriteAtlasFrames = (raw: string): SpriteAtlasManifest["frames"] => {
+  const parsed = safeJsonParse<unknown[]>(raw, []);
+  return parsed.filter(
+    (f): f is SpriteAtlasManifest["frames"][number] => {
+      if (typeof f !== "object" || f === null) return false;
+      const r = f as Record<string, unknown>;
+      return (
+        typeof r.name === "string" &&
+        typeof r.x === "number" &&
+        typeof r.y === "number" &&
+        typeof r.width === "number" &&
+        typeof r.height === "number"
+      );
+    },
+  );
+};
+
+/**
  * Parses a JSON-serialized keyframe array string into typed AnimationKeyframe[].
  * Returns an empty array on malformed input.
  */
@@ -1315,17 +1358,21 @@ export class BuilderProjectStateStore {
     readonly assets: Record<string, BuilderAsset>;
     readonly animationClips: Record<string, AnimationClip>;
     readonly animationTimelines: Record<string, AnimationTimeline>;
+    readonly spriteAtlases: Record<string, SpriteAtlasManifest>;
   }> {
-    const [assetRows, animationClipRows, animationTimelineRows] = await Promise.all([
-      prisma.builderProjectAsset.listProjectRows(projectId),
-      prisma.builderProjectAnimationClip.listProjectRows(projectId),
-      prisma.builderProjectAnimationTimeline.listProjectRows(projectId),
-    ]);
+    const [assetRows, animationClipRows, animationTimelineRows, spriteAtlasRows] =
+      await Promise.all([
+        prisma.builderProjectAsset.listProjectRows(projectId),
+        prisma.builderProjectAnimationClip.listProjectRows(projectId),
+        prisma.builderProjectAnimationTimeline.listProjectRows(projectId),
+        prisma.builderProjectSpriteAtlas.listProjectRows(projectId),
+      ]);
 
     return {
       assets: toBuilderAssetsFromRows(assetRows),
       animationClips: toAnimationClipsFromRows(animationClipRows),
       animationTimelines: toAnimationTimelinesFromRows(animationTimelineRows),
+      spriteAtlases: toSpriteAtlasFromRows(spriteAtlasRows),
     };
   }
 
