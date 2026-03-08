@@ -4,6 +4,7 @@ import { appConfig } from "../src/config/environment.ts";
 import { resetEmbeddingFallback } from "../src/domain/ai/knowledge-base-service.ts";
 import { ProviderRegistry } from "../src/domain/ai/providers/provider-registry.ts";
 import { vectorStore } from "../src/domain/ai/vector-store.ts";
+import { BuilderPublishValidationError } from "../src/domain/builder/builder-publish-validation.ts";
 import { builderService } from "../src/domain/builder/builder-service.ts";
 import { gameLoop } from "../src/domain/game/game-loop.ts";
 import { correlationIdHeader } from "../src/lib/correlation-id.ts";
@@ -2565,6 +2566,69 @@ describe("HTMX partial rendering", () => {
     expect(publishHtml.includes('id="builder-project-shell"')).toBe(true);
     expect(publishHtml.includes(`/game?lang=en-US&amp;projectId=${projectId}`)).toBe(true);
     expect(publishHtml.includes("/api/builder/projects/")).toBe(true);
+  });
+
+  test("builder publish rejects invalid scene node asset references", async () => {
+    const projectId = `publish-invalid-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+
+    const [scene] = await builderService.listScenes(projectId);
+    expect(scene).toBeDefined();
+    if (!scene) {
+      return;
+    }
+
+    await builderService.saveSceneNode(projectId, {
+      sceneId: scene.id,
+      id: `node-${crypto.randomUUID().slice(0, 8)}`,
+      nodeType: "sprite",
+      assetId: "missing-asset",
+    });
+
+    let publishError: unknown = null;
+    try {
+      await builderService.publishProject(projectId, true);
+    } catch (error) {
+      publishError = error;
+    }
+
+    expect(publishError).toBeInstanceOf(BuilderPublishValidationError);
+    if (publishError instanceof BuilderPublishValidationError) {
+      expect(publishError.issues.some((issue) => issue.code === "scene-node-asset-missing")).toBe(
+        true,
+      );
+    }
+
+    const publishResponse = await app.handle(
+      new Request(toUrl(`/api/builder/projects/${projectId}/publish`), {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json",
+        },
+        body: JSON.stringify({
+          published: true,
+          locale: "en-US",
+          currentPath: appRoutes.builder,
+        }),
+      }),
+    );
+
+    const payload = (await publishResponse.json()) as {
+      readonly ok: false;
+      readonly error: {
+        readonly code: string;
+        readonly message: string;
+      };
+    };
+
+    expect(publishResponse.status).toBe(httpStatus.unprocessableEntity);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("VALIDATION_ERROR");
+    expect(payload.error.message.includes("Publish blocked until builder validation passes.")).toBe(
+      true,
+    );
+    expect(payload.error.message.includes("references missing asset missing-asset.")).toBe(true);
   });
 
   test("builder HTML form mutations refresh the project shell out-of-band", async () => {

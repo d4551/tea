@@ -39,6 +39,10 @@ import {
   defaultBuilderProjectId,
   normalizeBuilderLocale,
 } from "./builder-project-state-store.ts";
+import {
+  BuilderPublishValidationError,
+  validateBuilderProjectForPublish,
+} from "./builder-publish-validation.ts";
 import { executeAutomationRun, executeGenerationJob } from "./creator-worker.ts";
 
 /**
@@ -1654,6 +1658,20 @@ class PrismaBuilderService implements BuilderService {
     projectId: string,
     published: boolean,
   ): Promise<BuilderProjectSnapshot | null> {
+    if (!published) {
+      return this.stateStore.publishProject(projectId, false);
+    }
+
+    const entry = await this.readProjectEntry(projectId);
+    if (!entry) {
+      return null;
+    }
+
+    const issues = validateBuilderProjectForPublish(entry.state);
+    if (issues.length > 0) {
+      throw new BuilderPublishValidationError(issues);
+    }
+
     return this.stateStore.publishProject(projectId, published);
   }
 

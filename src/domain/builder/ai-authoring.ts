@@ -97,6 +97,138 @@ const extractJson = (raw: string): unknown | null => {
   return safeJsonParse(jsonStr, null);
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const isStringRecord = (value: unknown): value is Record<string, number> =>
+  isRecord(value) && Object.values(value).every((entry) => typeof entry === "number");
+
+const parseGeneratedCombatEncounter = (value: unknown): GeneratedCombatEncounter | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const { id, sceneId, enemies, rewards, difficulty } = value;
+  if (
+    typeof id !== "string" ||
+    typeof sceneId !== "string" ||
+    !Array.isArray(enemies) ||
+    !isRecord(rewards) ||
+    typeof difficulty !== "string"
+  ) {
+    return null;
+  }
+
+  const parsedEnemies = enemies
+    .map((enemy) => {
+      if (!isRecord(enemy)) {
+        return null;
+      }
+      const { characterKey, level, stats } = enemy;
+      if (
+        typeof characterKey !== "string" ||
+        typeof level !== "number" ||
+        !Number.isFinite(level) ||
+        !isStringRecord(stats)
+      ) {
+        return null;
+      }
+      return {
+        characterKey,
+        level,
+        stats,
+      };
+    })
+    .filter((enemy): enemy is GeneratedCombatEncounter["enemies"][number] => enemy !== null);
+
+  const rewardItems = rewards.items;
+  if (
+    parsedEnemies.length !== enemies.length ||
+    typeof rewards.xp !== "number" ||
+    typeof rewards.gold !== "number" ||
+    !Array.isArray(rewardItems) ||
+    !rewardItems.every((item) => typeof item === "string")
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    sceneId,
+    enemies: parsedEnemies,
+    rewards: {
+      xp: rewards.xp,
+      gold: rewards.gold,
+      items: rewardItems,
+    },
+    difficulty,
+  };
+};
+
+const parseGeneratedInventoryItem = (value: unknown): GeneratedInventoryItem | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const { id, labelKey, descriptionKey, category, rarity, stackable, maxStack, effects } = value;
+  if (
+    typeof id !== "string" ||
+    typeof labelKey !== "string" ||
+    typeof descriptionKey !== "string" ||
+    (category !== "weapon" &&
+      category !== "armor" &&
+      category !== "consumable" &&
+      category !== "key" &&
+      category !== "material") ||
+    typeof rarity !== "string" ||
+    typeof stackable !== "boolean" ||
+    typeof maxStack !== "number" ||
+    !Number.isFinite(maxStack) ||
+    !isStringRecord(effects)
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    labelKey,
+    descriptionKey,
+    category,
+    rarity,
+    stackable,
+    maxStack,
+    effects,
+  };
+};
+
+const parseGeneratedCutsceneStep = (value: unknown): GeneratedCutsceneStep | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const { id, type, characterKey, textKey, durationMs, data } = value;
+  if (
+    typeof id !== "string" ||
+    (type !== "dialogue" && type !== "camera" && type !== "animation" && type !== "wait") ||
+    (characterKey !== null && typeof characterKey !== "string") ||
+    (textKey !== null && typeof textKey !== "string") ||
+    typeof durationMs !== "number" ||
+    !Number.isFinite(durationMs) ||
+    !isRecord(data)
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    type,
+    characterKey,
+    textKey,
+    durationMs,
+    data,
+  };
+};
+
 /**
  * AI-assisted content authoring service.
  *
@@ -142,8 +274,7 @@ export class AiAuthoringService {
       return null;
     }
 
-    const parsed = extractJson(result.text);
-    return parsed as GeneratedCombatEncounter;
+    return parseGeneratedCombatEncounter(extractJson(result.text));
   }
 
   /**
@@ -172,7 +303,12 @@ export class AiAuthoringService {
     }
 
     const parsed = extractJson(result.text);
-    return Array.isArray(parsed) ? (parsed as GeneratedInventoryItem[]) : [];
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .map((item) => parseGeneratedInventoryItem(item))
+      .filter((item): item is GeneratedInventoryItem => item !== null);
   }
 
   /**
@@ -203,6 +339,11 @@ export class AiAuthoringService {
     }
 
     const parsed = extractJson(result.text);
-    return Array.isArray(parsed) ? (parsed as GeneratedCutsceneStep[]) : [];
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .map((step) => parseGeneratedCutsceneStep(step))
+      .filter((step): step is GeneratedCutsceneStep => step !== null);
   }
 }

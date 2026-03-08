@@ -249,6 +249,20 @@ export interface Messages {
     readonly missingPrompt: string;
     readonly sceneIdRequired: string;
     readonly invalidPatchPlan: string;
+    readonly publishValidationFailed: string;
+    readonly publishValidationNoScenes: string;
+    readonly publishValidationSceneSpawnOutOfBounds: string;
+    readonly publishValidationSceneNpcOutOfBounds: string;
+    readonly publishValidationNodeAssetMissing: string;
+    readonly publishValidationNodeAssetUnapproved: string;
+    readonly publishValidationNodeAssetSceneModeMismatch: string;
+    readonly publishValidationNodeAssetKindMismatch: string;
+    readonly publishValidationNodeAssetFormatUnsupported: string;
+    readonly publishValidationNodeClipMissing: string;
+    readonly publishValidationNodeClipSceneModeMismatch: string;
+    readonly publishValidationNodeClipAssetMismatch: string;
+    readonly publishValidationClipAssetMissing: string;
+    readonly publishValidationClipAssetSceneModeMismatch: string;
     readonly noDialogues: string;
     readonly title: string;
     readonly dashboard: string;
@@ -916,6 +930,32 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       missingPrompt: "Prompt is required",
       sceneIdRequired: "Scene id is required",
       invalidPatchPlan: "Patch plan contains invalid operations",
+      publishValidationFailed: "Publish blocked until builder validation passes.",
+      publishValidationNoScenes: "Add at least one scene before publishing.",
+      publishValidationSceneSpawnOutOfBounds:
+        "Scene {sceneId} places the player spawn outside scene bounds.",
+      publishValidationSceneNpcOutOfBounds:
+        "Scene {sceneId} places NPC {npcId} outside scene bounds.",
+      publishValidationNodeAssetMissing:
+        "Scene {sceneId} node {nodeId} references missing asset {assetId}.",
+      publishValidationNodeAssetUnapproved:
+        "Scene {sceneId} node {nodeId} references unapproved asset {assetId}.",
+      publishValidationNodeAssetSceneModeMismatch:
+        "Scene {sceneId} node {nodeId} expects {expectedSceneMode} assets but {assetId} is {actualSceneMode}.",
+      publishValidationNodeAssetKindMismatch:
+        "Scene {sceneId} node {nodeId} cannot use asset {assetId} of kind {assetKind}.",
+      publishValidationNodeAssetFormatUnsupported:
+        "Scene {sceneId} node {nodeId} cannot use asset {assetId} with source format {sourceFormat}.",
+      publishValidationNodeClipMissing:
+        "Scene {sceneId} node {nodeId} references missing animation clip {clipId}.",
+      publishValidationNodeClipSceneModeMismatch:
+        "Scene {sceneId} node {nodeId} expects {expectedSceneMode} clips but {clipId} is {actualSceneMode}.",
+      publishValidationNodeClipAssetMismatch:
+        "Scene {sceneId} node {nodeId} links asset {assetId} but clip {clipId} belongs to another asset.",
+      publishValidationClipAssetMissing:
+        "Animation clip {clipId} references missing asset {assetId}.",
+      publishValidationClipAssetSceneModeMismatch:
+        "Animation clip {clipId} does not match asset {assetId}: expected {expectedSceneMode}, got {actualSceneMode}.",
       noDialogues: "No dialogue entries found",
       title: "Game Builder",
       dashboard: "Dashboard",
@@ -1600,6 +1640,29 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       missingPrompt: "必须提供提示词",
       sceneIdRequired: "必须提供场景 ID",
       invalidPatchPlan: "补丁方案包含无效操作",
+      publishValidationFailed: "发布已被阻止，必须先通过构建器校验。",
+      publishValidationNoScenes: "发布前至少需要一个场景。",
+      publishValidationSceneSpawnOutOfBounds: "场景 {sceneId} 的玩家出生点超出了场景边界。",
+      publishValidationSceneNpcOutOfBounds: "场景 {sceneId} 中的 NPC {npcId} 超出了场景边界。",
+      publishValidationNodeAssetMissing:
+        "场景 {sceneId} 的节点 {nodeId} 引用了缺失资源 {assetId}。",
+      publishValidationNodeAssetUnapproved:
+        "场景 {sceneId} 的节点 {nodeId} 引用了未批准资源 {assetId}。",
+      publishValidationNodeAssetSceneModeMismatch:
+        "场景 {sceneId} 的节点 {nodeId} 需要 {expectedSceneMode} 资源，但 {assetId} 是 {actualSceneMode}。",
+      publishValidationNodeAssetKindMismatch:
+        "场景 {sceneId} 的节点 {nodeId} 不能使用类型为 {assetKind} 的资源 {assetId}。",
+      publishValidationNodeAssetFormatUnsupported:
+        "场景 {sceneId} 的节点 {nodeId} 不能使用源格式为 {sourceFormat} 的资源 {assetId}。",
+      publishValidationNodeClipMissing:
+        "场景 {sceneId} 的节点 {nodeId} 引用了缺失动画片段 {clipId}。",
+      publishValidationNodeClipSceneModeMismatch:
+        "场景 {sceneId} 的节点 {nodeId} 需要 {expectedSceneMode} 动画片段，但 {clipId} 是 {actualSceneMode}。",
+      publishValidationNodeClipAssetMismatch:
+        "场景 {sceneId} 的节点 {nodeId} 绑定了资源 {assetId}，但动画片段 {clipId} 属于其他资源。",
+      publishValidationClipAssetMissing: "动画片段 {clipId} 引用了缺失资源 {assetId}。",
+      publishValidationClipAssetSceneModeMismatch:
+        "动画片段 {clipId} 与资源 {assetId} 的场景模式不一致：期望 {expectedSceneMode}，实际为 {actualSceneMode}。",
       noDialogues: "未找到对话条目",
       title: "游戏构建器",
       dashboard: "仪表盘",

@@ -9,6 +9,10 @@ import { knowledgeBaseService } from "../domain/ai/knowledge-base-service.ts";
 import { ProviderRegistry } from "../domain/ai/providers/provider-registry.ts";
 import { persistBuilderFile } from "../domain/builder/asset-storage.ts";
 import {
+  BuilderPublishValidationError,
+  type BuilderPublishValidationIssue,
+} from "../domain/builder/builder-publish-validation.ts";
+import {
   type BuilderAnimationClipCreatePayload,
   type BuilderAssetCreatePayload,
   type BuilderAutomationRunCreatePayload,
@@ -634,6 +638,111 @@ const buildError = (
 ) => {
   const correlationId = ensureCorrelationIdHeader(request, headers);
   return errorEnvelope(new ApplicationError(code, message, status, retryable), correlationId);
+};
+
+const formatBuilderTemplate = (
+  template: string,
+  replacements: Readonly<Record<string, string>>,
+): string =>
+  Object.entries(replacements).reduce(
+    (message, [key, value]) => message.replaceAll(`{${key}}`, value),
+    template,
+  );
+
+const describePublishValidationIssue = (
+  locale: string | undefined,
+  issue: BuilderPublishValidationIssue,
+): string => {
+  const messages = getBuilderMessages(locale);
+  switch (issue.code) {
+    case "no-scenes":
+      return messages.publishValidationNoScenes;
+    case "scene-spawn-out-of-bounds":
+      return formatBuilderTemplate(messages.publishValidationSceneSpawnOutOfBounds, {
+        sceneId: issue.sceneId ?? "",
+      });
+    case "scene-npc-out-of-bounds":
+      return formatBuilderTemplate(messages.publishValidationSceneNpcOutOfBounds, {
+        sceneId: issue.sceneId ?? "",
+        npcId: issue.npcId ?? "",
+      });
+    case "scene-node-asset-missing":
+      return formatBuilderTemplate(messages.publishValidationNodeAssetMissing, {
+        sceneId: issue.sceneId ?? "",
+        nodeId: issue.nodeId ?? "",
+        assetId: issue.assetId ?? "",
+      });
+    case "scene-node-asset-unapproved":
+      return formatBuilderTemplate(messages.publishValidationNodeAssetUnapproved, {
+        sceneId: issue.sceneId ?? "",
+        nodeId: issue.nodeId ?? "",
+        assetId: issue.assetId ?? "",
+      });
+    case "scene-node-asset-scene-mode-mismatch":
+      return formatBuilderTemplate(messages.publishValidationNodeAssetSceneModeMismatch, {
+        sceneId: issue.sceneId ?? "",
+        nodeId: issue.nodeId ?? "",
+        assetId: issue.assetId ?? "",
+        expectedSceneMode: issue.expectedSceneMode ?? "",
+        actualSceneMode: issue.actualSceneMode ?? "",
+      });
+    case "scene-node-asset-kind-mismatch":
+      return formatBuilderTemplate(messages.publishValidationNodeAssetKindMismatch, {
+        sceneId: issue.sceneId ?? "",
+        nodeId: issue.nodeId ?? "",
+        assetId: issue.assetId ?? "",
+        assetKind: issue.assetKind ?? "",
+      });
+    case "scene-node-asset-format-unsupported":
+      return formatBuilderTemplate(messages.publishValidationNodeAssetFormatUnsupported, {
+        sceneId: issue.sceneId ?? "",
+        nodeId: issue.nodeId ?? "",
+        assetId: issue.assetId ?? "",
+        sourceFormat: issue.sourceFormat ?? "",
+      });
+    case "scene-node-clip-missing":
+      return formatBuilderTemplate(messages.publishValidationNodeClipMissing, {
+        sceneId: issue.sceneId ?? "",
+        nodeId: issue.nodeId ?? "",
+        clipId: issue.clipId ?? "",
+      });
+    case "scene-node-clip-scene-mode-mismatch":
+      return formatBuilderTemplate(messages.publishValidationNodeClipSceneModeMismatch, {
+        sceneId: issue.sceneId ?? "",
+        nodeId: issue.nodeId ?? "",
+        clipId: issue.clipId ?? "",
+        expectedSceneMode: issue.expectedSceneMode ?? "",
+        actualSceneMode: issue.actualSceneMode ?? "",
+      });
+    case "scene-node-clip-asset-mismatch":
+      return formatBuilderTemplate(messages.publishValidationNodeClipAssetMismatch, {
+        sceneId: issue.sceneId ?? "",
+        nodeId: issue.nodeId ?? "",
+        clipId: issue.clipId ?? "",
+        assetId: issue.assetId ?? "",
+      });
+    case "animation-clip-asset-missing":
+      return formatBuilderTemplate(messages.publishValidationClipAssetMissing, {
+        clipId: issue.clipId ?? "",
+        assetId: issue.assetId ?? "",
+      });
+    case "animation-clip-asset-scene-mode-mismatch":
+      return formatBuilderTemplate(messages.publishValidationClipAssetSceneModeMismatch, {
+        clipId: issue.clipId ?? "",
+        assetId: issue.assetId ?? "",
+        expectedSceneMode: issue.expectedSceneMode ?? "",
+        actualSceneMode: issue.actualSceneMode ?? "",
+      });
+  }
+};
+
+const describePublishValidationIssues = (
+  locale: string | undefined,
+  issues: readonly BuilderPublishValidationIssue[],
+): string => {
+  const messages = getBuilderMessages(locale);
+  const details = issues.map((issue) => describePublishValidationIssue(locale, issue)).join(" ");
+  return `${messages.publishValidationFailed} ${details}`.trim();
 };
 
 const parseOperation = (rawText: string): BuilderArtifactPatch[] => {
@@ -1585,7 +1694,24 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         builderCurrentPath: actionCurrentPath,
       } = actionContext;
       const shouldPublish = builderService.resolvePublishState(body.published);
-      const project = await builderService.publishProject(actionProjectId, shouldPublish);
+      let project: Awaited<ReturnType<typeof builderService.publishProject>>;
+      try {
+        project = await builderService.publishProject(actionProjectId, shouldPublish);
+      } catch (error) {
+        if (error instanceof BuilderPublishValidationError) {
+          return status(
+            httpStatus.unprocessableEntity,
+            buildError(
+              request,
+              set.headers,
+              "VALIDATION_ERROR",
+              httpStatus.unprocessableEntity,
+              describePublishValidationIssues(actionLocale, error.issues),
+            ),
+          );
+        }
+        throw error;
+      }
       if (!project) {
         return status(
           httpStatus.notFound,
@@ -1753,6 +1879,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       response: {
         [httpStatus.ok]: builderOkResponse,
         [httpStatus.badRequest]: builderErrorResponse,
+        [httpStatus.unprocessableEntity]: builderErrorResponse,
         [httpStatus.notFound]: builderErrorResponse,
       },
     },
