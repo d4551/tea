@@ -118,6 +118,29 @@ const wrapOrPartial = (
 const toRecord = <T>(records: ReadonlyMap<string, T>): Record<string, T> =>
   Object.fromEntries(Array.from(records.entries()));
 
+const renderBuilderWarningAlert = (message: string): string =>
+  `<div role="alert" class="alert alert-warning alert-soft"><span>${escapeHtml(message)}</span></div>`;
+
+const wrapMissingProject = (
+  request: Request,
+  locale: LayoutContext["locale"],
+  messages: ReturnType<typeof getMessages>,
+  activeTab: string,
+  currentPath: string,
+  projectId: string,
+  project: BuilderChromeProject | null,
+): string =>
+  wrapOrPartial(
+    request,
+    locale,
+    messages,
+    activeTab,
+    currentPath,
+    projectId,
+    project,
+    renderBuilderWarningAlert(messages.builder.projectNotFound),
+  );
+
 const toChromeProject = (
   project: Awaited<ReturnType<typeof builderService.getProject>>,
 ): BuilderChromeProject | null =>
@@ -140,7 +163,7 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
     const project = await builderService.getProject(builderProjectId);
     const chromeProject = toChromeProject(project);
     if (!project) {
-      return wrapOrPartial(
+      return wrapMissingProject(
         request,
         builderLocale,
         messages,
@@ -148,7 +171,6 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
         builderCurrentPath,
         builderProjectId,
         chromeProject,
-        `<div role="alert" class="alert alert-warning alert-soft">${escapeHtml(messages.builder.projectNotFound)}</div>`,
       );
     }
     const totalScenes = project.scenes.size;
@@ -196,7 +218,7 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
     const project = await builderService.getProject(builderProjectId);
     const chromeProject = toChromeProject(project);
     if (!project) {
-      return wrapOrPartial(
+      return wrapMissingProject(
         request,
         builderLocale,
         messages,
@@ -204,7 +226,6 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
         builderCurrentPath,
         builderProjectId,
         chromeProject,
-        `<div role="alert" class="alert alert-warning alert-soft">${escapeHtml(messages.builder.projectNotFound)}</div>`,
       );
     }
     const scenes = toRecord(project.scenes);
@@ -225,7 +246,7 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
     const project = await builderService.getProject(builderProjectId);
     const chromeProject = toChromeProject(project);
     if (!project) {
-      return wrapOrPartial(
+      return wrapMissingProject(
         request,
         builderLocale,
         messages,
@@ -233,7 +254,6 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
         builderCurrentPath,
         builderProjectId,
         chromeProject,
-        `<div role="alert" class="alert alert-warning alert-soft">${escapeHtml(messages.builder.projectNotFound)}</div>`,
       );
     }
     const scenes = toRecord(project.scenes);
@@ -286,7 +306,7 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
     const project = await builderService.getProject(builderProjectId);
     const chromeProject = toChromeProject(project);
     if (!project) {
-      return wrapOrPartial(
+      return wrapMissingProject(
         request,
         builderLocale,
         messages,
@@ -294,7 +314,6 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
         builderCurrentPath,
         builderProjectId,
         chromeProject,
-        `<div role="alert" class="alert alert-warning alert-soft">${escapeHtml(messages.builder.projectNotFound)}</div>`,
       );
     }
     const features = await detectAvailableFeatures();
@@ -351,7 +370,7 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
     const project = await builderService.getProject(builderProjectId);
     const chromeProject = toChromeProject(project);
     if (!project) {
-      return wrapOrPartial(
+      return wrapMissingProject(
         request,
         builderLocale,
         messages,
@@ -359,7 +378,6 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
         builderCurrentPath,
         builderProjectId,
         chromeProject,
-        `<div role="alert" class="alert alert-warning alert-soft">${escapeHtml(messages.builder.projectNotFound)}</div>`,
       );
     }
     const body = renderMechanicsEditor(
@@ -387,7 +405,7 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
     const project = await builderService.getProject(builderProjectId);
     const chromeProject = toChromeProject(project);
     if (!project) {
-      return wrapOrPartial(
+      return wrapMissingProject(
         request,
         builderLocale,
         messages,
@@ -395,7 +413,6 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
         builderCurrentPath,
         builderProjectId,
         chromeProject,
-        `<div role="alert" class="alert alert-warning alert-soft">${escapeHtml(messages.builder.projectNotFound)}</div>`,
       );
     }
     const body = renderAutomationPanel(

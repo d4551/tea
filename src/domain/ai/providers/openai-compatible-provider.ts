@@ -480,6 +480,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
     }
 
     let responseJson: unknown;
+    // SAFETY: Response.json() may throw on malformed JSON body from external provider.
     try {
       responseJson = await response.json();
     } catch {

@@ -26,6 +26,8 @@ interface HudPayload {
   readonly dialogue?: HudDialogue;
 }
 
+// SAFETY: JSON.parse is the sole standard API that throws on invalid input.
+// This client-side variant cannot import the server-side safe-json util.
 const safeJsonParse = (text: string): HudPayload | null => {
   try {
     return JSON.parse(text) as HudPayload;

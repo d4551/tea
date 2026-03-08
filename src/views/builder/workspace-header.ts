@@ -52,7 +52,7 @@ export const renderWorkspaceHeader = (config: WorkspaceHeaderConfig): string => 
         ? `badge-primary text-primary-content border-transparent`
         : `badge-ghost text-${colorToken}`;
       return `<li>
-        <span class="badge badge-lg gap-1.5 px-3 py-4 ${activeClass}" ${isActive ? 'aria-current="page"' : ""}>
+        <span class="badge badge-lg gap-1.5 px-3 py-4 ${activeClass}" data-active="${isActive ? "true" : "false"}">
         <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">${tab.icon}</svg>
         <span>${escapeHtml(tab.label)}</span>
         </span>
@@ -73,8 +73,8 @@ export const renderWorkspaceHeader = (config: WorkspaceHeaderConfig): string => 
         </div>
         ${config.actions ? `<div class="flex flex-wrap gap-2 self-start">${config.actions}</div>` : ""}
       </div>
-      <nav aria-label="${escapeHtml(config.title)}">
-        <ul class="flex flex-wrap gap-2">${tabItems}</ul>
-      </nav>
+      <section aria-label="${escapeHtml(config.title)}">
+        <ul role="list" class="flex flex-wrap gap-2">${tabItems}</ul>
+      </section>
     </div>`;
 };

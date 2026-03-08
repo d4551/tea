@@ -504,6 +504,14 @@ const toBuilderMutationResult = (result: BuilderMutationResult) => ({
   action: result.action,
 });
 
+const toBuilderAiResponse = (response: BuilderAIResponse): BuilderAIResponse => ({
+  intent: response.intent,
+  rawText: response.rawText,
+  proposedOperations: response.proposedOperations.map(toBuilderArtifactPatch),
+  riskFlags: [...response.riskFlags],
+  validationHints: [...response.validationHints],
+});
+
 const projectDialogues = async (
   projectId: string,
   locale: LocaleCode,
@@ -1085,13 +1093,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         locale: actionLocale,
       };
       const response = await makeAiResult(aiRequest);
-      const payload = {
-        intent: response.intent,
-        rawText: response.rawText,
-        proposedOperations: response.proposedOperations.map(toBuilderArtifactPatch),
-        riskFlags: [...response.riskFlags],
-        validationHints: [...response.validationHints],
-      } as BuilderAIResponse;
+      const payload = toBuilderAiResponse(response);
 
       if (!wantsHtml(request.headers.get("accept"))) {
         return asAiResponseEnvelope(aiRequest, response, { request, headers: set.headers });

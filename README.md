@@ -104,6 +104,8 @@ The builder exposes a capability matrix that reflects current implementation sta
 | Automation / RPA | Partial | Lifecycle-managed worker, auditable steps, Playwright-backed evidence capture |
 | Multiplayer | Partial | Shared-session owner/controller/spectator flow with independent owner/controller avatars; spectator mode remains observe-only |
 | OpenUSD | Partial | `.usd/.usda/.usdc/.usdz` ingest supported; `usdz` playable in Three.js runtime |
+| WebGPU Renderer | Missing | Browser WebGPU rendering backend; becomes partial when `rendererPreference` is set to `webgpu` |
+| AI ONNX GPU | Missing | GPU-accelerated ONNX inference; becomes partial when `AI_ONNX_DEVICE=webgpu` and a WebGPU-capable browser is detected |
 
 ---
 
@@ -362,7 +364,27 @@ erDiagram
     string checksum
     json state
   }
+  GAME_SESSION_ACTOR {
+    string sessionId PK
+    string participantSessionId PK
+    float positionX
+    float positionY
+    string currentScene
+  }
+  AI_KNOWLEDGE_DOCUMENT {
+    string id PK
+    string scope
+    string projectId
+    string title
+  }
+  AI_KNOWLEDGE_CHUNK {
+    string id PK
+    string documentId FK
+    int chunkIndex
+    string text
+  }
   GAME_SESSION ||--o{ GAME_SESSION_PARTICIPANT : admits
+  GAME_SESSION ||--o{ GAME_SESSION_ACTOR : tracks
   GAME_SESSION ||--|| PLAYER_PROGRESS : has
   BUILDER_PROJECT ||--o{ BUILDER_PROJECT_SCENE : owns
   BUILDER_PROJECT ||--o{ BUILDER_PROJECT_DIALOGUE_ENTRY : owns
@@ -378,6 +400,8 @@ erDiagram
   BUILDER_PROJECT_ASSET ||--o{ BUILDER_PROJECT_ANIMATION_CLIP : drives
   BUILDER_PROJECT ||--o{ BUILDER_PROJECT_RELEASE : publishes
   BUILDER_PROJECT ||..o{ GAME_SESSION : seeds
+  BUILDER_PROJECT ||--o{ AI_KNOWLEDGE_DOCUMENT : indexes
+  AI_KNOWLEDGE_DOCUMENT ||--o{ AI_KNOWLEDGE_CHUNK : chunks
 ```
 
 ### Session Transport Contract
@@ -394,13 +418,22 @@ sequenceDiagram
 
   Client->>REST: POST create
   REST-->>Client: sessionId, resumeToken, resumeTokenExpiresAtMs
-  Client->>REST: POST invite or join
-  REST->>GL: createInviteToken or joinSession
-  GL-->>REST: invite token or joined participant session
+
+  Note over Client,GL: Optional: multiplayer invite/join flow
+  Client->>REST: POST invite (owner-only, role=controller|spectator)
+  REST->>GL: createInviteToken(sessionId, ownerSessionId, role)
+  GL-->>REST: invite token
+  REST-->>Client: join link
+
+  Client->>REST: POST join with invite token (participant browser)
+  REST->>GL: joinSession(inviteToken, participantSessionId)
+  GL-->>REST: participant-scoped resume token
+  REST-->>Client: participant resumeToken
+
   Client->>WS: connect with resumeToken query
   WS->>GL: restoreSession
   GL-->>WS: accepted
-  Client->>REST: POST command
+  Client->>REST: POST command (owner or controller only)
   REST->>GL: queue validated command
   GL-->>WS: publish state and rotated resume token
   Client->>HUD: SSE subscribe
@@ -694,6 +727,7 @@ AI retrieval behavior:
 
 - [概述](#概述)
   - [核心能力](#核心能力)
+  - [平台就绪状态](#平台就绪状态)
 - [技术栈](#技术栈-1)
 - [快速开始](#快速开始-1)
 - [系统架构](#系统架构)
@@ -716,12 +750,36 @@ TEA 游戏引擎是一个以服务端渲染 (SSR) 为核心的游戏开发平台
 
 #### 核心能力
 
-- **服务端渲染** — 所有页面由 Elysia 在服务端渲染，HTMX 提供渐进增强
-- **AI 叙事引擎** — 通过 🤗 Transformers 进行设备端推理，支持 ONNX/WebGPU 加速
+- **构建器 / 玩家循环** — 项目作用域内容编写、发布/取消发布、不可变发布版本、可玩验证
+- **共享会话多人联机** — 房主可向控制者和旁观者发放邀请令牌，控制者参与者在同一已发布运行时会话中驱动独立角色
+- **服务端渲染** — 所有页面由 Elysia 在服务端渲染，HTMX 提供 `hx-indicator` 与 `hx-disabled-elt` 渐进增强
+- **AI 叙事引擎** — 通过 🤗 Transformers 进行设备端推理，支持 ONNX/WebGPU 加速；补丁预览/应用支持可审查的共同编写流程
+- **AI 知识库与 RAG** — 持久化项目/应用作用域知识文档、嵌入式语义搜索、检索增强辅助及结构化工具规划
 - **可玩游戏客户端** — PixiJS 8 画布 + Three.js 3D 层，开发期间支持热重载
+- **OpenUSD 资产摄取** — 构建器上传支持 `.usd`、`.usda`、`.usdc`、`.usdz`；已发布 Three.js 运行时可直接加载 `usdz`
 - **全链路类型安全** — 从 Prisma 模式到 Elysia 路由契约与 SSR 视图的端到端类型
 - **国际化** — `Accept-Language` q 权重解析与确定性区域设置持久化
 - **结构化可观察性** — 关联 ID 传播、分级 JSON 日志、类型化错误信封
+
+#### 平台就绪状态
+
+构建器通过能力矩阵展示当前实现状态：
+
+| 能力 | 状态 | 说明 |
+|---|---|---|
+| 发布流程 | 已实现 | 发布/取消发布、不可变发布版本 |
+| 2D 运行时 | 部分实现 | PixiJS；从编写数据加载场景 |
+| 3D 运行时 | 部分实现 | Three.js 运行时支持已编写的模型资产；构建器视口 3D 编写尚未实现 |
+| 精灵流水线 | 部分实现 | 基于 Manifest；资产上传已实现 |
+| 动画流水线 | 部分实现 | 片段定义；无帧编辑器 |
+| 机制 | 部分实现 | 任务、触发器、对话图；任务编辑/删除已实现 |
+| AI 编写辅助 | 部分实现 | 补丁预览/应用；对话生成；结构化工具规划 |
+| RAG / 知识检索 | 部分实现 | 持久化文档、词法索引 + 语义重排、检索辅助；向量存储为 Prisma 行内 JSON |
+| 自动化 / RPA | 部分实现 | 生命周期托管工作者、可审计步骤、Playwright 证据抓取 |
+| 多人联机 | 部分实现 | 共享会话 房主/控制者/旁观者 流程，独立房主/控制者角色；旁观者仅可观察 |
+| OpenUSD | 部分实现 | `.usd/.usda/.usdc/.usdz` 摄取已支持；`usdz` 可在 Three.js 运行时播放 |
+| WebGPU 渲染器 | 未实现 | 浏览器 WebGPU 渲染后端；`rendererPreference=webgpu` 时变为部分实现 |
+| AI ONNX GPU | 未实现 | GPU 加速 ONNX 推理；`AI_ONNX_DEVICE=webgpu` 且浏览器支持 WebGPU 时变为部分实现 |
 
 ### 技术栈
 
@@ -745,16 +803,18 @@ TEA 游戏引擎是一个以服务端渲染 (SSR) 为核心的游戏开发平台
 # 克隆仓库
 git clone https://github.com/d4551/tea.git && cd tea
 
-# 安装依赖
-bun install
+# 一键引导（安装依赖、生成 Prisma、迁移 DB、构建资产、就绪检查）
+bun run setup
 
-# 配置环境变量
-cp .env.example .env
+# 或通过操作系统脚本从零开始
+./scripts/install-macos.sh
+./scripts/install-linux.sh
+powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
 
-# 生成 Prisma 客户端
-bun run prisma:generate
+# 验证运行时就绪
+bun run doctor
 
-# 启动开发服务器
+# 启动开发服务器（含所有监听器）
 bun run dev
 ```
 
@@ -960,7 +1020,27 @@ erDiagram
     string checksum
     json state
   }
+  GAME_SESSION_ACTOR {
+    string sessionId PK
+    string participantSessionId PK
+    float positionX
+    float positionY
+    string currentScene
+  }
+  AI_KNOWLEDGE_DOCUMENT {
+    string id PK
+    string scope
+    string projectId
+    string title
+  }
+  AI_KNOWLEDGE_CHUNK {
+    string id PK
+    string documentId FK
+    int chunkIndex
+    string text
+  }
   GAME_SESSION ||--o{ GAME_SESSION_PARTICIPANT : 准入
+  GAME_SESSION ||--o{ GAME_SESSION_ACTOR : 追踪
   GAME_SESSION ||--|| PLAYER_PROGRESS : 包含
   BUILDER_PROJECT ||--o{ BUILDER_PROJECT_SCENE : 拥有
   BUILDER_PROJECT ||--o{ BUILDER_PROJECT_DIALOGUE_ENTRY : 拥有
@@ -976,6 +1056,8 @@ erDiagram
   BUILDER_PROJECT_ASSET ||--o{ BUILDER_PROJECT_ANIMATION_CLIP : 驱动
   BUILDER_PROJECT ||--o{ BUILDER_PROJECT_RELEASE : 发布
   BUILDER_PROJECT ||..o{ GAME_SESSION : 初始化
+  BUILDER_PROJECT ||--o{ AI_KNOWLEDGE_DOCUMENT : 索引
+  AI_KNOWLEDGE_DOCUMENT ||--o{ AI_KNOWLEDGE_CHUNK : 分块
 ```
 
 #### 会话传输契约
@@ -990,10 +1072,22 @@ sequenceDiagram
 
   Client->>REST: POST create (创建会话)
   REST-->>Client: sessionId resumeToken resumeTokenExpiresAtMs
+
+  Note over Client,GL: 可选：多人联机邀请/加入流程
+  Client->>REST: POST invite（仅限房主，role=controller|spectator）
+  REST->>GL: createInviteToken(sessionId, ownerSessionId, role)
+  GL-->>REST: 邀请令牌
+  REST-->>Client: 加入链接
+
+  Client->>REST: POST join（参与者携带邀请令牌）
+  REST->>GL: joinSession(inviteToken, participantSessionId)
+  GL-->>REST: 参与者作用域恢复令牌
+  REST-->>Client: 参与者 resumeToken
+
   Client->>WS: 带 resumeToken 建立连接
   WS->>GL: restoreSession (恢复会话)
   GL-->>WS: 通过
-  Client->>REST: POST command (发送命令)
+  Client->>REST: POST command（仅限房主或控制者）
   REST->>GL: 命令入队
   GL-->>WS: 推送 state (状态) 和 new token (新令牌)
   Client->>HUD: 订阅 SSE 流
@@ -1048,13 +1142,15 @@ tea/
 
 | 命令 | 说明 |
 |---|---|
-| `bun run dev` | 启动开发服务器 |
+| `bun run dev` | 启动开发服务器（含所有监听器） |
+| `bun run setup` | 一键引导：安装依赖、保留/创建 `.env`、生成 Prisma、推送模式、构建资产、就绪检查 |
+| `bun run doctor` | 非破坏性就绪报告：数据库可达性、必要资产、可写目录、AI 路由 |
 | `bun run build:assets` | 一次性资产编译 |
 | `bun run start` | 生产环境：构建并启动 |
 | `bun run lint` | Biome 代码检查 |
 | `bun run typecheck` | TypeScript 严格类型检查 |
 | `bun test` | 运行测试套件 |
-| `bun run verify` | 完整流水线：检查 → 类型检查 → 测试 |
+| `bun run verify` | 完整流水线：构建资产 → 检查 → 类型检查 → 测试 |
 
 ### 环境变量
 

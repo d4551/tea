@@ -175,6 +175,103 @@ const asRecord = (value: unknown): Record<string, unknown> =>
 const cloneRecord = <T>(input: Record<string, T>): Record<string, T> =>
   structuredClone(input) as Record<string, T>;
 
+const toBuilderAssetKind = (value: string): BuilderAsset["kind"] | null => {
+  switch (value) {
+    case "background":
+    case "sprite-sheet":
+    case "audio":
+    case "model":
+    case "portrait":
+    case "tiles":
+    case "tile-set":
+    case "material":
+      return value;
+    default:
+      return null;
+  }
+};
+
+const toSceneMode = (value: string): BuilderAsset["sceneMode"] | null => {
+  switch (value) {
+    case "2d":
+    case "3d":
+      return value;
+    default:
+      return null;
+  }
+};
+
+const toSceneNode3dType = (value: string): SceneNode3D["nodeType"] | null => {
+  switch (value) {
+    case "model":
+    case "light":
+    case "camera":
+    case "spawn":
+    case "trigger":
+      return value;
+    default:
+      return null;
+  }
+};
+
+const toSceneNode2dType = (value: string): SceneNode2D["nodeType"] | null => {
+  switch (value) {
+    case "sprite":
+    case "tile":
+    case "spawn":
+    case "trigger":
+    case "camera":
+      return value;
+    default:
+      return null;
+  }
+};
+
+const toGenerationJobKind = (value: string): GenerationJob["kind"] | null => {
+  switch (value) {
+    case "sprite-sheet":
+    case "portrait":
+    case "tiles":
+    case "voice-line":
+    case "animation-plan":
+      return value;
+    default:
+      return null;
+  }
+};
+
+const toGenerationJobStatus = (value: string): GenerationJob["status"] | null => {
+  switch (value) {
+    case "queued":
+    case "running":
+    case "blocked_for_approval":
+    case "succeeded":
+    case "failed":
+    case "canceled":
+      return value;
+    default:
+      return null;
+  }
+};
+
+const toGenerationArtifactKind = (value: string): GenerationArtifact["kind"] | null => {
+  switch (value) {
+    case "background":
+    case "sprite-sheet":
+    case "audio":
+    case "model":
+    case "portrait":
+    case "tiles":
+    case "tile-set":
+    case "material":
+    case "animation-plan":
+    case "automation-evidence":
+      return value;
+    default:
+      return null;
+  }
+};
+
 const checksumOf = (value: unknown): string => {
   const payload = JSON.stringify(value);
   let hash = 0x811c9dc5;
@@ -656,9 +753,13 @@ const toScenesFromRows = (
 
             // 3D node: has z coordinate
             if (z !== null) {
+              const nodeType = toSceneNode3dType(node.nodeType);
+              if (!nodeType) {
+                return [];
+              }
               const node3d: SceneNode3D = {
                 id: node.id,
-                nodeType: node.nodeType as SceneNode3D["nodeType"],
+                nodeType,
                 position: { x, y, z },
                 rotation: {
                   x: node.rotationX ?? 0,
@@ -677,9 +778,13 @@ const toScenesFromRows = (
             }
 
             // 2D node: no z coordinate
+            const nodeType = toSceneNode2dType(node.nodeType);
+            if (!nodeType) {
+              return [];
+            }
             const node2d: SceneNode2D = {
               id: node.id,
-              nodeType: node.nodeType as SceneNode2D["nodeType"],
+              nodeType,
               position: { x, y },
               size: {
                 width: node.sizeWidth ?? 0,
@@ -767,52 +872,71 @@ const toBuilderAssetsFromRows = (
   rows: readonly BuilderProjectAssetRow[],
 ): Record<string, BuilderAsset> =>
   Object.fromEntries(
-    rows.map((row) => [
-      row.id,
-      {
-        id: row.id,
-        kind: row.kind as BuilderAsset["kind"],
-        label: row.label,
-        sceneMode: row.sceneMode as BuilderAsset["sceneMode"],
-        source: row.source,
-        sourceFormat: row.sourceFormat,
-        sourceMimeType: row.sourceMimeType ?? undefined,
-        tags: row.tags.map((t) => t.value),
-        variants: toAssetVariantArray(row.variants),
-        approved: row.approved,
-        createdAtMs: row.createdAt.getTime(),
-        updatedAtMs: row.updatedAt.getTime(),
-      } satisfies BuilderAsset,
-    ]),
+    rows.flatMap((row) => {
+      const kind = toBuilderAssetKind(row.kind);
+      const sceneMode = toSceneMode(row.sceneMode);
+      if (!kind || !sceneMode) {
+        return [];
+      }
+
+      return [
+        [
+          row.id,
+          {
+            id: row.id,
+            kind,
+            label: row.label,
+            sceneMode,
+            source: row.source,
+            sourceFormat: row.sourceFormat,
+            sourceMimeType: row.sourceMimeType ?? undefined,
+            tags: row.tags.map((t) => t.value),
+            variants: toAssetVariantArray(row.variants),
+            approved: row.approved,
+            createdAtMs: row.createdAt.getTime(),
+            updatedAtMs: row.updatedAt.getTime(),
+          } satisfies BuilderAsset,
+        ],
+      ];
+    }),
   ) as Record<string, BuilderAsset>;
 
 const toAnimationClipsFromRows = (
   rows: readonly BuilderProjectAnimationClipRow[],
 ): Record<string, AnimationClip> =>
   Object.fromEntries(
-    rows.map((row) => [
-      row.id,
-      {
-        id: row.id,
-        assetId: row.assetId,
-        label: row.label,
-        sceneMode: row.sceneMode as AnimationClip["sceneMode"],
-        stateTag: row.stateTag,
-        playbackFps: row.playbackFps,
-        startFrame: row.startFrame,
-        frameCount: row.frameCount,
-        loop: row.loop,
-        direction:
-          row.direction === "up" ||
-          row.direction === "down" ||
-          row.direction === "left" ||
-          row.direction === "right"
-            ? row.direction
-            : undefined,
-        createdAtMs: row.createdAt.getTime(),
-        updatedAtMs: row.updatedAt.getTime(),
-      } satisfies AnimationClip,
-    ]),
+    rows.flatMap((row) => {
+      const sceneMode = toSceneMode(row.sceneMode);
+      if (!sceneMode) {
+        return [];
+      }
+
+      return [
+        [
+          row.id,
+          {
+            id: row.id,
+            assetId: row.assetId,
+            label: row.label,
+            sceneMode,
+            stateTag: row.stateTag,
+            playbackFps: row.playbackFps,
+            startFrame: row.startFrame,
+            frameCount: row.frameCount,
+            loop: row.loop,
+            direction:
+              row.direction === "up" ||
+              row.direction === "down" ||
+              row.direction === "left" ||
+              row.direction === "right"
+                ? row.direction
+                : undefined,
+            createdAtMs: row.createdAt.getTime(),
+            updatedAtMs: row.updatedAt.getTime(),
+          } satisfies AnimationClip,
+        ],
+      ];
+    }),
   ) as Record<string, AnimationClip>;
 
 /**
@@ -1162,40 +1286,59 @@ const toGenerationJobsFromRows = (
   rows: readonly BuilderProjectGenerationJobRow[],
 ): Record<string, GenerationJob> =>
   Object.fromEntries(
-    rows.map((row) => [
-      row.id,
-      {
-        id: row.id,
-        kind: row.kind as GenerationJob["kind"],
-        status: row.status as GenerationJob["status"],
-        prompt: row.prompt,
-        targetId: row.targetId ?? undefined,
-        artifactIds: row.artifacts.map((a) => a.artifactId),
-        statusMessage: row.statusMessage,
-        createdAtMs: row.createdAt.getTime(),
-        updatedAtMs: row.updatedAt.getTime(),
-      } satisfies GenerationJob,
-    ]),
+    rows.flatMap((row) => {
+      const kind = toGenerationJobKind(row.kind);
+      const status = toGenerationJobStatus(row.status);
+      if (!kind || !status) {
+        return [];
+      }
+
+      return [
+        [
+          row.id,
+          {
+            id: row.id,
+            kind,
+            status,
+            prompt: row.prompt,
+            targetId: row.targetId ?? undefined,
+            artifactIds: row.artifacts.map((a) => a.artifactId),
+            statusMessage: row.statusMessage,
+            createdAtMs: row.createdAt.getTime(),
+            updatedAtMs: row.updatedAt.getTime(),
+          } satisfies GenerationJob,
+        ],
+      ];
+    }),
   ) as Record<string, GenerationJob>;
 
 const toGenerationArtifactsFromRows = (
   rows: readonly BuilderProjectArtifactRow[],
 ): Record<string, GenerationArtifact> =>
   Object.fromEntries(
-    rows.map((row) => [
-      row.id,
-      {
-        id: row.id,
-        jobId: row.jobId,
-        kind: row.kind as GenerationArtifact["kind"],
-        label: row.label,
-        previewSource: row.previewSource,
-        summary: row.summary,
-        mimeType: row.mimeType ?? undefined,
-        approved: row.approved,
-        createdAtMs: row.createdAt.getTime(),
-      } satisfies GenerationArtifact,
-    ]),
+    rows.flatMap((row) => {
+      const kind = toGenerationArtifactKind(row.kind);
+      if (!kind) {
+        return [];
+      }
+
+      return [
+        [
+          row.id,
+          {
+            id: row.id,
+            jobId: row.jobId,
+            kind,
+            label: row.label,
+            previewSource: row.previewSource,
+            summary: row.summary,
+            mimeType: row.mimeType ?? undefined,
+            approved: row.approved,
+            createdAtMs: row.createdAt.getTime(),
+          } satisfies GenerationArtifact,
+        ],
+      ];
+    }),
   ) as Record<string, GenerationArtifact>;
 
 const parseAutomationStepSpec = (raw: string | null): AutomationStepSpec | undefined => {

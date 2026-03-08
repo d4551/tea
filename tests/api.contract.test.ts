@@ -2062,9 +2062,6 @@ describe("API contracts", () => {
           }),
         }),
       );
-      if (!ingestResponse.ok) {
-        console.error("INGEST ERROR:", await ingestResponse.clone().text());
-      }
       const ingestPayload = (await ingestResponse.json()) as {
         readonly ok: boolean;
         readonly data?: {

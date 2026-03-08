@@ -6,6 +6,7 @@ import type {
   AssetVariant,
   BuilderAsset,
   EntityState,
+  Facing,
   GameActionState,
   GameDialogue,
   GameLocale,
@@ -20,8 +21,12 @@ import type {
   GameUiState,
   InventorySlot,
   NpcState,
+  NpcStateMachine,
   PlayerInventoryState,
   SceneDefinition,
+  SceneMode,
+  SceneNode2D,
+  SceneNode3D,
   SceneNodeDefinition,
   TriggerDefinition,
 } from "../../../shared/contracts/game.ts";
@@ -30,6 +35,103 @@ import { prismaBase } from "../../../shared/services/db.ts";
 import { buildSessionSceneState } from "../utils/session-state.ts";
 
 const logger = createLogger("game.state-store");
+
+const toFacing = (value: string): Facing => {
+  switch (value) {
+    case "up":
+    case "down":
+    case "left":
+    case "right":
+      return value;
+    default:
+      return "down";
+  }
+};
+
+const toParticipantRole = (value: string): Exclude<GameSessionParticipantRole, "owner"> | null => {
+  switch (value) {
+    case "controller":
+    case "spectator":
+      return value;
+    default:
+      return null;
+  }
+};
+
+const toSceneNode3dType = (value: string): SceneNode3D["nodeType"] | null => {
+  switch (value) {
+    case "model":
+    case "light":
+    case "camera":
+    case "spawn":
+    case "trigger":
+      return value;
+    default:
+      return null;
+  }
+};
+
+const toSceneNode2dType = (value: string): SceneNode2D["nodeType"] | null => {
+  switch (value) {
+    case "sprite":
+    case "tile":
+    case "spawn":
+    case "trigger":
+    case "camera":
+      return value;
+    default:
+      return null;
+  }
+};
+
+const toBuilderAssetKind = (value: string): BuilderAsset["kind"] | null => {
+  switch (value) {
+    case "background":
+    case "sprite-sheet":
+    case "audio":
+    case "model":
+    case "portrait":
+    case "tiles":
+    case "tile-set":
+    case "material":
+      return value;
+    default:
+      return null;
+  }
+};
+
+const toSceneMode = (value: string): SceneMode | null => {
+  switch (value) {
+    case "2d":
+    case "3d":
+      return value;
+    default:
+      return null;
+  }
+};
+
+const toNpcStateMachine = (value: string): NpcStateMachine => {
+  switch (value) {
+    case "idle":
+    case "wander":
+    case "face_player":
+    case "talking":
+      return value;
+    default:
+      return "idle";
+  }
+};
+
+const toQuestStepState = (value: string): GameQuestStepState["state"] => {
+  switch (value) {
+    case "pending":
+    case "active":
+    case "completed":
+      return value;
+    default:
+      return "pending";
+  }
+};
 
 /**
  * Canonical session storage contract for domain/game services.
@@ -811,7 +913,7 @@ const toEntityStateFromActorRow = (row: GameSessionActorRow): EntityState => ({
     x: row.positionX,
     y: row.positionY,
   },
-  facing: row.facing as EntityState["facing"],
+  facing: toFacing(row.facing),
   animation: row.animation,
   frame: row.frame,
   velocity: {
@@ -826,11 +928,18 @@ const toEntityStateFromActorRow = (row: GameSessionActorRow): EntityState => ({
   },
 });
 
-const toPresenceFromActorRow = (row: GameSessionActorRow): GameParticipantPresence => ({
-  sessionId: row.participantSessionId,
-  role: row.role as Exclude<GameSessionParticipantRole, "owner">,
-  entity: toEntityStateFromActorRow(row),
-});
+const toPresenceFromActorRow = (row: GameSessionActorRow): GameParticipantPresence | null => {
+  const role = toParticipantRole(row.role);
+  if (!role) {
+    return null;
+  }
+
+  return {
+    sessionId: row.participantSessionId,
+    role,
+    entity: toEntityStateFromActorRow(row),
+  };
+};
 
 const toSceneCollisionsFromRows = (
   rows: readonly GameSessionSceneCollisionRow[],
@@ -860,48 +969,58 @@ const toSceneNodesFromRows = (
         row.scaleZ !== null;
 
       if (isThreeDimensionalNode) {
-        return [
-          {
-            id: row.id,
-            nodeType: row.nodeType as SceneNodeDefinition["nodeType"],
-            assetId: row.assetId ?? undefined,
-            animationClipId: row.animationClipId ?? undefined,
-            position: {
-              x: row.positionX,
-              y: row.positionY,
-              z: row.positionZ ?? 0,
-            },
-            rotation: {
-              x: row.rotationX ?? 0,
-              y: row.rotationY ?? 0,
-              z: row.rotationZ ?? 0,
-            },
-            scale: {
-              x: row.scaleX ?? 1,
-              y: row.scaleY ?? 1,
-              z: row.scaleZ ?? 1,
-            },
-          } as SceneNodeDefinition,
-        ];
-      }
+        const nodeType = toSceneNode3dType(row.nodeType);
+        if (!nodeType) {
+          return [];
+        }
 
-      return [
-        {
+        const node3d: SceneNode3D = {
           id: row.id,
-          nodeType: row.nodeType as SceneNodeDefinition["nodeType"],
+          nodeType,
           assetId: row.assetId ?? undefined,
           animationClipId: row.animationClipId ?? undefined,
           position: {
             x: row.positionX,
             y: row.positionY,
+            z: row.positionZ ?? 0,
           },
-          size: {
-            width: row.sizeWidth ?? 0,
-            height: row.sizeHeight ?? 0,
+          rotation: {
+            x: row.rotationX ?? 0,
+            y: row.rotationY ?? 0,
+            z: row.rotationZ ?? 0,
           },
-          layer: row.layer ?? "scene",
-        } as SceneNodeDefinition,
-      ];
+          scale: {
+            x: row.scaleX ?? 1,
+            y: row.scaleY ?? 1,
+            z: row.scaleZ ?? 1,
+          },
+        };
+
+        return [node3d];
+      }
+
+      const nodeType = toSceneNode2dType(row.nodeType);
+      if (!nodeType) {
+        return [];
+      }
+
+      const node2d: SceneNode2D = {
+        id: row.id,
+        nodeType,
+        assetId: row.assetId ?? undefined,
+        animationClipId: row.animationClipId ?? undefined,
+        position: {
+          x: row.positionX,
+          y: row.positionY,
+        },
+        size: {
+          width: row.sizeWidth ?? 0,
+          height: row.sizeHeight ?? 0,
+        },
+        layer: row.layer ?? "scene",
+      };
+
+      return [node2d];
     });
 
 const toSceneAssetsFromRows = (
@@ -911,7 +1030,13 @@ const toSceneAssetsFromRows = (
 ): readonly BuilderAsset[] =>
   [...assetRows]
     .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
-    .map((assetRow) => {
+    .flatMap((assetRow) => {
+      const kind = toBuilderAssetKind(assetRow.kind);
+      const sceneMode = toSceneMode(assetRow.sceneMode);
+      if (!kind || !sceneMode) {
+        return [];
+      }
+
       const tags = tagRows
         .filter((row) => row.sessionId === assetRow.sessionId && row.assetId === assetRow.id)
         .sort((left, right) => left.ordinal - right.ordinal)
@@ -927,20 +1052,22 @@ const toSceneAssetsFromRows = (
           mimeType: row.mimeType ?? undefined,
         }));
 
-      return {
-        id: assetRow.id,
-        kind: assetRow.kind as BuilderAsset["kind"],
-        label: assetRow.label,
-        sceneMode: assetRow.sceneMode as BuilderAsset["sceneMode"],
-        source: assetRow.source,
-        sourceFormat: assetRow.sourceFormat,
-        sourceMimeType: assetRow.sourceMimeType ?? undefined,
-        tags,
-        variants,
-        approved: assetRow.approved,
-        createdAtMs: assetRow.createdAt.getTime(),
-        updatedAtMs: assetRow.updatedAt.getTime(),
-      };
+      return [
+        {
+          id: assetRow.id,
+          kind,
+          label: assetRow.label,
+          sceneMode,
+          source: assetRow.source,
+          sourceFormat: assetRow.sourceFormat,
+          sourceMimeType: assetRow.sourceMimeType ?? undefined,
+          tags,
+          variants,
+          approved: assetRow.approved,
+          createdAtMs: assetRow.createdAt.getTime(),
+          updatedAtMs: assetRow.updatedAt.getTime(),
+        },
+      ];
     });
 
 const toDialogueFromRuntimeStateRow = (
@@ -1000,7 +1127,7 @@ const toNpcStatesFromRows = (
         x: row.positionX,
         y: row.positionY,
       },
-      facing: row.facing as EntityState["facing"],
+      facing: toFacing(row.facing),
       animation: row.animation,
       frame: row.frame,
       velocity: {
@@ -1035,7 +1162,7 @@ const toNpcStatesFromRows = (
         greetLineKey: row.greetLineKey,
       },
       active: row.active,
-      state: row.state as NpcState["state"],
+      state: toNpcStateMachine(row.state),
     }));
 };
 
@@ -1223,7 +1350,7 @@ const toSessionQuestsFromRows = (
         id: row.id,
         title: row.title,
         description: row.description,
-        state: row.state as GameQuestStepState["state"],
+        state: toQuestStepState(row.state),
       },
     });
     stepsByQuestId.set(row.questId, current);
@@ -1406,9 +1533,15 @@ const restoreSceneState = (
   );
 
   if (ownerActor) {
+    const storedSceneMode = sceneStateRow ? toSceneMode(sceneStateRow.sceneMode) : null;
+    const sceneMode = storedSceneMode ?? "2d";
+    const coPlayers = coPlayerActors
+      .map((actor) => toPresenceFromActorRow(actor))
+      .filter((presence): presence is GameParticipantPresence => presence !== null);
+
     const candidateScene = {
       sceneId: row.sceneId,
-      sceneMode: (sceneStateRow?.sceneMode as GameSceneState["sceneMode"] | undefined) ?? "2d",
+      sceneMode,
       sceneTitle: sceneStateRow?.sceneTitle ?? row.sceneId,
       background: sceneStateRow?.background ?? gameAssetUrls.teaHouseBackground,
       geometry:
@@ -1422,10 +1555,7 @@ const restoreSceneState = (
       nodes: sceneNodeRows.length > 0 ? persistedNodes : [],
       assets: sceneAssetRows.length > 0 ? persistedAssets : [],
       player: toEntityStateFromActorRow(ownerActor),
-      coPlayers:
-        coPlayerActors.length > 0
-          ? coPlayerActors.map((actor) => toPresenceFromActorRow(actor))
-          : [],
+      coPlayers,
       npcs: persistedNpcs.length > 0 ? persistedNpcs : [],
       camera: runtimeStateRow
         ? {
@@ -1449,7 +1579,6 @@ const restoreSceneState = (
         releaseVersion: row.releaseVersion ?? undefined,
         triggerDefinitions:
           persistedTriggers.length > 0 ? structuredClone(persistedTriggers) : undefined,
-        repaired: false,
         migratedSceneState: sceneStateRow === null,
         migratedActors: actorRows.length === 0,
         migratedTriggers: false,
@@ -1457,6 +1586,9 @@ const restoreSceneState = (
         migratedFlags: false,
         migratedRuntimeState: runtimeStateRow === null,
         migratedNpcs: false,
+        repaired:
+          (sceneStateRow !== null && storedSceneMode === null) ||
+          coPlayers.length !== coPlayerActors.length,
       };
     }
   }
@@ -2542,12 +2674,21 @@ class PrismaGameStateStore implements GameStateStore {
       orderBy: { createdAt: "asc" },
     });
 
-    return rows.map((row) => ({
-      sessionId: row.participantSessionId,
-      role: row.role as Exclude<GameSessionParticipantRole, "owner">,
-      joinedAtMs: row.createdAt.getTime(),
-      updatedAtMs: row.updatedAt.getTime(),
-    }));
+    return rows.flatMap((row) => {
+      const role = toParticipantRole(row.role);
+      if (!role) {
+        return [];
+      }
+
+      return [
+        {
+          sessionId: row.participantSessionId,
+          role,
+          joinedAtMs: row.createdAt.getTime(),
+          updatedAtMs: row.updatedAt.getTime(),
+        },
+      ];
+    });
   }
 
   public async saveParticipant(
@@ -2572,9 +2713,11 @@ class PrismaGameStateStore implements GameStateStore {
       },
     });
 
+    const participantRole = toParticipantRole(row.role);
+
     return {
       sessionId: row.participantSessionId,
-      role: row.role as Exclude<GameSessionParticipantRole, "owner">,
+      role: participantRole ?? role,
       joinedAtMs: row.createdAt.getTime(),
       updatedAtMs: row.updatedAt.getTime(),
     };
