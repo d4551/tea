@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ssePlugin, type SseUtils } from "../src/plugins/sse-plugin.ts";
+import { type SseUtils, ssePlugin } from "../src/plugins/sse-plugin.ts";
 
 /**
  * SSE Plugin unit tests.

@@ -274,6 +274,44 @@ const toGenerationArtifactKind = (value: string): GenerationArtifact["kind"] | n
   }
 };
 
+const toAutomationRunStatus = (value: string): AutomationRun["status"] | null => {
+  switch (value) {
+    case "queued":
+    case "running":
+    case "blocked_for_approval":
+    case "succeeded":
+    case "failed":
+    case "canceled":
+      return value;
+    default:
+      return null;
+  }
+};
+
+const toAutomationStepAction = (value: string): AutomationRunStep["action"] | null => {
+  switch (value) {
+    case "browser":
+    case "http":
+    case "builder":
+    case "attach-file":
+      return value;
+    default:
+      return null;
+  }
+};
+
+const toAutomationStepStatus = (value: string): AutomationRunStep["status"] | null => {
+  switch (value) {
+    case "pending":
+    case "running":
+    case "completed":
+    case "failed":
+      return value;
+    default:
+      return null;
+  }
+};
+
 const checksumOf = (value: unknown): string => {
   const payload = JSON.stringify(value);
   let hash = 0x811c9dc5;
@@ -1343,44 +1381,254 @@ const toGenerationArtifactsFromRows = (
     }),
   ) as Record<string, GenerationArtifact>;
 
-const parseAutomationStepSpec = (raw: string | null): AutomationStepSpec | undefined => {
-  if (!raw) {
+const toStringRecord = (value: unknown): Readonly<Record<string, string>> | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const entries = Object.entries(value);
+  if (!entries.every(([, entryValue]) => typeof entryValue === "string")) {
+    return null;
+  }
+
+  return Object.fromEntries(entries) as Readonly<Record<string, string>>;
+};
+
+const parseAutomationStepSpecValue = (value: unknown): AutomationStepSpec | undefined => {
+  const record = asRecord(value);
+  const kind = toStringValue(record.kind);
+  if (!kind) {
     return undefined;
   }
 
-  const parsed = safeJsonParse<unknown>(raw, null);
-  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-    ? (parsed as AutomationStepSpec)
-    : undefined;
+  switch (kind) {
+    case "goto": {
+      const path = toStringValue(record.path);
+      return path?.startsWith("/") ? { kind, path } : undefined;
+    }
+    case "click": {
+      const role = toStringValue(record.role);
+      const name = toStringValue(record.name);
+      return role &&
+        name &&
+        (role === "button" ||
+          role === "link" ||
+          role === "tab" ||
+          role === "checkbox" ||
+          role === "radio" ||
+          role === "textbox")
+        ? { kind, role, name }
+        : undefined;
+    }
+    case "fill": {
+      const role = toStringValue(record.role);
+      const name = toStringValue(record.name);
+      const valueText = toStringValue(record.value);
+      return role &&
+        name &&
+        valueText &&
+        (role === "textbox" || role === "searchbox" || role === "combobox")
+        ? { kind, role, name, value: valueText }
+        : undefined;
+    }
+    case "assert-text": {
+      const text = toStringValue(record.text);
+      return text ? { kind, text } : undefined;
+    }
+    case "screenshot": {
+      const fileStem = toStringValue(record.fileStem);
+      const fullPage = toBooleanValue(record.fullPage);
+      return fileStem
+        ? {
+            kind,
+            fileStem,
+            ...(fullPage === null ? {} : { fullPage }),
+          }
+        : undefined;
+    }
+    case "request": {
+      const method = toStringValue(record.method);
+      const path = toStringValue(record.path);
+      const form = record.form === undefined ? undefined : toStringRecord(record.form);
+      const expectedStatusValue =
+        record.expectedStatus === undefined ? undefined : toNumberValue(record.expectedStatus);
+      const expectedStatus = expectedStatusValue === null ? undefined : expectedStatusValue;
+      const responseFileStem = toStringValue(record.responseFileStem) ?? undefined;
+      return (method === "GET" || method === "POST") &&
+        path &&
+        path.startsWith("/") &&
+        form !== null &&
+        (expectedStatus === undefined || Number.isInteger(expectedStatus))
+        ? {
+            kind,
+            method,
+            path,
+            ...(form ? { form } : {}),
+            ...(expectedStatus === undefined ? {} : { expectedStatus }),
+            ...(responseFileStem ? { responseFileStem } : {}),
+          }
+        : undefined;
+    }
+    case "create-scene": {
+      const id = toStringValue(record.id);
+      const titleKey = toStringValue(record.titleKey);
+      const background = toStringValue(record.background);
+      const sceneMode = toSceneMode(toStringValue(record.sceneMode) ?? "");
+      return id && titleKey && background && sceneMode
+        ? { kind, id, titleKey, background, sceneMode }
+        : undefined;
+    }
+    case "create-trigger": {
+      const id = toStringValue(record.id);
+      const label = toStringValue(record.label);
+      const event = toStringValue(record.event);
+      return id &&
+        label &&
+        event &&
+        (event === "scene-enter" ||
+          event === "npc-interact" ||
+          event === "chat" ||
+          event === "dialogue-confirmed" ||
+          event === "combat-victory" ||
+          event === "item-acquired" ||
+          event === "cutscene-completed")
+        ? {
+            kind,
+            id,
+            label,
+            event,
+            sceneId: toStringValue(record.sceneId) ?? undefined,
+            npcId: toStringValue(record.npcId) ?? undefined,
+          }
+        : undefined;
+    }
+    case "create-quest": {
+      const id = toStringValue(record.id);
+      const title = toStringValue(record.title);
+      const description = toStringValue(record.description);
+      const triggerId = toStringValue(record.triggerId);
+      return id && title && description && triggerId
+        ? { kind, id, title, description, triggerId }
+        : undefined;
+    }
+    case "create-dialogue-graph": {
+      const id = toStringValue(record.id);
+      const title = toStringValue(record.title);
+      const line = toStringValue(record.line);
+      return id && title && line
+        ? {
+            kind,
+            id,
+            title,
+            line,
+            npcId: toStringValue(record.npcId) ?? undefined,
+          }
+        : undefined;
+    }
+    case "create-asset": {
+      const id = toStringValue(record.id);
+      const label = toStringValue(record.label);
+      const assetKind = toBuilderAssetKind(toStringValue(record.assetKind) ?? "");
+      const sceneMode = toSceneMode(toStringValue(record.sceneMode) ?? "");
+      const source = toStringValue(record.source);
+      return id && label && assetKind && sceneMode && source
+        ? { kind, id, label, assetKind, sceneMode, source }
+        : undefined;
+    }
+    case "create-animation-clip": {
+      const id = toStringValue(record.id);
+      const assetId = toStringValue(record.assetId);
+      const stateTag = toStringValue(record.stateTag);
+      const playbackFpsValue =
+        record.playbackFps === undefined ? undefined : toNumberValue(record.playbackFps);
+      const frameCountValue =
+        record.frameCount === undefined ? undefined : toNumberValue(record.frameCount);
+      const playbackFps = playbackFpsValue === null ? undefined : playbackFpsValue;
+      const frameCount = frameCountValue === null ? undefined : frameCountValue;
+      return id &&
+        assetId &&
+        stateTag &&
+        (playbackFps === undefined || Number.isInteger(playbackFps)) &&
+        (frameCount === undefined || Number.isInteger(frameCount))
+        ? {
+            kind,
+            id,
+            assetId,
+            stateTag,
+            ...(playbackFps === undefined ? {} : { playbackFps }),
+            ...(frameCount === undefined ? {} : { frameCount }),
+          }
+        : undefined;
+    }
+    case "queue-generation-job": {
+      const jobKind = toGenerationJobKind(toStringValue(record.jobKind) ?? "");
+      const prompt = toStringValue(record.prompt);
+      return jobKind && prompt
+        ? {
+            kind,
+            jobKind,
+            prompt,
+            targetId: toStringValue(record.targetId) ?? undefined,
+          }
+        : undefined;
+    }
+    case "attach-generated-artifact": {
+      const sourceStepId = toStringValue(record.sourceStepId);
+      return sourceStepId ? { kind, sourceStepId } : undefined;
+    }
+    default:
+      return undefined;
+  }
 };
+
+const parseAutomationStepSpec = (raw: string | null): AutomationStepSpec | undefined =>
+  raw ? parseAutomationStepSpecValue(safeJsonParse<unknown>(raw, null)) : undefined;
 
 const toAutomationRunsFromRows = (
   rows: readonly BuilderProjectAutomationRunRow[],
 ): Record<string, AutomationRun> =>
   Object.fromEntries(
-    rows.map((row) => [
-      row.id,
-      {
-        id: row.id,
-        status: row.status as AutomationRun["status"],
-        goal: row.goal,
-        steps: row.steps.map(
-          (step) =>
-            ({
-              id: step.id,
-              action: step.action as AutomationRunStep["action"],
-              summary: step.summary,
-              status: step.status as AutomationRunStep["status"],
-              spec: parseAutomationStepSpec(step.specJson ?? null),
-              evidenceSource: step.evidenceSource ?? undefined,
-            }) satisfies AutomationRunStep,
-        ),
-        artifactIds: row.artifacts.map((a) => a.artifactId),
-        statusMessage: row.statusMessage,
-        createdAtMs: row.createdAt.getTime(),
-        updatedAtMs: row.updatedAt.getTime(),
-      } satisfies AutomationRun,
-    ]),
+    rows.flatMap((row) => {
+      const status = toAutomationRunStatus(row.status);
+      if (!status) {
+        return [];
+      }
+
+      const steps = row.steps.flatMap((step) => {
+        const action = toAutomationStepAction(step.action);
+        const stepStatus = toAutomationStepStatus(step.status);
+        if (!action || !stepStatus) {
+          return [];
+        }
+
+        return [
+          {
+            id: step.id,
+            action,
+            summary: step.summary,
+            status: stepStatus,
+            spec: parseAutomationStepSpec(step.specJson ?? null),
+            evidenceSource: step.evidenceSource ?? undefined,
+          } satisfies AutomationRunStep,
+        ];
+      });
+
+      return [
+        [
+          row.id,
+          {
+            id: row.id,
+            status,
+            goal: row.goal,
+            steps,
+            artifactIds: row.artifacts.map((artifact) => artifact.artifactId),
+            statusMessage: row.statusMessage,
+            createdAtMs: row.createdAt.getTime(),
+            updatedAtMs: row.updatedAt.getTime(),
+          } satisfies AutomationRun,
+        ],
+      ];
+    }),
   ) as Record<string, AutomationRun>;
 
 const withDraftWorkerState = (
@@ -1701,7 +1949,7 @@ const parseGenerationArtifactRecord = (
 const parseAutomationRunRecord = (runId: string, value: unknown): AutomationRun | null => {
   const record = asRecord(value);
   const goal = toStringValue(record.goal);
-  const status = toStringValue(record.status);
+  const status = toAutomationRunStatus(toStringValue(record.status) ?? "");
   const statusMessage = toStringValue(record.statusMessage);
   const createdAtMs = toNumberValue(record.createdAtMs);
   const updatedAtMs = toNumberValue(record.updatedAtMs);
@@ -1713,12 +1961,7 @@ const parseAutomationRunRecord = (runId: string, value: unknown): AutomationRun 
   const stepRecords = Array.isArray(record.steps) ? record.steps : null;
   if (
     !goal ||
-    (status !== "queued" &&
-      status !== "running" &&
-      status !== "blocked_for_approval" &&
-      status !== "succeeded" &&
-      status !== "failed" &&
-      status !== "canceled") ||
+    !status ||
     !statusMessage ||
     createdAtMs === null ||
     updatedAtMs === null ||
@@ -1731,21 +1974,10 @@ const parseAutomationRunRecord = (runId: string, value: unknown): AutomationRun 
   const steps = stepRecords.flatMap((stepValue) => {
     const stepRecord = asRecord(stepValue);
     const id = toStringValue(stepRecord.id);
-    const action = toStringValue(stepRecord.action);
+    const action = toAutomationStepAction(toStringValue(stepRecord.action) ?? "");
     const summary = toStringValue(stepRecord.summary);
-    const stepStatus = toStringValue(stepRecord.status);
-    if (
-      !id ||
-      (action !== "browser" &&
-        action !== "http" &&
-        action !== "builder" &&
-        action !== "attach-file") ||
-      !summary ||
-      (stepStatus !== "pending" &&
-        stepStatus !== "running" &&
-        stepStatus !== "completed" &&
-        stepStatus !== "failed")
-    ) {
+    const stepStatus = toAutomationStepStatus(toStringValue(stepRecord.status) ?? "");
+    if (!id || !action || !summary || !stepStatus) {
       return [];
     }
 
@@ -1755,10 +1987,7 @@ const parseAutomationRunRecord = (runId: string, value: unknown): AutomationRun 
         action,
         summary,
         status: stepStatus,
-        spec:
-          stepRecord.spec && typeof stepRecord.spec === "object" && !Array.isArray(stepRecord.spec)
-            ? (stepRecord.spec as AutomationStepSpec)
-            : undefined,
+        spec: parseAutomationStepSpecValue(stepRecord.spec),
         evidenceSource: toStringValue(stepRecord.evidenceSource) ?? undefined,
       } satisfies AutomationRunStep,
     ];
