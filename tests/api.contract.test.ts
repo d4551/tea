@@ -2,7 +2,6 @@ import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { createApp } from "../src/app.ts";
 import { appConfig } from "../src/config/environment.ts";
 import { ProviderRegistry } from "../src/domain/ai/providers/provider-registry.ts";
-import type { BuilderProjectSnapshot } from "../src/domain/builder/builder-project-state-store.ts";
 import { builderService } from "../src/domain/builder/builder-service.ts";
 import { gameLoop } from "../src/domain/game/game-loop.ts";
 import { correlationIdHeader } from "../src/lib/correlation-id.ts";
@@ -11,13 +10,15 @@ import { gameAssetUrls } from "../src/shared/constants/game-assets.ts";
 import { contentType, httpStatus } from "../src/shared/constants/http.ts";
 import { defaultOracleMode } from "../src/shared/constants/oracle.ts";
 import { appRoutes, withQueryParameters } from "../src/shared/constants/routes.ts";
-import { prisma } from "../src/shared/services/db.ts";
+import { prisma, prismaBase } from "../src/shared/services/db.ts";
 
 let app: Awaited<ReturnType<typeof createApp>>;
 const baseUrl = "http://localhost";
 const managedSessionIds = new Set<string>();
 
 const toUrl = (path: string): string => `${baseUrl}${path}`;
+const withSessionId = (pattern: string, sessionId: string): string =>
+  pattern.replace(":id", encodeURIComponent(sessionId));
 const countOccurrences = (source: string, fragment: string): number =>
   source.split(fragment).length - 1;
 const drainResponseBody = async (response: Response): Promise<void> => {
@@ -131,25 +132,6 @@ const createBuilderProject = async (projectId = `contract-${Date.now()}`) => {
 
   return { response, payload };
 };
-
-const snapshotToDraftState = (snapshot: BuilderProjectSnapshot): Record<string, unknown> => ({
-  scenes: Object.fromEntries(snapshot.scenes),
-  dialogues: Object.fromEntries(
-    [...snapshot.dialogues.entries()].map(([locale, catalog]) => [
-      locale,
-      Object.fromEntries(catalog),
-    ]),
-  ),
-  assets: Object.fromEntries(snapshot.assets),
-  animationClips: Object.fromEntries(snapshot.animationClips),
-  dialogueGraphs: Object.fromEntries(snapshot.dialogueGraphs),
-  quests: Object.fromEntries(snapshot.quests),
-  triggers: Object.fromEntries(snapshot.triggers),
-  flags: Object.fromEntries(snapshot.flags),
-  generationJobs: Object.fromEntries(snapshot.generationJobs),
-  artifacts: Object.fromEntries(snapshot.artifacts),
-  automationRuns: Object.fromEntries(snapshot.automationRuns),
-});
 
 beforeAll(async () => {
   app = await createApp();
@@ -808,7 +790,7 @@ describe("API contracts", () => {
     expect(movedControllerX > initialControllerX).toBe(true);
   });
 
-  test("game session state endpoint repairs malformed persisted scene payloads", async () => {
+  test("game session state endpoint repairs malformed normalized scene metadata", async () => {
     if (appConfig.game.sessionStore !== "prisma") {
       expect(true).toBe(true);
       return;
@@ -837,10 +819,10 @@ describe("API contracts", () => {
     const sessionId = createPayload.data?.sessionId ?? "";
     managedSessionIds.add(sessionId);
 
-    await prisma.gameSession.update({
-      where: { id: sessionId },
+    await prismaBase.gameSessionSceneState.update({
+      where: { sessionId },
       data: {
-        state: "malformed-state",
+        sceneMode: "invalid-scene-mode",
       },
     });
 
@@ -864,8 +846,8 @@ describe("API contracts", () => {
       };
     };
 
-    const repairedRow = await prisma.gameSession.findUnique({
-      where: { id: sessionId },
+    const repairedSceneStateRow = await prismaBase.gameSessionSceneState.findUnique({
+      where: { sessionId },
     });
 
     expect(createResponse.status).toBe(httpStatus.ok);
@@ -875,16 +857,251 @@ describe("API contracts", () => {
     expect(statePayload.data?.sessionId).toBe(sessionId);
     expect(statePayload.data?.state?.sceneId?.length).toBeGreaterThan(0);
     expect(statePayload.data?.state?.player?.id).toBe("player");
-    expect(repairedRow?.state).not.toBeNull();
-    expect(typeof repairedRow?.state).toBe("object");
-    expect(
-      typeof repairedRow?.state === "object" &&
-        repairedRow.state !== null &&
-        "scene" in repairedRow.state &&
-        typeof repairedRow.state.scene === "object" &&
-        repairedRow.state.scene !== null &&
-        "sceneId" in repairedRow.state.scene,
-    ).toBe(true);
+    expect(repairedSceneStateRow?.sceneMode).toBe("2d");
+    expect(repairedSceneStateRow?.sceneTitle?.length).toBeGreaterThan(0);
+  });
+
+  test("game sessions persist runtime actor state in normalized session tables", async () => {
+    const createResponse = await app.handle(
+      new Request(toUrl(appRoutes.gameApiSession), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          locale: "en-US",
+        }),
+      }),
+    );
+    const createPayload = (await createResponse.json()) as {
+      readonly ok: boolean;
+      readonly data?: {
+        readonly sessionId: string;
+      };
+    };
+    const sessionId = createPayload.data?.sessionId ?? "";
+    managedSessionIds.add(sessionId);
+
+    const [
+      sceneStateRow,
+      sceneCollisionRows,
+      sceneNodeRows,
+      sceneAssetRows,
+      actorRows,
+      runtimeStateRow,
+      npcRows,
+      npcDialogueKeyRows,
+      npcDialogueEntryRows,
+      questRows,
+      flagRows,
+    ] = await Promise.all([
+      prismaBase.gameSessionSceneState.findUnique({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionSceneCollision.findMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionSceneNode.findMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionSceneAsset.findMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionActor.findMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionRuntimeState.findUnique({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionNpc.findMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionNpcDialogueKey.findMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionNpcDialogueEntry.findMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionQuest.findMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionFlag.findMany({
+        where: { sessionId },
+      }),
+    ]);
+
+    expect(createResponse.status).toBe(httpStatus.ok);
+    expect(createPayload.ok).toBe(true);
+    expect(sceneStateRow).not.toBeNull();
+    expect(Array.isArray(sceneCollisionRows)).toBe(true);
+    expect(Array.isArray(sceneNodeRows)).toBe(true);
+    expect(Array.isArray(sceneAssetRows)).toBe(true);
+    expect(actorRows.length).toBeGreaterThan(0);
+    expect(runtimeStateRow).not.toBeNull();
+    expect(npcRows.length).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(npcDialogueKeyRows)).toBe(true);
+    expect(Array.isArray(npcDialogueEntryRows)).toBe(true);
+    expect(Array.isArray(questRows)).toBe(true);
+    expect(Array.isArray(flagRows)).toBe(true);
+  });
+
+  test("game sessions repair missing normalized runtime state into canonical tables", async () => {
+    const createResponse = await app.handle(
+      new Request(toUrl(appRoutes.gameApiSession), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          locale: "en-US",
+        }),
+      }),
+    );
+    const createPayload = (await createResponse.json()) as {
+      readonly ok: boolean;
+      readonly data?: {
+        readonly sessionId: string;
+      };
+    };
+    const sessionId = createPayload.data?.sessionId ?? "";
+    managedSessionIds.add(sessionId);
+    const sessionCookie = readSessionCookieHeader(createResponse) ?? "";
+
+    await prismaBase.$transaction([
+      prismaBase.gameSessionActor.deleteMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionSceneState.deleteMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionSceneCollision.deleteMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionSceneNode.deleteMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionSceneAssetVariant.deleteMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionSceneAssetTag.deleteMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionSceneAsset.deleteMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionRuntimeState.deleteMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionNpcDialogueEntry.deleteMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionNpcDialogueKey.deleteMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionNpc.deleteMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionQuestStep.deleteMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionQuest.deleteMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionFlag.deleteMany({
+        where: { sessionId },
+      }),
+    ]);
+
+    const stateResponse = await app.handle(
+      new Request(toUrl(withSessionId(appRoutes.gameApiSessionState, sessionId)), {
+        headers: {
+          cookie: sessionCookie,
+        },
+      }),
+    );
+    const statePayload = (await stateResponse.json()) as {
+      readonly ok: boolean;
+      readonly data?: {
+        readonly state: {
+          readonly sceneId?: string;
+          readonly player?: { readonly id: string };
+        };
+      };
+    };
+
+    const [
+      repairedActorRows,
+      repairedRuntimeStateRow,
+      repairedSceneStateRow,
+      repairedSceneCollisionRows,
+      repairedSceneNodeRows,
+      repairedSceneAssetRows,
+      repairedSceneAssetTagRows,
+      repairedSceneAssetVariantRows,
+      repairedNpcRows,
+      repairedNpcDialogueKeyRows,
+      repairedNpcDialogueEntryRows,
+      repairedQuestRows,
+      repairedFlagRows,
+    ] = await Promise.all([
+      prismaBase.gameSessionActor.findMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionRuntimeState.findUnique({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionSceneState.findUnique({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionSceneCollision.findMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionSceneNode.findMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionSceneAsset.findMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionSceneAssetTag.findMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionSceneAssetVariant.findMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionNpc.findMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionNpcDialogueKey.findMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionNpcDialogueEntry.findMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionQuest.findMany({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionFlag.findMany({
+        where: { sessionId },
+      }),
+    ]);
+
+    expect(stateResponse.status).toBe(httpStatus.ok);
+    expect(statePayload.ok).toBe(true);
+    expect(statePayload.data?.state.sceneId?.length).toBeGreaterThan(0);
+    expect(statePayload.data?.state.player?.id).toBe("player");
+    expect(repairedActorRows.length).toBeGreaterThan(0);
+    expect(repairedRuntimeStateRow).not.toBeNull();
+    expect(repairedSceneStateRow?.sceneMode).toBe("2d");
+    expect(Array.isArray(repairedSceneCollisionRows)).toBe(true);
+    expect(Array.isArray(repairedSceneNodeRows)).toBe(true);
+    expect(Array.isArray(repairedSceneAssetRows)).toBe(true);
+    expect(Array.isArray(repairedSceneAssetTagRows)).toBe(true);
+    expect(Array.isArray(repairedSceneAssetVariantRows)).toBe(true);
+    expect(Array.isArray(repairedNpcRows)).toBe(true);
+    expect(Array.isArray(repairedNpcDialogueKeyRows)).toBe(true);
+    expect(Array.isArray(repairedNpcDialogueEntryRows)).toBe(true);
+    expect(Array.isArray(repairedQuestRows)).toBe(true);
+    expect(Array.isArray(repairedFlagRows)).toBe(true);
   });
 
   test("game session save endpoint returns not found envelope for missing session", async () => {
@@ -1351,69 +1568,63 @@ describe("API contracts", () => {
     const projectId = `media-${crypto.randomUUID()}`;
     await createBuilderProject(projectId);
 
-    const [projectRow, assetCount, clipCount] = await Promise.all([
-      prisma.builderProject.findUnique({
-        where: { id: projectId },
-        select: { state: true },
-      }),
-      prisma.builderProjectAsset.count({ where: { projectId } }),
-      prisma.builderProjectAnimationClip.count({ where: { projectId } }),
-    ]);
-
-    const stateRecord = asRecord(projectRow?.state);
-    expect("assets" in stateRecord).toBe(false);
-    expect("animationClips" in stateRecord).toBe(false);
-    expect(assetCount).toBeGreaterThan(0);
-    expect(clipCount).toBeGreaterThan(0);
-  });
-
-  test("builder project reads promote blob-backed media into relational draft rows", async () => {
-    const projectId = `blob-media-${crypto.randomUUID()}`;
-    await createBuilderProject(projectId);
     const snapshot = await builderService.getProject(projectId);
     expect(snapshot).not.toBeNull();
     if (!snapshot) {
       return;
     }
 
-    await prisma.builderProjectAnimationClip.deleteMany({ where: { projectId } });
-    await prisma.builderProjectAsset.deleteMany({ where: { projectId } });
-    await prisma.builderProject.update({
-      where: { id: projectId },
-      data: {
-        state: JSON.parse(JSON.stringify(snapshotToDraftState(snapshot))),
-      },
-    });
+    const expectedTagCount = [...snapshot.assets.values()].reduce(
+      (count, asset) => count + asset.tags.length,
+      0,
+    );
+    const expectedVariantCount = [...snapshot.assets.values()].reduce(
+      (count, asset) => count + asset.variants.length,
+      0,
+    );
 
-    const migratedSnapshot = await builderService.getProject(projectId);
-    const [projectRow, assetCount, clipCount] = await Promise.all([
-      prisma.builderProject.findUnique({
-        where: { id: projectId },
-        select: { state: true },
-      }),
-      prisma.builderProjectAsset.count({ where: { projectId } }),
-      prisma.builderProjectAnimationClip.count({ where: { projectId } }),
-    ]);
-
-    expect(migratedSnapshot).not.toBeNull();
-    expect(assetCount).toBe(snapshot.assets.size);
-    expect(clipCount).toBe(snapshot.animationClips.size);
+    const [projectRow, assetCount, assetTagCount, assetVariantCount, clipCount] = await Promise.all(
+      [
+        prisma.builderProject.findUnique({
+          where: { id: projectId },
+          select: { state: true },
+        }),
+        prisma.builderProjectAsset.count({ where: { projectId } }),
+        prisma.builderProjectAssetTag.count({ where: { projectId } }),
+        prisma.builderProjectAssetVariant.count({ where: { projectId } }),
+        prisma.builderProjectAnimationClip.count({ where: { projectId } }),
+      ],
+    );
 
     const stateRecord = asRecord(projectRow?.state);
     expect("assets" in stateRecord).toBe(false);
     expect("animationClips" in stateRecord).toBe(false);
+    expect(assetCount).toBeGreaterThan(0);
+    expect(assetTagCount).toBe(expectedTagCount);
+    expect(assetVariantCount).toBe(expectedVariantCount);
+    expect(clipCount).toBeGreaterThan(0);
   });
 
   test("builder project creation stores scenes and localized dialogue entries outside the draft state blob", async () => {
     const projectId = `content-${crypto.randomUUID()}`;
     await createBuilderProject(projectId);
 
-    const [projectRow, sceneCount, dialogueEntryCount] = await Promise.all([
+    const [
+      projectRow,
+      sceneCount,
+      sceneCollisionCount,
+      sceneNpcCount,
+      sceneNodeCount,
+      dialogueEntryCount,
+    ] = await Promise.all([
       prisma.builderProject.findUnique({
         where: { id: projectId },
         select: { state: true },
       }),
       prisma.builderProjectScene.count({ where: { projectId } }),
+      prisma.builderProjectSceneCollision.count({ where: { projectId } }),
+      prisma.builderProjectSceneNpc.count({ where: { projectId } }),
+      prisma.builderProjectSceneNode.count({ where: { projectId } }),
       prisma.builderProjectDialogueEntry.count({ where: { projectId } }),
     ]);
 
@@ -1421,11 +1632,14 @@ describe("API contracts", () => {
     expect("scenes" in stateRecord).toBe(false);
     expect("dialogues" in stateRecord).toBe(false);
     expect(sceneCount).toBeGreaterThan(0);
+    expect(sceneCollisionCount).toBeGreaterThan(0);
+    expect(sceneNpcCount).toBeGreaterThan(0);
+    expect(sceneNodeCount).toBeGreaterThan(0);
     expect(dialogueEntryCount).toBeGreaterThan(0);
   });
 
-  test("builder project reads promote blob-backed scenes and dialogue catalogs into relational draft rows", async () => {
-    const projectId = `blob-content-${crypto.randomUUID()}`;
+  test("builder mechanics state stores dialogue graphs quests triggers and flags outside the draft state blob", async () => {
+    const projectId = `mechanics-state-${crypto.randomUUID()}`;
     await createBuilderProject(projectId);
     const snapshot = await builderService.getProject(projectId);
     expect(snapshot).not.toBeNull();
@@ -1433,54 +1647,64 @@ describe("API contracts", () => {
       return;
     }
 
-    await prisma.builderProjectDialogueEntry.deleteMany({ where: { projectId } });
-    await prisma.builderProjectScene.deleteMany({ where: { projectId } });
-    await prisma.builderProject.update({
-      where: { id: projectId },
-      data: {
-        state: JSON.parse(JSON.stringify(snapshotToDraftState(snapshot))),
-      },
-    });
-
-    const migratedSnapshot = await builderService.getProject(projectId);
-    const [projectRow, sceneCount, dialogueEntryCount] = await Promise.all([
+    const [
+      projectRow,
+      dialogueGraphCount,
+      dialogueGraphNodeCount,
+      dialogueGraphEdgeCount,
+      questCount,
+      questStepCount,
+      triggerCount,
+      triggerRequiredFlagCount,
+      triggerSetFlagCount,
+      flagCount,
+      flagRows,
+    ] = await Promise.all([
       prisma.builderProject.findUnique({
         where: { id: projectId },
         select: { state: true },
       }),
-      prisma.builderProjectScene.count({ where: { projectId } }),
-      prisma.builderProjectDialogueEntry.count({ where: { projectId } }),
+      prisma.builderProjectDialogueGraph.count({ where: { projectId } }),
+      prisma.builderProjectDialogueGraphNode.count({ where: { projectId } }),
+      prisma.builderProjectDialogueGraphEdge.count({ where: { projectId } }),
+      prisma.builderProjectQuest.count({ where: { projectId } }),
+      prisma.builderProjectQuestStep.count({ where: { projectId } }),
+      prisma.builderProjectTrigger.count({ where: { projectId } }),
+      prisma.builderProjectTriggerRequiredFlag.count({ where: { projectId } }),
+      prisma.builderProjectTriggerSetFlag.count({ where: { projectId } }),
+      prisma.builderProjectFlag.count({ where: { projectId } }),
+      prisma.builderProjectFlag.findMany({
+        where: { projectId },
+        select: {
+          key: true,
+          valueType: true,
+          stringValue: true,
+          numberValue: true,
+          boolValue: true,
+        },
+      }),
     ]);
 
-    const expectedDialogueCount = [...snapshot.dialogues.values()].reduce(
-      (count, catalog) => count + catalog.size,
+    const expectedDialogueGraphNodeCount = [...snapshot.dialogueGraphs.values()].reduce(
+      (count, graph) => count + graph.nodes.length,
       0,
     );
-
-    expect(migratedSnapshot).not.toBeNull();
-    expect(sceneCount).toBe(snapshot.scenes.size);
-    expect(dialogueEntryCount).toBe(expectedDialogueCount);
-
-    const stateRecord = asRecord(projectRow?.state);
-    expect("scenes" in stateRecord).toBe(false);
-    expect("dialogues" in stateRecord).toBe(false);
-  });
-
-  test("builder mechanics state stores dialogue graphs quests triggers and flags outside the draft state blob", async () => {
-    const projectId = `mechanics-state-${crypto.randomUUID()}`;
-    await createBuilderProject(projectId);
-
-    const [projectRow, dialogueGraphCount, questCount, triggerCount, flagCount] = await Promise.all(
-      [
-        prisma.builderProject.findUnique({
-          where: { id: projectId },
-          select: { state: true },
-        }),
-        prisma.builderProjectDialogueGraph.count({ where: { projectId } }),
-        prisma.builderProjectQuest.count({ where: { projectId } }),
-        prisma.builderProjectTrigger.count({ where: { projectId } }),
-        prisma.builderProjectFlag.count({ where: { projectId } }),
-      ],
+    const expectedDialogueGraphEdgeCount = [...snapshot.dialogueGraphs.values()].reduce(
+      (count, graph) =>
+        count + graph.nodes.reduce((nodeCount, node) => nodeCount + node.edges.length, 0),
+      0,
+    );
+    const expectedQuestStepCount = [...snapshot.quests.values()].reduce(
+      (count, quest) => count + quest.steps.length,
+      0,
+    );
+    const expectedTriggerRequiredFlagCount = [...snapshot.triggers.values()].reduce(
+      (count, trigger) => count + Object.keys(trigger.requiredFlags ?? {}).length,
+      0,
+    );
+    const expectedTriggerSetFlagCount = [...snapshot.triggers.values()].reduce(
+      (count, trigger) => count + Object.keys(trigger.setFlags ?? {}).length,
+      0,
     );
 
     const stateRecord = asRecord(projectRow?.state);
@@ -1489,56 +1713,21 @@ describe("API contracts", () => {
     expect("triggers" in stateRecord).toBe(false);
     expect("flags" in stateRecord).toBe(false);
     expect(dialogueGraphCount).toBeGreaterThan(0);
+    expect(dialogueGraphNodeCount).toBe(expectedDialogueGraphNodeCount);
+    expect(dialogueGraphEdgeCount).toBe(expectedDialogueGraphEdgeCount);
     expect(questCount).toBeGreaterThan(0);
+    expect(questStepCount).toBe(expectedQuestStepCount);
     expect(triggerCount).toBeGreaterThan(0);
+    expect(triggerRequiredFlagCount).toBe(expectedTriggerRequiredFlagCount);
+    expect(triggerSetFlagCount).toBe(expectedTriggerSetFlagCount);
     expect(flagCount).toBeGreaterThan(0);
-  });
-
-  test("builder project reads promote blob-backed mechanics into relational draft rows", async () => {
-    const projectId = `blob-mechanics-${crypto.randomUUID()}`;
-    await createBuilderProject(projectId);
-    const snapshot = await builderService.getProject(projectId);
-    expect(snapshot).not.toBeNull();
-    if (!snapshot) {
-      return;
-    }
-
-    await prisma.builderProjectFlag.deleteMany({ where: { projectId } });
-    await prisma.builderProjectTrigger.deleteMany({ where: { projectId } });
-    await prisma.builderProjectQuest.deleteMany({ where: { projectId } });
-    await prisma.builderProjectDialogueGraph.deleteMany({ where: { projectId } });
-    await prisma.builderProject.update({
-      where: { id: projectId },
-      data: {
-        state: JSON.parse(JSON.stringify(snapshotToDraftState(snapshot))),
-      },
-    });
-
-    const migratedSnapshot = await builderService.getProject(projectId);
-    const [projectRow, dialogueGraphCount, questCount, triggerCount, flagCount] = await Promise.all(
-      [
-        prisma.builderProject.findUnique({
-          where: { id: projectId },
-          select: { state: true },
-        }),
-        prisma.builderProjectDialogueGraph.count({ where: { projectId } }),
-        prisma.builderProjectQuest.count({ where: { projectId } }),
-        prisma.builderProjectTrigger.count({ where: { projectId } }),
-        prisma.builderProjectFlag.count({ where: { projectId } }),
-      ],
-    );
-
-    expect(migratedSnapshot).not.toBeNull();
-    expect(dialogueGraphCount).toBe(snapshot.dialogueGraphs.size);
-    expect(questCount).toBe(snapshot.quests.size);
-    expect(triggerCount).toBe(snapshot.triggers.size);
-    expect(flagCount).toBe(snapshot.flags.size);
-
-    const stateRecord = asRecord(projectRow?.state);
-    expect("dialogueGraphs" in stateRecord).toBe(false);
-    expect("quests" in stateRecord).toBe(false);
-    expect("triggers" in stateRecord).toBe(false);
-    expect("flags" in stateRecord).toBe(false);
+    expect(flagRows.length).toBe(flagCount);
+    expect(
+      flagRows.every(
+        (row) =>
+          row.valueType === "string" || row.valueType === "number" || row.valueType === "boolean",
+      ),
+    ).toBe(true);
   });
 
   test("builder worker state stores jobs artifacts and automation runs outside the draft state blob", async () => {
@@ -1580,62 +1769,26 @@ describe("API contracts", () => {
     });
     await builderService.processQueuedWork(projectId);
 
-    const [projectRow, jobCount, artifactCount, automationRunCount] = await Promise.all([
+    const [
+      projectRow,
+      jobCount,
+      jobArtifactCount,
+      artifactCount,
+      automationRunCount,
+      automationRunStepCount,
+      automationRunArtifactCount,
+    ] = await Promise.all([
       prisma.builderProject.findUnique({
         where: { id: projectId },
         select: { state: true },
       }),
       prisma.builderProjectGenerationJob.count({ where: { projectId } }),
+      prisma.builderProjectGenerationJobArtifact.count({ where: { projectId } }),
       prisma.builderProjectArtifact.count({ where: { projectId } }),
       prisma.builderProjectAutomationRun.count({ where: { projectId } }),
+      prisma.builderProjectAutomationRunStep.count({ where: { projectId } }),
+      prisma.builderProjectAutomationRunArtifact.count({ where: { projectId } }),
     ]);
-
-    const stateRecord = asRecord(projectRow?.state);
-    expect("generationJobs" in stateRecord).toBe(false);
-    expect("artifacts" in stateRecord).toBe(false);
-    expect("automationRuns" in stateRecord).toBe(false);
-    expect(jobCount).toBeGreaterThan(0);
-    expect(artifactCount).toBeGreaterThan(0);
-    expect(automationRunCount).toBeGreaterThan(0);
-  });
-
-  test("builder project reads promote blob-backed worker state into relational draft rows", async () => {
-    const projectId = `blob-worker-${crypto.randomUUID()}`;
-    await createBuilderProject(projectId);
-    await builderService.saveGenerationJob(projectId, {
-      id: "job.migrated",
-      job: {
-        id: "job.migrated",
-        kind: "portrait",
-        status: "queued",
-        prompt: "Migrated queued job",
-        artifactIds: [],
-        statusMessage: "queued",
-        createdAtMs: Date.now(),
-        updatedAtMs: Date.now(),
-      },
-    });
-    await builderService.saveAutomationRun(projectId, {
-      id: "run.migrated",
-      run: {
-        id: "run.migrated",
-        status: "queued",
-        goal: "Migrated automation",
-        steps: [
-          {
-            id: "step.migrated",
-            action: "builder",
-            summary: "Inspect project shell",
-            status: "pending",
-          },
-        ],
-        artifactIds: [],
-        statusMessage: "queued",
-        createdAtMs: Date.now(),
-        updatedAtMs: Date.now(),
-      },
-    });
-    await builderService.processQueuedWork(projectId);
 
     const snapshot = await builderService.getProject(projectId);
     expect(snapshot).not.toBeNull();
@@ -1643,36 +1796,29 @@ describe("API contracts", () => {
       return;
     }
 
-    await prisma.builderProjectArtifact.deleteMany({ where: { projectId } });
-    await prisma.builderProjectAutomationRun.deleteMany({ where: { projectId } });
-    await prisma.builderProjectGenerationJob.deleteMany({ where: { projectId } });
-    await prisma.builderProject.update({
-      where: { id: projectId },
-      data: {
-        state: JSON.parse(JSON.stringify(snapshotToDraftState(snapshot))),
-      },
-    });
-
-    const migratedSnapshot = await builderService.getProject(projectId);
-    const [projectRow, jobCount, artifactCount, automationRunCount] = await Promise.all([
-      prisma.builderProject.findUnique({
-        where: { id: projectId },
-        select: { state: true },
-      }),
-      prisma.builderProjectGenerationJob.count({ where: { projectId } }),
-      prisma.builderProjectArtifact.count({ where: { projectId } }),
-      prisma.builderProjectAutomationRun.count({ where: { projectId } }),
-    ]);
-
-    expect(migratedSnapshot).not.toBeNull();
-    expect(jobCount).toBe(snapshot.generationJobs.size);
-    expect(artifactCount).toBe(snapshot.artifacts.size);
-    expect(automationRunCount).toBe(snapshot.automationRuns.size);
+    const expectedJobArtifactCount = [...snapshot.generationJobs.values()].reduce(
+      (count, job) => count + job.artifactIds.length,
+      0,
+    );
+    const expectedAutomationRunStepCount = [...snapshot.automationRuns.values()].reduce(
+      (count, run) => count + run.steps.length,
+      0,
+    );
+    const expectedAutomationRunArtifactCount = [...snapshot.automationRuns.values()].reduce(
+      (count, run) => count + run.artifactIds.length,
+      0,
+    );
 
     const stateRecord = asRecord(projectRow?.state);
     expect("generationJobs" in stateRecord).toBe(false);
     expect("artifacts" in stateRecord).toBe(false);
     expect("automationRuns" in stateRecord).toBe(false);
+    expect(jobCount).toBeGreaterThan(0);
+    expect(jobArtifactCount).toBe(expectedJobArtifactCount);
+    expect(artifactCount).toBeGreaterThan(0);
+    expect(automationRunCount).toBeGreaterThan(0);
+    expect(automationRunStepCount).toBe(expectedAutomationRunStepCount);
+    expect(automationRunArtifactCount).toBe(expectedAutomationRunArtifactCount);
   });
 
   test("game command queue overflow maps to conflict state", async () => {
@@ -1722,6 +1868,7 @@ describe("API contracts", () => {
           readonly ok: boolean;
           readonly error?: {
             readonly code: string;
+            readonly message: string;
           };
         })
       : null;
@@ -1737,6 +1884,7 @@ describe("API contracts", () => {
     expect(conflictResponse).toBeDefined();
     expect(commandPayload?.ok).toBe(false);
     expect(commandPayload?.error?.code).toBe("CONFLICT");
+    expect(commandPayload?.error?.message).toBe("Command queue is full.");
   });
 
   test("builder AI capabilities endpoint returns capability flags", async () => {
@@ -1858,6 +2006,24 @@ describe("API contracts", () => {
   test("AI knowledge routes ingest list and semantically search indexed documents", async () => {
     await withMockedEmbeddingGeneration(async () => {
       const projectId = `knowledge-${crypto.randomUUID()}`;
+      await app.handle(
+        new Request(toUrl(appRoutes.aiKnowledgeDocuments), {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            projectId,
+            title: "Lighting Checklist",
+            source: "design/lighting.md",
+            text: [
+              "Ambient lantern intensity should stay low in the tea house foyer.",
+              "OpenUSD variants should keep source fidelity before conversion.",
+            ].join("\n\n"),
+            locale: "en-US",
+          }),
+        }),
+      );
       const ingestResponse = await app.handle(
         new Request(toUrl(appRoutes.aiKnowledgeDocuments), {
           method: "POST",
@@ -1925,6 +2091,15 @@ describe("API contracts", () => {
           }>;
         };
       };
+      const termCount = await prismaBase.aiKnowledgeChunkTerm.count({
+        where: {
+          chunk: {
+            document: {
+              projectId,
+            },
+          },
+        },
+      });
 
       expect(ingestResponse.status).toBe(httpStatus.ok);
       expect(ingestPayload.ok).toBe(true);
@@ -1944,6 +2119,7 @@ describe("API contracts", () => {
       expect(searchPayload.data?.matches?.[0]?.source).toBe("design/combat.md");
       expect(searchPayload.data?.matches?.[0]?.text.includes("Parry timing")).toBe(true);
       expect(typeof searchPayload.data?.matches?.[0]?.score).toBe("number");
+      expect(termCount).toBeGreaterThan(0);
     });
   });
 

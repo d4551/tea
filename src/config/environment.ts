@@ -150,6 +150,10 @@ export interface AppConfig {
         readonly chatModel: string;
         readonly embeddingModel?: string;
         readonly visionModel?: string;
+        readonly transcriptionModel?: string;
+        readonly speechModel?: string;
+        readonly moderationModel?: string;
+        readonly speechVoice?: string;
       };
       readonly cloud: {
         readonly enabled: boolean;
@@ -160,6 +164,10 @@ export interface AppConfig {
         readonly chatModel: string;
         readonly embeddingModel?: string;
         readonly visionModel?: string;
+        readonly transcriptionModel?: string;
+        readonly speechModel?: string;
+        readonly moderationModel?: string;
+        readonly speechVoice?: string;
       };
     };
     readonly routing: {
@@ -170,6 +178,7 @@ export interface AppConfig {
     readonly ragChunkSize: number;
     readonly ragChunkOverlap: number;
     readonly ragSearchLimit: number;
+    readonly ragCandidateLimit: number;
     readonly ragHashDimension: number;
     readonly audioInputSampleRateHz: number;
     readonly audioUploadMaxBytes: number;
@@ -234,6 +243,7 @@ const DEFAULT_AI_LOCAL_TEXT_TO_SPEECH_MODEL = "Xenova/speecht5_tts";
 const DEFAULT_AI_RAG_CHUNK_SIZE = 800;
 const DEFAULT_AI_RAG_CHUNK_OVERLAP = 120;
 const DEFAULT_AI_RAG_SEARCH_LIMIT = 5;
+const DEFAULT_AI_RAG_CANDIDATE_LIMIT = 24;
 const DEFAULT_AI_RAG_HASH_DIMENSION = 64;
 const DEFAULT_AI_LOCAL_TTS_SPEAKER_EMBEDDINGS =
   "https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/speaker_embeddings.bin";
@@ -412,7 +422,7 @@ const resolveLocalDatabaseDirectory = (databaseUrl: string): string | null => {
   return pathPart.slice(0, lastSlashIndex);
 };
 
-const resolvedHost = Bun.env.HOST ?? "0.0.0.0";
+const resolvedHost = Bun.env.SERVER_HOST ?? "localhost";
 const resolvedPort = parseInteger(Bun.env.PORT, DEFAULT_PORT, 1, "PORT");
 const resolvedDatabaseUrl = parseRequiredString(Bun.env.DATABASE_URL, "DATABASE_URL");
 const resolvedAppOrigin = parseAbsoluteUrl(Bun.env.APP_ORIGIN, "APP_ORIGIN");
@@ -940,6 +950,12 @@ export const appConfig: AppConfig = {
           DEFAULT_OLLAMA_CHAT_MODEL,
         embeddingModel: parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_EMBEDDING_MODEL),
         visionModel: parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_VISION_MODEL),
+        transcriptionModel: parseOptionalString(
+          Bun.env.AI_LOCAL_API_COMPATIBLE_TRANSCRIPTION_MODEL,
+        ),
+        speechModel: parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_SPEECH_MODEL),
+        moderationModel: parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_MODERATION_MODEL),
+        speechVoice: parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_SPEECH_VOICE),
       },
       cloud: {
         enabled: parseBoolean(
@@ -969,6 +985,15 @@ export const appConfig: AppConfig = {
           "text-embedding-3-small",
         visionModel:
           parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_VISION_MODEL) ?? "gpt-4.1-mini",
+        transcriptionModel:
+          parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_TRANSCRIPTION_MODEL) ??
+          "gpt-4o-mini-transcribe",
+        speechModel:
+          parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_SPEECH_MODEL) ?? "gpt-4o-mini-tts",
+        moderationModel:
+          parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_MODERATION_MODEL) ??
+          "omni-moderation-latest",
+        speechVoice: parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_SPEECH_VOICE) ?? "alloy",
       },
     },
     routing: {
@@ -997,6 +1022,12 @@ export const appConfig: AppConfig = {
       DEFAULT_AI_RAG_SEARCH_LIMIT,
       1,
       "AI_RAG_SEARCH_LIMIT",
+    ),
+    ragCandidateLimit: parseInteger(
+      Bun.env.AI_RAG_CANDIDATE_LIMIT,
+      DEFAULT_AI_RAG_CANDIDATE_LIMIT,
+      DEFAULT_AI_RAG_SEARCH_LIMIT,
+      "AI_RAG_CANDIDATE_LIMIT",
     ),
     ragHashDimension: parseInteger(
       Bun.env.AI_RAG_HASH_DIMENSION,

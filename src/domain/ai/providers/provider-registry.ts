@@ -111,6 +111,10 @@ export class ProviderRegistry {
           chatModel: appConfig.ai.openAiCompatible.local.chatModel,
           embeddingModel: appConfig.ai.openAiCompatible.local.embeddingModel,
           visionModel: appConfig.ai.openAiCompatible.local.visionModel,
+          transcriptionModel: appConfig.ai.openAiCompatible.local.transcriptionModel,
+          speechModel: appConfig.ai.openAiCompatible.local.speechModel,
+          moderationModel: appConfig.ai.openAiCompatible.local.moderationModel,
+          speechVoice: appConfig.ai.openAiCompatible.local.speechVoice,
           local: true,
         }),
       );
@@ -126,6 +130,10 @@ export class ProviderRegistry {
           chatModel: appConfig.ai.openAiCompatible.cloud.chatModel,
           embeddingModel: appConfig.ai.openAiCompatible.cloud.embeddingModel,
           visionModel: appConfig.ai.openAiCompatible.cloud.visionModel,
+          transcriptionModel: appConfig.ai.openAiCompatible.cloud.transcriptionModel,
+          speechModel: appConfig.ai.openAiCompatible.cloud.speechModel,
+          moderationModel: appConfig.ai.openAiCompatible.cloud.moderationModel,
+          speechVoice: appConfig.ai.openAiCompatible.cloud.speechVoice,
           local: false,
         }),
       );

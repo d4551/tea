@@ -26,6 +26,7 @@ interface AuthSessionCookieOptions {
   readonly sameSite: "lax";
   readonly path: string;
   readonly maxAge: number;
+  readonly secure: boolean;
 }
 
 export type AuthCookieBag = Record<string, Cookie<unknown>>;
@@ -42,6 +43,7 @@ const sessionCookieOptions: AuthSessionCookieOptions = {
   sameSite: "lax",
   path: "/",
   maxAge: appConfig.auth.sessionMaxAgeSeconds,
+  secure: true,
 };
 
 const readSessionId = (cookie: AuthCookieBag): string | null => {

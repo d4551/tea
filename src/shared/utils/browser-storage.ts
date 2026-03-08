@@ -4,6 +4,7 @@
  * @param key Storage key.
  * @returns Stored string value, or `null` when storage is unavailable.
  */
+// SAFETY: localStorage access can throw when browser privacy settings block site data.
 export const readLocalStorage = (key: string): string | null => {
   try {
     return localStorage.getItem(key);
@@ -19,6 +20,7 @@ export const readLocalStorage = (key: string): string | null => {
  * @param value Serialized storage payload.
  * @returns `true` when the write succeeds.
  */
+// SAFETY: localStorage writes can throw when quota is exceeded or storage is blocked.
 export const writeLocalStorage = (key: string, value: string): boolean => {
   try {
     localStorage.setItem(key, value);

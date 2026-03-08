@@ -118,6 +118,8 @@ export const getTriggerEventLabel = (messages: Messages, event: TriggerEventType
       return messages.builder.triggerEventChat;
     case "dialogue-confirmed":
       return messages.builder.triggerEventDialogueConfirmed;
+    default:
+      return String(event);
   }
 };
 

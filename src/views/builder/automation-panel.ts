@@ -41,11 +41,19 @@ export const renderAutomationPanel = (
           ? `<div class="card-actions justify-end gap-2">
               <form hx-post="${escapeHtml(reviewAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#${runSpinnerId}" hx-disabled-elt="button">
                 <input type="hidden" name="approved" value="true" />
-                <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.approveAction)}</button>
+                <button
+                  type="submit"
+                  class="btn btn-primary btn-sm"
+                  aria-label="${escapeHtml(messages.builder.approveAction)}: ${escapeHtml(run.goal)}"
+                >${escapeHtml(messages.builder.approveAction)}</button>
               </form>
               <form hx-post="${escapeHtml(reviewAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#${runSpinnerId}" hx-disabled-elt="button">
                 <input type="hidden" name="approved" value="false" />
-                <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.builder.cancelAction)}</button>
+                <button
+                  type="submit"
+                  class="btn btn-outline btn-sm"
+                  aria-label="${escapeHtml(messages.builder.cancelAction)}: ${escapeHtml(run.goal)}"
+                >${escapeHtml(messages.builder.cancelAction)}</button>
               </form>
               <span id="${runSpinnerId}" class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
             </div>`

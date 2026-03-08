@@ -8,9 +8,8 @@
  *  - Graceful fallback: return null when model work cannot be completed
  */
 
-import { rm } from "node:fs/promises";
-import { resolve as resolvePath } from "node:path";
 import { env, pipeline } from "@huggingface/transformers";
+import { $ } from "bun";
 import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
 import { MODEL_REGISTRY, type ModelKey } from "./model-registry.ts";
@@ -57,7 +56,7 @@ const isCorruptedCacheError = (error: unknown): boolean => {
 };
 
 const resolveModelCachePath = (modelId: string): string =>
-  resolvePath(appConfig.ai.transformersCacheDirectory, ...modelId.split("/"));
+  [appConfig.ai.transformersCacheDirectory, ...modelId.split("/")].join("/").replace(/\/+/g, "/");
 
 /**
  * Sentiment inference output contract.
@@ -405,23 +404,19 @@ export class ModelManager {
     }
     logger.info("model.loading", { key, model: entry.model });
 
-    try {
-      const pipe = await pipeline(entry.task as Parameters<typeof pipeline>[0], entry.model, {
-        dtype: entry.dtype,
-        device: entry.device,
-      });
-
-      this._pipelines.set(key, pipe);
-      logger.info("model.loaded", { key, model: entry.model });
-      return pipe;
-    } catch (error: unknown) {
+    const pipeResult = await pipeline(entry.task as Parameters<typeof pipeline>[0], entry.model, {
+      dtype: entry.dtype,
+      device: entry.device,
+    }).catch((error: unknown) => {
       if (allowCacheRecovery && isCorruptedCacheError(error)) {
-        await this._purgeModelCache(key);
-        return this._loadPipeline(key, false);
+        return this._purgeModelCache(key).then(() => this._loadPipeline(key, false));
       }
+      return Promise.reject(error);
+    });
 
-      throw error;
-    }
+    this._pipelines.set(key, pipeResult);
+    logger.info("model.loaded", { key, model: entry.model });
+    return pipeResult;
   }
 
   /**
@@ -476,7 +471,7 @@ export class ModelManager {
   private async _purgeModelCache(key: ModelKey): Promise<void> {
     const modelId = MODEL_REGISTRY[key].model;
     const modelCachePath = resolveModelCachePath(modelId);
-    await rm(modelCachePath, { recursive: true, force: true });
+    await $`rm -rf ${modelCachePath}`;
     logger.warn("model.cache.purged", {
       key,
       model: modelId,

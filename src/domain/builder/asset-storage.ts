@@ -1,7 +1,12 @@
-import { mkdir } from "node:fs/promises";
-import { dirname, extname, join } from "node:path";
 import { appConfig } from "../../config/environment.ts";
 import { toPublicAssetUrl } from "../../shared/constants/assets.ts";
+
+const getExtname = (path: string): string => {
+  const match = path.match(/\.([^.]+)$/);
+  return match ? `.${match[1]}` : "";
+};
+
+const joinPath = (...paths: string[]): string => paths.join("/").replace(/\/+/g, "/");
 
 /**
  * Stable persisted builder asset metadata.
@@ -27,7 +32,7 @@ const sanitizePathSegment = (value: string, fallback: string): string => {
 };
 
 const inferExtension = (fileName: string, contentType?: string): string => {
-  const nameExtension = extname(fileName).replace(/^\./, "").trim().toLowerCase();
+  const nameExtension = getExtname(fileName).replace(/^\./, "").trim().toLowerCase();
   if (nameExtension.length > 0) {
     return nameExtension;
   }
@@ -82,8 +87,7 @@ export const persistBuilderFile = async (
 ): Promise<StoredBuilderAssetFile> => {
   const extension = inferExtension(fileName, contentType);
   const relativePath = toRelativeStoragePath(projectId, scope, basename, extension);
-  const absolutePath = join(appConfig.staticAssets.publicDirectory, relativePath);
-  await mkdir(dirname(absolutePath), { recursive: true });
+  const absolutePath = joinPath(appConfig.staticAssets.publicDirectory, relativePath);
   const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   await Bun.write(absolutePath, payload);
 

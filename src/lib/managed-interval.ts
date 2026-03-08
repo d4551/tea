@@ -42,18 +42,22 @@ export const executeManagedIntervalTask = async <TResult>(
 
   options.setInFlight(true);
 
-  try {
-    const result = await options.run();
-    options.onSuccess?.(result);
-  } catch (error: unknown) {
-    const normalizedError = toError(error);
-    options.logger.warn(options.failureEvent, {
-      message: normalizedError.message,
-      ...(options.mapFailureData?.(normalizedError) ?? {}),
+  const ran = await options
+    .run()
+    .then((data) => ({ ok: true as const, data }))
+    .catch((error: unknown) => {
+      const normalizedError = toError(error);
+      options.logger.warn(options.failureEvent, {
+        message: normalizedError.message,
+        ...(options.mapFailureData?.(normalizedError) ?? {}),
+      });
+      return { ok: false as const };
     });
-  } finally {
-    options.setInFlight(false);
+
+  if (ran.ok) {
+    options.onSuccess?.(ran.data);
   }
+  options.setInFlight(false);
 };
 
 /**

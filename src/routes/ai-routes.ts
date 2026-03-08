@@ -116,6 +116,10 @@ const localRuntimeSchema = t.Object({
       chatModel: t.String(),
       embeddingModel: t.Optional(t.String()),
       visionModel: t.Optional(t.String()),
+      transcriptionModel: t.Optional(t.String()),
+      speechModel: t.Optional(t.String()),
+      moderationModel: t.Optional(t.String()),
+      speechVoice: t.Optional(t.String()),
     }),
     cloud: t.Object({
       enabled: t.Boolean(),
@@ -124,6 +128,10 @@ const localRuntimeSchema = t.Object({
       chatModel: t.String(),
       embeddingModel: t.Optional(t.String()),
       visionModel: t.Optional(t.String()),
+      transcriptionModel: t.Optional(t.String()),
+      speechModel: t.Optional(t.String()),
+      moderationModel: t.Optional(t.String()),
+      speechVoice: t.Optional(t.String()),
     }),
     defaultPolicy: t.String(),
     cloudFallbackEnabled: t.Boolean(),
@@ -632,7 +640,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
       if (!result.ok) {
         return createAiFailureEnvelope(
           correlationId,
-          result.error || messages.ai.retrievalAssistUnavailable,
+          messages.ai.retrievalAssistUnavailable,
           result.retryable ?? true,
         );
       }
@@ -674,7 +682,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
       if (!result.ok) {
         return createAiFailureEnvelope(
           correlationId,
-          result.error || messages.ai.toolPlanningUnavailable,
+          messages.ai.toolPlanningUnavailable,
           result.retryable,
         );
       }
@@ -719,7 +727,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
       if (!result.ok) {
         return createAiFailureEnvelope(
           correlationId,
-          result.error || messages.ai.dialogueGenerationUnavailable,
+          messages.ai.dialogueGenerationUnavailable,
           result.retryable,
         );
       }
@@ -758,7 +766,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
       if (!result.ok) {
         return createAiFailureEnvelope(
           correlationId,
-          result.error || messages.ai.sceneGenerationUnavailable,
+          messages.ai.sceneGenerationUnavailable,
           result.retryable,
         );
       }
@@ -792,7 +800,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
       if (!result.ok) {
         return createAiFailureEnvelope(
           correlationId,
-          result.error || messages.ai.designAssistUnavailable,
+          messages.ai.designAssistUnavailable,
           result.retryable,
         );
       }
@@ -866,7 +874,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
         return errorEnvelope(
           new ApplicationError(
             "AI_PROVIDER_FAILURE",
-            result.error || messages.ai.audioTranscriptionUnavailable,
+            messages.ai.audioTranscriptionUnavailable,
             httpStatus.serviceUnavailable,
             result.retryable,
           ),
@@ -893,7 +901,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
         tags: ["ai"],
         summary: "Transcribe local speech audio",
         description:
-          "Accepts a base64-encoded WAV payload, normalizes it to the configured input sample rate, and runs local speech-to-text inference.",
+          "Accepts a base64-encoded WAV payload, normalizes it to the configured input sample rate, and routes speech-to-text inference through the best available local-first AI provider.",
       },
       response: {
         [httpStatus.ok]: t.Union([transcriptionResponseSchema, errorResultSchema]),
@@ -912,7 +920,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
       if (!result.ok) {
         return createAiFailureEnvelope(
           correlationId,
-          result.error || messages.ai.audioSynthesisUnavailable,
+          messages.ai.audioSynthesisUnavailable,
           result.retryable,
         );
       }
@@ -935,7 +943,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
         tags: ["ai"],
         summary: "Synthesize local speech audio",
         description:
-          "Runs local text-to-speech inference and returns the generated mono WAV payload as base64 for preview or downstream processing.",
+          "Routes text-to-speech inference through the best available local-first AI provider and returns the generated mono WAV payload as base64 for preview or downstream processing.",
       },
       response: {
         [httpStatus.ok]: t.Union([synthesisResponseSchema, errorResultSchema]),

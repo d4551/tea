@@ -100,7 +100,7 @@ The builder exposes a capability matrix that reflects current implementation sta
 | Animation pipeline | Partial | Clip definitions; no frame editor |
 | Mechanics | Partial | Quests, triggers, dialogue graphs; quest edit/delete implemented |
 | AI authoring | Partial | Patch preview/apply; dialogue generate; structured tool planning |
-| RAG / knowledge retrieval | Partial | Persisted documents, semantic search, retrieval assist; vector storage is JSON-backed in Prisma rows rather than a dedicated vector database |
+| RAG / knowledge retrieval | Partial | Persisted documents, lexical term index plus semantic rerank, retrieval assist; vector storage is JSON-backed in Prisma rows rather than a dedicated vector database |
 | Automation / RPA | Partial | Lifecycle-managed worker, auditable steps, Playwright-backed evidence capture |
 | Multiplayer | Partial | Shared-session owner/controller/spectator flow with independent owner/controller avatars; spectator mode remains observe-only |
 | OpenUSD | Partial | `.usd/.usda/.usdc/.usdz` ingest supported; `usdz` playable in Three.js runtime |
@@ -244,7 +244,7 @@ sequenceDiagram
 
 ### Plugin Pipeline
 
-Plugins are composed in strict order. Each plugin decorates the request context for downstream consumers. Infrastructure plugins (request-context, onError, content-type, swagger, static-assets) run first; then page, game, API, and AI routes; then the AI provider lifecycle plugin; then the scoped `game-request-context` derive plugin; then `game-plugin`; then builder routes; finally session-purge and creator-worker for lifecycle-owned background execution. Builder locale, project id, current path, and scoped body/query/param merges are attached once through `src/plugins/builder-request-context.ts`, page/oracle auth-session state is attached once through `src/plugins/auth-session.ts`, game HTTP participant identity/locale plus playable-page `sessionId` / `projectId` / `invite` query resolution and websocket participant/resume-token resolution are attached once through `src/plugins/game-request-context.ts`, full-page SSR shells consume a shared `LayoutContext` from `src/views/layout.ts`, builder JSON draft-state decode/versioned-save/snapshot projection now live behind `src/domain/builder/builder-project-state-store.ts`, `src/shared/contracts/game.ts` owns persisted scene-state / realtime-frame validation, `game-plugin` owns session-scoped websocket tick cleanup plus transport teardown when a session closes or is deleted, and `game-loop` owns canonical session resolution, dashboard/session metrics, expired-session purging, and the HUD state read path consumed by SSE transport rendering.
+Plugins are composed in strict order. Each plugin decorates the request context for downstream consumers. Infrastructure plugins (request-context, onError, content-type, swagger, static-assets) run first; then page, game, API, and AI routes; then the AI provider lifecycle plugin; then the scoped `game-request-context` derive plugin; then `game-plugin`; then builder routes; finally session-purge and creator-worker for lifecycle-owned background execution. Builder locale, project id, current path, and scoped body/query/param merges are attached once through `src/plugins/builder-request-context.ts`, page/oracle auth-session state is attached once through `src/plugins/auth-session.ts`, game HTTP participant identity/locale plus playable-page `sessionId` / `projectId` / `invite` query resolution and websocket participant/resume-token resolution are attached once through `src/plugins/game-request-context.ts`, full-page SSR shells consume a shared `LayoutContext` from `src/views/layout.ts`, builder JSON draft-state decode/versioned-save/snapshot projection now live behind `src/domain/builder/builder-project-state-store.ts`, `src/shared/contracts/game.ts` owns persisted scene-state / realtime-frame validation, `GameStateStore` owns normalized session persistence for scalar project/release binding plus relational scene, actor, runtime, NPC, trigger, quest, and flag rows, `game-plugin` owns session-scoped websocket tick cleanup plus transport teardown when a session closes or is deleted, and `game-loop` owns canonical session resolution, dashboard/session metrics, expired-session purging, and the HUD state read path consumed by SSE transport rendering.
 
 ```mermaid
 flowchart LR
@@ -267,7 +267,7 @@ flowchart LR
 
 ### Domain Model
 
-Core entities: GameSession (authoritative runtime state), GameSessionParticipant (shared-session multiplayer membership), PlayerProgress (XP and level), BuilderProject (draft state/versioning), BuilderProjectScene / BuilderProjectDialogueEntry (relational draft world-content registries), BuilderProjectAsset / BuilderProjectAnimationClip (relational draft media registries), BuilderProjectDialogueGraph / BuilderProjectQuest / BuilderProjectTrigger / BuilderProjectFlag (relational draft mechanics registries), BuilderProjectGenerationJob / BuilderProjectArtifact / BuilderProjectAutomationRun (relational draft worker state), AiKnowledgeDocument / AiKnowledgeChunk (persisted RAG corpus), and BuilderProjectRelease (immutable published snapshots).
+Core entities: GameSession (authoritative shared runtime session row with scalar project/release binding), GameSessionSceneState / GameSessionSceneCollision / GameSessionSceneNode / GameSessionSceneAsset / GameSessionSceneAssetTag / GameSessionSceneAssetVariant (normalized runtime scene playback state), GameSessionParticipant (shared-session multiplayer membership), GameSessionActor (authoritative per-participant runtime actor state), GameSessionRuntimeState / GameSessionNpc / GameSessionNpcDialogueKey / GameSessionNpcDialogueEntry (normalized runtime camera, dialogue, and NPC state), GameSessionTrigger / GameSessionTriggerRequiredFlag / GameSessionTriggerSetFlag (normalized runtime trigger state), GameSessionQuest / GameSessionQuestStep / GameSessionFlag (normalized runtime quest and flag state), PlayerProgress / PlayerProgressVisitedScene / PlayerProgressInteraction (normalized runtime progression state), BuilderProject (draft state/versioning), BuilderProjectScene / BuilderProjectSceneCollision / BuilderProjectSceneNpc / BuilderProjectSceneNpcDialogueKey / BuilderProjectSceneNode / BuilderProjectDialogueEntry (relational draft world-content registries), BuilderProjectAsset / BuilderProjectAssetTag / BuilderProjectAssetVariant / BuilderProjectAnimationClip (relational draft media registries), BuilderProjectDialogueGraph / BuilderProjectDialogueGraphNode / BuilderProjectDialogueGraphEdge / BuilderProjectQuest / BuilderProjectQuestStep / BuilderProjectTrigger / BuilderProjectTriggerRequiredFlag / BuilderProjectTriggerSetFlag / BuilderProjectFlag (relational draft mechanics registries), BuilderProjectGenerationJob / BuilderProjectGenerationJobArtifact / BuilderProjectArtifact / BuilderProjectAutomationRun / BuilderProjectAutomationRunStep / BuilderProjectAutomationRunArtifact (relational draft worker state), AiKnowledgeDocument / AiKnowledgeChunk (persisted RAG corpus), and BuilderProjectRelease (immutable published snapshots).
 
 ```mermaid
 erDiagram
@@ -538,12 +538,21 @@ Core `.env` variables (see `.env.example` for full defaults):
 | `AI_ONNX_DEVICE` | ONNX execution device (`cpu`, `webgpu`, or `wasm`); use `cpu` for Bun server runtime stability |
 | `AI_LOCAL_API_COMPATIBLE_ENABLED` | Enables a local OpenAI-compatible inference lane (recommended for Ramalama-class local servers) |
 | `AI_LOCAL_API_COMPATIBLE_BASE_URL` | Base URL for the local OpenAI-compatible API (for example `http://127.0.0.1:8080/v1`) |
+| `AI_LOCAL_API_COMPATIBLE_TRANSCRIPTION_MODEL` | Optional speech-to-text model exposed by the local OpenAI-compatible lane |
+| `AI_LOCAL_API_COMPATIBLE_SPEECH_MODEL` | Optional text-to-speech model exposed by the local OpenAI-compatible lane |
+| `AI_LOCAL_API_COMPATIBLE_MODERATION_MODEL` | Optional moderation/classification model exposed by the local OpenAI-compatible lane |
+| `AI_LOCAL_API_COMPATIBLE_SPEECH_VOICE` | Optional default speech voice used by the local OpenAI-compatible lane |
 | `AI_CLOUD_API_COMPATIBLE_ENABLED` | Enables the hosted OpenAI-compatible fallback lane |
 | `AI_CLOUD_API_COMPATIBLE_BASE_URL` | Base URL for the hosted OpenAI-compatible API |
+| `AI_CLOUD_API_COMPATIBLE_TRANSCRIPTION_MODEL` | Speech-to-text model used by the hosted OpenAI-compatible lane |
+| `AI_CLOUD_API_COMPATIBLE_SPEECH_MODEL` | Text-to-speech model used by the hosted OpenAI-compatible lane |
+| `AI_CLOUD_API_COMPATIBLE_MODERATION_MODEL` | Moderation/classification model used by the hosted OpenAI-compatible lane |
+| `AI_CLOUD_API_COMPATIBLE_SPEECH_VOICE` | Default speech voice used by the hosted OpenAI-compatible lane |
 | `AI_CLOUD_FALLBACK_ENABLED` | Allows hosted OpenAI-compatible providers when no local-capable provider can satisfy the request |
 | `AI_RAG_CHUNK_SIZE` | Plain-text chunk size used when ingesting persisted knowledge documents |
 | `AI_RAG_CHUNK_OVERLAP` | Overlap between adjacent RAG chunks |
 | `AI_RAG_SEARCH_LIMIT` | Default retrieval limit for semantic search and retrieval assist |
+| `AI_RAG_CANDIDATE_LIMIT` | Lexical term-index shortlist size used before semantic reranking |
 | `AI_RAG_HASH_DIMENSION` | Deterministic fallback embedding dimension used when local/cloud embeddings are unavailable or degraded |
 
 Game runtime controls:
@@ -587,7 +596,7 @@ Repo audit checklist:
 - No direct provider binding outside `ProviderRegistry`
 - No direct persistence access outside owning domain stores/services
 - No raw user-facing strings outside message catalogs
-- No active authored/runtime state trapped in opaque JSON except immutable release snapshots and opaque machine payloads
+- No active authored/runtime state trapped in opaque JSON except immutable release snapshots and opaque machine payloads such as persisted embeddings
 
 ---
 
@@ -642,6 +651,7 @@ AI retrieval behavior:
 
 - Knowledge ingestion chunks plain text, embeds each chunk, and persists the corpus in Prisma.
 - Embeddings route through the shared provider registry, so local Transformers and cloud/back-end providers share one routing boundary.
+- Retrieval first narrows to a Prisma-backed lexical term index and then reranks semantically in application memory, which avoids full-corpus scans while keeping Prisma as the canonical persisted corpus.
 - When the active embedding backend is cold, degraded, or unavailable, the knowledge service falls back to deterministic hashed embeddings so retrieval endpoints remain responsive instead of timing out.
 
 ---
@@ -852,7 +862,7 @@ flowchart LR
 
 #### 领域模型
 
-核心实体：GameSession（服务端权威运行时状态）、GameSessionParticipant（共享会话多人参与关系）、PlayerProgress（经验值与等级）、BuilderProject（草稿状态/版本控制）、BuilderProjectScene / BuilderProjectDialogueEntry（关系型草稿世界内容注册表）、BuilderProjectAsset / BuilderProjectAnimationClip（关系型草稿媒体注册表）、BuilderProjectDialogueGraph / BuilderProjectQuest / BuilderProjectTrigger / BuilderProjectFlag（关系型草稿机制注册表）、BuilderProjectGenerationJob / BuilderProjectArtifact / BuilderProjectAutomationRun（关系型草稿工作进程状态），以及 BuilderProjectRelease（不可变的发布快照）。
+核心实体：GameSession（带项目/发布版本标量绑定的服务端权威运行时会话行）、GameSessionParticipant（共享会话多人参与关系）、GameSessionActor（按参与者划分的权威运行时角色状态）、GameSessionRuntimeState / GameSessionNpc / GameSessionNpcDialogueKey / GameSessionNpcDialogueEntry（关系型运行时镜头、对话与 NPC 状态）、GameSessionTrigger / GameSessionTriggerRequiredFlag / GameSessionTriggerSetFlag（关系型运行时触发器状态）、GameSessionQuest / GameSessionQuestStep / GameSessionFlag（关系型运行时任务与旗标状态）、PlayerProgress / PlayerProgressVisitedScene / PlayerProgressInteraction（关系型运行时进度状态）、BuilderProject（草稿状态/版本控制）、BuilderProjectScene / BuilderProjectSceneCollision / BuilderProjectSceneNpc / BuilderProjectSceneNpcDialogueKey / BuilderProjectSceneNode / BuilderProjectDialogueEntry（关系型草稿世界内容注册表）、BuilderProjectAsset / BuilderProjectAssetTag / BuilderProjectAssetVariant / BuilderProjectAnimationClip（关系型草稿媒体注册表）、BuilderProjectDialogueGraph / BuilderProjectDialogueGraphNode / BuilderProjectDialogueGraphEdge / BuilderProjectQuest / BuilderProjectQuestStep / BuilderProjectTrigger / BuilderProjectTriggerRequiredFlag / BuilderProjectTriggerSetFlag / BuilderProjectFlag（关系型草稿机制注册表）、BuilderProjectGenerationJob / BuilderProjectGenerationJobArtifact / BuilderProjectArtifact / BuilderProjectAutomationRun / BuilderProjectAutomationRunStep / BuilderProjectAutomationRunArtifact（关系型草稿工作进程状态），以及 BuilderProjectRelease（不可变的发布快照）。
 
 ```mermaid
 erDiagram

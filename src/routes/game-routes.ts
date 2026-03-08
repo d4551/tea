@@ -7,7 +7,42 @@ import { gameRequestContextPlugin } from "../plugins/game-request-context.ts";
 import { defaultGameConfig } from "../shared/config/game-config.ts";
 import { appRoutes } from "../shared/constants/routes.ts";
 import type { GameSessionState } from "../shared/contracts/game.ts";
-import { GamePage } from "../views/game-page.ts";
+import { GamePage, type GamePageProps } from "../views/game-page.ts";
+
+/**
+ * Assembles `GamePage` playable-state props from a resolved session.
+ *
+ * @param session Resolved game session state.
+ * @param locale Active locale code.
+ * @returns Props suitable for `GamePage`.
+ */
+const buildPlayablePageProps = (session: GameSessionState, locale: LocaleCode): GamePageProps => ({
+  state: "playable",
+  locale,
+  sessionId: session.sessionId,
+  projectId: session.projectId,
+  sceneTitle: session.state.sceneTitle,
+  sceneMode: session.state.sceneMode,
+  activeQuestTitle:
+    session.state.quests
+      ?.find((quest) => !quest.completed)
+      ?.steps.find((step) => step.state === "active")?.title ??
+    session.state.quests?.find((quest) => !quest.completed)?.title,
+  resumeToken: session.resumeToken,
+  resumeTokenExpiresAtMs: session.resumeTokenExpiresAtMs,
+  commandQueueDepth: session.commandQueueDepth,
+  version: session.version,
+  participantSessionId: session.participantSessionId,
+  participantRole: session.participantRole,
+  participants: session.participants,
+  clientRuntimeConfig: {
+    commandSendIntervalMs: defaultGameConfig.commandSendIntervalMs,
+    commandTtlMs: defaultGameConfig.commandTtlMs,
+    socketReconnectDelayMs: defaultGameConfig.socketReconnectDelayMs,
+    restoreRequestTimeoutMs: defaultGameConfig.restoreRequestTimeoutMs,
+    restoreMaxAttempts: defaultGameConfig.restoreMaxAttempts,
+  },
+});
 
 const hydrateGameSession = async (
   sessionId: string | null,
@@ -51,33 +86,7 @@ export const gameRoutes = new Elysia({ prefix: appRoutes.game })
         if (inviteToken) {
           const joined = await gameLoop.joinSession(inviteToken, ownerSessionId);
           if (joined) {
-            return GamePage({
-              state: "playable",
-              locale,
-              sessionId: joined.sessionId,
-              projectId: joined.projectId,
-              sceneTitle: joined.state.sceneTitle,
-              sceneMode: joined.state.sceneMode,
-              activeQuestTitle:
-                joined.state.quests
-                  ?.find((quest) => !quest.completed)
-                  ?.steps.find((step) => step.state === "active")?.title ??
-                joined.state.quests?.find((quest) => !quest.completed)?.title,
-              resumeToken: joined.resumeToken,
-              resumeTokenExpiresAtMs: joined.resumeTokenExpiresAtMs,
-              commandQueueDepth: joined.commandQueueDepth,
-              version: joined.version,
-              participantSessionId: joined.participantSessionId,
-              participantRole: joined.participantRole,
-              participants: joined.participants,
-              clientRuntimeConfig: {
-                commandSendIntervalMs: defaultGameConfig.commandSendIntervalMs,
-                commandTtlMs: defaultGameConfig.commandTtlMs,
-                socketReconnectDelayMs: defaultGameConfig.socketReconnectDelayMs,
-                restoreRequestTimeoutMs: defaultGameConfig.restoreRequestTimeoutMs,
-                restoreMaxAttempts: defaultGameConfig.restoreMaxAttempts,
-              },
-            });
+            return GamePage(buildPlayablePageProps(joined, locale));
           }
 
           return GamePage({
@@ -113,33 +122,7 @@ export const gameRoutes = new Elysia({ prefix: appRoutes.game })
           });
         }
 
-        return GamePage({
-          state: "playable",
-          locale,
-          sessionId: session.sessionId,
-          projectId: session.projectId,
-          sceneTitle: session.state.sceneTitle,
-          sceneMode: session.state.sceneMode,
-          activeQuestTitle:
-            session.state.quests
-              ?.find((quest) => !quest.completed)
-              ?.steps.find((step) => step.state === "active")?.title ??
-            session.state.quests?.find((quest) => !quest.completed)?.title,
-          resumeToken: session.resumeToken,
-          resumeTokenExpiresAtMs: session.resumeTokenExpiresAtMs,
-          commandQueueDepth: session.commandQueueDepth,
-          version: session.version,
-          participantSessionId: session.participantSessionId,
-          participantRole: session.participantRole,
-          participants: session.participants,
-          clientRuntimeConfig: {
-            commandSendIntervalMs: defaultGameConfig.commandSendIntervalMs,
-            commandTtlMs: defaultGameConfig.commandTtlMs,
-            socketReconnectDelayMs: defaultGameConfig.socketReconnectDelayMs,
-            restoreRequestTimeoutMs: defaultGameConfig.restoreRequestTimeoutMs,
-            restoreMaxAttempts: defaultGameConfig.restoreMaxAttempts,
-          },
-        });
+        return GamePage(buildPlayablePageProps(session, locale));
       },
     ),
   );

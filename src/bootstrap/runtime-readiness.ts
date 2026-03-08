@@ -1,5 +1,3 @@
-import { constants as fsConstants } from "node:fs";
-import { access, mkdir } from "node:fs/promises";
 import { appConfig } from "../config/environment.ts";
 import { createLogger } from "../lib/logger.ts";
 import { assetRelativePaths, joinLocalPath } from "../shared/constants/assets.ts";
@@ -69,12 +67,14 @@ const resolveRequiredDirectories = (): readonly string[] => {
 };
 
 const verifyWritableDirectory = async (directoryPath: string): Promise<RuntimeReadinessCheck> => {
-  await mkdir(directoryPath, { recursive: true });
-  await access(directoryPath, fsConstants.W_OK);
+  const probePath = `${directoryPath}/.bun-probe`;
+  const ok = await Bun.write(probePath, "ok")
+    .then((bytes) => bytes > 0)
+    .catch(() => false);
   return {
     key: `directory:${directoryPath}`,
     label: "Writable directory",
-    ok: true,
+    ok,
     detail: directoryPath,
   };
 };

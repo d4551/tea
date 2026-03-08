@@ -204,12 +204,27 @@ export interface Messages {
     readonly invalidDirection: string;
     readonly chatMissingFields: string;
     readonly unknownCommandType: string;
+    readonly sessionOwnershipMismatch: string;
+    readonly sessionAccessDenied: string;
+    readonly spectatorControlDenied: string;
+    readonly sessionExpiredRequest: string;
+    readonly sessionNotFoundRequest: string;
+    readonly commandRejected: string;
+    readonly commandQueueFull: string;
+    readonly commandDropped: string;
+    readonly commandExpired: string;
+    readonly chatRateLimited: string;
+    readonly commandTypeMissing: string;
+    readonly saveCooldownActive: string;
   };
   readonly builder: {
     readonly projectNotFound: string;
     readonly sceneNotFound: string;
     readonly npcNotFound: string;
     readonly dialogueNotFound: string;
+    readonly missingPrompt: string;
+    readonly sceneIdRequired: string;
+    readonly invalidPatchPlan: string;
     readonly noDialogues: string;
     readonly title: string;
     readonly dashboard: string;
@@ -818,12 +833,27 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       invalidDirection: "Invalid move direction",
       chatMissingFields: "Chat commands require npcId and message",
       unknownCommandType: "Unknown command type",
+      sessionOwnershipMismatch: "Session ownership mismatch.",
+      sessionAccessDenied: "Session access denied.",
+      spectatorControlDenied: "Spectators cannot control gameplay.",
+      sessionExpiredRequest: "The requested session has expired.",
+      sessionNotFoundRequest: "Session not found.",
+      commandRejected: "Command rejected.",
+      commandQueueFull: "Command queue is full.",
+      commandDropped: "Command was dropped.",
+      commandExpired: "Command expired before it could be processed.",
+      chatRateLimited: "Chat commands are temporarily rate limited.",
+      commandTypeMissing: "Command type was not resolved for the accepted command.",
+      saveCooldownActive: "Save is cooling down.",
     },
     builder: {
       projectNotFound: "Project not found",
       sceneNotFound: "Scene not found",
       npcNotFound: "NPC not found",
       dialogueNotFound: "Dialogue key not found",
+      missingPrompt: "Prompt is required",
+      sceneIdRequired: "Scene id is required",
+      invalidPatchPlan: "Patch plan contains invalid operations",
       noDialogues: "No dialogue entries found",
       title: "Game Builder",
       dashboard: "Dashboard",
@@ -1437,12 +1467,27 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       invalidDirection: "无效移动方向",
       chatMissingFields: "缺少聊天对象或消息内容",
       unknownCommandType: "未识别的命令类型",
+      sessionOwnershipMismatch: "会话所有权不匹配。",
+      sessionAccessDenied: "没有访问该会话的权限。",
+      spectatorControlDenied: "旁观者无法控制游戏。",
+      sessionExpiredRequest: "请求的会话已过期。",
+      sessionNotFoundRequest: "未找到会话。",
+      commandRejected: "命令已被拒绝。",
+      commandQueueFull: "命令队列已满。",
+      commandDropped: "命令已被丢弃。",
+      commandExpired: "命令在处理前已过期。",
+      chatRateLimited: "聊天命令触发了限流，请稍后重试。",
+      commandTypeMissing: "已接受命令缺少解析后的命令类型。",
+      saveCooldownActive: "保存仍在冷却中。",
     },
     builder: {
       projectNotFound: "项目未找到",
       sceneNotFound: "场景未找到",
       npcNotFound: "NPC 未找到",
       dialogueNotFound: "对话键未找到",
+      missingPrompt: "必须提供提示词",
+      sceneIdRequired: "必须提供场景 ID",
+      invalidPatchPlan: "补丁方案包含无效操作",
       noDialogues: "未找到对话条目",
       title: "游戏构建器",
       dashboard: "仪表盘",

@@ -77,6 +77,43 @@ const gameCommandPayloadSchema = t.Union([
       t.Object({
         type: t.Literal("retryAction"),
       }),
+      t.Object({
+        type: t.Literal("combatAction"),
+        action: t.Object({
+          actorId: t.String(),
+          type: t.Union([
+            t.Literal("attack"),
+            t.Literal("defend"),
+            t.Literal("skill"),
+            t.Literal("item"),
+            t.Literal("flee"),
+          ]),
+          targetIds: t.Array(t.String()),
+          skillId: t.Optional(t.String()),
+          itemId: t.Optional(t.String()),
+        }),
+      }),
+      t.Object({
+        type: t.Literal("openInventory"),
+      }),
+      t.Object({
+        type: t.Literal("closeInventory"),
+      }),
+      t.Object({
+        type: t.Literal("useItem"),
+        slotIndex: t.Number(),
+      }),
+      t.Object({
+        type: t.Literal("equipItem"),
+        slotIndex: t.Number(),
+      }),
+      t.Object({
+        type: t.Literal("unequipItem"),
+        slot: t.Union([t.Literal("weapon"), t.Literal("armor"), t.Literal("accessory")]),
+      }),
+      t.Object({
+        type: t.Literal("advanceCutscene"),
+      }),
     ]),
   }),
   t.Object({
@@ -87,6 +124,13 @@ const gameCommandPayloadSchema = t.Union([
       t.Literal("chat"),
       t.Literal("closeDialogue"),
       t.Literal("retryAction"),
+      t.Literal("combatAction"),
+      t.Literal("openInventory"),
+      t.Literal("closeInventory"),
+      t.Literal("useItem"),
+      t.Literal("equipItem"),
+      t.Literal("unequipItem"),
+      t.Literal("advanceCutscene"),
     ]),
     direction: t.Optional(
       t.Union([t.Literal("up"), t.Literal("down"), t.Literal("left"), t.Literal("right")]),
@@ -94,6 +138,23 @@ const gameCommandPayloadSchema = t.Union([
     durationMs: t.Optional(t.Number()),
     npcId: t.Optional(t.String()),
     message: t.Optional(t.String()),
+    action: t.Optional(
+      t.Object({
+        actorId: t.String(),
+        type: t.Union([
+          t.Literal("attack"),
+          t.Literal("defend"),
+          t.Literal("skill"),
+          t.Literal("item"),
+          t.Literal("flee"),
+        ]),
+        targetIds: t.Array(t.String()),
+        skillId: t.Optional(t.String()),
+        itemId: t.Optional(t.String()),
+      }),
+    ),
+    slotIndex: t.Optional(t.Number()),
+    slot: t.Optional(t.Union([t.Literal("weapon"), t.Literal("armor"), t.Literal("accessory")])),
   }),
 ]);
 const commandBodySchema = gameCommandPayloadSchema;
@@ -222,6 +283,9 @@ const actionStateSchema = t.Union([
   t.Literal("moved"),
   t.Literal("dialogueOpen"),
   t.Literal("blockedByCollision"),
+  t.Literal("inCombat"),
+  t.Literal("inCutscene"),
+  t.Literal("inventoryOpen"),
 ]);
 
 const commandResponse = t.Object({
@@ -238,6 +302,14 @@ const commandResponse = t.Object({
       t.Literal("chat"),
       t.Literal("closeDialogue"),
       t.Literal("retryAction"),
+      t.Literal("combatAction"),
+      t.Literal("openInventory"),
+      t.Literal("closeInventory"),
+      t.Literal("useItem"),
+      t.Literal("equipItem"),
+      t.Literal("unequipItem"),
+      t.Literal("skipCutscene"),
+      t.Literal("advanceCutscene"),
     ]),
     errorCode: t.Optional(t.String()),
     errorReason: t.Optional(t.String()),
@@ -248,6 +320,7 @@ const commandResponse = t.Object({
 });
 
 type SupportedLocale = "en-US" | "zh-CN";
+const getGameMessages = (locale: string) => getMessages(normalizeLocale(locale));
 const wsCloseCode = {
   sessionNotFound: 4404,
   sessionExpired: 4408,
@@ -273,7 +346,30 @@ const toGameSessionStatePayload = (state: GameSessionState) => ({
   participants: state.participants.map((participant) => ({ ...participant })),
 });
 
-const requireGameSession = async (sessionId: string): Promise<GameSession> => {
+const getCommandErrorMessage = (
+  locale: string,
+  errorCode: string | undefined,
+  errorReason: string | undefined,
+): string => {
+  const messages = getGameMessages(locale);
+  if (errorCode === "INVALID_COMMAND") {
+    return messages.game.invalidCommand;
+  }
+
+  switch (errorReason) {
+    case "command-queue-full":
+      return messages.game.commandQueueFull;
+    case "command-expired":
+      return messages.game.commandExpired;
+    case "chat-rate-limit":
+      return messages.game.chatRateLimited;
+    default:
+      return messages.game.commandDropped;
+  }
+};
+
+const requireGameSession = async (sessionId: string, locale: string): Promise<GameSession> => {
+  const messages = getGameMessages(locale);
   const sessionResult = await gameLoop.getStoredSession(sessionId);
   if (sessionResult.ok) {
     return sessionResult.payload;
@@ -282,13 +378,18 @@ const requireGameSession = async (sessionId: string): Promise<GameSession> => {
   if (sessionResult.error === "SESSION_EXPIRED") {
     throw new ApplicationError(
       "SESSION_EXPIRED",
-      "The requested session has expired.",
+      messages.game.sessionExpiredRequest,
       httpStatus.gone,
       false,
     );
   }
 
-  throw new ApplicationError("SESSION_NOT_FOUND", "Session not found.", httpStatus.notFound, false);
+  throw new ApplicationError(
+    "SESSION_NOT_FOUND",
+    messages.game.sessionNotFoundRequest,
+    httpStatus.notFound,
+    false,
+  );
 };
 
 /**
@@ -297,12 +398,14 @@ const requireGameSession = async (sessionId: string): Promise<GameSession> => {
 const requireOwnedGameSession = async (
   sessionId: string,
   ownerSessionId: string,
+  locale: string,
 ): Promise<GameSession> => {
-  const session = await requireGameSession(sessionId);
+  const messages = getGameMessages(locale);
+  const session = await requireGameSession(sessionId, locale);
   if (session.ownerSessionId !== ownerSessionId) {
     throw new ApplicationError(
       "UNAUTHORIZED",
-      "Session ownership mismatch.",
+      messages.game.sessionOwnershipMismatch,
       httpStatus.unauthorized,
       false,
     );
@@ -317,12 +420,14 @@ const requireOwnedGameSession = async (
 const requireAccessibleGameSession = async (
   sessionId: string,
   participantSessionId: string,
+  locale: string,
 ): Promise<GameSessionState> => {
+  const messages = getGameMessages(locale);
   const state = await gameLoop.getSessionState(sessionId, participantSessionId);
   if (!state) {
     throw new ApplicationError(
       "UNAUTHORIZED",
-      "Session access denied.",
+      messages.game.sessionAccessDenied,
       httpStatus.unauthorized,
       false,
     );
@@ -337,12 +442,14 @@ const requireAccessibleGameSession = async (
 const requireControllableGameSession = async (
   sessionId: string,
   participantSessionId: string,
+  locale: string,
 ): Promise<GameSessionState> => {
-  const state = await requireAccessibleGameSession(sessionId, participantSessionId);
+  const messages = getGameMessages(locale);
+  const state = await requireAccessibleGameSession(sessionId, participantSessionId, locale);
   if (state.participantRole === "spectator") {
     throw new ApplicationError(
       "UNAUTHORIZED",
-      "Spectators cannot control gameplay.",
+      messages.game.spectatorControlDenied,
       httpStatus.unauthorized,
       false,
     );
@@ -462,6 +569,9 @@ const createHudStream = async function* ({
   let lastObjectiveTitle = "";
   let lastSceneMode: GameHudState["sceneMode"] | "__missing" = "__missing";
   let lastParticipantsSignature = "";
+  let lastCombatSignature = "";
+  let lastInventorySignature = "";
+  let lastCutsceneSignature = "";
 
   while (!signal.aborted) {
     const hudState = await gameLoop.getHudState(sessionId, participantSessionId);
@@ -537,7 +647,7 @@ const createHudStream = async function* ({
         catalog.progression.levelNames[Math.max(0, level - 1)] ?? messages.game.unknownLevel;
       yield sse.event(
         "xp",
-        `<div id="hud-xp" class="badge badge-primary badge-lg shadow-sm">XP: ${xp} / Lv${level} ${escapeHtml(levelName)}</div>`,
+        `<div id="hud-xp" class="badge badge-primary badge-lg shadow-sm">${escapeHtml(messages.game.xpLabel)}: ${xp} / ${escapeHtml(messages.game.levelLabel)}${level} ${escapeHtml(levelName)}</div>`,
         { id: `${sessionId}-xp-${xp}`, retry: retryMs },
       );
       lastXp = xp;
@@ -562,6 +672,228 @@ const createHudStream = async function* ({
       sequence += 1;
     }
 
+    const combat = hudState.combat;
+    const combatSignature = combat ? JSON.stringify(combat) : "";
+
+    if (combatSignature !== lastCombatSignature) {
+      if (combat) {
+        const playerRows = combat.combatants
+          .filter((c) => c.isPlayer)
+          .map(
+            (c) =>
+              `<li class="flex items-center justify-between bg-base-100 p-2 rounded-box border border-base-200">
+             <span class="font-bold text-primary truncate max-w-[120px]">${escapeHtml(c.label)}</span>
+             <div class="flex items-center gap-2">
+               <span class="text-xs font-mono w-16 text-right">${c.stats.hp}/${c.stats.maxHp} HP</span>
+               <progress class="progress progress-success w-24 border border-base-content/20" value="${c.stats.hp}" max="${c.stats.maxHp}"></progress>
+             </div>
+           </li>`,
+          )
+          .join("");
+
+        const enemyRows = combat.combatants
+          .filter((c) => !c.isPlayer)
+          .map(
+            (c) =>
+              `<li class="flex items-center justify-between bg-base-100 p-2 rounded-box border border-base-200">
+             <span class="font-bold text-error truncate max-w-[120px]">${escapeHtml(c.label)}</span>
+             <div class="flex items-center gap-2">
+               <span class="text-xs font-mono w-16 text-right">${c.stats.hp}/${c.stats.maxHp} HP</span>
+               <progress class="progress progress-error w-24 border border-base-content/20" value="${c.stats.hp}" max="${c.stats.maxHp}"></progress>
+             </div>
+           </li>`,
+          )
+          .join("");
+
+        const logs =
+          combat.log && combat.log.length > 0
+            ? combat.log
+                .slice(-3)
+                .map(
+                  (l) =>
+                    `<div><span class="text-base-content/50">></span> ${escapeHtml(l.logEntry)}</div>`,
+                )
+                .join("")
+            : '<div class="text-base-content/50 italic">Combat initiated...</div>';
+
+        const html = `
+          <div id="hud-combat" class="card bg-base-300/95 backdrop-blur shadow-2xl p-6 w-full max-w-4xl opacity-100 pointer-events-auto transition-all duration-300 scale-100 border border-base-content/10">
+            
+            <div class="flex justify-between items-center mb-6 border-b border-base-content/10 pb-4">
+              <h3 class="text-2xl font-black text-base-content uppercase tracking-widest flex items-center gap-2">
+                <span class="text-error">⚔</span> Combat Engagement
+              </h3>
+              <div class="flex gap-2">
+                <span class="badge badge-error badge-outline font-mono">PHASE: ${escapeHtml(combat.phase.toUpperCase())}</span>
+                <span class="badge badge-neutral font-mono shadow-sm">TURN ${combat.turnIndex + 1}</span>
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-8 mb-6">
+              <div class="space-y-3">
+                <h4 class="text-sm font-bold uppercase tracking-wider text-base-content/70">Party</h4>
+                <ul class="space-y-2">
+                  ${playerRows}
+                </ul>
+              </div>
+              <div class="space-y-3">
+                <h4 class="text-sm font-bold uppercase tracking-wider text-base-content/70">Hostiles</h4>
+                <ul class="space-y-2">
+                  ${enemyRows}
+                </ul>
+              </div>
+            </div>
+
+            <div class="bg-base-100/50 rounded-box p-3 font-mono text-sm h-28 overflow-y-auto border border-base-content/5 shadow-inner flex flex-col justify-end">
+              ${logs}
+            </div>
+            
+            <div class="mt-6 flex gap-2 justify-center">
+              <p class="text-xs text-base-content/50 font-mono">Use standard 'combatAction' commands via CLI / Game API to proceed.</p>
+            </div>
+          </div>
+        `;
+        yield sse.event("combat", html, { id: `${sessionId}-combat-${sequence}`, retry: retryMs });
+      } else {
+        yield sse.event("combat", `<div id="hud-combat" class="hidden"></div>`, {
+          id: `${sessionId}-combat-${sequence}`,
+          retry: retryMs,
+        });
+      }
+
+      lastCombatSignature = combatSignature;
+      sequence += 1;
+    }
+
+    const inventory = hudState.inventory;
+    const inventorySignature = inventory ? JSON.stringify(inventory) : "";
+
+    if (inventorySignature !== lastInventorySignature) {
+      if (inventory) {
+        const capacityHTML = `
+          <div class="flex justify-between text-xs text-base-content/70 mt-1 mb-4 font-mono">
+            <span>Capacity</span>
+            <span>${inventory.slots.length} / ${inventory.capacity}</span>
+          </div>
+          <progress class="progress progress-primary w-full h-1" value="${inventory.slots.length}" max="${inventory.capacity}"></progress>
+        `;
+
+        const slotsHTML = inventory.slots
+          .map(
+            (s) => `
+          <div class="flex items-center justify-between p-2 rounded bg-base-100 hover:bg-base-200 cursor-pointer border border-base-content/5 transition-colors">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded bg-base-300 flex items-center justify-center font-bold text-lg border border-base-content/10 shadow-sm">
+                ${s.itemId.substring(0, 1).toUpperCase()}
+              </div>
+              <div class="flex flex-col">
+                <span class="font-bold text-sm text-base-content leading-tight">${escapeHtml(s.itemId)}</span>
+                <span class="text-xs text-base-content/50">${s.quantity}x</span>
+              </div>
+            </div>
+            <button class="btn btn-xs btn-ghost text-base-content/40 hover:text-primary">Action</button>
+          </div>
+        `,
+          )
+          .join("");
+
+        const html = `
+          <div id="hud-inventory" class="card bg-base-300/95 backdrop-blur shadow-2xl p-6 w-full max-w-3xl opacity-100 pointer-events-auto transition-all duration-300 scale-100 border border-base-content/10">
+            <div class="flex justify-between items-center mb-4 border-b border-base-content/10 pb-4">
+              <h3 class="text-2xl font-black text-base-content uppercase tracking-widest flex items-center gap-2">
+                <span class="text-primary">🎒</span> Inventory
+              </h3>
+              <div class="flex gap-2">
+                <span class="badge badge-neutral font-mono shadow-sm">ID: ${escapeHtml(hudState.sessionId.substring(0, 8))}</span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div class="col-span-1 border-r border-base-content/10 pr-6">
+                <h4 class="text-sm font-bold uppercase tracking-wider text-base-content/70 mb-2">Storage</h4>
+                ${capacityHTML}
+                <div class="divider my-2"></div>
+                <div class="text-xs font-mono text-base-content/50">
+                  <p>Weight: 0.0kg</p>
+                  <p>Gold: 0</p>
+                </div>
+              </div>
+              
+              <div class="col-span-2">
+                <h4 class="text-sm font-bold uppercase tracking-wider text-base-content/70 mb-4">Items</h4>
+                <div class="space-y-2 max-h-64 overflow-y-auto pr-2 rounded-box p-1 custom-scrollbar">
+                  ${slotsHTML.length > 0 ? slotsHTML : '<div class="text-center p-8 text-base-content/30 italic">Empty</div>'}
+                </div>
+              </div>
+            </div>
+            
+            <div class="mt-6 pt-4 border-t border-base-content/10 flex justify-between items-center">
+              <p class="text-xs text-base-content/50 font-mono">Use 'inventoryAction' to manage items.</p>
+              <button class="btn btn-sm btn-outline shadow-sm" hx-post="/api/game/command" hx-vals='{"action":"close_inventory"}' hx-swap="none">Close</button>
+            </div>
+          </div>
+        `;
+        yield sse.event("inventory", html, {
+          id: `${sessionId}-inventory-${sequence}`,
+          retry: retryMs,
+        });
+      } else {
+        yield sse.event("inventory", `<div id="hud-inventory" class="hidden"></div>`, {
+          id: `${sessionId}-inventory-${sequence}`,
+          retry: retryMs,
+        });
+      }
+
+      lastInventorySignature = inventorySignature;
+      sequence += 1;
+    }
+
+    const cutscene = hudState.cutscene;
+    const cutsceneSignature = cutscene ? JSON.stringify(cutscene) : "";
+
+    if (cutsceneSignature !== lastCutsceneSignature) {
+      if (cutscene) {
+        const step = hudState.activeCutsceneStep;
+        let contentHtml = "";
+
+        if (step?.action === "dialogue") {
+          contentHtml = `
+            <div class="card bg-base-200/95 shadow-2xl p-6 w-full max-w-2xl backdrop-blur relative border border-base-content/10">
+              <p class="font-bold text-primary mb-2 text-lg uppercase tracking-wider">${escapeHtml(step.speakerKey ?? "")}</p>
+              <p class="text-lg text-base-content">${escapeHtml(step.dialogueKey ?? "")}</p>
+              <div class="absolute bottom-3 right-6 text-xs text-base-content/50 font-mono animate-pulse">Use 'advanceCutscene' (Space/Enter) to continue</div>
+            </div>
+          `;
+        } else if (step?.action === "camera_pan" || step?.action === "wait") {
+          contentHtml = `<div class="text-xl font-mono text-base-content/50 uppercase tracking-[0.2em] italic animate-pulse">Cinematic in progress...</div>`;
+        }
+
+        const html = `
+          <div id="hud-cutscene" class="fixed inset-0 z-50 flex flex-col items-center justify-end pb-[15vh] bg-black/70 backdrop-blur-sm pointer-events-auto transition-all duration-500">
+            <div class="absolute top-6 right-6">
+              <span class="badge badge-neutral shadow-sm font-mono text-xs tracking-widest px-3 py-2">CINEMATIC</span>
+            </div>
+            ${contentHtml}
+            <div class="absolute top-6 left-6">
+               <button class="btn btn-sm btn-ghost text-base-content/40 hover:text-base-content" hx-post="/api/game/command" hx-vals='{"type":"skipCutscene"}' hx-swap="none">Skip [ESC]</button>
+            </div>
+          </div>
+        `;
+        yield sse.event("cutscene", html, {
+          id: `${sessionId}-cutscene-${sequence}`,
+          retry: retryMs,
+        });
+      } else {
+        yield sse.event("cutscene", `<div id="hud-cutscene" class="hidden"></div>`, {
+          id: `${sessionId}-cutscene-${sequence}`,
+          retry: retryMs,
+        });
+      }
+
+      lastCutsceneSignature = cutsceneSignature;
+      sequence += 1;
+    }
+
     sequence += 1;
     yield sse.ping();
     await Bun.sleep(defaultGameConfig.hudPollIntervalMs);
@@ -573,13 +905,19 @@ const createHudStreamHandler = async function* ({
   sse,
   request,
   gameParticipantSessionId,
+  gameRequestLocale,
 }: {
   params: { id: string };
   sse: SseUtils;
   request: Request;
   gameParticipantSessionId: string;
+  gameRequestLocale: string;
 }): AsyncGenerator<string> {
-  const session = await requireAccessibleGameSession(params.id, gameParticipantSessionId);
+  const session = await requireAccessibleGameSession(
+    params.id,
+    gameParticipantSessionId,
+    gameRequestLocale,
+  );
   yield* createHudStream({
     session,
     participantSessionId: gameParticipantSessionId,
@@ -730,8 +1068,12 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .get(
         route.state,
-        async ({ params, gameParticipantSessionId }) => {
-          const state = await requireAccessibleGameSession(params.id, gameParticipantSessionId);
+        async ({ params, gameParticipantSessionId, gameRequestLocale }) => {
+          const state = await requireAccessibleGameSession(
+            params.id,
+            gameParticipantSessionId,
+            gameRequestLocale,
+          );
           return { ok: true, data: toGameSessionStatePayload(state) };
         },
         {
@@ -746,7 +1088,8 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .post(
         route.restore,
-        async ({ params, body, set, gameParticipantSessionId }) => {
+        async ({ params, body, set, gameParticipantSessionId, gameRequestLocale }) => {
+          const messages = getGameMessages(gameRequestLocale);
           const restoredSession = await gameLoop.restoreSession(
             params.id,
             body.resumeToken,
@@ -756,7 +1099,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
             set.status = httpStatus.unauthorized;
             throw new ApplicationError(
               "UNAUTHORIZED",
-              "Session not found or resume token invalid.",
+              messages.game.sessionAccessDenied,
               httpStatus.unauthorized,
               false,
             );
@@ -765,6 +1108,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
           const sessionState = await requireAccessibleGameSession(
             params.id,
             gameParticipantSessionId,
+            gameRequestLocale,
           );
           return { ok: true, data: toGameSessionStatePayload(sessionState) };
         },
@@ -781,7 +1125,16 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .post(
         route.join,
-        async ({ params, body, set, request, status, gameParticipantSessionId }) => {
+        async ({
+          params,
+          body,
+          set,
+          request,
+          status,
+          gameParticipantSessionId,
+          gameRequestLocale,
+        }) => {
+          const messages = getGameMessages(gameRequestLocale);
           const sessionState = await gameLoop.joinSession(
             body.inviteToken,
             gameParticipantSessionId,
@@ -792,7 +1145,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
               errorEnvelope(
                 new ApplicationError(
                   "UNAUTHORIZED",
-                  "Invite token invalid.",
+                  messages.game.invalidInviteDescription,
                   httpStatus.unauthorized,
                   false,
                 ),
@@ -814,15 +1167,20 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .post(
         route.close,
-        async ({ params, set, gameParticipantSessionId }) => {
+        async ({ params, set, gameParticipantSessionId, gameRequestLocale }) => {
           const ownerSessionId = gameParticipantSessionId;
-          const session = await requireOwnedGameSession(params.id, ownerSessionId);
+          const session = await requireOwnedGameSession(
+            params.id,
+            ownerSessionId,
+            gameRequestLocale,
+          );
           const closed = await gameLoop.closeSession(session.id);
           if (!closed) {
+            const messages = getGameMessages(gameRequestLocale);
             set.status = httpStatus.notFound;
             throw new ApplicationError(
               "SESSION_NOT_FOUND",
-              "Session not found.",
+              messages.game.sessionNotFoundRequest,
               httpStatus.notFound,
               false,
             );
@@ -859,7 +1217,8 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
           gameRequestLocale,
         }) => {
           const ownerSessionId = gameParticipantSessionId;
-          await requireOwnedGameSession(params.id, ownerSessionId);
+          const messages = getGameMessages(gameRequestLocale);
+          await requireOwnedGameSession(params.id, ownerSessionId, gameRequestLocale);
           const inviteToken = await gameLoop.createInviteToken(
             params.id,
             ownerSessionId,
@@ -871,7 +1230,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
               errorEnvelope(
                 new ApplicationError(
                   "SESSION_NOT_FOUND",
-                  "Session not found.",
+                  messages.game.sessionNotFoundRequest,
                   httpStatus.notFound,
                   false,
                 ),
@@ -919,15 +1278,20 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .post(
         route.save,
-        async ({ params, set, gameParticipantSessionId }) => {
+        async ({ params, set, gameParticipantSessionId, gameRequestLocale }) => {
           const ownerSessionId = gameParticipantSessionId;
-          const session = await requireOwnedGameSession(params.id, ownerSessionId);
+          const messages = getGameMessages(gameRequestLocale);
+          const session = await requireOwnedGameSession(
+            params.id,
+            ownerSessionId,
+            gameRequestLocale,
+          );
           const saveCooldownRemainingMs = gameLoop.getSaveCooldownRemainingMs(params.id);
           if (saveCooldownRemainingMs > 0) {
             set.status = httpStatus.tooManyRequests;
             throw new ApplicationError(
               "CONFLICT",
-              `save-cooldown:${saveCooldownRemainingMs}`,
+              `${messages.game.saveCooldownActive} (${saveCooldownRemainingMs}ms)`,
               httpStatus.tooManyRequests,
               true,
             );
@@ -957,15 +1321,20 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .delete(
         "/session/:id",
-        async ({ params, set, gameParticipantSessionId }) => {
+        async ({ params, set, gameParticipantSessionId, gameRequestLocale }) => {
           const ownerSessionId = gameParticipantSessionId;
-          const session = await requireOwnedGameSession(params.id, ownerSessionId);
+          const messages = getGameMessages(gameRequestLocale);
+          const session = await requireOwnedGameSession(
+            params.id,
+            ownerSessionId,
+            gameRequestLocale,
+          );
           const closed = await gameLoop.closeSession(session.id);
           if (!closed) {
             set.status = httpStatus.notFound;
             throw new ApplicationError(
               "SESSION_NOT_FOUND",
-              "Session not found.",
+              messages.game.sessionNotFoundRequest,
               httpStatus.notFound,
               false,
             );
@@ -992,8 +1361,13 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .post(
         route.command,
-        async ({ body, params, set, gameParticipantSessionId }) => {
-          const session = await requireControllableGameSession(params.id, gameParticipantSessionId);
+        async ({ body, params, set, gameParticipantSessionId, gameRequestLocale }) => {
+          const session = await requireControllableGameSession(
+            params.id,
+            gameParticipantSessionId,
+            gameRequestLocale,
+          );
+          const messages = getGameMessages(session.locale);
           const result = gameLoop.processCommand(
             session.sessionId,
             gameParticipantSessionId,
@@ -1005,8 +1379,8 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
             throw new ApplicationError(
               result.errorCode ?? "INVALID_COMMAND",
               result.errorCode === "INVALID_COMMAND"
-                ? "Invalid command payload."
-                : "Command rejected.",
+                ? messages.game.invalidCommand
+                : messages.game.commandRejected,
               httpStatus.unprocessableEntity,
               false,
             );
@@ -1016,7 +1390,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
             set.status = httpStatus.conflict;
             throw new ApplicationError(
               result.errorCode,
-              result.errorReason ?? "Command queue is full.",
+              getCommandErrorMessage(session.locale, result.errorCode, result.errorReason),
               httpStatus.conflict,
               true,
             );
@@ -1026,7 +1400,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
             set.status = httpStatus.serviceUnavailable;
             throw new ApplicationError(
               result.errorCode ?? "INVALID_COMMAND",
-              result.errorReason ?? "Command was dropped.",
+              getCommandErrorMessage(session.locale, result.errorCode, result.errorReason),
               httpStatus.serviceUnavailable,
               true,
             );
@@ -1036,7 +1410,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
             set.status = httpStatus.unprocessableEntity;
             throw new ApplicationError(
               "INVALID_COMMAND",
-              "Command type was not resolved for accepted command.",
+              messages.game.commandTypeMissing,
               httpStatus.unprocessableEntity,
               false,
             );
@@ -1046,10 +1420,10 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
             ok: true,
             data: {
               sessionId: result.sessionId,
-              commandId: result.commandId,
+              commandId: result.commandId ?? "unknown",
               sequenceId: result.sequenceId,
               state: result.state,
-              commandType: result.commandType,
+              commandType: result.commandType!,
               errorCode: result.errorCode,
               errorReason: result.errorReason,
               commandState: result.commandState,
@@ -1074,8 +1448,12 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .get(
         route.dialogue,
-        async ({ params, gameParticipantSessionId }) => {
-          const session = await requireAccessibleGameSession(params.id, gameParticipantSessionId);
+        async ({ params, gameParticipantSessionId, gameRequestLocale }) => {
+          const session = await requireAccessibleGameSession(
+            params.id,
+            gameParticipantSessionId,
+            gameRequestLocale,
+          );
           return { ok: true, data: session.state.dialogue };
         },
         {

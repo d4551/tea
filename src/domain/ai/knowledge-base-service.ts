@@ -1,7 +1,9 @@
+import { Prisma } from "@prisma/client";
 import { appConfig, type LocaleCode, normalizeLocale } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
-import { prisma } from "../../shared/services/db.ts";
+import { prismaBase } from "../../shared/services/db.ts";
 import { ProviderRegistry } from "./providers/provider-registry.ts";
+import { vectorStore } from "./vector-store.ts";
 
 const logger = createLogger("ai.knowledge-base");
 let embeddingFallbackUntilMs = 0;
@@ -95,14 +97,58 @@ interface ChunkSeed {
   readonly tokenEstimate: number;
 }
 
+interface ChunkTermSeed {
+  readonly term: string;
+  readonly occurrenceCount: number;
+}
+
 interface EmbeddedChunkSeed extends ChunkSeed {
+  readonly chunkId: string;
   readonly embedding: readonly number[];
+  readonly searchText: string;
+  readonly terms: readonly ChunkTermSeed[];
+}
+
+interface KnowledgeChunkCandidateRow {
+  readonly id: string;
 }
 
 const estimateTokenCount = (value: string): number =>
   Math.max(1, Math.ceil(value.trim().length / 4));
 
 const trimNormalized = (value: string): string => value.replace(/\s+/gu, " ").trim();
+
+const normalizeSearchText = (value: string): string =>
+  trimNormalized(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fff\s]+/gu, " ");
+
+const tokenizeSearchTerms = (value: string): readonly string[] =>
+  Array.from(
+    new Set(
+      normalizeSearchText(value)
+        .split(/\s+/u)
+        .map((term) => term.trim())
+        .filter((term) => term.length >= 2),
+    ),
+  );
+
+const extractSearchTerms = (value: string): readonly ChunkTermSeed[] => {
+  const counts = new Map<string, number>();
+  for (const term of normalizeSearchText(value)
+    .split(/\s+/u)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length >= 2)) {
+    counts.set(term, (counts.get(term) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .sort((left, right) => left[0].localeCompare(right[0]))
+    .map(([term, occurrenceCount]) => ({
+      term,
+      occurrenceCount,
+    }));
+};
 
 const createContentHash = async (value: string): Promise<string> => {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -204,7 +250,7 @@ const createFallbackEmbedding = (text: string): Float32Array => {
   return values;
 };
 
-const parseEmbedding = (value: unknown): readonly number[] | null => {
+export const parseEmbedding = (value: unknown): readonly number[] | null => {
   if (!Array.isArray(value)) {
     return null;
   }
@@ -215,7 +261,7 @@ const parseEmbedding = (value: unknown): readonly number[] | null => {
   return normalized.length > 0 ? normalized : null;
 };
 
-const cosineSimilarity = (left: readonly number[], right: readonly number[]): number => {
+export const cosineSimilarity = (left: readonly number[], right: readonly number[]): number => {
   const length = Math.min(left.length, right.length);
   if (length === 0) {
     return -1;
@@ -249,15 +295,21 @@ const resolveEmbedding = async (text: string): Promise<Float32Array> => {
     return createFallbackEmbedding(text);
   }
 
-  try {
-    const registry = await ProviderRegistry.getInstance();
-    const embedding = await registry.generateEmbedding(text);
+  const registry = await ProviderRegistry.getInstance().catch((error: unknown) => {
+    logger.warn("knowledge.embedding.provider.failed", { error: String(error) });
+    embeddingFallbackUntilMs = Date.now() + embeddingFallbackCooldownMs();
+    return null;
+  });
+
+  if (registry) {
+    const embedding = await registry.generateEmbedding(text).catch((error: unknown) => {
+      logger.warn("knowledge.embedding.provider.failed", { error: String(error) });
+      embeddingFallbackUntilMs = Date.now() + embeddingFallbackCooldownMs();
+      return null;
+    });
     if (embedding) {
       return embedding;
     }
-  } catch (error: unknown) {
-    logger.warn("knowledge.embedding.provider.failed", { error: String(error) });
-    embeddingFallbackUntilMs = Date.now() + embeddingFallbackCooldownMs();
   }
 
   logger.info("knowledge.embedding.fallback", {
@@ -266,6 +318,45 @@ const resolveEmbedding = async (text: string): Promise<Float32Array> => {
   });
   embeddingFallbackUntilMs = Date.now() + embeddingFallbackCooldownMs();
   return createFallbackEmbedding(text);
+};
+
+const toPersistedChunkRows = (
+  documentId: string,
+  chunks: readonly EmbeddedChunkSeed[],
+): {
+  readonly chunkRows: {
+    readonly id: string;
+    readonly documentId: string;
+    readonly ordinal: number;
+    readonly text: string;
+    readonly searchText: string;
+    readonly embedding: Prisma.InputJsonValue;
+    readonly tokenEstimate: number;
+  }[];
+  readonly termRows: {
+    readonly chunkId: string;
+    readonly term: string;
+    readonly occurrenceCount: number;
+  }[];
+} => {
+  const chunkRows = chunks.map((chunk) => ({
+    id: chunk.chunkId,
+    documentId,
+    ordinal: chunk.ordinal,
+    text: chunk.text,
+    searchText: chunk.searchText,
+    embedding: JSON.parse(JSON.stringify(chunk.embedding)) as Prisma.InputJsonValue,
+    tokenEstimate: chunk.tokenEstimate,
+  }));
+  const termRows = chunks.flatMap((chunk) =>
+    chunk.terms.map((term) => ({
+      chunkId: chunk.chunkId,
+      term: term.term,
+      occurrenceCount: term.occurrenceCount,
+    })),
+  );
+
+  return { chunkRows, termRows };
 };
 
 /**
@@ -302,12 +393,15 @@ export class KnowledgeBaseService {
       const embedding = await resolveEmbedding(chunk.text);
       embeddedChunks.push({
         ...chunk,
+        chunkId: `${crypto.randomUUID()}:chunk:${chunk.ordinal}`,
         embedding: toEmbeddingArray(embedding),
+        searchText: normalizeSearchText(chunk.text),
+        terms: extractSearchTerms(chunk.text),
       });
     }
 
     const contentHash = await createContentHash(`${locale}\n${title}\n${source}\n${text}`);
-    const existing = await prisma.aiKnowledgeDocument.findFirst({
+    const existing = await prismaBase.aiKnowledgeDocument.findFirst({
       where: {
         projectId: input.projectId ?? null,
         contentHash,
@@ -320,55 +414,64 @@ export class KnowledgeBaseService {
     });
 
     const persisted = existing
-      ? await prisma.aiKnowledgeDocument.update({
-          where: { id: existing.id },
-          data: {
-            title,
-            source,
-            locale,
-            chunks: {
-              deleteMany: {},
-              createMany: {
-                data: embeddedChunks.map((chunk) => ({
-                  id: `${existing.id}:chunk:${chunk.ordinal}`,
-                  ordinal: chunk.ordinal,
-                  text: chunk.text,
-                  embedding: JSON.parse(JSON.stringify(chunk.embedding)),
-                  tokenEstimate: chunk.tokenEstimate,
-                })),
+      ? await prismaBase.$transaction(async (tx) => {
+          const chunkRows = toPersistedChunkRows(existing.id, embeddedChunks);
+
+          const updated = await tx.aiKnowledgeDocument.update({
+            where: { id: existing.id },
+            data: {
+              title,
+              source,
+              locale,
+            },
+          });
+
+          await tx.aiKnowledgeChunk.deleteMany({
+            where: { documentId: existing.id },
+          });
+          await tx.aiKnowledgeChunk.createMany({
+            data: chunkRows.chunkRows,
+          });
+          await tx.aiKnowledgeChunkTerm.createMany({
+            data: chunkRows.termRows,
+          });
+
+          return tx.aiKnowledgeDocument.findUniqueOrThrow({
+            where: { id: updated.id },
+            include: {
+              chunks: {
+                select: { id: true },
               },
             },
-          },
-          include: {
-            chunks: {
-              select: { id: true },
-            },
-          },
+          });
         })
-      : await prisma.aiKnowledgeDocument.create({
-          data: {
-            projectId: input.projectId ?? null,
-            title,
-            source,
-            locale,
-            contentHash,
-            chunks: {
-              createMany: {
-                data: embeddedChunks.map((chunk) => ({
-                  id: `${crypto.randomUUID()}:chunk:${chunk.ordinal}`,
-                  ordinal: chunk.ordinal,
-                  text: chunk.text,
-                  embedding: JSON.parse(JSON.stringify(chunk.embedding)),
-                  tokenEstimate: chunk.tokenEstimate,
-                })),
+      : await prismaBase.$transaction(async (tx) => {
+          const created = await tx.aiKnowledgeDocument.create({
+            data: {
+              projectId: input.projectId ?? null,
+              title,
+              source,
+              locale,
+              contentHash,
+            },
+          });
+          const chunkRows = toPersistedChunkRows(created.id, embeddedChunks);
+
+          await tx.aiKnowledgeChunk.createMany({
+            data: chunkRows.chunkRows,
+          });
+          await tx.aiKnowledgeChunkTerm.createMany({
+            data: chunkRows.termRows,
+          });
+
+          return tx.aiKnowledgeDocument.findUniqueOrThrow({
+            where: { id: created.id },
+            include: {
+              chunks: {
+                select: { id: true },
               },
             },
-          },
-          include: {
-            chunks: {
-              select: { id: true },
-            },
-          },
+          });
         });
 
     logger.info("knowledge.document.ingested", {
@@ -377,6 +480,13 @@ export class KnowledgeBaseService {
       chunkCount: persisted.chunks.length,
       locale,
     });
+
+    vectorStore.upsertMany(
+      embeddedChunks.map((chunk) => ({
+        chunkId: chunk.chunkId,
+        embedding: chunk.embedding,
+      })),
+    );
 
     return {
       id: persisted.id,
@@ -398,7 +508,7 @@ export class KnowledgeBaseService {
    * @returns Persisted document summaries sorted by update time.
    */
   async listDocuments(projectId?: string): Promise<readonly KnowledgeDocumentRecord[]> {
-    const rows = await prisma.aiKnowledgeDocument.findMany({
+    const rows = await prismaBase.aiKnowledgeDocument.findMany({
       where: {
         ...(projectId ? { projectId } : {}),
       },
@@ -435,14 +545,106 @@ export class KnowledgeBaseService {
    * @returns Whether a document was deleted.
    */
   async deleteDocument(documentId: string, projectId?: string): Promise<boolean> {
-    const deleted = await prisma.aiKnowledgeDocument.deleteMany({
+    const existingChunks = await prismaBase.aiKnowledgeChunk.findMany({
+      where: { document: { id: documentId, ...(projectId ? { projectId } : {}) } },
+      select: { id: true },
+    });
+
+    const deleted = await prismaBase.aiKnowledgeDocument.deleteMany({
       where: {
         id: documentId,
         ...(projectId ? { projectId } : {}),
       },
     });
 
+    if (deleted.count > 0 && existingChunks.length > 0) {
+      vectorStore.removeMany(existingChunks.map((row) => row.id));
+    }
+
     return deleted.count > 0;
+  }
+
+  private async shortlistChunkIds(
+    query: string,
+    options: {
+      readonly projectId?: string;
+      readonly locale?: string;
+      readonly limit: number;
+    },
+  ): Promise<readonly string[]> {
+    const searchTerms = tokenizeSearchTerms(query);
+    if (searchTerms.length === 0) {
+      const rows = await prismaBase.aiKnowledgeChunk.findMany({
+        where: {
+          document: {
+            ...(options.projectId ? { projectId: options.projectId } : {}),
+            ...(options.locale ? { locale: options.locale } : {}),
+          },
+        },
+        orderBy: {
+          document: {
+            updatedAt: "desc",
+          },
+        },
+        select: {
+          id: true,
+        },
+        take: options.limit,
+      });
+      return rows.map((row) => row.id);
+    }
+
+    const rows = await prismaBase.$queryRaw<readonly KnowledgeChunkCandidateRow[]>(
+      Prisma.sql`
+        SELECT "AiKnowledgeChunkTerm"."chunkId" AS "id"
+        FROM "AiKnowledgeChunkTerm"
+        INNER JOIN "AiKnowledgeChunk"
+          ON "AiKnowledgeChunk"."id" = "AiKnowledgeChunkTerm"."chunkId"
+        INNER JOIN "AiKnowledgeDocument"
+          ON "AiKnowledgeDocument"."id" = "AiKnowledgeChunk"."documentId"
+        WHERE 1 = 1
+          ${
+            options.projectId
+              ? Prisma.sql`AND "AiKnowledgeDocument"."projectId" = ${options.projectId}`
+              : Prisma.empty
+          }
+          ${
+            options.locale
+              ? Prisma.sql`AND "AiKnowledgeDocument"."locale" = ${options.locale}`
+              : Prisma.empty
+          }
+          AND "AiKnowledgeChunkTerm"."term" IN (${Prisma.join(searchTerms)})
+        GROUP BY "AiKnowledgeChunkTerm"."chunkId"
+        ORDER BY SUM("AiKnowledgeChunkTerm"."occurrenceCount") DESC,
+          MIN("AiKnowledgeChunk"."tokenEstimate") ASC,
+          MIN("AiKnowledgeChunk"."ordinal") ASC
+        LIMIT ${options.limit}
+      `,
+    );
+
+    if (rows.length > 0) {
+      return rows.map((row) => row.id);
+    }
+
+    const fallbackRows = await prismaBase.aiKnowledgeChunk.findMany({
+      where: {
+        document: {
+          ...(options.projectId ? { projectId: options.projectId } : {}),
+          ...(options.locale ? { locale: options.locale } : {}),
+        },
+      },
+      orderBy: {
+        document: {
+          updatedAt: "desc",
+        },
+      },
+      select: {
+        id: true,
+      },
+      take: options.limit,
+    });
+
+    return fallbackRows.map((row) => row.id);
   }
 
   /**
@@ -466,26 +668,46 @@ export class KnowledgeBaseService {
     }
 
     const queryEmbedding = await resolveEmbedding(trimmedQuery);
-
     const targetLocale = options.locale ? normalizeLocale(options.locale) : undefined;
-    const rows = await prisma.aiKnowledgeChunk.findMany({
+    const effectiveLimit = options.limit ?? appConfig.ai.ragSearchLimit;
+    const candidateLimit = Math.max(effectiveLimit, appConfig.ai.ragCandidateLimit);
+
+    const vecResults = vectorStore.search(queryEmbedding, candidateLimit);
+
+    const candidateIds =
+      vecResults.length > 0
+        ? vecResults.map((result) => result.chunkId)
+        : await this.shortlistChunkIds(trimmedQuery, {
+            projectId: options.projectId,
+            locale: targetLocale,
+            limit: candidateLimit,
+          });
+
+    if (candidateIds.length === 0) {
+      return [];
+    }
+
+    const rows = await prismaBase.aiKnowledgeChunk.findMany({
       where: {
-        document: {
-          ...(options.projectId ? { projectId: options.projectId } : {}),
-          ...(targetLocale ? { locale: targetLocale } : {}),
-        },
+        id: { in: [...candidateIds] },
+        ...(options.projectId || targetLocale
+          ? {
+              document: {
+                ...(options.projectId ? { projectId: options.projectId } : {}),
+                ...(targetLocale ? { locale: targetLocale } : {}),
+              },
+            }
+          : {}),
       },
-      include: {
-        document: true,
-      },
+      include: { document: true },
     });
+
+    const distanceMap = new Map(vecResults.map((r) => [r.chunkId, r.distance]));
 
     const ranked = rows
       .map((row) => {
-        const embedding = parseEmbedding(row.embedding);
-        if (!embedding) {
-          return null;
-        }
+        const vecDistance = distanceMap.get(row.id);
+        const score = vecDistance !== undefined ? 1 - vecDistance : 0;
 
         return {
           documentId: row.documentId,
@@ -495,12 +717,11 @@ export class KnowledgeBaseService {
           locale: normalizeLocale(row.document.locale),
           ordinal: row.ordinal,
           text: row.text,
-          score: cosineSimilarity(Array.from(queryEmbedding), embedding),
+          score,
         } satisfies KnowledgeSearchMatch;
       })
-      .filter((match): match is KnowledgeSearchMatch => match !== null)
       .sort((left, right) => right.score - left.score)
-      .slice(0, options.limit ?? appConfig.ai.ragSearchLimit);
+      .slice(0, effectiveLimit);
 
     return ranked;
   }

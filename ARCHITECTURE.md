@@ -77,12 +77,12 @@ graph TB
   - command/state websocket endpoint
   - websocket tick registration/cleanup and session-scoped transport teardown
 - `game-loop` owns authoritative simulation, canonical session resolution, owner/controller avatar movement, dashboard/session metrics, expired-session purging, HUD state projection, token verification, tick scheduling, throttled persistence, and chat rate limiting.
-- `playerProgressStore` owns XP, level, and one-time interaction persistence consumed by the game loop and HUD projection.
+- `playerProgressStore` owns XP, level, visited-scene, and one-time interaction persistence consumed by the game loop and HUD projection, backed by normalized `PlayerProgressVisitedScene` and `PlayerProgressInteraction` rows instead of JSON blobs.
 - `shared/contracts/game.ts` owns boundary validation for persisted scene state, trigger definitions, and realtime websocket frames before they reach runtime or client renderers.
-- `GameStateStore` stays the persistence boundary behind `game-loop`, including persisted shared-session participants.
-- `builder-project-state-store` owns builder project JSON decode/normalize, optimistic versioned saves, snapshot projection, and published-release reads.
+- `GameStateStore` stays the persistence boundary behind `game-loop`, including persisted shared-session participants plus normalized session scene, actor, runtime-state, NPC, trigger, quest, and flag rows.
+- `builder-project-state-store` owns builder project JSON decode/normalize, optimistic versioned saves, snapshot projection, published-release reads, and the projection of normalized scene metadata/collision/NPC/node rows back into builder scene contracts.
 - `builder-service` owns builder domain mutations, canonical create-form defaults for scenes/assets/animation clips/mechanics/generation/automation, publish/unpublish orchestration, AI patch preview/apply flows, and canonical asset metadata for OpenUSD-aware ingestion.
-- `knowledge-base-service` owns RAG chunking, embedding resolution, knowledge-document persistence, semantic retrieval, and retrieval-augmented assist prompts.
+- `knowledge-base-service` owns RAG chunking, embedding resolution, knowledge-document persistence, lexical term indexing, semantic retrieval, and retrieval-augmented assist prompts.
 - `ProviderRegistry` owns provider lifecycle, capability routing, embeddings routing, and structured tool planning across Ollama, Transformers.js, and generic OpenAI-compatible local/cloud lanes. `knowledge-base-service` consumes that registry rather than binding to local/cloud providers directly.
 - `runtime-readiness` owns setup/doctor/startup verification for DB reachability, required assets, writable directories, Bun version policy, and AI routing configuration.
 - `ai-provider-plugin` owns provider-registry boot, periodic capability refresh, and shutdown disposal.
@@ -215,7 +215,7 @@ flowchart TD
 
 Current behavior:
 
-- Draft edits mutate `builderProject.state` only for residual draft metadata, while scenes, dialogue catalogs, assets, animation clips, dialogue graphs, quests, triggers, flags, generation jobs, artifacts, and automation runs live in relational draft tables.
+- Draft edits mutate `builderProject.state` only for residual draft metadata, while scenes, dialogue catalogs, assets, animation clips, dialogue graph nodes/edges, quest steps, trigger flag conditions/effects, flags, generation-job artifact links, automation run steps/artifact links, artifacts, and automation runs live in relational draft tables.
 - Asset upload via `POST /api/builder/assets/upload`; mechanics CRUD via quest/trigger/dialogue-graph routes.
 - Asset ingestion accepts images, audio, glTF/GLB, and OpenUSD source files (`.usd`, `.usda`, `.usdc`, `.usdz`).
 - Published runtime currently treats `usdz` as the directly loadable OpenUSD variant in Three.js, while `.usd/.usda/.usdc` remain authoritative source variants for later import or conversion workflows.
@@ -244,8 +244,10 @@ flowchart LR
 Notes:
 
 - RAG corpus is persisted in Prisma so retrieval is available across requests and boots.
+- Retrieval uses a Prisma-backed lexical term index before semantic reranking so the app no longer fetches the entire chunk corpus for every search.
 - Embedding generation remains provider-routed and local-first, but the service uses deterministic fallback embeddings when the configured embedding backend cannot answer within the configured pipeline timeout budget.
 - The recommended local API-compatible runtime target is Ramalama (or any equivalent OpenAI-compatible local server) exposed through the generic `/v1` provider lane rather than bespoke route logic.
+- The OpenAI-compatible local/cloud lanes now expose chat, embeddings, vision, audio transcription, speech synthesis, and moderation-backed classification when the corresponding lane models are configured.
 - Structured tool planning is routed through `ProviderRegistry.planTools()` so local/cloud providers share one contract instead of each route inventing its own planner surface.
 
 ## Setup and Audit Surface

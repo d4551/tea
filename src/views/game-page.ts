@@ -305,6 +305,39 @@ export function GamePage(props: GamePageProps) {
                   class="hidden w-full max-w-2xl pointer-events-auto transform opacity-0 transition-all duration-300 scale-95"
                 >
                 </div>
+
+                <div
+                  id="hud-combat"
+                  data-hud-slot="hud-combat"
+                  sse-swap="combat"
+                  hx-swap="outerHTML"
+                  aria-live="polite"
+                  role="log"
+                  class="hidden w-full max-w-4xl pointer-events-auto transform opacity-0 transition-all duration-300 scale-95"
+                >
+                </div>
+
+                <div
+                  id="hud-inventory"
+                  data-hud-slot="hud-inventory"
+                  sse-swap="inventory"
+                  hx-swap="outerHTML"
+                  aria-live="polite"
+                  role="region"
+                  class="hidden w-full max-w-3xl pointer-events-auto transform opacity-0 transition-all duration-300 scale-95"
+                >
+                </div>
+
+                <div
+                  id="hud-cutscene"
+                  data-hud-slot="hud-cutscene"
+                  sse-swap="cutscene"
+                  hx-swap="outerHTML"
+                  aria-live="polite"
+                  role="region"
+                  class="hidden w-full h-full pointer-events-auto transform transition-all duration-500"
+                >
+                </div>
               </div>
             </div>
           </div>

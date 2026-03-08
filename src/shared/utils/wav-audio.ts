@@ -76,14 +76,14 @@ const decodeSample = (
  * @param input Raw WAV bytes.
  * @returns Decoded mono audio for inference.
  */
-export const decodeWavAudio = (input: Uint8Array): DecodedWavAudio => {
+export const decodeWavAudio = (input: Uint8Array): DecodedWavAudioResult => {
   const view = new DataView(input.buffer, input.byteOffset, input.byteLength);
   if (input.byteLength < 44) {
-    throw new Error("WAV payload is too small.");
+    return { ok: false, error: "WAV payload is too small." };
   }
 
   if (readAscii(view, 0, 4) !== riffHeader || readAscii(view, 8, 4) !== waveHeader) {
-    throw new Error("Unsupported WAV container.");
+    return { ok: false, error: "Unsupported WAV container." };
   }
 
   let offset = 12;
@@ -116,17 +116,17 @@ export const decodeWavAudio = (input: Uint8Array): DecodedWavAudio => {
   }
 
   if (dataOffset < 0 || channelCount < 1 || sampleRate < 1 || bitsPerSample < 1) {
-    throw new Error("WAV payload is missing required format or data chunks.");
+    return { ok: false, error: "WAV payload is missing required format or data chunks." };
   }
 
   if (audioFormat !== 1 && audioFormat !== 3) {
-    throw new Error(`Unsupported WAV audio format: ${audioFormat}`);
+    return { ok: false, error: `Unsupported WAV audio format: ${audioFormat}` };
   }
 
   const bytesPerSample = Math.ceil(bitsPerSample / 8);
   const frameSize = bytesPerSample * channelCount;
   if (frameSize < 1) {
-    throw new Error("Invalid WAV frame size.");
+    return { ok: false, error: "Invalid WAV frame size." };
   }
 
   const frameCount = Math.floor(dataSize / frameSize);
@@ -142,31 +142,18 @@ export const decodeWavAudio = (input: Uint8Array): DecodedWavAudio => {
   }
 
   return {
-    samples: monoSamples,
-    sampleRate,
-    channels: channelCount,
-    durationMs: Math.round((frameCount / sampleRate) * 1000),
+    ok: true,
+    value: {
+      samples: monoSamples,
+      sampleRate,
+      channels: channelCount,
+      durationMs: Math.round((frameCount / sampleRate) * 1000),
+    },
   };
 };
 
-/**
- * Attempts to decode a WAV payload into mono inference-ready PCM without throwing.
- *
- * @param input Raw WAV bytes.
- * @returns Typed decode result with either the decoded payload or a stable error message.
- */
 export const safeDecodeWavAudio = (input: Uint8Array): DecodedWavAudioResult => {
-  try {
-    return {
-      ok: true,
-      value: decodeWavAudio(input),
-    };
-  } catch (error: unknown) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "Unsupported WAV payload.",
-    };
-  }
+  return decodeWavAudio(input);
 };
 
 /**

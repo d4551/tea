@@ -76,7 +76,7 @@ export const renderKnowledgeDocumentList = (
             hx-target="#ai-knowledge-documents"
             hx-swap="innerHTML"
             hx-confirm="${escapeHtml(messages.builder.deleteKnowledgeDocumentConfirm)}"
-            aria-label="${escapeHtml(messages.builder.deleteKnowledgeDocument)}"
+            aria-label="${escapeHtml(messages.builder.deleteKnowledgeDocument)}: ${escapeHtml(document.title)}"
           >
             ${escapeHtml(messages.builder.deleteKnowledgeDocument)}
           </button>

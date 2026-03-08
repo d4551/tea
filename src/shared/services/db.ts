@@ -1,5 +1,5 @@
 import { PrismaLibSql } from "@prisma/adapter-libsql";
-import { type Prisma, PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import type { LocaleCode } from "../../config/environment.ts";
 import { appConfig } from "../../config/environment.ts";
 import { getLevel } from "../../domain/game/progression.ts";
@@ -14,6 +14,7 @@ import type {
   QuestDefinition,
   SceneDefinition,
   TriggerDefinition,
+  AnimationTimeline,
 } from "../contracts/game.ts";
 
 declare global {
@@ -67,11 +68,10 @@ export const builderProjectSceneRowSelect = {
   sceneMode: true,
   titleKey: true,
   background: true,
-  geometry: true,
-  spawn: true,
-  npcs: true,
-  nodes: true,
-  collisions: true,
+  geometryWidth: true,
+  geometryHeight: true,
+  spawnX: true,
+  spawnY: true,
 } satisfies Prisma.BuilderProjectSceneSelect;
 
 /**
@@ -79,6 +79,104 @@ export const builderProjectSceneRowSelect = {
  */
 export type BuilderProjectSceneRow = Prisma.BuilderProjectSceneGetPayload<{
   select: typeof builderProjectSceneRowSelect;
+}>;
+
+/**
+ * Canonical builder scene-collision row shape used by domain services.
+ */
+export const builderProjectSceneCollisionRowSelect = {
+  projectId: true,
+  sceneId: true,
+  ordinal: true,
+  x: true,
+  y: true,
+  width: true,
+  height: true,
+} satisfies Prisma.BuilderProjectSceneCollisionSelect;
+
+/**
+ * Selected builder scene-collision row contract shared across persistence helpers.
+ */
+export type BuilderProjectSceneCollisionRow = Prisma.BuilderProjectSceneCollisionGetPayload<{
+  select: typeof builderProjectSceneCollisionRowSelect;
+}>;
+
+/**
+ * Canonical builder scene-NPC row shape used by domain services.
+ */
+export const builderProjectSceneNpcRowSelect = {
+  projectId: true,
+  sceneId: true,
+  characterKey: true,
+  ordinal: true,
+  x: true,
+  y: true,
+  labelKey: true,
+  interactRadius: true,
+  wanderRadius: true,
+  wanderSpeed: true,
+  idlePauseMinMs: true,
+  idlePauseMaxMs: true,
+  greetOnApproach: true,
+  greetLineKey: true,
+} satisfies Prisma.BuilderProjectSceneNpcSelect;
+
+/**
+ * Selected builder scene-NPC row contract shared across persistence helpers.
+ */
+export type BuilderProjectSceneNpcRow = Prisma.BuilderProjectSceneNpcGetPayload<{
+  select: typeof builderProjectSceneNpcRowSelect;
+}>;
+
+/**
+ * Canonical builder scene-NPC dialogue-key row shape used by domain services.
+ */
+export const builderProjectSceneNpcDialogueKeyRowSelect = {
+  projectId: true,
+  sceneId: true,
+  characterKey: true,
+  ordinal: true,
+  key: true,
+} satisfies Prisma.BuilderProjectSceneNpcDialogueKeySelect;
+
+/**
+ * Selected builder scene-NPC dialogue-key row contract shared across persistence helpers.
+ */
+export type BuilderProjectSceneNpcDialogueKeyRow =
+  Prisma.BuilderProjectSceneNpcDialogueKeyGetPayload<{
+    select: typeof builderProjectSceneNpcDialogueKeyRowSelect;
+  }>;
+
+/**
+ * Canonical builder scene-node row shape used by domain services.
+ */
+export const builderProjectSceneNodeRowSelect = {
+  projectId: true,
+  sceneId: true,
+  id: true,
+  ordinal: true,
+  nodeType: true,
+  assetId: true,
+  animationClipId: true,
+  positionX: true,
+  positionY: true,
+  positionZ: true,
+  sizeWidth: true,
+  sizeHeight: true,
+  layer: true,
+  rotationX: true,
+  rotationY: true,
+  rotationZ: true,
+  scaleX: true,
+  scaleY: true,
+  scaleZ: true,
+} satisfies Prisma.BuilderProjectSceneNodeSelect;
+
+/**
+ * Selected builder scene-node row contract shared across persistence helpers.
+ */
+export type BuilderProjectSceneNodeRow = Prisma.BuilderProjectSceneNodeGetPayload<{
+  select: typeof builderProjectSceneNodeRowSelect;
 }>;
 
 /**
@@ -110,8 +208,6 @@ export const builderProjectAssetRowSelect = {
   source: true,
   sourceFormat: true,
   sourceMimeType: true,
-  tags: true,
-  variants: true,
   approved: true,
   createdAt: true,
   updatedAt: true,
@@ -122,6 +218,44 @@ export const builderProjectAssetRowSelect = {
  */
 export type BuilderProjectAssetRow = Prisma.BuilderProjectAssetGetPayload<{
   select: typeof builderProjectAssetRowSelect;
+}>;
+
+/**
+ * Canonical builder-project asset-tag row shape used by domain services.
+ */
+export const builderProjectAssetTagRowSelect = {
+  projectId: true,
+  assetId: true,
+  ordinal: true,
+  value: true,
+} satisfies Prisma.BuilderProjectAssetTagSelect;
+
+/**
+ * Selected builder-project asset-tag row contract shared across persistence helpers.
+ */
+export type BuilderProjectAssetTagRow = Prisma.BuilderProjectAssetTagGetPayload<{
+  select: typeof builderProjectAssetTagRowSelect;
+}>;
+
+/**
+ * Canonical builder-project asset-variant row shape used by domain services.
+ */
+export const builderProjectAssetVariantRowSelect = {
+  projectId: true,
+  assetId: true,
+  id: true,
+  ordinal: true,
+  format: true,
+  source: true,
+  usage: true,
+  mimeType: true,
+} satisfies Prisma.BuilderProjectAssetVariantSelect;
+
+/**
+ * Selected builder-project asset-variant row contract shared across persistence helpers.
+ */
+export type BuilderProjectAssetVariantRow = Prisma.BuilderProjectAssetVariantGetPayload<{
+  select: typeof builderProjectAssetVariantRowSelect;
 }>;
 
 /**
@@ -151,6 +285,47 @@ export type BuilderProjectAnimationClipRow = Prisma.BuilderProjectAnimationClipG
 }>;
 
 /**
+ * Canonical builder animation-timeline row shape used by domain services.
+ */
+export const builderProjectAnimationTimelineRowSelect = {
+  projectId: true,
+  id: true,
+  assetId: true,
+  label: true,
+  sceneMode: true,
+  stateTag: true,
+  durationMs: true,
+  loop: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.BuilderProjectAnimationTimelineSelect;
+
+/**
+ * Selected builder animation-timeline row contract shared across persistence helpers.
+ */
+export type BuilderProjectAnimationTimelineRow = Prisma.BuilderProjectAnimationTimelineGetPayload<{
+  select: typeof builderProjectAnimationTimelineRowSelect;
+}>;
+
+/**
+ * Canonical builder animation-track row shape used by domain services.
+ */
+export const builderProjectAnimationTrackRowSelect = {
+  projectId: true,
+  timelineId: true,
+  id: true,
+  property: true,
+  keyframes: true,
+} satisfies Prisma.BuilderProjectAnimationTrackSelect;
+
+/**
+ * Selected builder animation-track row contract shared across persistence helpers.
+ */
+export type BuilderProjectAnimationTrackRow = Prisma.BuilderProjectAnimationTrackGetPayload<{
+  select: typeof builderProjectAnimationTrackRowSelect;
+}>;
+
+/**
  * Canonical builder dialogue-graph row shape used by domain services.
  */
 export const builderProjectDialogueGraphRowSelect = {
@@ -159,7 +334,6 @@ export const builderProjectDialogueGraphRowSelect = {
   title: true,
   npcId: true,
   rootNodeId: true,
-  nodes: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.BuilderProjectDialogueGraphSelect;
@@ -172,6 +346,54 @@ export type BuilderProjectDialogueGraphRow = Prisma.BuilderProjectDialogueGraphG
 }>;
 
 /**
+ * Canonical builder dialogue-graph node row shape used by domain services.
+ */
+export const builderProjectDialogueGraphNodeRowSelect = {
+  projectId: true,
+  graphId: true,
+  id: true,
+  ordinal: true,
+  line: true,
+} satisfies NonNullable<Prisma.BuilderProjectDialogueGraphNodeFindManyArgs["select"]>;
+
+/**
+ * Selected builder dialogue-graph node row contract shared across persistence helpers.
+ */
+export interface BuilderProjectDialogueGraphNodeRow {
+  readonly projectId: string;
+  readonly graphId: string;
+  readonly id: string;
+  readonly ordinal: number;
+  readonly line: string;
+}
+
+/**
+ * Canonical builder dialogue-graph edge row shape used by domain services.
+ */
+export const builderProjectDialogueGraphEdgeRowSelect = {
+  projectId: true,
+  graphId: true,
+  nodeId: true,
+  ordinal: true,
+  toNodeId: true,
+  requiredFlag: true,
+  advanceQuestStepId: true,
+} satisfies NonNullable<Prisma.BuilderProjectDialogueGraphEdgeFindManyArgs["select"]>;
+
+/**
+ * Selected builder dialogue-graph edge row contract shared across persistence helpers.
+ */
+export interface BuilderProjectDialogueGraphEdgeRow {
+  readonly projectId: string;
+  readonly graphId: string;
+  readonly nodeId: string;
+  readonly ordinal: number;
+  readonly toNodeId: string;
+  readonly requiredFlag: string | null;
+  readonly advanceQuestStepId: string | null;
+}
+
+/**
  * Canonical builder quest row shape used by domain services.
  */
 export const builderProjectQuestRowSelect = {
@@ -179,7 +401,6 @@ export const builderProjectQuestRowSelect = {
   id: true,
   title: true,
   description: true,
-  steps: true,
 } satisfies Prisma.BuilderProjectQuestSelect;
 
 /**
@@ -188,6 +409,32 @@ export const builderProjectQuestRowSelect = {
 export type BuilderProjectQuestRow = Prisma.BuilderProjectQuestGetPayload<{
   select: typeof builderProjectQuestRowSelect;
 }>;
+
+/**
+ * Canonical builder quest-step row shape used by domain services.
+ */
+export const builderProjectQuestStepRowSelect = {
+  projectId: true,
+  questId: true,
+  id: true,
+  ordinal: true,
+  title: true,
+  description: true,
+  triggerId: true,
+} satisfies NonNullable<Prisma.BuilderProjectQuestStepFindManyArgs["select"]>;
+
+/**
+ * Selected builder quest-step row contract shared across persistence helpers.
+ */
+export interface BuilderProjectQuestStepRow {
+  readonly projectId: string;
+  readonly questId: string;
+  readonly id: string;
+  readonly ordinal: number;
+  readonly title: string;
+  readonly description: string;
+  readonly triggerId: string;
+}
 
 /**
  * Canonical builder trigger row shape used by domain services.
@@ -200,8 +447,6 @@ export const builderProjectTriggerRowSelect = {
   sceneId: true,
   npcId: true,
   nodeId: true,
-  requiredFlags: true,
-  setFlags: true,
   questId: true,
   questStepId: true,
 } satisfies Prisma.BuilderProjectTriggerSelect;
@@ -214,13 +459,68 @@ export type BuilderProjectTriggerRow = Prisma.BuilderProjectTriggerGetPayload<{
 }>;
 
 /**
+ * Canonical builder trigger-required-flag row shape used by domain services.
+ */
+export const builderProjectTriggerRequiredFlagRowSelect = {
+  projectId: true,
+  triggerId: true,
+  key: true,
+  valueType: true,
+  stringValue: true,
+  numberValue: true,
+  boolValue: true,
+} satisfies NonNullable<Prisma.BuilderProjectTriggerRequiredFlagFindManyArgs["select"]>;
+
+/**
+ * Selected builder trigger-required-flag row contract shared across persistence helpers.
+ */
+export interface BuilderProjectTriggerRequiredFlagRow {
+  readonly projectId: string;
+  readonly triggerId: string;
+  readonly key: string;
+  readonly valueType: string;
+  readonly stringValue: string | null;
+  readonly numberValue: number | null;
+  readonly boolValue: boolean | null;
+}
+
+/**
+ * Canonical builder trigger-set-flag row shape used by domain services.
+ */
+export const builderProjectTriggerSetFlagRowSelect = {
+  projectId: true,
+  triggerId: true,
+  key: true,
+  valueType: true,
+  stringValue: true,
+  numberValue: true,
+  boolValue: true,
+} satisfies NonNullable<Prisma.BuilderProjectTriggerSetFlagFindManyArgs["select"]>;
+
+/**
+ * Selected builder trigger-set-flag row contract shared across persistence helpers.
+ */
+export interface BuilderProjectTriggerSetFlagRow {
+  readonly projectId: string;
+  readonly triggerId: string;
+  readonly key: string;
+  readonly valueType: string;
+  readonly stringValue: string | null;
+  readonly numberValue: number | null;
+  readonly boolValue: boolean | null;
+}
+
+/**
  * Canonical builder flag row shape used by domain services.
  */
 export const builderProjectFlagRowSelect = {
   projectId: true,
   key: true,
   label: true,
-  initialValue: true,
+  valueType: true,
+  stringValue: true,
+  numberValue: true,
+  boolValue: true,
 } satisfies Prisma.BuilderProjectFlagSelect;
 
 /**
@@ -240,7 +540,6 @@ export const builderProjectGenerationJobRowSelect = {
   status: true,
   prompt: true,
   targetId: true,
-  artifactIds: true,
   statusMessage: true,
   createdAt: true,
   updatedAt: true,
@@ -252,6 +551,24 @@ export const builderProjectGenerationJobRowSelect = {
 export type BuilderProjectGenerationJobRow = Prisma.BuilderProjectGenerationJobGetPayload<{
   select: typeof builderProjectGenerationJobRowSelect;
 }>;
+
+/**
+ * Canonical builder generation-job artifact row shape used by domain services.
+ */
+export const builderProjectGenerationJobArtifactRowSelect = {
+  projectId: true,
+  jobId: true,
+  ordinal: true,
+  artifactId: true,
+} satisfies Prisma.BuilderProjectGenerationJobArtifactSelect;
+
+/**
+ * Selected builder generation-job artifact row contract shared across persistence helpers.
+ */
+export type BuilderProjectGenerationJobArtifactRow =
+  Prisma.BuilderProjectGenerationJobArtifactGetPayload<{
+    select: typeof builderProjectGenerationJobArtifactRowSelect;
+  }>;
 
 /**
  * Canonical builder artifact row shape used by domain services.
@@ -284,8 +601,6 @@ export const builderProjectAutomationRunRowSelect = {
   id: true,
   status: true,
   goal: true,
-  steps: true,
-  artifactIds: true,
   statusMessage: true,
   createdAt: true,
   updatedAt: true,
@@ -298,15 +613,51 @@ export type BuilderProjectAutomationRunRow = Prisma.BuilderProjectAutomationRunG
   select: typeof builderProjectAutomationRunRowSelect;
 }>;
 
+/**
+ * Canonical builder automation-run step row shape used by domain services.
+ */
+export const builderProjectAutomationRunStepRowSelect = {
+  projectId: true,
+  runId: true,
+  id: true,
+  ordinal: true,
+  action: true,
+  summary: true,
+  status: true,
+  evidenceSource: true,
+} satisfies Prisma.BuilderProjectAutomationRunStepSelect;
+
+/**
+ * Selected builder automation-run step row contract shared across persistence helpers.
+ */
+export type BuilderProjectAutomationRunStepRow = Prisma.BuilderProjectAutomationRunStepGetPayload<{
+  select: typeof builderProjectAutomationRunStepRowSelect;
+}>;
+
+/**
+ * Canonical builder automation-run artifact row shape used by domain services.
+ */
+export const builderProjectAutomationRunArtifactRowSelect = {
+  projectId: true,
+  runId: true,
+  ordinal: true,
+  artifactId: true,
+} satisfies Prisma.BuilderProjectAutomationRunArtifactSelect;
+
+/**
+ * Selected builder automation-run artifact row contract shared across persistence helpers.
+ */
+export type BuilderProjectAutomationRunArtifactRow =
+  Prisma.BuilderProjectAutomationRunArtifactGetPayload<{
+    select: typeof builderProjectAutomationRunArtifactRowSelect;
+  }>;
+
 // ── Base client ───────────────────────────────────────────────────────────────
 
-const createBaseClient = () => {
+const createBaseClient = (): PrismaClient => {
   const adapter = new PrismaLibSql({ url: appConfig.database.url });
   return new PrismaClient({ adapter, log: ["warn", "error"] });
 };
-
-const toJsonValue = (value: unknown): Prisma.InputJsonValue =>
-  JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 
 const toSceneCreateManyInput = (
   projectId: string,
@@ -318,12 +669,94 @@ const toSceneCreateManyInput = (
     sceneMode: scene.sceneMode,
     titleKey: scene.titleKey,
     background: scene.background,
-    geometry: toJsonValue(scene.geometry),
-    spawn: toJsonValue(scene.spawn),
-    npcs: toJsonValue(scene.npcs),
-    nodes: scene.nodes ? toJsonValue(scene.nodes) : undefined,
-    collisions: toJsonValue(scene.collisions),
+    geometryWidth: scene.geometry.width,
+    geometryHeight: scene.geometry.height,
+    spawnX: scene.spawn.x,
+    spawnY: scene.spawn.y,
   }));
+
+const toSceneCollisionCreateManyInput = (
+  projectId: string,
+  scenes: readonly SceneDefinition[],
+): Prisma.BuilderProjectSceneCollisionCreateManyInput[] =>
+  scenes.flatMap((scene) =>
+    scene.collisions.map((collision, ordinal) => ({
+      projectId,
+      sceneId: scene.id,
+      ordinal,
+      x: collision.x,
+      y: collision.y,
+      width: collision.width,
+      height: collision.height,
+    })),
+  );
+
+const toSceneNpcCreateManyInput = (
+  projectId: string,
+  scenes: readonly SceneDefinition[],
+): Prisma.BuilderProjectSceneNpcCreateManyInput[] =>
+  scenes.flatMap((scene) =>
+    scene.npcs.map((npc, ordinal) => ({
+      projectId,
+      sceneId: scene.id,
+      characterKey: npc.characterKey,
+      ordinal,
+      x: npc.x,
+      y: npc.y,
+      labelKey: npc.labelKey,
+      interactRadius: npc.interactRadius,
+      wanderRadius: npc.ai.wanderRadius,
+      wanderSpeed: npc.ai.wanderSpeed,
+      idlePauseMinMs: npc.ai.idlePauseMs[0],
+      idlePauseMaxMs: npc.ai.idlePauseMs[1],
+      greetOnApproach: npc.ai.greetOnApproach,
+      greetLineKey: npc.ai.greetLineKey,
+    })),
+  );
+
+const toSceneNpcDialogueKeyCreateManyInput = (
+  projectId: string,
+  scenes: readonly SceneDefinition[],
+): Prisma.BuilderProjectSceneNpcDialogueKeyCreateManyInput[] =>
+  scenes.flatMap((scene) =>
+    scene.npcs.flatMap((npc) =>
+      npc.dialogueKeys.map((key, ordinal) => ({
+        projectId,
+        sceneId: scene.id,
+        characterKey: npc.characterKey,
+        ordinal,
+        key,
+      })),
+    ),
+  );
+
+const toSceneNodeCreateManyInput = (
+  projectId: string,
+  scenes: readonly SceneDefinition[],
+): Prisma.BuilderProjectSceneNodeCreateManyInput[] =>
+  scenes.flatMap((scene) =>
+    (scene.nodes ?? []).map((node, ordinal) => ({
+      projectId,
+      sceneId: scene.id,
+      id: node.id,
+      ordinal,
+      nodeType: node.nodeType,
+      assetId: node.assetId,
+      animationClipId: node.animationClipId,
+      positionX: node.position.x,
+      positionY: node.position.y,
+      positionZ: "z" in node.position ? node.position.z : null,
+      sizeWidth: "size" in node ? node.size.width : null,
+      sizeHeight: "size" in node ? node.size.height : null,
+      layer: "layer" in node ? node.layer : null,
+      rotationX: "rotation" in node ? node.rotation.x : null,
+      rotationY: "rotation" in node ? node.rotation.y : null,
+      rotationZ: "rotation" in node ? node.rotation.z : null,
+      scaleX: "scale" in node ? node.scale.x : null,
+      scaleY: "scale" in node ? node.scale.y : null,
+      scaleZ: "scale" in node ? node.scale.z : null,
+    })),
+  );
 
 const toDialogueEntryCreateManyInput = (
   projectId: string,
@@ -351,12 +784,40 @@ const toAssetCreateManyInput = (
     source: asset.source,
     sourceFormat: asset.sourceFormat,
     sourceMimeType: asset.sourceMimeType,
-    tags: toJsonValue(asset.tags),
-    variants: toJsonValue(asset.variants),
     approved: asset.approved,
     createdAt: new Date(asset.createdAtMs),
     updatedAt: new Date(asset.updatedAtMs),
   }));
+
+const toAssetTagCreateManyInput = (
+  projectId: string,
+  assets: readonly BuilderAsset[],
+): Prisma.BuilderProjectAssetTagCreateManyInput[] =>
+  assets.flatMap((asset) =>
+    asset.tags.map((tag, ordinal) => ({
+      projectId,
+      assetId: asset.id,
+      ordinal,
+      value: tag,
+    })),
+  );
+
+const toAssetVariantCreateManyInput = (
+  projectId: string,
+  assets: readonly BuilderAsset[],
+): Prisma.BuilderProjectAssetVariantCreateManyInput[] =>
+  assets.flatMap((asset) =>
+    asset.variants.map((variant, ordinal) => ({
+      projectId,
+      assetId: asset.id,
+      id: variant.id,
+      ordinal,
+      format: variant.format,
+      source: variant.source,
+      usage: variant.usage,
+      mimeType: variant.mimeType ?? null,
+    })),
+  );
 
 const toAnimationClipCreateManyInput = (
   projectId: string,
@@ -378,6 +839,37 @@ const toAnimationClipCreateManyInput = (
     updatedAt: new Date(clip.updatedAtMs),
   }));
 
+const toAnimationTimelineCreateManyInput = (
+  projectId: string,
+  timelines: readonly AnimationTimeline[],
+): Prisma.BuilderProjectAnimationTimelineCreateManyInput[] =>
+  timelines.map((timeline) => ({
+    projectId,
+    id: timeline.id,
+    assetId: timeline.assetId,
+    label: timeline.label,
+    sceneMode: timeline.sceneMode,
+    stateTag: timeline.stateTag,
+    durationMs: timeline.durationMs,
+    loop: timeline.loop,
+    createdAt: new Date(timeline.createdAtMs),
+    updatedAt: new Date(timeline.updatedAtMs),
+  }));
+
+const toAnimationTrackCreateManyInput = (
+  projectId: string,
+  timelines: readonly AnimationTimeline[],
+): Prisma.BuilderProjectAnimationTrackCreateManyInput[] =>
+  timelines.flatMap((timeline) =>
+    timeline.tracks.map((track) => ({
+      projectId,
+      timelineId: timeline.id,
+      id: track.id,
+      property: track.property,
+      keyframes: JSON.stringify(track.keyframes),
+    })),
+  );
+
 const toDialogueGraphCreateManyInput = (
   projectId: string,
   dialogueGraphs: readonly DialogueGraph[],
@@ -388,10 +880,55 @@ const toDialogueGraphCreateManyInput = (
     title: graph.title,
     npcId: graph.npcId,
     rootNodeId: graph.rootNodeId,
-    nodes: toJsonValue(graph.nodes),
     createdAt: new Date(graph.createdAtMs),
     updatedAt: new Date(graph.updatedAtMs),
   }));
+
+const toDialogueGraphNodeCreateManyInput = (
+  projectId: string,
+  dialogueGraphs: readonly DialogueGraph[],
+): Array<{
+  readonly projectId: string;
+  readonly graphId: string;
+  readonly id: string;
+  readonly ordinal: number;
+  readonly line: string;
+}> =>
+  dialogueGraphs.flatMap((graph) =>
+    graph.nodes.map((node, ordinal) => ({
+      projectId,
+      graphId: graph.id,
+      id: node.id,
+      ordinal,
+      line: node.line,
+    })),
+  );
+
+const toDialogueGraphEdgeCreateManyInput = (
+  projectId: string,
+  dialogueGraphs: readonly DialogueGraph[],
+): Array<{
+  readonly projectId: string;
+  readonly graphId: string;
+  readonly nodeId: string;
+  readonly ordinal: number;
+  readonly toNodeId: string;
+  readonly requiredFlag?: string;
+  readonly advanceQuestStepId?: string;
+}> =>
+  dialogueGraphs.flatMap((graph) =>
+    graph.nodes.flatMap((node) =>
+      node.edges.map((edge, ordinal) => ({
+        projectId,
+        graphId: graph.id,
+        nodeId: node.id,
+        ordinal,
+        toNodeId: edge.to,
+        requiredFlag: edge.requiredFlag,
+        advanceQuestStepId: edge.advanceQuestStepId,
+      })),
+    ),
+  );
 
 const toQuestCreateManyInput = (
   projectId: string,
@@ -402,8 +939,65 @@ const toQuestCreateManyInput = (
     id: quest.id,
     title: quest.title,
     description: quest.description,
-    steps: toJsonValue(quest.steps),
   }));
+
+const toQuestStepCreateManyInput = (
+  projectId: string,
+  quests: readonly QuestDefinition[],
+): Array<{
+  readonly projectId: string;
+  readonly questId: string;
+  readonly id: string;
+  readonly ordinal: number;
+  readonly title: string;
+  readonly description: string;
+  readonly triggerId: string;
+}> =>
+  quests.flatMap((quest) =>
+    quest.steps.map((step, ordinal) => ({
+      projectId,
+      questId: quest.id,
+      id: step.id,
+      ordinal,
+      title: step.title,
+      description: step.description,
+      triggerId: step.triggerId,
+    })),
+  );
+
+const toFlagValueColumns = (
+  value: string | number | boolean,
+): {
+  readonly valueType: string;
+  readonly stringValue: string | null;
+  readonly numberValue: number | null;
+  readonly boolValue: boolean | null;
+} => {
+  if (typeof value === "string") {
+    return {
+      valueType: "string",
+      stringValue: value,
+      numberValue: null,
+      boolValue: null,
+    };
+  }
+
+  if (typeof value === "number") {
+    return {
+      valueType: "number",
+      stringValue: null,
+      numberValue: value,
+      boolValue: null,
+    };
+  }
+
+  return {
+    valueType: "boolean",
+    stringValue: null,
+    numberValue: null,
+    boolValue: value,
+  };
+};
 
 const toTriggerCreateManyInput = (
   projectId: string,
@@ -417,11 +1011,51 @@ const toTriggerCreateManyInput = (
     sceneId: trigger.sceneId,
     npcId: trigger.npcId,
     nodeId: trigger.nodeId,
-    requiredFlags: trigger.requiredFlags ? toJsonValue(trigger.requiredFlags) : undefined,
-    setFlags: trigger.setFlags ? toJsonValue(trigger.setFlags) : undefined,
     questId: trigger.questId,
     questStepId: trigger.questStepId,
   }));
+
+const toTriggerRequiredFlagCreateManyInput = (
+  projectId: string,
+  triggers: readonly TriggerDefinition[],
+): Array<{
+  readonly projectId: string;
+  readonly triggerId: string;
+  readonly key: string;
+  readonly valueType: string;
+  readonly stringValue: string | null;
+  readonly numberValue: number | null;
+  readonly boolValue: boolean | null;
+}> =>
+  triggers.flatMap((trigger) =>
+    Object.entries(trigger.requiredFlags ?? {}).map(([key, value]) => ({
+      projectId,
+      triggerId: trigger.id,
+      key,
+      ...toFlagValueColumns(value),
+    })),
+  );
+
+const toTriggerSetFlagCreateManyInput = (
+  projectId: string,
+  triggers: readonly TriggerDefinition[],
+): Array<{
+  readonly projectId: string;
+  readonly triggerId: string;
+  readonly key: string;
+  readonly valueType: string;
+  readonly stringValue: string | null;
+  readonly numberValue: number | null;
+  readonly boolValue: boolean | null;
+}> =>
+  triggers.flatMap((trigger) =>
+    Object.entries(trigger.setFlags ?? {}).map(([key, value]) => ({
+      projectId,
+      triggerId: trigger.id,
+      key,
+      ...toFlagValueColumns(value),
+    })),
+  );
 
 const toFlagCreateManyInput = (
   projectId: string,
@@ -431,7 +1065,7 @@ const toFlagCreateManyInput = (
     projectId,
     key: flag.key,
     label: flag.label,
-    initialValue: toJsonValue(flag.initialValue),
+    ...toFlagValueColumns(flag.initialValue),
   }));
 
 const toGenerationJobCreateManyInput = (
@@ -445,11 +1079,28 @@ const toGenerationJobCreateManyInput = (
     status: job.status,
     prompt: job.prompt,
     targetId: job.targetId,
-    artifactIds: toJsonValue(job.artifactIds),
     statusMessage: job.statusMessage,
     createdAt: new Date(job.createdAtMs),
     updatedAt: new Date(job.updatedAtMs),
   }));
+
+const toGenerationJobArtifactCreateManyInput = (
+  projectId: string,
+  generationJobs: readonly GenerationJob[],
+): Array<{
+  readonly projectId: string;
+  readonly jobId: string;
+  readonly ordinal: number;
+  readonly artifactId: string;
+}> =>
+  generationJobs.flatMap((job) =>
+    job.artifactIds.map((artifactId, ordinal) => ({
+      projectId,
+      jobId: job.id,
+      ordinal,
+      artifactId,
+    })),
+  );
 
 const toArtifactCreateManyInput = (
   projectId: string,
@@ -477,12 +1128,54 @@ const toAutomationRunCreateManyInput = (
     id: run.id,
     status: run.status,
     goal: run.goal,
-    steps: toJsonValue(run.steps),
-    artifactIds: toJsonValue(run.artifactIds),
     statusMessage: run.statusMessage,
     createdAt: new Date(run.createdAtMs),
     updatedAt: new Date(run.updatedAtMs),
   }));
+
+const toAutomationRunStepCreateManyInput = (
+  projectId: string,
+  automationRuns: readonly AutomationRun[],
+): Array<{
+  readonly projectId: string;
+  readonly runId: string;
+  readonly id: string;
+  readonly ordinal: number;
+  readonly action: string;
+  readonly summary: string;
+  readonly status: string;
+  readonly evidenceSource?: string;
+}> =>
+  automationRuns.flatMap((run) =>
+    run.steps.map((step, ordinal) => ({
+      projectId,
+      runId: run.id,
+      id: step.id,
+      ordinal,
+      action: step.action,
+      summary: step.summary,
+      status: step.status,
+      evidenceSource: step.evidenceSource,
+    })),
+  );
+
+const toAutomationRunArtifactCreateManyInput = (
+  projectId: string,
+  automationRuns: readonly AutomationRun[],
+): Array<{
+  readonly projectId: string;
+  readonly runId: string;
+  readonly ordinal: number;
+  readonly artifactId: string;
+}> =>
+  automationRuns.flatMap((run) =>
+    run.artifactIds.map((artifactId, ordinal) => ({
+      projectId,
+      runId: run.id,
+      ordinal,
+      artifactId,
+    })),
+  );
 
 // ── Domain error for session state ────────────────────────────────────────────
 
@@ -549,6 +1242,33 @@ const withDomainExtensions = (base: PrismaClient) =>
                 await tx.builderProjectScene.createMany({
                   data: toSceneCreateManyInput(id, content.scenes),
                 });
+                const sceneCollisions = toSceneCollisionCreateManyInput(id, content.scenes);
+                if (sceneCollisions.length > 0) {
+                  await tx.builderProjectSceneCollision.createMany({
+                    data: sceneCollisions,
+                  });
+                }
+                const sceneNpcs = toSceneNpcCreateManyInput(id, content.scenes);
+                if (sceneNpcs.length > 0) {
+                  await tx.builderProjectSceneNpc.createMany({
+                    data: sceneNpcs,
+                  });
+                }
+                const sceneNpcDialogueKeys = toSceneNpcDialogueKeyCreateManyInput(
+                  id,
+                  content.scenes,
+                );
+                if (sceneNpcDialogueKeys.length > 0) {
+                  await tx.builderProjectSceneNpcDialogueKey.createMany({
+                    data: sceneNpcDialogueKeys,
+                  });
+                }
+                const sceneNodes = toSceneNodeCreateManyInput(id, content.scenes);
+                if (sceneNodes.length > 0) {
+                  await tx.builderProjectSceneNode.createMany({
+                    data: sceneNodes,
+                  });
+                }
               }
               const dialogueEntries = toDialogueEntryCreateManyInput(id, content.dialogues);
               if (dialogueEntries.length > 0) {
@@ -560,6 +1280,18 @@ const withDomainExtensions = (base: PrismaClient) =>
                 await tx.builderProjectAsset.createMany({
                   data: toAssetCreateManyInput(id, content.assets),
                 });
+                const assetTags = toAssetTagCreateManyInput(id, content.assets);
+                if (assetTags.length > 0) {
+                  await tx.builderProjectAssetTag.createMany({
+                    data: assetTags,
+                  });
+                }
+                const assetVariants = toAssetVariantCreateManyInput(id, content.assets);
+                if (assetVariants.length > 0) {
+                  await tx.builderProjectAssetVariant.createMany({
+                    data: assetVariants,
+                  });
+                }
               }
               if (content.animationClips.length > 0) {
                 await tx.builderProjectAnimationClip.createMany({
@@ -570,16 +1302,52 @@ const withDomainExtensions = (base: PrismaClient) =>
                 await tx.builderProjectDialogueGraph.createMany({
                   data: toDialogueGraphCreateManyInput(id, content.dialogueGraphs),
                 });
+                const dialogueGraphNodes = toDialogueGraphNodeCreateManyInput(
+                  id,
+                  content.dialogueGraphs,
+                );
+                if (dialogueGraphNodes.length > 0) {
+                  await tx.builderProjectDialogueGraphNode.createMany({
+                    data: dialogueGraphNodes,
+                  });
+                }
+                const dialogueGraphEdges = toDialogueGraphEdgeCreateManyInput(
+                  id,
+                  content.dialogueGraphs,
+                );
+                if (dialogueGraphEdges.length > 0) {
+                  await tx.builderProjectDialogueGraphEdge.createMany({
+                    data: dialogueGraphEdges,
+                  });
+                }
               }
               if (content.quests.length > 0) {
                 await tx.builderProjectQuest.createMany({
                   data: toQuestCreateManyInput(id, content.quests),
                 });
+                const questSteps = toQuestStepCreateManyInput(id, content.quests);
+                if (questSteps.length > 0) {
+                  await tx.builderProjectQuestStep.createMany({
+                    data: questSteps,
+                  });
+                }
               }
               if (content.triggers.length > 0) {
                 await tx.builderProjectTrigger.createMany({
                   data: toTriggerCreateManyInput(id, content.triggers),
                 });
+                const requiredFlags = toTriggerRequiredFlagCreateManyInput(id, content.triggers);
+                if (requiredFlags.length > 0) {
+                  await tx.builderProjectTriggerRequiredFlag.createMany({
+                    data: requiredFlags,
+                  });
+                }
+                const setFlags = toTriggerSetFlagCreateManyInput(id, content.triggers);
+                if (setFlags.length > 0) {
+                  await tx.builderProjectTriggerSetFlag.createMany({
+                    data: setFlags,
+                  });
+                }
               }
               if (content.flags.length > 0) {
                 await tx.builderProjectFlag.createMany({
@@ -590,6 +1358,15 @@ const withDomainExtensions = (base: PrismaClient) =>
                 await tx.builderProjectGenerationJob.createMany({
                   data: toGenerationJobCreateManyInput(id, content.generationJobs),
                 });
+                const generationJobArtifacts = toGenerationJobArtifactCreateManyInput(
+                  id,
+                  content.generationJobs,
+                );
+                if (generationJobArtifacts.length > 0) {
+                  await tx.builderProjectGenerationJobArtifact.createMany({
+                    data: generationJobArtifacts,
+                  });
+                }
               }
               if (content.artifacts.length > 0) {
                 await tx.builderProjectArtifact.createMany({
@@ -600,6 +1377,24 @@ const withDomainExtensions = (base: PrismaClient) =>
                 await tx.builderProjectAutomationRun.createMany({
                   data: toAutomationRunCreateManyInput(id, content.automationRuns),
                 });
+                const automationRunSteps = toAutomationRunStepCreateManyInput(
+                  id,
+                  content.automationRuns,
+                );
+                if (automationRunSteps.length > 0) {
+                  await tx.builderProjectAutomationRunStep.createMany({
+                    data: automationRunSteps,
+                  });
+                }
+                const automationRunArtifacts = toAutomationRunArtifactCreateManyInput(
+                  id,
+                  content.automationRuns,
+                );
+                if (automationRunArtifacts.length > 0) {
+                  await tx.builderProjectAutomationRunArtifact.createMany({
+                    data: automationRunArtifacts,
+                  });
+                }
               }
             }
 
@@ -650,13 +1445,34 @@ const withDomainExtensions = (base: PrismaClient) =>
               await tx.builderProjectDialogueEntry.deleteMany({
                 where: { projectId: id },
               });
+              await tx.builderProjectSceneNpcDialogueKey.deleteMany({
+                where: { projectId: id },
+              });
+              await tx.builderProjectSceneNpc.deleteMany({
+                where: { projectId: id },
+              });
+              await tx.builderProjectSceneNode.deleteMany({
+                where: { projectId: id },
+              });
+              await tx.builderProjectSceneCollision.deleteMany({
+                where: { projectId: id },
+              });
               await tx.builderProjectScene.deleteMany({
                 where: { projectId: id },
               });
               await tx.builderProjectArtifact.deleteMany({
                 where: { projectId: id },
               });
+              await tx.builderProjectAutomationRunArtifact.deleteMany({
+                where: { projectId: id },
+              });
+              await tx.builderProjectAutomationRunStep.deleteMany({
+                where: { projectId: id },
+              });
               await tx.builderProjectAutomationRun.deleteMany({
+                where: { projectId: id },
+              });
+              await tx.builderProjectGenerationJobArtifact.deleteMany({
                 where: { projectId: id },
               });
               await tx.builderProjectGenerationJob.deleteMany({
@@ -665,16 +1481,37 @@ const withDomainExtensions = (base: PrismaClient) =>
               await tx.builderProjectAnimationClip.deleteMany({
                 where: { projectId: id },
               });
+              await tx.builderProjectDialogueGraphEdge.deleteMany({
+                where: { projectId: id },
+              });
+              await tx.builderProjectDialogueGraphNode.deleteMany({
+                where: { projectId: id },
+              });
               await tx.builderProjectDialogueGraph.deleteMany({
                 where: { projectId: id },
               });
+              await tx.builderProjectQuestStep.deleteMany({
+                where: { projectId: id },
+              });
               await tx.builderProjectQuest.deleteMany({
+                where: { projectId: id },
+              });
+              await tx.builderProjectTriggerRequiredFlag.deleteMany({
+                where: { projectId: id },
+              });
+              await tx.builderProjectTriggerSetFlag.deleteMany({
                 where: { projectId: id },
               });
               await tx.builderProjectTrigger.deleteMany({
                 where: { projectId: id },
               });
               await tx.builderProjectFlag.deleteMany({
+                where: { projectId: id },
+              });
+              await tx.builderProjectAssetTag.deleteMany({
+                where: { projectId: id },
+              });
+              await tx.builderProjectAssetVariant.deleteMany({
                 where: { projectId: id },
               });
               await tx.builderProjectAsset.deleteMany({
@@ -685,6 +1522,33 @@ const withDomainExtensions = (base: PrismaClient) =>
                 await tx.builderProjectScene.createMany({
                   data: toSceneCreateManyInput(id, content.scenes),
                 });
+                const sceneCollisions = toSceneCollisionCreateManyInput(id, content.scenes);
+                if (sceneCollisions.length > 0) {
+                  await tx.builderProjectSceneCollision.createMany({
+                    data: sceneCollisions,
+                  });
+                }
+                const sceneNpcs = toSceneNpcCreateManyInput(id, content.scenes);
+                if (sceneNpcs.length > 0) {
+                  await tx.builderProjectSceneNpc.createMany({
+                    data: sceneNpcs,
+                  });
+                }
+                const sceneNpcDialogueKeys = toSceneNpcDialogueKeyCreateManyInput(
+                  id,
+                  content.scenes,
+                );
+                if (sceneNpcDialogueKeys.length > 0) {
+                  await tx.builderProjectSceneNpcDialogueKey.createMany({
+                    data: sceneNpcDialogueKeys,
+                  });
+                }
+                const sceneNodes = toSceneNodeCreateManyInput(id, content.scenes);
+                if (sceneNodes.length > 0) {
+                  await tx.builderProjectSceneNode.createMany({
+                    data: sceneNodes,
+                  });
+                }
               }
               const dialogueEntries = toDialogueEntryCreateManyInput(id, content.dialogues);
               if (dialogueEntries.length > 0) {
@@ -696,6 +1560,18 @@ const withDomainExtensions = (base: PrismaClient) =>
                 await tx.builderProjectAsset.createMany({
                   data: toAssetCreateManyInput(id, content.assets),
                 });
+                const assetTags = toAssetTagCreateManyInput(id, content.assets);
+                if (assetTags.length > 0) {
+                  await tx.builderProjectAssetTag.createMany({
+                    data: assetTags,
+                  });
+                }
+                const assetVariants = toAssetVariantCreateManyInput(id, content.assets);
+                if (assetVariants.length > 0) {
+                  await tx.builderProjectAssetVariant.createMany({
+                    data: assetVariants,
+                  });
+                }
               }
               if (content.animationClips.length > 0) {
                 await tx.builderProjectAnimationClip.createMany({
@@ -706,16 +1582,52 @@ const withDomainExtensions = (base: PrismaClient) =>
                 await tx.builderProjectDialogueGraph.createMany({
                   data: toDialogueGraphCreateManyInput(id, content.dialogueGraphs),
                 });
+                const dialogueGraphNodes = toDialogueGraphNodeCreateManyInput(
+                  id,
+                  content.dialogueGraphs,
+                );
+                if (dialogueGraphNodes.length > 0) {
+                  await tx.builderProjectDialogueGraphNode.createMany({
+                    data: dialogueGraphNodes,
+                  });
+                }
+                const dialogueGraphEdges = toDialogueGraphEdgeCreateManyInput(
+                  id,
+                  content.dialogueGraphs,
+                );
+                if (dialogueGraphEdges.length > 0) {
+                  await tx.builderProjectDialogueGraphEdge.createMany({
+                    data: dialogueGraphEdges,
+                  });
+                }
               }
               if (content.quests.length > 0) {
                 await tx.builderProjectQuest.createMany({
                   data: toQuestCreateManyInput(id, content.quests),
                 });
+                const questSteps = toQuestStepCreateManyInput(id, content.quests);
+                if (questSteps.length > 0) {
+                  await tx.builderProjectQuestStep.createMany({
+                    data: questSteps,
+                  });
+                }
               }
               if (content.triggers.length > 0) {
                 await tx.builderProjectTrigger.createMany({
                   data: toTriggerCreateManyInput(id, content.triggers),
                 });
+                const requiredFlags = toTriggerRequiredFlagCreateManyInput(id, content.triggers);
+                if (requiredFlags.length > 0) {
+                  await tx.builderProjectTriggerRequiredFlag.createMany({
+                    data: requiredFlags,
+                  });
+                }
+                const setFlags = toTriggerSetFlagCreateManyInput(id, content.triggers);
+                if (setFlags.length > 0) {
+                  await tx.builderProjectTriggerSetFlag.createMany({
+                    data: setFlags,
+                  });
+                }
               }
               if (content.flags.length > 0) {
                 await tx.builderProjectFlag.createMany({
@@ -726,6 +1638,15 @@ const withDomainExtensions = (base: PrismaClient) =>
                 await tx.builderProjectGenerationJob.createMany({
                   data: toGenerationJobCreateManyInput(id, content.generationJobs),
                 });
+                const generationJobArtifacts = toGenerationJobArtifactCreateManyInput(
+                  id,
+                  content.generationJobs,
+                );
+                if (generationJobArtifacts.length > 0) {
+                  await tx.builderProjectGenerationJobArtifact.createMany({
+                    data: generationJobArtifacts,
+                  });
+                }
               }
               if (content.artifacts.length > 0) {
                 await tx.builderProjectArtifact.createMany({
@@ -736,6 +1657,24 @@ const withDomainExtensions = (base: PrismaClient) =>
                 await tx.builderProjectAutomationRun.createMany({
                   data: toAutomationRunCreateManyInput(id, content.automationRuns),
                 });
+                const automationRunSteps = toAutomationRunStepCreateManyInput(
+                  id,
+                  content.automationRuns,
+                );
+                if (automationRunSteps.length > 0) {
+                  await tx.builderProjectAutomationRunStep.createMany({
+                    data: automationRunSteps,
+                  });
+                }
+                const automationRunArtifacts = toAutomationRunArtifactCreateManyInput(
+                  id,
+                  content.automationRuns,
+                );
+                if (automationRunArtifacts.length > 0) {
+                  await tx.builderProjectAutomationRunArtifact.createMany({
+                    data: automationRunArtifacts,
+                  });
+                }
               }
             }
 
@@ -860,6 +1799,66 @@ const withDomainExtensions = (base: PrismaClient) =>
       },
 
       /**
+       * BuilderProjectSceneCollision persistence helpers.
+       */
+      builderProjectSceneCollision: {
+        /** Lists draft scene collision rows for one project. */
+        async listProjectRows(
+          projectId: string,
+        ): Promise<readonly BuilderProjectSceneCollisionRow[]> {
+          return base.builderProjectSceneCollision.findMany({
+            where: { projectId },
+            orderBy: [{ sceneId: "asc" }, { ordinal: "asc" }],
+            select: builderProjectSceneCollisionRowSelect,
+          });
+        },
+      },
+
+      /**
+       * BuilderProjectSceneNpc persistence helpers.
+       */
+      builderProjectSceneNpc: {
+        /** Lists draft scene-NPC rows for one project. */
+        async listProjectRows(projectId: string): Promise<readonly BuilderProjectSceneNpcRow[]> {
+          return base.builderProjectSceneNpc.findMany({
+            where: { projectId },
+            orderBy: [{ sceneId: "asc" }, { ordinal: "asc" }],
+            select: builderProjectSceneNpcRowSelect,
+          });
+        },
+      },
+
+      /**
+       * BuilderProjectSceneNpcDialogueKey persistence helpers.
+       */
+      builderProjectSceneNpcDialogueKey: {
+        /** Lists draft scene-NPC dialogue-key rows for one project. */
+        async listProjectRows(
+          projectId: string,
+        ): Promise<readonly BuilderProjectSceneNpcDialogueKeyRow[]> {
+          return base.builderProjectSceneNpcDialogueKey.findMany({
+            where: { projectId },
+            orderBy: [{ sceneId: "asc" }, { characterKey: "asc" }, { ordinal: "asc" }],
+            select: builderProjectSceneNpcDialogueKeyRowSelect,
+          });
+        },
+      },
+
+      /**
+       * BuilderProjectSceneNode persistence helpers.
+       */
+      builderProjectSceneNode: {
+        /** Lists draft scene-node rows for one project. */
+        async listProjectRows(projectId: string): Promise<readonly BuilderProjectSceneNodeRow[]> {
+          return base.builderProjectSceneNode.findMany({
+            where: { projectId },
+            orderBy: [{ sceneId: "asc" }, { ordinal: "asc" }],
+            select: builderProjectSceneNodeRowSelect,
+          });
+        },
+      },
+
+      /**
        * BuilderProjectDialogueEntry persistence helpers.
        */
       builderProjectDialogueEntry: {
@@ -888,6 +1887,36 @@ const withDomainExtensions = (base: PrismaClient) =>
       },
 
       /**
+       * BuilderProjectAssetTag persistence helpers.
+       */
+      builderProjectAssetTag: {
+        /** Lists draft asset-tag rows for one project. */
+        async listProjectRows(projectId: string): Promise<readonly BuilderProjectAssetTagRow[]> {
+          return base.builderProjectAssetTag.findMany({
+            where: { projectId },
+            orderBy: [{ assetId: "asc" }, { ordinal: "asc" }],
+            select: builderProjectAssetTagRowSelect,
+          });
+        },
+      },
+
+      /**
+       * BuilderProjectAssetVariant persistence helpers.
+       */
+      builderProjectAssetVariant: {
+        /** Lists draft asset-variant rows for one project. */
+        async listProjectRows(
+          projectId: string,
+        ): Promise<readonly BuilderProjectAssetVariantRow[]> {
+          return base.builderProjectAssetVariant.findMany({
+            where: { projectId },
+            orderBy: [{ assetId: "asc" }, { ordinal: "asc" }],
+            select: builderProjectAssetVariantRowSelect,
+          });
+        },
+      },
+
+      /**
        * BuilderProjectAnimationClip persistence helpers.
        */
       builderProjectAnimationClip: {
@@ -898,6 +1927,36 @@ const withDomainExtensions = (base: PrismaClient) =>
           return base.builderProjectAnimationClip.findMany({
             where: { projectId },
             select: builderProjectAnimationClipRowSelect,
+          });
+        },
+      },
+
+      /**
+       * BuilderProjectAnimationTimeline persistence helpers.
+       */
+      builderProjectAnimationTimeline: {
+        /** Lists draft animation-timeline rows for one project. */
+        async listProjectRows(
+          projectId: string,
+        ): Promise<readonly BuilderProjectAnimationTimelineRow[]> {
+          return base.builderProjectAnimationTimeline.findMany({
+            where: { projectId },
+            select: builderProjectAnimationTimelineRowSelect,
+          });
+        },
+      },
+
+      /**
+       * BuilderProjectAnimationTrack persistence helpers.
+       */
+      builderProjectAnimationTrack: {
+        /** Lists draft animation-track rows for one project. */
+        async listProjectRows(
+          projectId: string,
+        ): Promise<readonly BuilderProjectAnimationTrackRow[]> {
+          return base.builderProjectAnimationTrack.findMany({
+            where: { projectId },
+            select: builderProjectAnimationTrackRowSelect,
           });
         },
       },
@@ -918,6 +1977,38 @@ const withDomainExtensions = (base: PrismaClient) =>
       },
 
       /**
+       * BuilderProjectDialogueGraphNode persistence helpers.
+       */
+      builderProjectDialogueGraphNode: {
+        /** Lists draft dialogue-graph node rows for one project. */
+        async listProjectRows(
+          projectId: string,
+        ): Promise<readonly BuilderProjectDialogueGraphNodeRow[]> {
+          return base.builderProjectDialogueGraphNode.findMany({
+            where: { projectId },
+            orderBy: [{ graphId: "asc" }, { ordinal: "asc" }],
+            select: builderProjectDialogueGraphNodeRowSelect,
+          });
+        },
+      },
+
+      /**
+       * BuilderProjectDialogueGraphEdge persistence helpers.
+       */
+      builderProjectDialogueGraphEdge: {
+        /** Lists draft dialogue-graph edge rows for one project. */
+        async listProjectRows(
+          projectId: string,
+        ): Promise<readonly BuilderProjectDialogueGraphEdgeRow[]> {
+          return base.builderProjectDialogueGraphEdge.findMany({
+            where: { projectId },
+            orderBy: [{ graphId: "asc" }, { nodeId: "asc" }, { ordinal: "asc" }],
+            select: builderProjectDialogueGraphEdgeRowSelect,
+          });
+        },
+      },
+
+      /**
        * BuilderProjectQuest persistence helpers.
        */
       builderProjectQuest: {
@@ -926,6 +2017,20 @@ const withDomainExtensions = (base: PrismaClient) =>
           return base.builderProjectQuest.findMany({
             where: { projectId },
             select: builderProjectQuestRowSelect,
+          });
+        },
+      },
+
+      /**
+       * BuilderProjectQuestStep persistence helpers.
+       */
+      builderProjectQuestStep: {
+        /** Lists draft quest-step rows for one project. */
+        async listProjectRows(projectId: string): Promise<readonly BuilderProjectQuestStepRow[]> {
+          return base.builderProjectQuestStep.findMany({
+            where: { projectId },
+            orderBy: [{ questId: "asc" }, { ordinal: "asc" }],
+            select: builderProjectQuestStepRowSelect,
           });
         },
       },
@@ -944,6 +2049,38 @@ const withDomainExtensions = (base: PrismaClient) =>
       },
 
       /**
+       * BuilderProjectTriggerRequiredFlag persistence helpers.
+       */
+      builderProjectTriggerRequiredFlag: {
+        /** Lists draft trigger-required-flag rows for one project. */
+        async listProjectRows(
+          projectId: string,
+        ): Promise<readonly BuilderProjectTriggerRequiredFlagRow[]> {
+          return base.builderProjectTriggerRequiredFlag.findMany({
+            where: { projectId },
+            orderBy: [{ triggerId: "asc" }, { key: "asc" }],
+            select: builderProjectTriggerRequiredFlagRowSelect,
+          });
+        },
+      },
+
+      /**
+       * BuilderProjectTriggerSetFlag persistence helpers.
+       */
+      builderProjectTriggerSetFlag: {
+        /** Lists draft trigger-set-flag rows for one project. */
+        async listProjectRows(
+          projectId: string,
+        ): Promise<readonly BuilderProjectTriggerSetFlagRow[]> {
+          return base.builderProjectTriggerSetFlag.findMany({
+            where: { projectId },
+            orderBy: [{ triggerId: "asc" }, { key: "asc" }],
+            select: builderProjectTriggerSetFlagRowSelect,
+          });
+        },
+      },
+
+      /**
        * BuilderProjectFlag persistence helpers.
        */
       builderProjectFlag: {
@@ -957,6 +2094,7 @@ const withDomainExtensions = (base: PrismaClient) =>
       },
 
       builderProjectGenerationJob: {
+        /** Lists draft generation-job rows for one project. */
         async listProjectRows(
           projectId: string,
         ): Promise<readonly BuilderProjectGenerationJobRow[]> {
@@ -967,7 +2105,27 @@ const withDomainExtensions = (base: PrismaClient) =>
         },
       },
 
+      /**
+       * BuilderProjectGenerationJobArtifact persistence helpers.
+       */
+      builderProjectGenerationJobArtifact: {
+        /** Lists draft generation-job artifact rows for one project. */
+        async listProjectRows(
+          projectId: string,
+        ): Promise<readonly BuilderProjectGenerationJobArtifactRow[]> {
+          return base.builderProjectGenerationJobArtifact.findMany({
+            where: { projectId },
+            orderBy: [{ jobId: "asc" }, { ordinal: "asc" }],
+            select: builderProjectGenerationJobArtifactRowSelect,
+          });
+        },
+      },
+
+      /**
+       * BuilderProjectArtifact persistence helpers.
+       */
       builderProjectArtifact: {
+        /** Lists draft artifact rows for one project. */
         async listProjectRows(projectId: string): Promise<readonly BuilderProjectArtifactRow[]> {
           return base.builderProjectArtifact.findMany({
             where: { projectId },
@@ -976,13 +2134,49 @@ const withDomainExtensions = (base: PrismaClient) =>
         },
       },
 
+      /**
+       * BuilderProjectAutomationRun persistence helpers.
+       */
       builderProjectAutomationRun: {
+        /** Lists draft automation-run rows for one project. */
         async listProjectRows(
           projectId: string,
         ): Promise<readonly BuilderProjectAutomationRunRow[]> {
           return base.builderProjectAutomationRun.findMany({
             where: { projectId },
             select: builderProjectAutomationRunRowSelect,
+          });
+        },
+      },
+
+      /**
+       * BuilderProjectAutomationRunStep persistence helpers.
+       */
+      builderProjectAutomationRunStep: {
+        /** Lists draft automation-run step rows for one project. */
+        async listProjectRows(
+          projectId: string,
+        ): Promise<readonly BuilderProjectAutomationRunStepRow[]> {
+          return base.builderProjectAutomationRunStep.findMany({
+            where: { projectId },
+            orderBy: [{ runId: "asc" }, { ordinal: "asc" }],
+            select: builderProjectAutomationRunStepRowSelect,
+          });
+        },
+      },
+
+      /**
+       * BuilderProjectAutomationRunArtifact persistence helpers.
+       */
+      builderProjectAutomationRunArtifact: {
+        /** Lists draft automation-run artifact rows for one project. */
+        async listProjectRows(
+          projectId: string,
+        ): Promise<readonly BuilderProjectAutomationRunArtifactRow[]> {
+          return base.builderProjectAutomationRunArtifact.findMany({
+            where: { projectId },
+            orderBy: [{ runId: "asc" }, { ordinal: "asc" }],
+            select: builderProjectAutomationRunArtifactRowSelect,
           });
         },
       },
@@ -1036,10 +2230,28 @@ const withDomainExtensions = (base: PrismaClient) =>
               sessionId,
               xp: newXp,
               level: newLevel,
-              visitedScenes: [] satisfies Prisma.JsonArray,
-              interactions: {} satisfies Prisma.JsonObject,
             },
             update: { xp: newXp, level: newLevel },
+          });
+        },
+
+        /**
+         * Lists visited scene rows for one session in deterministic ordinal order.
+         */
+        async listVisitedSceneRows(sessionId: string) {
+          return base.playerProgressVisitedScene.findMany({
+            where: { sessionId },
+            orderBy: { ordinal: "asc" },
+          });
+        },
+
+        /**
+         * Lists interaction completion rows for one session.
+         */
+        async listInteractionRows(sessionId: string) {
+          return base.playerProgressInteraction.findMany({
+            where: { sessionId },
+            orderBy: { interactionId: "asc" },
           });
         },
       },
@@ -1065,12 +2277,12 @@ type ExtendedPrismaClient = ReturnType<typeof withDomainExtensions>;
 
 // ── Singleton export ──────────────────────────────────────────────────────────
 
-const createPrismaClient = (): ExtendedPrismaClient => {
-  const base = createBaseClient();
-  return withDomainExtensions(base);
-};
+const basePrismaClient = createBaseClient();
+type BasePrismaClient = PrismaClient;
 
-export const prisma: ExtendedPrismaClient = globalThis._devPrisma ?? createPrismaClient();
+export const prismaBase: BasePrismaClient = basePrismaClient;
+export const prisma: ExtendedPrismaClient =
+  globalThis._devPrisma ?? withDomainExtensions(basePrismaClient);
 
 if (appConfig.runtime.nodeEnv === "development") {
   globalThis._devPrisma = prisma;

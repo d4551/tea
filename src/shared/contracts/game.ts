@@ -354,9 +354,16 @@ export interface DialogueGraph {
 }
 
 /**
- * Supported trigger event types in the first mechanics slice.
+ * Supported trigger event types for the mechanics engine.
  */
-export type TriggerEventType = "scene-enter" | "npc-interact" | "chat" | "dialogue-confirmed";
+export type TriggerEventType =
+  | "scene-enter"
+  | "npc-interact"
+  | "chat"
+  | "dialogue-confirmed"
+  | "combat-victory"
+  | "item-acquired"
+  | "cutscene-completed";
 
 /**
  * Builder-authored game flag definition.
@@ -386,6 +393,8 @@ export interface TriggerDefinition {
   readonly npcId?: string;
   /** Optional authored scene-node scoping. */
   readonly nodeId?: string;
+  /** Optional cutscene to start when triggered. */
+  readonly cutsceneId?: string;
   /** Optional flag prerequisites keyed by flag id. */
   readonly requiredFlags?: Readonly<Record<string, string | number | boolean>>;
   /** Flag mutations applied when the trigger fires. */
@@ -567,6 +576,471 @@ export interface AutomationRun {
   readonly updatedAtMs: number;
 }
 
+// ---------------------------------------------------------------------------
+// Combat System
+// ---------------------------------------------------------------------------
+
+/**
+ * Damage type taxonomy for the combat engine.
+ */
+export type DamageType = "physical" | "magical" | "fire" | "ice" | "lightning" | "holy" | "dark";
+
+/**
+ * Base statistics shared by all combatants.
+ */
+export interface CombatantStats {
+  /** Maximum hit points. */
+  readonly maxHp: number;
+  /** Current hit points. */
+  readonly hp: number;
+  /** Maximum mana points. */
+  readonly maxMp: number;
+  /** Current mana points. */
+  readonly mp: number;
+  /** Physical attack power. */
+  readonly attack: number;
+  /** Physical defense. */
+  readonly defense: number;
+  /** Magical attack power. */
+  readonly magicAttack: number;
+  /** Magical defense. */
+  readonly magicDefense: number;
+  /** Turn order priority. */
+  readonly speed: number;
+  /** Chance to land a critical hit (0-1). */
+  readonly critRate: number;
+  /** Critical damage multiplier (e.g., 1.5). */
+  readonly critMultiplier: number;
+}
+
+/**
+ * Combatant in an active encounter.
+ */
+export interface Combatant {
+  /** Unique combatant identifier within the encounter. */
+  readonly id: string;
+  /** Display label for UI. */
+  readonly label: string;
+  /** Character key into sprite manifest. */
+  readonly characterKey: string;
+  /** Whether this combatant is player-controlled. */
+  readonly isPlayer: boolean;
+  /** Live combat statistics. */
+  readonly stats: CombatantStats;
+  /** Active status effects. */
+  readonly statusEffects: readonly StatusEffect[];
+  /** Whether the combatant is alive. */
+  readonly alive: boolean;
+}
+
+/**
+ * Temporal status effect applied to a combatant.
+ */
+export interface StatusEffect {
+  /** Effect identifier. */
+  readonly id: string;
+  /** Display label. */
+  readonly label: string;
+  /** Remaining turns until expiry. */
+  readonly remainingTurns: number;
+  /** Stat modifier applied per turn. */
+  readonly statModifier?: Partial<CombatantStats>;
+  /** Damage dealt per turn (DoT). */
+  readonly damagePerTurn?: number;
+  /** Healing applied per turn (HoT). */
+  readonly healPerTurn?: number;
+}
+
+/**
+ * Player-selectable combat action.
+ */
+export type CombatActionType = "attack" | "defend" | "skill" | "item" | "flee";
+
+/**
+ * Single combat action submitted by a combatant.
+ */
+export interface CombatAction {
+  /** Acting combatant identifier. */
+  readonly actorId: string;
+  /** Action type. */
+  readonly type: CombatActionType;
+  /** Target combatant identifier(s). */
+  readonly targetIds: readonly string[];
+  /** Optional skill identifier. */
+  readonly skillId?: string;
+  /** Optional item identifier for "item" actions. */
+  readonly itemId?: string;
+}
+
+/**
+ * Damage result from a single combat action resolution.
+ */
+export interface CombatDamageResult {
+  /** Target combatant identifier. */
+  readonly targetId: string;
+  /** Raw damage dealt before mitigation. */
+  readonly rawDamage: number;
+  /** Final damage after defense. */
+  readonly finalDamage: number;
+  /** Whether this was a critical hit. */
+  readonly critical: boolean;
+  /** Damage type dealt. */
+  readonly damageType: DamageType;
+  /** Whether the target was defeated. */
+  readonly defeated: boolean;
+}
+
+/**
+ * Result of executing a full combat turn.
+ */
+export interface CombatTurnResult {
+  /** Action that was executed. */
+  readonly action: CombatAction;
+  /** Damage outcomes for each target. */
+  readonly damages: readonly CombatDamageResult[];
+  /** Status effects applied. */
+  readonly appliedEffects: readonly StatusEffect[];
+  /** Text log entry for the turn. */
+  readonly logEntry: string;
+}
+
+/**
+ * Combat encounter phase.
+ */
+export type CombatPhase =
+  | "intro"
+  | "player_turn"
+  | "enemy_turn"
+  | "resolution"
+  | "victory"
+  | "defeat"
+  | "fled";
+
+/**
+ * Active combat encounter state.
+ */
+export interface CombatEncounterState {
+  /** Unique encounter identifier. */
+  readonly id: string;
+  /** Current phase of combat. */
+  readonly phase: CombatPhase;
+  /** Current turn index (0-based). */
+  readonly turnIndex: number;
+  /** All combatants in the encounter. */
+  readonly combatants: readonly Combatant[];
+  /** Turn order (combatant ids). */
+  readonly turnOrder: readonly string[];
+  /** Index into turnOrder for the current actor. */
+  readonly activeActorIndex: number;
+  /** Combat log for UI display. */
+  readonly log: readonly CombatTurnResult[];
+  /** Optional loot table identifier for victory rewards. */
+  readonly lootTableId?: string;
+}
+
+/**
+ * Builder-authored enemy template for encounter generation.
+ */
+export interface EnemyTemplate {
+  /** Stable enemy identifier. */
+  readonly id: string;
+  /** Display label key. */
+  readonly labelKey: string;
+  /** Character key for sprite rendering. */
+  readonly characterKey: string;
+  /** Base statistics. */
+  readonly baseStats: CombatantStats;
+  /** XP reward on defeat. */
+  readonly xpReward: number;
+  /** Item drop table. */
+  readonly dropIds?: readonly string[];
+}
+
+// ---------------------------------------------------------------------------
+// Inventory System
+// ---------------------------------------------------------------------------
+
+/**
+ * Item rarity tier for the loot system.
+ */
+export type ItemRarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
+
+/**
+ * Equipment slot for character loadout.
+ */
+export type EquipmentSlotType = "weapon" | "armor" | "accessory" | "consumable";
+
+/**
+ * Stat modification applied by an item.
+ */
+export interface ItemStatEffect {
+  /** Stat key to modify. */
+  readonly stat: keyof CombatantStats;
+  /** Additive modifier value. */
+  readonly value: number;
+}
+
+/**
+ * Special effect triggered when an item is used.
+ */
+export interface ItemUseEffect {
+  /** Effect type. */
+  readonly type: "heal_hp" | "heal_mp" | "damage" | "buff" | "debuff" | "cure_status";
+  /** Numeric magnitude. */
+  readonly magnitude: number;
+  /** Optional duration in turns for buffs/debuffs. */
+  readonly durationTurns?: number;
+  /** Optional target selector. */
+  readonly target?: "self" | "ally" | "enemy" | "all_allies" | "all_enemies";
+}
+
+/**
+ * Builder-authored item definition.
+ */
+export interface ItemDefinition {
+  /** Stable item identifier. */
+  readonly id: string;
+  /** Display label key for localization. */
+  readonly labelKey: string;
+  /** Item description key. */
+  readonly descriptionKey: string;
+  /** Rarity tier. */
+  readonly rarity: ItemRarity;
+  /** Equipment slot if equippable. */
+  readonly equipSlot?: EquipmentSlotType;
+  /** Whether this item can stack in inventory. */
+  readonly stackable: boolean;
+  /** Maximum stack size. */
+  readonly maxStack: number;
+  /** Passive stat effects when equipped. */
+  readonly statEffects: readonly ItemStatEffect[];
+  /** Active effects when consumed/used. */
+  readonly useEffects: readonly ItemUseEffect[];
+  /** Sell value. */
+  readonly sellValue: number;
+  /** Optional sprite asset identifier for UI rendering. */
+  readonly spriteAssetId?: string;
+  /** Creation timestamp in ms since epoch. */
+  readonly createdAtMs: number;
+}
+
+/**
+ * Single slot in a player's inventory.
+ */
+export interface InventorySlot {
+  /** Slot index (0-based). */
+  readonly slotIndex: number;
+  /** Item definition identifier. */
+  readonly itemId: string;
+  /** Current stack quantity. */
+  readonly quantity: number;
+}
+
+/**
+ * Equipment loadout for a player.
+ */
+export interface EquipmentLoadout {
+  /** Equipped weapon item id, if any. */
+  readonly weapon?: string;
+  /** Equipped armor item id, if any. */
+  readonly armor?: string;
+  /** Equipped accessory item id, if any. */
+  readonly accessory?: string;
+}
+
+/**
+ * Full inventory state for a session participant.
+ */
+export interface PlayerInventoryState {
+  /** Maximum inventory capacity. */
+  readonly capacity: number;
+  /** Occupied slots. */
+  readonly slots: readonly InventorySlot[];
+  /** Current equipment loadout. */
+  readonly equipment: EquipmentLoadout;
+  /** Currency balance. */
+  readonly currency: number;
+}
+
+// ---------------------------------------------------------------------------
+// Cutscene System
+// ---------------------------------------------------------------------------
+
+/**
+ * Cutscene action types for the sequencer.
+ */
+export type CutsceneActionType =
+  | "dialogue"
+  | "camera_pan"
+  | "fade_in"
+  | "fade_out"
+  | "wait"
+  | "animate_entity"
+  | "play_sound"
+  | "set_flag"
+  | "spawn_entity"
+  | "remove_entity";
+
+/**
+ * Single authored cutscene step.
+ */
+export interface CutsceneStep {
+  /** Stable step identifier. */
+  readonly id: string;
+  /** Step ordinal for sequencing. */
+  readonly ordinal: number;
+  /** Action type for this step. */
+  readonly action: CutsceneActionType;
+  /** Duration in ms (for waits, fades, camera pans). */
+  readonly durationMs: number;
+  /** Optional dialogue speaker character key. */
+  readonly speakerKey?: string;
+  /** Optional dialogue text key. */
+  readonly dialogueKey?: string;
+  /** Optional target entity/NPC identifier. */
+  readonly entityId?: string;
+  /** Optional animation key to trigger. */
+  readonly animationKey?: string;
+  /** Optional camera target position. */
+  readonly cameraTarget?: Vector2;
+  /** Optional flag key to set. */
+  readonly flagKey?: string;
+  /** Optional flag value to set. */
+  readonly flagValue?: string | number | boolean;
+  /** Optional sound asset identifier. */
+  readonly soundAssetId?: string;
+}
+
+/**
+ * Builder-authored cutscene definition.
+ */
+export interface CutsceneDefinition {
+  /** Stable cutscene identifier. */
+  readonly id: string;
+  /** Human-readable cutscene label. */
+  readonly label: string;
+  /** Trigger event that starts this cutscene. */
+  readonly triggerId?: string;
+  /** Ordered steps in the cutscene. */
+  readonly steps: readonly CutsceneStep[];
+  /** Whether the player can skip the cutscene. */
+  readonly skippable: boolean;
+  /** Creation timestamp in ms since epoch. */
+  readonly createdAtMs: number;
+  /** Last update timestamp in ms since epoch. */
+  readonly updatedAtMs: number;
+}
+
+/**
+ * Active cutscene playback state.
+ */
+export type CutscenePlaybackPhase = "playing" | "waiting_for_input" | "completed" | "skipped";
+
+/**
+ * Runtime cutscene playback state.
+ */
+export interface CutscenePlaybackState {
+  /** Active cutscene identifier. */
+  readonly cutsceneId: string;
+  /** Current step index. */
+  readonly currentStepIndex: number;
+  /** Elapsed time within the current step in ms. */
+  readonly stepElapsedMs: number;
+  /** Current playback phase. */
+  readonly phase: CutscenePlaybackPhase;
+}
+
+// ---------------------------------------------------------------------------
+// Animation Timeline Editor
+// ---------------------------------------------------------------------------
+
+/**
+ * Numeric keyframe in an animation track.
+ */
+export interface AnimationKeyframe {
+  /** Time position in ms. */
+  readonly timeMs: number;
+  /** Numeric value at this keyframe. */
+  readonly value: number;
+  /** Easing function for interpolation to the next keyframe. */
+  readonly easing: "linear" | "ease-in" | "ease-out" | "ease-in-out" | "step";
+}
+
+/**
+ * Single track in an animation timeline (e.g., position.x, opacity, frame). */
+export interface AnimationTrack {
+  /** Stable track identifier. */
+  readonly id: string;
+  /** Property path this track animates (e.g., "position.x", "frame"). */
+  readonly property: string;
+  /** Keyframes in chronological order. */
+  readonly keyframes: readonly AnimationKeyframe[];
+}
+
+/**
+ * Builder-authored animation timeline linking tracks to a state tag.
+ */
+export interface AnimationTimeline {
+  /** Stable timeline identifier. */
+  readonly id: string;
+  /** Owning asset identifier. */
+  readonly assetId: string;
+  /** Human-readable timeline label. */
+  readonly label: string;
+  /** State tag (e.g., idle-down, attack-right). */
+  readonly stateTag: string;
+  /** Target scene mode. */
+  readonly sceneMode: SceneMode;
+  /** Total duration in ms. */
+  readonly durationMs: number;
+  /** Whether the timeline loops. */
+  readonly loop: boolean;
+  /** Animation tracks. */
+  readonly tracks: readonly AnimationTrack[];
+  /** Creation timestamp in ms since epoch. */
+  readonly createdAtMs: number;
+  /** Last update timestamp in ms since epoch. */
+  readonly updatedAtMs: number;
+}
+
+// ---------------------------------------------------------------------------
+// Sprite Atlas Packing
+// ---------------------------------------------------------------------------
+
+/**
+ * Packed frame metadata within a sprite atlas.
+ */
+export interface SpriteAtlasFrame {
+  /** Frame identifier (typically filename). */
+  readonly id: string;
+  /** X position in the atlas. */
+  readonly x: number;
+  /** Y position in the atlas. */
+  readonly y: number;
+  /** Frame width. */
+  readonly width: number;
+  /** Frame height. */
+  readonly height: number;
+}
+
+/**
+ * Generated sprite atlas metadata.
+ */
+export interface SpriteAtlasManifest {
+  /** Stable atlas identifier. */
+  readonly id: string;
+  /** Browser-accessible atlas image path. */
+  readonly imagePath: string;
+  /** Atlas image width. */
+  readonly atlasWidth: number;
+  /** Atlas image height. */
+  readonly atlasHeight: number;
+  /** Packed frames. */
+  readonly frames: readonly SpriteAtlasFrame[];
+  /** Creation timestamp in ms since epoch. */
+  readonly createdAtMs: number;
+}
+
 /**
  * Top-level game configuration contract.
  */
@@ -740,6 +1214,12 @@ export interface GameSceneState {
   readonly flags?: Readonly<Record<string, string | number | boolean>>;
   /** World time tracked in ms for diagnostics. */
   readonly worldTimeMs: number;
+  /** Active combat encounter state, if in combat. */
+  readonly combat?: CombatEncounterState;
+  /** Player inventory state. */
+  readonly inventory?: PlayerInventoryState;
+  /** Active cutscene playback state, if in cutscene. */
+  readonly cutscene?: CutscenePlaybackState;
 }
 
 /**
@@ -762,6 +1242,8 @@ export interface GameSession {
   readonly releaseVersion?: number;
   /** Published trigger definitions captured when the session was created. */
   readonly triggerDefinitions?: readonly TriggerDefinition[];
+  /** Published cutscene definitions captured when the session was created. */
+  readonly cutsceneDefinitions?: readonly CutsceneDefinition[];
   /** Connected room participants authorized to observe or control the session. */
   readonly participants: readonly GameSessionParticipant[];
   /** Monotonic scene-state version used for optimistic persistence. */
@@ -805,7 +1287,10 @@ export type GameSseEventName =
   | "dialogue"
   | "participants"
   | "close"
-  | "error";
+  | "error"
+  | "combat"
+  | "inventory"
+  | "cutscene";
 
 /**
  * Deterministic stream close reasons for SSE clients.
@@ -813,7 +1298,8 @@ export type GameSseEventName =
 export type GameSseCloseReason = "session-missing" | "session-expired" | "stream-error";
 
 /**
- * Sub-state machine for gameplay actions and collisions. */
+ * Sub-state machine for gameplay actions and collisions.
+ */
 export type GameActionState =
   | "idle"
   | "loading"
@@ -826,7 +1312,10 @@ export type GameActionState =
   | "resolving"
   | "moved"
   | "dialogueOpen"
-  | "blockedByCollision";
+  | "blockedByCollision"
+  | "inCombat"
+  | "inCutscene"
+  | "inventoryOpen";
 
 /**
  * Open dialogue entry.
@@ -873,6 +1362,38 @@ export type GameCommand =
     }
   | {
       readonly type: "retryAction";
+    }
+  | {
+      readonly type: "combatAction";
+      /** The combat action to execute. */
+      readonly action: CombatAction;
+    }
+  | {
+      readonly type: "openInventory";
+    }
+  | {
+      readonly type: "closeInventory";
+    }
+  | {
+      readonly type: "useItem";
+      /** Slot index of the item to use. */
+      readonly slotIndex: number;
+    }
+  | {
+      readonly type: "equipItem";
+      /** Slot index of the item to equip. */
+      readonly slotIndex: number;
+    }
+  | {
+      readonly type: "unequipItem";
+      /** Equipment slot to clear. */
+      readonly slot: EquipmentSlotType;
+    }
+  | {
+      readonly type: "advanceCutscene";
+    }
+  | {
+      readonly type: "skipCutscene";
     };
 
 /**
@@ -962,7 +1483,10 @@ const isGameActionStateValue = (value: unknown): value is GameActionState =>
   value === "resolving" ||
   value === "moved" ||
   value === "dialogueOpen" ||
-  value === "blockedByCollision";
+  value === "blockedByCollision" ||
+  value === "inCombat" ||
+  value === "inCutscene" ||
+  value === "inventoryOpen";
 
 const isQuestStepStateValue = (value: unknown): value is QuestStepState =>
   value === "pending" || value === "active" || value === "completed";
@@ -971,7 +1495,10 @@ const isTriggerEventTypeValue = (value: unknown): value is TriggerEventType =>
   value === "scene-enter" ||
   value === "npc-interact" ||
   value === "chat" ||
-  value === "dialogue-confirmed";
+  value === "dialogue-confirmed" ||
+  value === "combat-victory" ||
+  value === "item-acquired" ||
+  value === "cutscene-completed";
 
 const isVector2 = (value: unknown): value is Vector2 =>
   isRecord(value) && isFiniteNumber(value.x) && isFiniteNumber(value.y);
@@ -1252,7 +1779,7 @@ export const validateGameRealtimeFrame = (
   let state: GameSceneState | undefined;
   if (payload.state !== undefined) {
     const stateValidation = validateGameSceneState(payload.state);
-    if (!stateValidation.ok) {
+    if (stateValidation.ok === false) {
       return { ok: false, message: stateValidation.message };
     }
 
@@ -1299,14 +1826,25 @@ export const validateGameRealtimeFrame = (
   }
 
   const commandQueueDepth =
-    payload.commandQueueDepth === undefined ? undefined : payload.commandQueueDepth;
-  const resumeToken = payload.resumeToken === undefined ? undefined : payload.resumeToken;
+    payload.commandQueueDepth === undefined ? undefined : (payload.commandQueueDepth as number);
+  const resumeToken =
+    payload.resumeToken === undefined ? undefined : (payload.resumeToken as string);
   const resumeTokenExpiresAtMs =
-    payload.resumeTokenExpiresAtMs === undefined ? undefined : payload.resumeTokenExpiresAtMs;
-  const participants = payload.participants === undefined ? undefined : payload.participants;
+    payload.resumeTokenExpiresAtMs === undefined
+      ? undefined
+      : (payload.resumeTokenExpiresAtMs as number);
+  const participants =
+    payload.participants === undefined
+      ? undefined
+      : (payload.participants as readonly GameSessionParticipant[]);
   const participantRole =
-    payload.participantRole === undefined ? undefined : payload.participantRole;
-  const coPlayers = payload.coPlayers === undefined ? undefined : payload.coPlayers;
+    payload.participantRole === undefined
+      ? undefined
+      : (payload.participantRole as GameSessionParticipantRole);
+  const coPlayers =
+    payload.coPlayers === undefined
+      ? undefined
+      : (payload.coPlayers as readonly GameParticipantPresence[]);
 
   return {
     ok: true,
@@ -1506,7 +2044,7 @@ export const validateGameCommandInput = (
       commandPayload,
       isSupportedLocale(locale) ? (locale as LocaleCode) : sessionLocale,
     );
-    if (!commandValidation.ok) {
+    if (commandValidation.ok === false) {
       return {
         ok: false,
         errorCode: commandValidation.errorCode,
@@ -1544,7 +2082,7 @@ export const validateGameCommandInput = (
   }
 
   const commandValidation = validateGameCommand(payload, sessionLocale);
-  if (!commandValidation.ok) {
+  if (commandValidation.ok === false) {
     return {
       ok: false,
       errorCode: commandValidation.errorCode,
@@ -1811,6 +2349,14 @@ export interface GameHudState {
   readonly level: number;
   /** Active dialogue, if any. */
   readonly dialogue: GameSceneState["dialogue"];
+  /** Active combat encounter, if any. */
+  readonly combat?: CombatEncounterState;
+  /** Active inventory sequence, if open */
+  readonly inventory?: PlayerInventoryState;
+  /** Active cutscene state, if any. */
+  readonly cutscene?: CutscenePlaybackState;
+  /** The actively playing cutscene step, if any. */
+  readonly activeCutsceneStep?: CutsceneStep;
 }
 
 /**
@@ -1939,6 +2485,18 @@ export interface BuilderAnimationClipPayload {
   readonly id: string;
   /** Clip definition. */
   readonly clip: AnimationClip;
+  /** Optional checksum for idempotent writes. */
+  readonly checksum?: string;
+}
+
+/**
+ * Builder animation timeline mutation payload.
+ */
+export interface BuilderAnimationTimelinePayload {
+  /** Timeline identifier. */
+  readonly id: string;
+  /** Timeline definition. */
+  readonly timeline: AnimationTimeline;
   /** Optional checksum for idempotent writes. */
   readonly checksum?: string;
 }

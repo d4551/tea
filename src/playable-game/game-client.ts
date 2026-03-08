@@ -740,44 +740,23 @@ const initGameClient = async (): Promise<void> => {
         runtimeConfig.restoreRequestTimeoutMs,
       );
 
-      try {
-        const response = await fetch(buildSessionRestoreUrl(runtimeSessionMeta.sessionId), {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          credentials: "same-origin",
-          signal: controller.signal,
-          body: JSON.stringify({
-            resumeToken: runtimeSessionMeta.resumeToken,
-          }),
-        });
-        if (!response.ok) {
-          if (response.status >= 500 && attempt + 1 < runtimeConfig.restoreMaxAttempts) {
-            await delay(runtimeConfig.socketReconnectDelayMs);
-            continue;
-          }
-          return false;
-        }
+      const fetchResult = await fetch(buildSessionRestoreUrl(runtimeSessionMeta.sessionId), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        signal: controller.signal,
+        body: JSON.stringify({
+          resumeToken: runtimeSessionMeta.resumeToken,
+        }),
+      }).catch((error) => ({ error }));
 
-        const payload = (await response.json()) as RestoreSessionResponse;
-        if (!payload.ok) {
-          return false;
-        }
+      clearTimeout(timeoutHandle);
+      if (restoreAbortController === controller) {
+        restoreAbortController = null;
+      }
 
-        runtimeSessionMeta = {
-          ...runtimeSessionMeta,
-          participantSessionId:
-            payload.data.participantSessionId ?? runtimeSessionMeta.participantSessionId,
-          resumeToken: payload.data.resumeToken ?? runtimeSessionMeta.resumeToken,
-          expiresAtMs: payload.data.resumeTokenExpiresAtMs ?? runtimeSessionMeta.expiresAtMs,
-          commandQueueDepth: payload.data.commandQueueDepth ?? runtimeSessionMeta.commandQueueDepth,
-          locale: payload.data.locale,
-          version: payload.data.version ?? runtimeSessionMeta.version,
-        };
-        persistSessionMeta(runtimeSessionMeta, runtimeConfig);
-        commandQueueDepth = runtimeSessionMeta.commandQueueDepth;
-        setQueueDepth(queueBadge, statusTarget, labels, commandQueueDepth);
-        return true;
-      } catch (error) {
+      if (fetchResult && "error" in fetchResult) {
+        const error = fetchResult.error;
         if (controller.signal.aborted && attempt + 1 < runtimeConfig.restoreMaxAttempts) {
           await delay(runtimeConfig.socketReconnectDelayMs);
           continue;
@@ -791,12 +770,36 @@ const initGameClient = async (): Promise<void> => {
           continue;
         }
         return false;
-      } finally {
-        clearTimeout(timeoutHandle);
-        if (restoreAbortController === controller) {
-          restoreAbortController = null;
-        }
       }
+
+      const response = fetchResult as Response;
+      if (!response.ok) {
+        if (response.status >= 500 && attempt + 1 < runtimeConfig.restoreMaxAttempts) {
+          await delay(runtimeConfig.socketReconnectDelayMs);
+          continue;
+        }
+        return false;
+      }
+
+      const payload = (await response.json().catch(() => null)) as RestoreSessionResponse | null;
+      if (!payload?.ok) {
+        return false;
+      }
+
+      runtimeSessionMeta = {
+        ...runtimeSessionMeta,
+        participantSessionId:
+          payload.data.participantSessionId ?? runtimeSessionMeta.participantSessionId,
+        resumeToken: payload.data.resumeToken ?? runtimeSessionMeta.resumeToken,
+        expiresAtMs: payload.data.resumeTokenExpiresAtMs ?? runtimeSessionMeta.expiresAtMs,
+        commandQueueDepth: payload.data.commandQueueDepth ?? runtimeSessionMeta.commandQueueDepth,
+        locale: payload.data.locale,
+        version: payload.data.version ?? runtimeSessionMeta.version,
+      };
+      persistSessionMeta(runtimeSessionMeta, runtimeConfig);
+      commandQueueDepth = runtimeSessionMeta.commandQueueDepth;
+      setQueueDepth(queueBadge, statusTarget, labels, commandQueueDepth);
+      return true;
     }
     return false;
   };
@@ -1110,8 +1113,16 @@ const initGameClient = async (): Promise<void> => {
         return;
       }
 
+      if (event.key.toLowerCase() === "i" || event.key === "Tab") {
+        sendEnvelope({ type: "openInventory" });
+        event.preventDefault();
+        return;
+      }
+
       if (event.key === "Escape") {
-        sendEnvelope({ type: "confirmDialogue" });
+        // First try to close dialogue, then try to close inventory
+        sendEnvelope({ type: "closeDialogue" });
+        sendEnvelope({ type: "closeInventory" });
         event.preventDefault();
       }
     },

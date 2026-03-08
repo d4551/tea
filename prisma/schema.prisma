@@ -31,32 +31,158 @@ model AiKnowledgeDocument {
 }
 
 model AiKnowledgeChunk {
-  id            String              @id
+  id            String                 @id
   documentId    String
-  document      AiKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document      AiKnowledgeDocument    @relation(fields: [documentId], references: [id], onDelete: Cascade)
   ordinal       Int
   text          String
+  searchText    String
   embedding     Json
   tokenEstimate Int
-  createdAt     DateTime            @default(now())
+  createdAt     DateTime               @default(now())
+  terms         AiKnowledgeChunkTerm[]
 
   @@index([documentId])
   @@index([documentId, ordinal])
+  @@index([documentId, searchText])
+}
+
+model AiKnowledgeChunkTerm {
+  chunkId         String
+  term            String
+  occurrenceCount Int
+  chunk           AiKnowledgeChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+
+  @@id([chunkId, term])
+  @@index([term])
+  @@index([term, chunkId])
 }
 
 model GameSession {
-  id          String   @id @default(cuid())
-  ownerSessionId String @default("anonymous")
-  seed        Int
-  locale      String   @default("en-US")
-  sceneId     String   @default("teaHouse")
-  state       Json
-  stateVersion Int     @default(1)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  expiresAt   DateTime
-  progress    PlayerProgress?
-  participants GameSessionParticipant[]
+  id             String                      @id @default(cuid())
+  ownerSessionId String                      @default("anonymous")
+  seed           Int
+  locale         String                      @default("en-US")
+  sceneId        String                      @default("teaHouse")
+  projectId      String?
+  releaseVersion Int?
+  stateVersion   Int                         @default(1)
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+  expiresAt      DateTime
+  progress       PlayerProgress?
+  participants   GameSessionParticipant[]
+  actors         GameSessionActor[]
+  triggers       GameSessionTrigger[]
+  quests         GameSessionQuest[]
+  flags          GameSessionFlag[]
+  sceneState     GameSessionSceneState?
+  collisions     GameSessionSceneCollision[]
+  nodes          GameSessionSceneNode[]
+  assets         GameSessionSceneAsset[]
+  runtimeState   GameSessionRuntimeState?
+  npcs           GameSessionNpc[]
+  inventorySlots GameSessionInventorySlot[]
+  equipment      GameSessionEquipment?
+  combatState    GameSessionCombatState?
+  combatants     GameSessionCombatant[]
+  cutsceneState  GameSessionCutsceneState?
+}
+
+model GameSessionSceneState {
+  sessionId      String      @id
+  session        GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sceneMode      String
+  sceneTitle     String
+  background     String
+  geometryWidth  Int
+  geometryHeight Int
+}
+
+model GameSessionSceneCollision {
+  sessionId String
+  ordinal   Int
+  session   GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  x         Float
+  y         Float
+  width     Float
+  height    Float
+
+  @@id([sessionId, ordinal])
+  @@index([sessionId])
+}
+
+model GameSessionSceneNode {
+  sessionId       String
+  id              String
+  ordinal         Int
+  session         GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  nodeType        String
+  assetId         String?
+  animationClipId String?
+  positionX       Float
+  positionY       Float
+  positionZ       Float?
+  sizeWidth       Float?
+  sizeHeight      Float?
+  layer           String?
+  rotationX       Float?
+  rotationY       Float?
+  rotationZ       Float?
+  scaleX          Float?
+  scaleY          Float?
+  scaleZ          Float?
+
+  @@id([sessionId, id])
+  @@unique([sessionId, ordinal])
+  @@index([sessionId])
+}
+
+model GameSessionSceneAsset {
+  sessionId      String
+  id             String
+  session        GameSession                    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  kind           String
+  label          String
+  sceneMode      String
+  source         String
+  sourceFormat   String
+  sourceMimeType String?
+  approved       Boolean
+  createdAt      DateTime
+  updatedAt      DateTime
+  tags           GameSessionSceneAssetTag[]
+  variants       GameSessionSceneAssetVariant[]
+
+  @@id([sessionId, id])
+  @@index([sessionId])
+}
+
+model GameSessionSceneAssetTag {
+  sessionId String
+  assetId   String
+  ordinal   Int
+  asset     GameSessionSceneAsset @relation(fields: [sessionId, assetId], references: [sessionId, id], onDelete: Cascade)
+  value     String
+
+  @@id([sessionId, assetId, ordinal])
+  @@index([sessionId, assetId])
+}
+
+model GameSessionSceneAssetVariant {
+  sessionId String
+  assetId   String
+  id        String
+  ordinal   Int
+  asset     GameSessionSceneAsset @relation(fields: [sessionId, assetId], references: [sessionId, id], onDelete: Cascade)
+  format    String
+  source    String
+  usage     String
+  mimeType  String?
+
+  @@id([sessionId, assetId, id])
+  @@unique([sessionId, assetId, ordinal])
+  @@index([sessionId, assetId])
 }
 
 model GameSessionParticipant {
@@ -64,37 +190,233 @@ model GameSessionParticipant {
   participantSessionId String
   session              GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   role                 String
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
 
   @@id([sessionId, participantSessionId])
   @@index([sessionId])
 }
 
+model GameSessionActor {
+  sessionId            String
+  participantSessionId String
+  session              GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role                 String
+  entityId             String
+  label                String
+  characterKey         String
+  positionX            Float
+  positionY            Float
+  facing               String
+  animation            String
+  frame                Int
+  velocityX            Float
+  velocityY            Float
+  boundsX              Float
+  boundsY              Float
+  boundsWidth          Float
+  boundsHeight         Float
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  @@id([sessionId, participantSessionId])
+  @@index([sessionId])
+}
+
+model GameSessionRuntimeState {
+  sessionId        String      @id
+  session          GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  cameraX          Float
+  cameraY          Float
+  uiState          String
+  actionState      String
+  worldTimeMs      Int
+  dialogueNpcId    String?
+  dialogueNpcLabel String?
+  dialogueLine     String?
+  dialogueLineKey  String?
+}
+
+model GameSessionNpc {
+  sessionId       String
+  id              String
+  session         GameSession                   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  ordinal         Int
+  characterKey    String
+  positionX       Float
+  positionY       Float
+  label           String
+  facing          String
+  animation       String
+  frame           Int
+  velocityX       Float
+  velocityY       Float
+  boundsX         Float
+  boundsY         Float
+  boundsWidth     Float
+  boundsHeight    Float
+  aiEnabled       Boolean
+  dialogueIndex   Int
+  interactRadius  Float
+  homePositionX   Float
+  homePositionY   Float
+  wanderRadius    Float
+  wanderSpeed     Float
+  idlePauseMinMs  Int
+  idlePauseMaxMs  Int
+  greetOnApproach Boolean
+  greetLineKey    String
+  active          Boolean
+  state           String
+  dialogueKeys    GameSessionNpcDialogueKey[]
+  dialogueEntries GameSessionNpcDialogueEntry[]
+
+  @@id([sessionId, id])
+  @@unique([sessionId, ordinal])
+  @@index([sessionId])
+}
+
+model GameSessionNpcDialogueKey {
+  sessionId String
+  npcId     String
+  ordinal   Int
+  key       String
+  npc       GameSessionNpc @relation(fields: [sessionId, npcId], references: [sessionId, id], onDelete: Cascade)
+
+  @@id([sessionId, npcId, ordinal])
+  @@index([sessionId, npcId])
+}
+
+model GameSessionNpcDialogueEntry {
+  sessionId String
+  npcId     String
+  ordinal   Int
+  key       String
+  text      String
+  npc       GameSessionNpc @relation(fields: [sessionId, npcId], references: [sessionId, id], onDelete: Cascade)
+
+  @@id([sessionId, npcId, ordinal])
+  @@index([sessionId, npcId])
+}
+
+model GameSessionTrigger {
+  sessionId     String
+  id            String
+  session       GameSession                      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  label         String
+  event         String
+  sceneId       String?
+  npcId         String?
+  nodeId        String?
+  questId       String?
+  questStepId   String?
+  requiredFlags GameSessionTriggerRequiredFlag[]
+  setFlags      GameSessionTriggerSetFlag[]
+
+  @@id([sessionId, id])
+  @@index([sessionId])
+}
+
+model GameSessionTriggerRequiredFlag {
+  sessionId   String
+  triggerId   String
+  key         String
+  trigger     GameSessionTrigger @relation(fields: [sessionId, triggerId], references: [sessionId, id], onDelete: Cascade)
+  valueType   String
+  stringValue String?
+  numberValue Float?
+  boolValue   Boolean?
+
+  @@id([sessionId, triggerId, key])
+  @@index([sessionId, triggerId])
+}
+
+model GameSessionTriggerSetFlag {
+  sessionId   String
+  triggerId   String
+  key         String
+  trigger     GameSessionTrigger @relation(fields: [sessionId, triggerId], references: [sessionId, id], onDelete: Cascade)
+  valueType   String
+  stringValue String?
+  numberValue Float?
+  boolValue   Boolean?
+
+  @@id([sessionId, triggerId, key])
+  @@index([sessionId, triggerId])
+}
+
+model GameSessionQuest {
+  sessionId   String
+  id          String
+  session     GameSession            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  ordinal     Int
+  title       String
+  description String
+  completed   Boolean
+  steps       GameSessionQuestStep[]
+
+  @@id([sessionId, id])
+  @@unique([sessionId, ordinal])
+  @@index([sessionId])
+}
+
+model GameSessionQuestStep {
+  sessionId   String
+  questId     String
+  id          String
+  quest       GameSessionQuest @relation(fields: [sessionId, questId], references: [sessionId, id], onDelete: Cascade)
+  ordinal     Int
+  title       String
+  description String
+  state       String
+
+  @@id([sessionId, questId, id])
+  @@unique([sessionId, questId, ordinal])
+  @@index([sessionId, questId])
+}
+
+model GameSessionFlag {
+  sessionId   String
+  key         String
+  session     GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  valueType   String
+  stringValue String?
+  numberValue Float?
+  boolValue   Boolean?
+
+  @@id([sessionId, key])
+  @@index([sessionId])
+}
+
 model BuilderProject {
-  id                     String                 @id
-  state                  Json
-  checksum               String
-  version                Int                    @default(1)
-  createdBy              String                 @default("system")
-  updatedBy              String                 @default("system")
-  source                 String                 @default("builder-service-seed")
-  latestReleaseVersion   Int                    @default(0)
+  id                      String                             @id
+  state                   Json
+  checksum                String
+  version                 Int                                @default(1)
+  createdBy               String                             @default("system")
+  updatedBy               String                             @default("system")
+  source                  String                             @default("builder-service-seed")
+  latestReleaseVersion    Int                                @default(0)
   publishedReleaseVersion Int?
-  createdAt              DateTime               @default(now())
-  updatedAt              DateTime               @updatedAt
-  scenes                 BuilderProjectScene[]
-  dialogueEntries        BuilderProjectDialogueEntry[]
-  assets                 BuilderProjectAsset[]
-  animationClips         BuilderProjectAnimationClip[]
-  dialogueGraphs         BuilderProjectDialogueGraph[]
-  quests                 BuilderProjectQuest[]
-  triggers               BuilderProjectTrigger[]
-  flags                  BuilderProjectFlag[]
-  generationJobs         BuilderProjectGenerationJob[]
-  artifacts              BuilderProjectArtifact[]
-  automationRuns         BuilderProjectAutomationRun[]
-  releases               BuilderProjectRelease[]
+  createdAt               DateTime                           @default(now())
+  updatedAt               DateTime                           @updatedAt
+  scenes                  BuilderProjectScene[]
+  dialogueEntries         BuilderProjectDialogueEntry[]
+  assets                  BuilderProjectAsset[]
+  animationClips          BuilderProjectAnimationClip[]
+  dialogueGraphs          BuilderProjectDialogueGraph[]
+  quests                  BuilderProjectQuest[]
+  triggers                BuilderProjectTrigger[]
+  flags                   BuilderProjectFlag[]
+  generationJobs          BuilderProjectGenerationJob[]
+  artifacts               BuilderProjectArtifact[]
+  automationRuns          BuilderProjectAutomationRun[]
+  releases                BuilderProjectRelease[]
+  enemyTemplates          BuilderProjectEnemyTemplate[]
+  itemDefinitions         BuilderProjectItemDefinition[]
+  cutsceneDefinitions     BuilderProjectCutsceneDefinition[]
+  animationTimelines      BuilderProjectAnimationTimeline[]
+  spriteAtlases           BuilderProjectSpriteAtlas[]
 }
 
 model BuilderProjectRelease {
@@ -110,28 +432,106 @@ model BuilderProjectRelease {
 }
 
 model BuilderProjectScene {
-  projectId    String
-  id           String
-  project      BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  sceneMode    String?
-  titleKey     String
-  background   String
-  geometry     Json
-  spawn        Json
-  npcs         Json
-  nodes        Json?
-  collisions   Json
+  projectId      String
+  id             String
+  project        BuilderProject                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sceneMode      String?
+  titleKey       String
+  background     String
+  geometryWidth  Int
+  geometryHeight Int
+  spawnX         Int
+  spawnY         Int
+  npcs           BuilderProjectSceneNpc[]
+  nodes          BuilderProjectSceneNode[]
+  collisions     BuilderProjectSceneCollision[]
 
   @@id([projectId, id])
   @@index([projectId])
 }
 
+model BuilderProjectSceneCollision {
+  projectId String
+  sceneId   String
+  ordinal   Int
+  scene     BuilderProjectScene @relation(fields: [projectId, sceneId], references: [projectId, id], onDelete: Cascade)
+  x         Int
+  y         Int
+  width     Int
+  height    Int
+
+  @@id([projectId, sceneId, ordinal])
+  @@index([projectId, sceneId])
+}
+
+model BuilderProjectSceneNpc {
+  projectId       String
+  sceneId         String
+  characterKey    String
+  scene           BuilderProjectScene                 @relation(fields: [projectId, sceneId], references: [projectId, id], onDelete: Cascade)
+  ordinal         Int
+  x               Int
+  y               Int
+  labelKey        String
+  interactRadius  Int
+  wanderRadius    Int
+  wanderSpeed     Float
+  idlePauseMinMs  Int
+  idlePauseMaxMs  Int
+  greetOnApproach Boolean
+  greetLineKey    String
+  dialogueKeys    BuilderProjectSceneNpcDialogueKey[]
+
+  @@id([projectId, sceneId, characterKey])
+  @@unique([projectId, sceneId, ordinal])
+  @@index([projectId, sceneId])
+}
+
+model BuilderProjectSceneNpcDialogueKey {
+  projectId    String
+  sceneId      String
+  characterKey String
+  ordinal      Int
+  npc          BuilderProjectSceneNpc @relation(fields: [projectId, sceneId, characterKey], references: [projectId, sceneId, characterKey], onDelete: Cascade)
+  key          String
+
+  @@id([projectId, sceneId, characterKey, ordinal])
+  @@index([projectId, sceneId, characterKey])
+}
+
+model BuilderProjectSceneNode {
+  projectId       String
+  sceneId         String
+  id              String
+  scene           BuilderProjectScene @relation(fields: [projectId, sceneId], references: [projectId, id], onDelete: Cascade)
+  ordinal         Int
+  nodeType        String
+  assetId         String?
+  animationClipId String?
+  positionX       Float
+  positionY       Float
+  positionZ       Float?
+  sizeWidth       Float?
+  sizeHeight      Float?
+  layer           String?
+  rotationX       Float?
+  rotationY       Float?
+  rotationZ       Float?
+  scaleX          Float?
+  scaleY          Float?
+  scaleZ          Float?
+
+  @@id([projectId, sceneId, id])
+  @@unique([projectId, sceneId, ordinal])
+  @@index([projectId, sceneId])
+}
+
 model BuilderProjectDialogueEntry {
-  projectId   String
-  locale      String
-  key         String
-  project     BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  text        String
+  projectId String
+  locale    String
+  key       String
+  project   BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  text      String
 
   @@id([projectId, locale, key])
   @@index([projectId])
@@ -139,42 +539,69 @@ model BuilderProjectDialogueEntry {
 }
 
 model BuilderProjectAsset {
-  projectId   String
-  id          String
-  project     BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  kind        String
-  label       String
-  sceneMode   String
-  source      String
-  sourceFormat String @default("dat")
+  projectId      String
+  id             String
+  project        BuilderProject                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  kind           String
+  label          String
+  sceneMode      String
+  source         String
+  sourceFormat   String                        @default("dat")
   sourceMimeType String?
-  tags        Json
-  variants    Json
-  approved    Boolean @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  tags           BuilderProjectAssetTag[]
+  variants       BuilderProjectAssetVariant[]
+  approved       Boolean                       @default(false)
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
   animationClips BuilderProjectAnimationClip[]
 
   @@id([projectId, id])
   @@index([projectId])
 }
 
+model BuilderProjectAssetTag {
+  projectId String
+  assetId   String
+  ordinal   Int
+  asset     BuilderProjectAsset @relation(fields: [projectId, assetId], references: [projectId, id], onDelete: Cascade)
+  value     String
+
+  @@id([projectId, assetId, ordinal])
+  @@index([projectId, assetId])
+}
+
+model BuilderProjectAssetVariant {
+  projectId String
+  assetId   String
+  id        String
+  asset     BuilderProjectAsset @relation(fields: [projectId, assetId], references: [projectId, id], onDelete: Cascade)
+  ordinal   Int
+  format    String
+  source    String
+  usage     String
+  mimeType  String?
+
+  @@id([projectId, assetId, id])
+  @@unique([projectId, assetId, ordinal])
+  @@index([projectId, assetId])
+}
+
 model BuilderProjectAnimationClip {
-  projectId    String
-  id           String
-  project      BuilderProject      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assetId      String
-  asset        BuilderProjectAsset @relation(fields: [projectId, assetId], references: [projectId, id], onDelete: Cascade)
-  label        String
-  sceneMode    String
-  stateTag     String
-  playbackFps  Int
-  startFrame   Int
-  frameCount   Int
-  loop         Boolean
-  direction    String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  projectId   String
+  id          String
+  project     BuilderProject      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assetId     String
+  asset       BuilderProjectAsset @relation(fields: [projectId, assetId], references: [projectId, id], onDelete: Cascade)
+  label       String
+  sceneMode   String
+  stateTag    String
+  playbackFps Int
+  startFrame  Int
+  frameCount  Int
+  loop        Boolean
+  direction   String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
 
   @@id([projectId, id])
   @@index([projectId])
@@ -183,118 +610,251 @@ model BuilderProjectAnimationClip {
 model BuilderProjectGenerationJob {
   projectId     String
   id            String
-  project       BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project       BuilderProject                        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   kind          String
   status        String
   prompt        String
   targetId      String?
-  artifactIds   Json
+  artifacts     BuilderProjectGenerationJobArtifact[]
   statusMessage String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime                              @default(now())
+  updatedAt     DateTime                              @updatedAt
 
   @@id([projectId, id])
   @@index([projectId])
+}
+
+model BuilderProjectGenerationJobArtifact {
+  projectId  String
+  jobId      String
+  ordinal    Int
+  artifactId String
+  job        BuilderProjectGenerationJob @relation(fields: [projectId, jobId], references: [projectId, id], onDelete: Cascade)
+
+  @@id([projectId, jobId, ordinal])
+  @@index([projectId, jobId])
 }
 
 model BuilderProjectDialogueGraph {
-  projectId    String
-  id           String
-  project      BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  title        String
-  npcId        String?
-  rootNodeId   String
-  nodes        Json
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  projectId  String
+  id         String
+  project    BuilderProject                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title      String
+  npcId      String?
+  rootNodeId String
+  createdAt  DateTime                          @default(now())
+  updatedAt  DateTime                          @updatedAt
+  nodes      BuilderProjectDialogueGraphNode[]
 
   @@id([projectId, id])
   @@index([projectId])
+}
+
+model BuilderProjectDialogueGraphNode {
+  projectId String
+  graphId   String
+  id        String
+  graph     BuilderProjectDialogueGraph       @relation(fields: [projectId, graphId], references: [projectId, id], onDelete: Cascade)
+  ordinal   Int
+  line      String
+  edges     BuilderProjectDialogueGraphEdge[]
+
+  @@id([projectId, graphId, id])
+  @@unique([projectId, graphId, ordinal])
+  @@index([projectId, graphId])
+}
+
+model BuilderProjectDialogueGraphEdge {
+  projectId          String
+  graphId            String
+  nodeId             String
+  ordinal            Int
+  node               BuilderProjectDialogueGraphNode @relation(fields: [projectId, graphId, nodeId], references: [projectId, graphId, id], onDelete: Cascade)
+  toNodeId           String
+  requiredFlag       String?
+  advanceQuestStepId String?
+
+  @@id([projectId, graphId, nodeId, ordinal])
+  @@index([projectId, graphId, nodeId])
 }
 
 model BuilderProjectQuest {
-  projectId    String
-  id           String
-  project      BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  title        String
-  description  String
-  steps        Json
+  projectId   String
+  id          String
+  project     BuilderProject            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String
+  description String
+  steps       BuilderProjectQuestStep[]
 
   @@id([projectId, id])
   @@index([projectId])
+}
+
+model BuilderProjectQuestStep {
+  projectId   String
+  questId     String
+  id          String
+  quest       BuilderProjectQuest @relation(fields: [projectId, questId], references: [projectId, id], onDelete: Cascade)
+  ordinal     Int
+  title       String
+  description String
+  triggerId   String
+
+  @@id([projectId, questId, id])
+  @@unique([projectId, questId, ordinal])
+  @@index([projectId, questId])
 }
 
 model BuilderProjectTrigger {
-  projectId       String
-  id              String
-  project         BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  label           String
-  event           String
-  sceneId         String?
-  npcId           String?
-  nodeId          String?
-  requiredFlags   Json?
-  setFlags        Json?
-  questId         String?
-  questStepId     String?
+  projectId     String
+  id            String
+  project       BuilderProject                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  label         String
+  event         String
+  sceneId       String?
+  npcId         String?
+  nodeId        String?
+  cutsceneId    String?
+  requiredFlags BuilderProjectTriggerRequiredFlag[]
+  setFlags      BuilderProjectTriggerSetFlag[]
+  questId       String?
+  questStepId   String?
 
   @@id([projectId, id])
   @@index([projectId])
 }
 
+model BuilderProjectTriggerRequiredFlag {
+  projectId   String
+  triggerId   String
+  key         String
+  trigger     BuilderProjectTrigger @relation(fields: [projectId, triggerId], references: [projectId, id], onDelete: Cascade)
+  valueType   String
+  stringValue String?
+  numberValue Float?
+  boolValue   Boolean?
+
+  @@id([projectId, triggerId, key])
+  @@index([projectId, triggerId])
+}
+
+model BuilderProjectTriggerSetFlag {
+  projectId   String
+  triggerId   String
+  key         String
+  trigger     BuilderProjectTrigger @relation(fields: [projectId, triggerId], references: [projectId, id], onDelete: Cascade)
+  valueType   String
+  stringValue String?
+  numberValue Float?
+  boolValue   Boolean?
+
+  @@id([projectId, triggerId, key])
+  @@index([projectId, triggerId])
+}
+
 model BuilderProjectFlag {
-  projectId      String
-  key            String
-  project        BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  label          String
-  initialValue   Json
+  projectId   String
+  key         String
+  project     BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  label       String
+  valueType   String         @default("boolean")
+  stringValue String?
+  numberValue Float?
+  boolValue   Boolean?       @default(false)
 
   @@id([projectId, key])
   @@index([projectId])
 }
 
 model BuilderProjectArtifact {
-  projectId      String
-  id             String
-  project        BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  jobId          String
-  kind           String
-  label          String
-  previewSource  String
-  summary        String
-  mimeType       String?
-  approved       Boolean @default(false)
-  createdAt      DateTime @default(now())
+  projectId     String
+  id            String
+  project       BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  jobId         String
+  kind          String
+  label         String
+  previewSource String
+  summary       String
+  mimeType      String?
+  approved      Boolean        @default(false)
+  createdAt     DateTime       @default(now())
 
   @@id([projectId, id])
   @@index([projectId])
 }
 
 model BuilderProjectAutomationRun {
-  projectId      String
-  id             String
-  project        BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  status         String
-  goal           String
-  steps          Json
-  artifactIds    Json
-  statusMessage  String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  projectId     String
+  id            String
+  project       BuilderProject                        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status        String
+  goal          String
+  steps         BuilderProjectAutomationRunStep[]
+  artifacts     BuilderProjectAutomationRunArtifact[]
+  statusMessage String
+  createdAt     DateTime                              @default(now())
+  updatedAt     DateTime                              @updatedAt
 
   @@id([projectId, id])
   @@index([projectId])
 }
 
+model BuilderProjectAutomationRunStep {
+  projectId      String
+  runId          String
+  id             String
+  run            BuilderProjectAutomationRun @relation(fields: [projectId, runId], references: [projectId, id], onDelete: Cascade)
+  ordinal        Int
+  action         String
+  summary        String
+  status         String
+  evidenceSource String?
+
+  @@id([projectId, runId, id])
+  @@unique([projectId, runId, ordinal])
+  @@index([projectId, runId])
+}
+
+model BuilderProjectAutomationRunArtifact {
+  projectId  String
+  runId      String
+  ordinal    Int
+  artifactId String
+  run        BuilderProjectAutomationRun @relation(fields: [projectId, runId], references: [projectId, id], onDelete: Cascade)
+
+  @@id([projectId, runId, ordinal])
+  @@index([projectId, runId])
+}
+
 model PlayerProgress {
-  id            String      @id @default(cuid())
-  sessionId     String      @unique
-  session       GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  xp            Int         @default(0)
-  level         Int         @default(1)
-  visitedScenes Json
-  interactions  Json
-  updatedAt     DateTime    @updatedAt
+  id            String                       @id @default(cuid())
+  sessionId     String                       @unique
+  session       GameSession                  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  xp            Int                          @default(0)
+  level         Int                          @default(1)
+  visitedScenes PlayerProgressVisitedScene[]
+  interactions  PlayerProgressInteraction[]
+  updatedAt     DateTime                     @updatedAt
+}
+
+model PlayerProgressVisitedScene {
+  sessionId String
+  ordinal   Int
+  sceneId   String
+  progress  PlayerProgress @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+
+  @@id([sessionId, ordinal])
+  @@index([sessionId])
+}
+
+model PlayerProgressInteraction {
+  sessionId     String
+  interactionId String
+  progress      PlayerProgress @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  createdAt     DateTime       @default(now())
+
+  @@id([sessionId, interactionId])
+  @@index([sessionId])
 }
 
 model AiGenerationLog {
@@ -308,4 +868,230 @@ model AiGenerationLog {
   durationMs Int
   locale     String   @default("en-US")
   createdAt  DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Session-scoped: Inventory
+// ---------------------------------------------------------------------------
+
+model GameSessionInventorySlot {
+  sessionId String
+  slotIndex Int
+  session   GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  itemId    String
+  quantity  Int         @default(1)
+
+  @@id([sessionId, slotIndex])
+  @@index([sessionId])
+}
+
+model GameSessionEquipment {
+  sessionId String      @id
+  session   GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  weapon    String?
+  armor     String?
+  accessory String?
+  currency  Int         @default(0)
+}
+
+// ---------------------------------------------------------------------------
+// Session-scoped: Combat
+// ---------------------------------------------------------------------------
+
+model GameSessionCombatState {
+  sessionId        String      @id
+  session          GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  encounterId      String
+  phase            String      @default("intro")
+  turnIndex        Int         @default(0)
+  activeActorIndex Int         @default(0)
+  lootTableId      String?
+  combatLog        String      @default("[]")
+}
+
+model GameSessionCombatant {
+  sessionId      String
+  id             String
+  session        GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  label          String
+  characterKey   String
+  isPlayer       Boolean     @default(false)
+  maxHp          Int
+  hp             Int
+  maxMp          Int         @default(0)
+  mp             Int         @default(0)
+  attack         Int         @default(10)
+  defense        Int         @default(5)
+  magicAttack    Int         @default(0)
+  magicDefense   Int         @default(0)
+  speed          Int         @default(10)
+  critRate       Float       @default(0.05)
+  critMultiplier Float       @default(1.5)
+  alive          Boolean     @default(true)
+  ordinal        Int         @default(0)
+  statusEffects  String      @default("[]")
+
+  @@id([sessionId, id])
+  @@index([sessionId])
+}
+
+// ---------------------------------------------------------------------------
+// Session-scoped: Cutscene
+// ---------------------------------------------------------------------------
+
+model GameSessionCutsceneState {
+  sessionId        String      @id
+  session          GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  cutsceneId       String
+  currentStepIndex Int         @default(0)
+  stepElapsedMs    Int         @default(0)
+  phase            String      @default("playing")
+}
+
+// ---------------------------------------------------------------------------
+// Builder-scoped: Enemy Templates
+// ---------------------------------------------------------------------------
+
+model BuilderProjectEnemyTemplate {
+  projectId      String
+  id             String
+  project        BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  labelKey       String
+  characterKey   String
+  maxHp          Int
+  maxMp          Int            @default(0)
+  attack         Int            @default(10)
+  defense        Int            @default(5)
+  magicAttack    Int            @default(0)
+  magicDefense   Int            @default(0)
+  speed          Int            @default(10)
+  critRate       Float          @default(0.05)
+  critMultiplier Float          @default(1.5)
+  xpReward       Int            @default(10)
+  dropIds        String         @default("[]")
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@id([projectId, id])
+  @@index([projectId])
+}
+
+// ---------------------------------------------------------------------------
+// Builder-scoped: Item Definitions
+// ---------------------------------------------------------------------------
+
+model BuilderProjectItemDefinition {
+  projectId      String
+  id             String
+  project        BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  labelKey       String
+  descriptionKey String
+  rarity         String         @default("common")
+  equipSlot      String?
+  stackable      Boolean        @default(true)
+  maxStack       Int            @default(99)
+  statEffects    String         @default("[]")
+  useEffects     String         @default("[]")
+  sellValue      Int            @default(0)
+  spriteAssetId  String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@id([projectId, id])
+  @@index([projectId])
+}
+
+// ---------------------------------------------------------------------------
+// Builder-scoped: Cutscene Definitions
+// ---------------------------------------------------------------------------
+
+model BuilderProjectCutsceneDefinition {
+  projectId String
+  id        String
+  project   BuilderProject               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  label     String
+  triggerId String?
+  skippable Boolean                      @default(true)
+  steps     BuilderProjectCutsceneStep[]
+  createdAt DateTime                     @default(now())
+  updatedAt DateTime                     @updatedAt
+
+  @@id([projectId, id])
+  @@index([projectId])
+}
+
+model BuilderProjectCutsceneStep {
+  projectId     String
+  cutsceneId    String
+  id            String
+  cutscene      BuilderProjectCutsceneDefinition @relation(fields: [projectId, cutsceneId], references: [projectId, id], onDelete: Cascade)
+  ordinal       Int
+  action        String
+  durationMs    Int                              @default(0)
+  speakerKey    String?
+  dialogueKey   String?
+  entityId      String?
+  animationKey  String?
+  cameraTargetX Float?
+  cameraTargetY Float?
+  flagKey       String?
+  flagValue     String?
+  soundAssetId  String?
+
+  @@id([projectId, cutsceneId, id])
+  @@unique([projectId, cutsceneId, ordinal])
+  @@index([projectId, cutsceneId])
+}
+
+// ---------------------------------------------------------------------------
+// Builder-scoped: Animation Timelines
+// ---------------------------------------------------------------------------
+
+model BuilderProjectAnimationTimeline {
+  projectId  String
+  id         String
+  project    BuilderProject                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assetId    String
+  label      String
+  stateTag   String
+  sceneMode  String                         @default("2d")
+  durationMs Int                            @default(1000)
+  loop       Boolean                        @default(true)
+  tracks     BuilderProjectAnimationTrack[]
+  createdAt  DateTime                       @default(now())
+  updatedAt  DateTime                       @updatedAt
+
+  @@id([projectId, id])
+  @@index([projectId])
+  @@index([projectId, assetId])
+}
+
+model BuilderProjectAnimationTrack {
+  projectId  String
+  timelineId String
+  id         String
+  timeline   BuilderProjectAnimationTimeline @relation(fields: [projectId, timelineId], references: [projectId, id], onDelete: Cascade)
+  property   String
+  keyframes  String                          @default("[]")
+
+  @@id([projectId, timelineId, id])
+  @@index([projectId, timelineId])
+}
+
+// ---------------------------------------------------------------------------
+// Builder-scoped: Sprite Atlases
+// ---------------------------------------------------------------------------
+
+model BuilderProjectSpriteAtlas {
+  projectId   String
+  id          String
+  project     BuilderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  imagePath   String
+  atlasWidth  Int
+  atlasHeight Int
+  frames      String         @default("[]")
+  createdAt   DateTime       @default(now())
+
+  @@id([projectId, id])
+  @@index([projectId])
 }

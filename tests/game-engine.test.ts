@@ -12,6 +12,7 @@ import { gameAssetUrls } from "../src/shared/constants/game-assets.ts";
 import { httpStatus } from "../src/shared/constants/http.ts";
 import { appRoutes } from "../src/shared/constants/routes.ts";
 import type { SceneDefinition } from "../src/shared/contracts/game.ts";
+import { prismaBase } from "../src/shared/services/db.ts";
 
 let app: Awaited<ReturnType<typeof createApp>>;
 const baseUrl = "http://localhost";
@@ -149,6 +150,16 @@ describe("game engine runtime", () => {
     });
     expect(teaMonk?.dialogueEntries[0]?.key).toBe(teaMonkDefinition.ai.greetLineKey);
     expect(teaMonk?.dialogueEntries[0]?.text.length).toBeGreaterThan(0);
+  });
+
+  test("createSession falls back to the canonical default scene when the requested scene is invalid", async () => {
+    const session = await gameLoop.createSession("en-US", "missing-scene-id");
+    managedSessionIds.add(session.sessionId);
+
+    expect(session.state.sceneId).toBe(defaultGameConfig.defaultSceneId);
+    expect(session.state.sceneMode).toBe("2d");
+    expect(session.state.player.position.x).toBeGreaterThan(0);
+    expect(session.state.player.position.y).toBeGreaterThan(0);
   });
 
   test("queued commands advance without a websocket tick owner", async () => {
@@ -500,6 +511,10 @@ describe("game engine runtime", () => {
       10,
     );
     const levelUpAward = await playerProgressStore.awardXp(session.sessionId, 25);
+    const persistedInteractions = await prismaBase.playerProgressInteraction.findMany({
+      where: { sessionId: session.sessionId },
+      orderBy: { interactionId: "asc" },
+    });
 
     expect(firstInteraction).toEqual({
       interactionApplied: true,
@@ -524,6 +539,11 @@ describe("game engine runtime", () => {
       previousLevel: 1,
       leveledUp: true,
     });
+    expect(
+      persistedInteractions.filter(
+        (interaction) => interaction.interactionId === "intro-interaction",
+      ),
+    ).toHaveLength(1);
   });
 });
 
@@ -615,7 +635,8 @@ describe("game engine HTTP contracts", () => {
     expect(secondSave.status).toBe(httpStatus.tooManyRequests);
     expect(payload.ok).toBe(false);
     expect(payload.error?.code).toBe("CONFLICT");
-    expect(payload.error?.message.includes("save-cooldown:")).toBe(true);
+    expect(payload.error?.message.includes("save-cooldown:")).toBe(false);
+    expect(payload.error?.message.includes("Save is cooling down.")).toBe(true);
   });
 
   test("hud stream escapes runtime dialogue content", async () => {
@@ -630,6 +651,7 @@ describe("game engine HTTP contracts", () => {
 
     await gameStateStore.saveSession({
       ...stored.payload,
+      stateVersion: stored.payload.stateVersion + 1,
       scene: {
         ...stored.payload.scene,
         dialogue: {

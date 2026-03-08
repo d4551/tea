@@ -37,6 +37,10 @@ export interface AiRuntimeProfile {
       readonly chatModel: string;
       readonly embeddingModel?: string;
       readonly visionModel?: string;
+      readonly transcriptionModel?: string;
+      readonly speechModel?: string;
+      readonly moderationModel?: string;
+      readonly speechVoice?: string;
     };
     readonly cloud: {
       readonly enabled: boolean;
@@ -45,6 +49,10 @@ export interface AiRuntimeProfile {
       readonly chatModel: string;
       readonly embeddingModel?: string;
       readonly visionModel?: string;
+      readonly transcriptionModel?: string;
+      readonly speechModel?: string;
+      readonly moderationModel?: string;
+      readonly speechVoice?: string;
     };
     readonly defaultPolicy: "local-first";
     readonly cloudFallbackEnabled: boolean;
@@ -87,6 +95,10 @@ export const getAiRuntimeProfile = (): AiRuntimeProfile => ({
       chatModel: appConfig.ai.openAiCompatible.local.chatModel,
       embeddingModel: appConfig.ai.openAiCompatible.local.embeddingModel,
       visionModel: appConfig.ai.openAiCompatible.local.visionModel,
+      transcriptionModel: appConfig.ai.openAiCompatible.local.transcriptionModel,
+      speechModel: appConfig.ai.openAiCompatible.local.speechModel,
+      moderationModel: appConfig.ai.openAiCompatible.local.moderationModel,
+      speechVoice: appConfig.ai.openAiCompatible.local.speechVoice,
     },
     cloud: {
       enabled: appConfig.ai.openAiCompatible.cloud.enabled,
@@ -95,6 +107,10 @@ export const getAiRuntimeProfile = (): AiRuntimeProfile => ({
       chatModel: appConfig.ai.openAiCompatible.cloud.chatModel,
       embeddingModel: appConfig.ai.openAiCompatible.cloud.embeddingModel,
       visionModel: appConfig.ai.openAiCompatible.cloud.visionModel,
+      transcriptionModel: appConfig.ai.openAiCompatible.cloud.transcriptionModel,
+      speechModel: appConfig.ai.openAiCompatible.cloud.speechModel,
+      moderationModel: appConfig.ai.openAiCompatible.cloud.moderationModel,
+      speechVoice: appConfig.ai.openAiCompatible.cloud.speechVoice,
     },
     defaultPolicy: appConfig.ai.routing.defaultPolicy,
     cloudFallbackEnabled: appConfig.ai.routing.cloudFallbackEnabled,

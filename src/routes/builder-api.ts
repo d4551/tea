@@ -900,7 +900,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
             set.headers,
             "VALIDATION_ERROR",
             httpStatus.badRequest,
-            "Missing prompt.",
+            getBuilderMessages(actionLocale).missingPrompt,
           ),
         );
       }
@@ -962,7 +962,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
             set.headers,
             "VALIDATION_ERROR",
             httpStatus.badRequest,
-            "Missing prompt.",
+            getBuilderMessages(actionLocale).missingPrompt,
           ),
         );
       }
@@ -1297,7 +1297,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
             set.headers,
             "VALIDATION_ERROR",
             httpStatus.badRequest,
-            "Missing prompt.",
+            getBuilderMessages(locale).missingPrompt,
           ),
         );
       }
@@ -1405,7 +1405,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
             set.headers,
             "CONFLICT",
             httpStatus.conflict,
-            "Patch plan contains invalid operations.",
+            getBuilderMessages(body.locale).invalidPatchPlan,
             true,
           ),
         );
@@ -2276,7 +2276,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
             set.headers,
             "VALIDATION_ERROR",
             httpStatus.badRequest,
-            "sceneId is required",
+            getBuilderMessages(locale).sceneIdRequired,
           ),
         );
       }

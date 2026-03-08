@@ -141,14 +141,9 @@ const toWorkerFailure = (error: unknown): WorkerFailure => ({
 const runWorkerStep = async <TPayload>(
   step: () => Promise<TPayload>,
 ): Promise<WorkerResult<TPayload>> => {
-  try {
-    return {
-      ok: true,
-      data: await step(),
-    };
-  } catch (error: unknown) {
-    return toWorkerFailure(error);
-  }
+  return step()
+    .then((data) => ({ ok: true as const, data }))
+    .catch((error: unknown) => toWorkerFailure(error));
 };
 
 const probeAutomationOrigin = async (targetUrl: URL): Promise<boolean> => {
@@ -296,7 +291,7 @@ const attemptPlaywrightEvidence = async (
   }
   const browser = browserResult.data;
 
-  try {
+  const processPage = async (): Promise<string | null> => {
     const pageResult = await runWorkerStep(() => browser.newPage());
     if (!pageResult.ok) {
       workerLogger.warn("automation.playwright.page-failed", {
@@ -340,14 +335,18 @@ const attemptPlaywrightEvidence = async (
     }
 
     return persistedResult.data.publicUrl;
-  } finally {
-    const closeResult = await runWorkerStep(() => browser.close());
-    if (!closeResult.ok) {
-      workerLogger.warn("automation.playwright.close-failed", {
-        message: closeResult.error,
-      });
-    }
+  };
+
+  const publicUrl = await processPage();
+
+  const closeResult = await runWorkerStep(() => browser.close());
+  if (!closeResult.ok) {
+    workerLogger.warn("automation.playwright.close-failed", {
+      message: closeResult.error,
+    });
   }
+
+  return publicUrl;
 };
 
 /**

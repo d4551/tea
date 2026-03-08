@@ -1,8 +1,9 @@
-import { createHash } from "node:crypto";
 import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
 import { defaultGameConfig, resolveScene } from "../../shared/config/game-config.ts";
 import type {
+  CutscenePlaybackState,
+  CutsceneStep,
   GameActionState,
   GameCommandEnvelope,
   GameCommandInput,
@@ -27,6 +28,8 @@ import { validateGameCommandInput } from "../../shared/contracts/game.ts";
 import { safeJsonParse } from "../../shared/utils/safe-json.ts";
 import { builderService } from "../builder/builder-service.ts";
 import { generateNpcDialogue } from "./ai/game-ai-service.ts";
+import { combatEngine } from "./combat-engine.ts";
+import { cutsceneEngine } from "./cutscene-engine.ts";
 import { npcAiEngine } from "./npc-ai.ts";
 import { XP_CONFIG } from "./progression.ts";
 import { sceneEngine } from "./scene-engine.ts";
@@ -131,11 +134,9 @@ const hashResumePayload = (
   expiresAtMs: number,
   tokenVersion: number,
 ): string =>
-  createHash("sha256")
-    .update(
-      `${sessionId}:${participantSessionId}:${expiresAtMs}:${tokenVersion}:${resumeTokenSecretMaterial}`,
-    )
-    .digest("base64url");
+  Bun.hash(
+    `${sessionId}:${participantSessionId}:${expiresAtMs}:${tokenVersion}:${resumeTokenSecretMaterial}`,
+  ).toString(36);
 
 const hashInvitePayload = (
   sessionId: string,
@@ -143,9 +144,9 @@ const hashInvitePayload = (
   role: Exclude<GameSessionParticipantRole, "owner">,
   expiresAtMs: number,
 ): string =>
-  createHash("sha256")
-    .update(`${sessionId}:${ownerSessionId}:${role}:${expiresAtMs}:${resumeTokenSecretMaterial}`)
-    .digest("base64url");
+  Bun.hash(
+    `${sessionId}:${ownerSessionId}:${role}:${expiresAtMs}:${resumeTokenSecretMaterial}`,
+  ).toString(36);
 
 const encodeResumeToken = (
   sessionId: string,
@@ -534,6 +535,11 @@ export class GameLoopService {
           this.advanceQuestState(state, trigger.questId, trigger.questStepId) || triggerChanged;
       }
 
+      if (trigger.cutsceneId) {
+        state.cutscene = cutsceneEngine.startCutscene(trigger.cutsceneId);
+        triggerChanged = true;
+      }
+
       changed = triggerChanged || changed;
     }
 
@@ -599,13 +605,25 @@ export class GameLoopService {
         new Map<string, string>()
       ).entries(),
     );
-    const resolvedScene =
-      publishedProject?.scenes.get(sceneId) ??
+    const resolvedScene = publishedProject?.scenes.get(sceneId) ??
       resolveScene(sceneId) ??
-      resolveScene(defaultGameConfig.defaultSceneId);
-    if (!resolvedScene) {
-      throw new Error("Invalid scene");
-    }
+      resolveScene(defaultGameConfig.defaultSceneId) ?? {
+        id: defaultGameConfig.defaultSceneId,
+        sceneMode: "2d",
+        titleKey: "scene.teaHouse.title",
+        background: "",
+        geometry: {
+          width: defaultGameConfig.viewportWidth,
+          height: defaultGameConfig.viewportHeight,
+        },
+        spawn: {
+          x: Math.round(defaultGameConfig.viewportWidth / 2),
+          y: Math.round(defaultGameConfig.viewportHeight / 2),
+        },
+        nodes: [],
+        npcs: [],
+        collisions: [],
+      };
 
     const scene = buildSessionSceneState(
       resolvedScene,
@@ -787,6 +805,15 @@ export class GameLoopService {
       sessionResult.payload.scene.quests?.find((quest) => !quest.completed) ??
       sessionResult.payload.scene.quests?.[0];
 
+    let activeCutsceneStep: CutsceneStep | undefined;
+    if (sessionResult.payload.scene.cutscene) {
+      const state = sessionResult.payload.scene.cutscene;
+      const def = sessionResult.payload.cutsceneDefinitions?.find((c) => c.id === state.cutsceneId);
+      if (def && state.currentStepIndex < def.steps.length) {
+        activeCutsceneStep = def.steps[state.currentStepIndex];
+      }
+    }
+
     return {
       sessionId,
       sceneTitle: sessionResult.payload.scene.sceneTitle,
@@ -798,6 +825,13 @@ export class GameLoopService {
       xp: progress?.xp ?? 0,
       level: progress?.level ?? 1,
       dialogue: sessionResult.payload.scene.dialogue,
+      combat: sessionResult.payload.scene.combat,
+      inventory:
+        sessionResult.payload.scene.actionState === "inventoryOpen"
+          ? sessionResult.payload.scene.inventory
+          : undefined,
+      cutscene: sessionResult.payload.scene.cutscene,
+      activeCutsceneStep,
     };
   }
 
@@ -903,7 +937,9 @@ export class GameLoopService {
       const callbacks = this.tickCallbacks.get(sessionId);
       callbacks?.delete(onSnapshot);
       if ((callbacks?.size ?? 0) === 0 && this.getCommandQueueDepth(sessionId) === 0) {
-        void this.flushSession(sessionId).catch(() => undefined);
+        void this.flushSession(sessionId).catch((error: unknown) => {
+          logger.warn("game-loop.flush.teardown-failed", { sessionId, error: String(error) });
+        });
       }
     };
   }
@@ -1091,7 +1127,9 @@ export class GameLoopService {
       }
 
       this.tickInFlight.add(sessionId);
-      try {
+      this.tickInFlight.add(sessionId);
+
+      const runTick = async (): Promise<void> => {
         const snapshot = await this.tick(sessionId, defaultGameConfig.tickMs);
         if (!snapshot) {
           this._clearTick(sessionId);
@@ -1109,13 +1147,15 @@ export class GameLoopService {
 
         await this.flushSession(sessionId);
         this._clearTick(sessionId);
-      } catch (error) {
+      };
+
+      await runTick().catch(async (error: unknown) => {
         logger.error("tick.failed", {
           sessionId,
           error: String(error),
         });
-        const restored = await this.stateStore.getSession(sessionId);
-        if (restored.ok) {
+        const restored = await this.stateStore.getSession(sessionId).catch(() => null);
+        if (restored?.ok) {
           this.liveSessions.set(sessionId, restored.payload as Mutable<GameSession>);
         }
         if (
@@ -1124,9 +1164,9 @@ export class GameLoopService {
         ) {
           this.scheduleTick(sessionId, defaultGameConfig.tickMs);
         }
-      } finally {
-        this.tickInFlight.delete(sessionId);
-      }
+      });
+
+      this.tickInFlight.delete(sessionId);
     }, delayMs);
 
     this.tickTimeouts.set(sessionId, timeout);
@@ -1494,11 +1534,135 @@ export class GameLoopService {
       } else if (commandType === "retryAction") {
         commandApplied = true;
         nextActionState = "loading";
+      } else if (commandType === "combatAction") {
+        commandApplied = true;
+        if (state.combat && state.combat.phase !== "victory" && state.combat.phase !== "defeat") {
+          const actorId = cmd.action.actorId;
+          const isActorTurn = state.combat.turnOrder[state.combat.activeActorIndex] === actorId;
+
+          if (isActorTurn) {
+            const actor = state.combat.combatants.find((c) => c.id === actorId);
+            const targets = state.combat.combatants.filter((c) =>
+              cmd.action.targetIds.includes(c.id),
+            );
+
+            if (actor && targets.length > 0) {
+              const results = combatEngine.resolveAction(actor, cmd.action, targets);
+              const nextCombatState = combatEngine.applyResultsAndAdvanceTurn(
+                state.combat,
+                results,
+              );
+
+              if (nextCombatState.phase === "victory") {
+                state.combat = undefined;
+                nextActionState = "success";
+                await this.progressStore.awardXp(sessionId, 50); // Give 50 XP for winning combat
+              } else if (nextCombatState.phase === "defeat") {
+                state.combat = undefined;
+                nextActionState = "idle";
+                state.player.position = { x: 50, y: 50 }; // Basic revive/respawn mechanic
+              } else {
+                state.combat = nextCombatState as any;
+                nextActionState = "inCombat";
+              }
+            } else {
+              nextActionState = "error.nonRetryable";
+            }
+          } else {
+            nextActionState = "error.nonRetryable";
+          }
+        } else {
+          nextActionState = "error.nonRetryable";
+        }
+      } else if (commandType === "openInventory") {
+        commandApplied = true;
+        nextActionState = "inventoryOpen";
+      } else if (commandType === "closeInventory") {
+        commandApplied = true;
+        nextActionState = "idle";
+      } else if (commandType === "advanceCutscene") {
+        commandApplied = true;
+        if (state.cutscene) {
+          const def = session.cutsceneDefinitions?.find((c) => c.id === state.cutscene?.cutsceneId);
+          if (def) {
+            const result = cutsceneEngine.handleInput(state.cutscene, def);
+            if (result.type === "completed" || result.type === "skipped") {
+              state.cutscene = undefined;
+              nextActionState = "idle";
+              this.applyMatchingTriggers(
+                state,
+                session.triggerDefinitions ?? [],
+                "cutscene-completed",
+                { sceneId: state.sceneId },
+              );
+            } else {
+              state.cutscene = result.state as any;
+              nextActionState = "inCutscene";
+            }
+          }
+        }
+      } else if (commandType === "skipCutscene") {
+        commandApplied = true;
+        if (state.cutscene) {
+          const def = session.cutsceneDefinitions?.find((c) => c.id === state.cutscene?.cutsceneId);
+          if (def) {
+            const result = cutsceneEngine.skipCutscene(state.cutscene, def);
+            if (result.type === "skipped" || result.type === "completed") {
+              state.cutscene = undefined;
+              nextActionState = "idle";
+              this.applyMatchingTriggers(
+                state,
+                session.triggerDefinitions ?? [],
+                "cutscene-completed",
+                { sceneId: state.sceneId },
+              );
+            } else {
+              state.cutscene = result.state as any;
+              nextActionState = "inCutscene";
+            }
+          }
+        }
       }
     }
 
     if (!commandApplied) {
-      nextActionState = state.dialogue ? "dialogueOpen" : "idle";
+      if (state.dialogue) {
+        nextActionState = "dialogueOpen";
+      } else if (state.actionState === "inventoryOpen") {
+        nextActionState = "inventoryOpen";
+      } else if (state.combat) {
+        nextActionState = "inCombat";
+      } else if (state.cutscene) {
+        nextActionState = "inCutscene";
+      } else {
+        nextActionState = "idle";
+      }
+    }
+
+    if (state.cutscene) {
+      const def = session.cutsceneDefinitions?.find((c) => c.id === state.cutscene?.cutsceneId);
+      if (def) {
+        const result = cutsceneEngine.executeTick(state.cutscene, def, dtMs);
+        if (result.type === "completed" || result.type === "skipped") {
+          state.cutscene = undefined;
+          if (nextActionState === "inCutscene") {
+            nextActionState = "idle";
+          }
+          this.applyMatchingTriggers(
+            state,
+            session.triggerDefinitions ?? [],
+            "cutscene-completed",
+            { sceneId: state.sceneId },
+          );
+        } else {
+          state.cutscene = result.state as any;
+          nextActionState = "inCutscene";
+        }
+      } else {
+        // Fallback if missing definition
+        state.cutscene = undefined;
+        nextActionState = "idle";
+      }
     }
 
     if (state.dialogue === null && nextActionState !== "dialogueOpen") {

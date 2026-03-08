@@ -33,6 +33,7 @@
     "pixi.js": "8.16.0",
     "playwright": "1.58.2",
     "sharp": "0.34.5",
+    "sqlite-vec": "^0.1.7-alpha.2",
     "three": "0.183.2"
   },
   "trustedDependencies": [

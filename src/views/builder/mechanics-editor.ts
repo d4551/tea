@@ -244,7 +244,13 @@ export const renderMechanicsEditor = (
               .map((step) => `<span class="badge badge-outline">${escapeHtml(step.title)}</span>`)
               .join("")}
           </div>
-          <button class="btn btn-outline btn-xs" hx-get="${escapeHtml(questEditHref(quest.id))}" hx-target="#mechanics-detail" hx-swap="innerHTML">${escapeHtml(messages.builder.openDetails)}</button>
+          <button
+            class="btn btn-outline btn-xs"
+            hx-get="${escapeHtml(questEditHref(quest.id))}"
+            hx-target="#mechanics-detail"
+            hx-swap="innerHTML"
+            aria-label="${escapeHtml(messages.builder.openDetails)}: ${escapeHtml(quest.title)}"
+          >${escapeHtml(messages.builder.openDetails)}</button>
         </div>
       </article>`,
     )
@@ -267,7 +273,13 @@ export const renderMechanicsEditor = (
             <span class="badge badge-outline">${escapeHtml(getTriggerEventLabel(messages, trigger.event))}</span>
           </div>
           <p class="text-sm text-base-content/75">${escapeHtml(trigger.sceneId ?? messages.builder.triggerSceneGlobal)}</p>
-          <button class="btn btn-outline btn-xs" hx-get="${escapeHtml(triggerEditHref(trigger.id))}" hx-target="#mechanics-detail" hx-swap="innerHTML">${escapeHtml(messages.builder.openDetails)}</button>
+          <button
+            class="btn btn-outline btn-xs"
+            hx-get="${escapeHtml(triggerEditHref(trigger.id))}"
+            hx-target="#mechanics-detail"
+            hx-swap="innerHTML"
+            aria-label="${escapeHtml(messages.builder.openDetails)}: ${escapeHtml(trigger.label)}"
+          >${escapeHtml(messages.builder.openDetails)}</button>
         </div>
       </article>`,
     )
@@ -294,7 +306,13 @@ export const renderMechanicsEditor = (
                 : ""
             }
           </div>
-          <button class="btn btn-outline btn-xs" hx-get="${escapeHtml(graphEditHref(graph.id))}" hx-target="#mechanics-detail" hx-swap="innerHTML">${escapeHtml(messages.builder.openDetails)}</button>
+          <button
+            class="btn btn-outline btn-xs"
+            hx-get="${escapeHtml(graphEditHref(graph.id))}"
+            hx-target="#mechanics-detail"
+            hx-swap="innerHTML"
+            aria-label="${escapeHtml(messages.builder.openDetails)}: ${escapeHtml(graph.title)}"
+          >${escapeHtml(messages.builder.openDetails)}</button>
         </div>
       </article>`,
     )

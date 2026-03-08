@@ -1,11 +1,4 @@
-import type { Prisma } from "@prisma/client";
 import { prisma } from "../../../shared/services/db.ts";
-
-interface ParsedInteractionMap {
-  readonly [key: string]: boolean;
-}
-
-type MutableInteractionMap = { [key: string]: boolean };
 
 /**
  * Minimal player-progress snapshot required by runtime HUD and progression flows.
@@ -37,41 +30,6 @@ export interface PlayerProgressInteractionResult extends PlayerProgressAwardResu
   readonly interactionApplied: boolean;
 }
 
-const toRecordFromParsed = (value: unknown): ParsedInteractionMap => {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(
-    Object.entries(value).flatMap(([key, entry]) =>
-      typeof key === "string" && typeof entry === "boolean" ? [[key, entry]] : [],
-    ),
-  ) as ParsedInteractionMap;
-};
-
-const parseInteractionMap = (
-  source: Prisma.JsonValue,
-): { readonly map: ParsedInteractionMap; readonly repaired: boolean } => {
-  if (source !== null && typeof source === "object" && !Array.isArray(source)) {
-    return { map: toRecordFromParsed(source), repaired: false };
-  }
-  return { map: {}, repaired: true };
-};
-
-const sanitizeInteractionFlag = (value: unknown): boolean =>
-  typeof value === "boolean" ? value : false;
-
-const rebuildInteractionMap = (raw: ParsedInteractionMap): MutableInteractionMap => {
-  const next: MutableInteractionMap = {};
-  for (const [key, value] of Object.entries(raw)) {
-    if (key.length > 0) {
-      next[key] = sanitizeInteractionFlag(value);
-    }
-  }
-
-  return next;
-};
-
 /**
  * Single persistence owner for player XP, levels, and one-time interaction markers.
  */
@@ -89,8 +47,6 @@ export class PlayerProgressStore {
         sessionId,
         xp: 0,
         level: 1,
-        visitedScenes: [] satisfies Prisma.JsonArray,
-        interactions: {} satisfies Prisma.JsonObject,
       },
     });
   }
@@ -168,17 +124,16 @@ export class PlayerProgressStore {
       };
     }
 
-    const parsed = parseInteractionMap(current.interactions);
-    const interactions = rebuildInteractionMap(parsed.map);
+    const existingInteraction = await prisma.playerProgressInteraction.findUnique({
+      where: {
+        sessionId_interactionId: {
+          sessionId,
+          interactionId,
+        },
+      },
+    });
 
-    if (interactions[interactionId]) {
-      if (parsed.repaired) {
-        await prisma.playerProgress.update({
-          where: { sessionId },
-          data: { interactions },
-        });
-      }
-
+    if (existingInteraction) {
       return {
         interactionApplied: false,
         awarded: false,
@@ -189,10 +144,11 @@ export class PlayerProgressStore {
       };
     }
 
-    interactions[interactionId] = true;
-    await prisma.playerProgress.update({
-      where: { sessionId },
-      data: { interactions },
+    await prisma.playerProgressInteraction.create({
+      data: {
+        sessionId,
+        interactionId,
+      },
     });
 
     const awardResult = await this.awardXp(sessionId, awardAmount);
