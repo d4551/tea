@@ -5,11 +5,14 @@
     "packages/*"
   ],
   "scripts": {
+    "audit:security": "bun audit",
+    "docs:check": "bun run scripts/docs-surface-check.ts",
     "format": "biome format . --write",
     "format:check": "biome format .",
     "dev": "bun run scripts/dev.ts",
     "start": "bun run build:assets && bun src/server.ts",
     "build:assets": "bun run scripts/build-assets.ts",
+    "dependency:drift": "bun run scripts/dependency-drift-check.ts",
     "setup": "bun run scripts/setup.ts",
     "doctor": "bun run scripts/doctor.ts",
     "lint": "biome check .",
@@ -17,7 +20,7 @@
     "test": "bun test",
     "prisma:generate": "bunx --bun prisma generate",
     "prisma:migrate": "bun run scripts/prisma-migrate.ts",
-    "verify": "bun run build:assets && bun run lint && bun run typecheck && bun test"
+    "verify": "bun run build:assets && bun run dependency:drift && bun run docs:check && bun run lint && bun run typecheck && bun test"
   },
   "dependencies": {
     "@elysiajs/static": "1.4.7",
@@ -30,7 +33,7 @@
     "htmx.org": "2.0.8",
     "lotfk-game-contracts": "workspace:*",
     "lotfk-seeded-prng": "workspace:*",
-    "pixi.js": "8.16.0",
+    "pixi.js": "8.17.0",
     "playwright": "1.58.2",
     "sharp": "0.34.5",
     "sqlite-vec": "^0.1.7-alpha.2",

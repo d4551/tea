@@ -5,7 +5,7 @@ import { i18nContextPlugin } from "../plugins/i18n-context.ts";
 import { defaultOracleMode } from "../shared/constants/oracle.ts";
 import { appRoutes, resolveRequestPathWithQuery } from "../shared/constants/routes.ts";
 import type { LayoutContext } from "../views/layout.ts";
-import { type OraclePanelState, renderOraclePanel } from "../views/oracle.ts";
+import { type OraclePanelState, renderOraclePanel, toOraclePanelState } from "../views/oracle.ts";
 import { renderHomePage } from "../views/pages.ts";
 import { parseOracleMode } from "./oracle-input.ts";
 
@@ -60,22 +60,15 @@ export const createPageRoutes = (oracleService: OracleService) =>
                 hasSession: authHasSession,
               });
 
-              oraclePanelState = {
-                ...outcome,
-                mode,
-                question,
-              };
+              oraclePanelState = toOraclePanelState(outcome, mode, question);
             }
 
-            return renderHomePage(
-              {
-                layout: {
-                  ...createRouteLayoutContext(request, locale, messages, "home"),
-                  oraclePanelState,
-                },
+            return renderHomePage({
+              layout: {
+                ...createRouteLayoutContext(request, locale, messages, "home"),
+                oraclePanelState,
               },
-              oraclePanelState,
-            );
+            });
           },
           {
             query: oracleQuerySchema,
@@ -94,11 +87,7 @@ export const createPageRoutes = (oracleService: OracleService) =>
               hasSession: authHasSession,
             });
 
-            const panelState: OraclePanelState = {
-              ...outcome,
-              mode,
-              question,
-            };
+            const panelState: OraclePanelState = toOraclePanelState(outcome, mode, question);
 
             return renderOraclePanel(messages, panelState);
           },

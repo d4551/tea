@@ -1,3 +1,4 @@
+import { appConfig } from "../../config/environment.ts";
 import type {
   AnimationClip,
   BuilderAsset,
@@ -25,7 +26,8 @@ export type BuilderPublishValidationIssueCode =
   | "scene-node-clip-scene-mode-mismatch"
   | "scene-node-clip-asset-mismatch"
   | "animation-clip-asset-missing"
-  | "animation-clip-asset-scene-mode-mismatch";
+  | "animation-clip-asset-scene-mode-mismatch"
+  | "3d-scene-needs-webgpu";
 
 /**
  * Structured publish-validation issue payload.
@@ -51,22 +53,6 @@ export interface BuilderPublishValidationIssue {
   readonly actualSceneMode?: SceneMode;
   /** Optional source format. */
   readonly sourceFormat?: string;
-}
-
-/**
- * Typed publish-validation failure raised by the builder domain.
- */
-export class BuilderPublishValidationError extends Error {
-  /** Ordered validation issues that blocked publish. */
-  public readonly issues: readonly BuilderPublishValidationIssue[];
-
-  /**
-   * @param issues Ordered validation issues that blocked publishing.
-   */
-  public constructor(issues: readonly BuilderPublishValidationIssue[]) {
-    super("Builder publish validation failed.");
-    this.issues = issues;
-  }
 }
 
 const spriteNodeAssetKinds = new Set<BuilderAssetKind>(["sprite-sheet", "portrait", "background"]);
@@ -96,7 +82,7 @@ const validateNodeAssetKind = (
         assetKind: asset.kind,
       };
     }
-    if (!supported3dModelFormats.has(asset.sourceFormat.toLowerCase())) {
+    if (!supported3dModelFormats.has(asset.sourceFormat)) {
       return {
         code: "scene-node-asset-format-unsupported",
         nodeId: node.id,
@@ -243,22 +229,36 @@ const validateAnimationClip = (
 };
 
 /**
+ * Result of publishing validation.
+ */
+export type BuilderPublishValidationResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly issues: readonly BuilderPublishValidationIssue[] };
+
+/**
  * Validates whether a builder project is internally consistent enough to publish.
  *
  * @param state Canonical builder project state.
- * @returns Ordered list of publish-blocking issues.
+ * @returns Result with any publish-blocking issues.
  */
 export const validateBuilderProjectForPublish = (
   state: BuilderProjectState,
-): readonly BuilderPublishValidationIssue[] => {
+): BuilderPublishValidationResult => {
   const scenes = Object.values(state.scenes);
   if (scenes.length === 0) {
-    return [{ code: "no-scenes" }];
+    return { ok: false, issues: [{ code: "no-scenes" }] };
   }
 
   const issues: BuilderPublishValidationIssue[] = [];
 
   for (const scene of scenes) {
+    if (getSceneMode(scene) === "3d" && appConfig.playableGame.rendererPreference !== "webgpu") {
+      issues.push({
+        code: "3d-scene-needs-webgpu",
+        sceneId: scene.id,
+      });
+    }
+
     if (!isPointWithinScene(scene, scene.spawn.x, scene.spawn.y)) {
       issues.push({
         code: "scene-spawn-out-of-bounds",
@@ -283,5 +283,9 @@ export const validateBuilderProjectForPublish = (
     issues.push(...validateAnimationClip(clip, state));
   }
 
-  return issues;
+  if (issues.length > 0) {
+    return { ok: false, issues };
+  }
+
+  return { ok: true };
 };

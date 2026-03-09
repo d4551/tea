@@ -130,18 +130,15 @@ export const renderLayout = (input: LayoutInput): string => {
     <meta name="view-transition" content="same-origin" />
     <title>${escapeHtml(title)} · ${escapeHtml(messages.metadata.appName)}</title>
     <meta name="description" content="${escapeHtml(messages.metadata.appSubtitle)}" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700&display=swap" />
     <link rel="stylesheet" href="${escapeHtml(appConfig.stylesheetPath)}" />
-    <script>/* Theme flash prevention */(function(){try{var t=localStorage.getItem("app-theme-preference");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}})()</script>
     <script src="${escapeHtml(appConfig.htmxScriptPath)}" defer></script>
   </head>
-  <body class="min-h-screen bg-base-100 text-base-content" hx-boost="${boostEnabled}">
+  <body class="min-h-screen bg-base-100 text-base-content antialiased" hx-boost="${boostEnabled}" hx-ext="layout-controls,focus-panel">
     <a
       href="#main-content"
-      class="sr-only z-[100] m-2 inline-flex rounded-md border border-base-content bg-base-100 px-3 py-2 text-sm font-semibold text-base-content focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+      class="sr-only z-[100] m-2 inline-flex items-center gap-2 rounded-lg border-2 border-primary bg-base-100 px-4 py-3 text-sm font-semibold text-primary shadow-lg transition-all duration-200 focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:ring-2 focus:ring-primary focus:ring-offset-2 hover:bg-primary hover:text-primary-content"
     >
+      <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
       ${escapeHtml(messages.common.skipToContent)}
     </a>
     
@@ -158,7 +155,7 @@ export const renderLayout = (input: LayoutInput): string => {
             <!-- Mobile Top Bar & Desktop Breadcrumbs -->
             ${hideTopBar ? "" : renderTopBar(messages, locale, languageSwitch, currentPathWithQuery, breadcrumbs)}
             
-            <main id="main-content" class="${escapeHtml(containerClass)} vt-main flex-1">
+            <main id="main-content" tabindex="-1" class="${escapeHtml(containerClass)} vt-main flex-1">
               ${body}
             </main>
             
@@ -183,6 +180,7 @@ export const renderLayout = (input: LayoutInput): string => {
             class="btn btn-circle btn-primary h-16 w-16 shrink-0 shadow-2xl"
             aria-controls="ai-chat-drawer"
             aria-expanded="false"
+            aria-haspopup="dialog"
             aria-label="${escapeHtml(messages.common.openAiAssistant)}"
             data-drawer-toggle-target="ai-chat-drawer"
             data-drawer-toggle-mode="toggle"
@@ -195,7 +193,7 @@ export const renderLayout = (input: LayoutInput): string => {
       <!-- AI Chat Sidebar (Right) -->
       <div class="drawer-side z-[60]">
         <label for="ai-chat-drawer" aria-label="${escapeHtml(messages.common.closeAiChat)}" class="drawer-overlay"></label>
-        <div class="menu min-h-full w-80 border-l border-base-300 bg-base-100 p-0 text-base-content sm:w-96">
+        <div class="menu min-h-full w-80 border-l border-base-300 bg-base-100 p-0 text-base-content sm:w-96" role="dialog" aria-modal="false" aria-label="${escapeHtml(messages.common.openAiAssistant)}">
           <div class="flex items-center justify-end border-b border-base-300 px-4 py-3">
             <button
               type="button"

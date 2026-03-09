@@ -4,7 +4,6 @@ import { appConfig } from "../src/config/environment.ts";
 import { resetEmbeddingFallback } from "../src/domain/ai/knowledge-base-service.ts";
 import { ProviderRegistry } from "../src/domain/ai/providers/provider-registry.ts";
 import { vectorStore } from "../src/domain/ai/vector-store.ts";
-import { BuilderPublishValidationError } from "../src/domain/builder/builder-publish-validation.ts";
 import { builderService } from "../src/domain/builder/builder-service.ts";
 import { gameLoop } from "../src/domain/game/game-loop.ts";
 import { correlationIdHeader } from "../src/lib/correlation-id.ts";
@@ -1951,12 +1950,17 @@ describe("API contracts", () => {
     ).toBe(true);
     expect(
       payload.data?.capabilities.some(
+        (capability) => capability.key === "releaseFlow" && capability.status === "implemented",
+      ),
+    ).toBe(true);
+    expect(
+      payload.data?.capabilities.some(
         (capability) => capability.key === "runtime2d" && capability.status === "partial",
       ),
     ).toBe(true);
     expect(
       payload.data?.capabilities.some(
-        (capability) => capability.key === "runtime3d" && capability.status === "missing",
+        (capability) => capability.key === "runtime3d" && capability.status === "partial",
       ),
     ).toBe(true);
   });
@@ -2376,11 +2380,12 @@ describe("HTMX partial rendering", () => {
     expect(html.includes("/public/vendor/htmx-ext/oracle-indicator.js")).toBe(false);
     expect(countOccurrences(html, 'data-hud-slot="hud-xp"')).toBe(1);
     expect(html.includes('data-connected-label="connected"')).toBe(true);
-    expect(html.includes('name="game-client-command-send-interval-ms"')).toBe(true);
-    expect(html.includes('name="game-client-command-ttl-ms"')).toBe(true);
-    expect(html.includes('name="game-client-socket-reconnect-delay-ms"')).toBe(true);
-    expect(html.includes('name="game-client-restore-request-timeout-ms"')).toBe(true);
-    expect(html.includes('name="game-client-restore-max-attempts"')).toBe(true);
+    expect(html.includes('id="game-client-bootstrap"')).toBe(true);
+    expect(html.includes('"commandSendIntervalMs"')).toBe(true);
+    expect(html.includes('"commandTtlMs"')).toBe(true);
+    expect(html.includes('"socketReconnectDelayMs"')).toBe(true);
+    expect(html.includes('"restoreRequestTimeoutMs"')).toBe(true);
+    expect(html.includes('"restoreMaxAttempts"')).toBe(true);
     expect(html.includes('hx-boost="false"')).toBe(true);
     expect(countOccurrences(html, 'id="main-content"')).toBe(1);
     expect(html.includes('role="img"')).toBe(false);
@@ -2582,16 +2587,11 @@ describe("HTMX partial rendering", () => {
       assetId: "missing-asset",
     });
 
-    let publishError: unknown = null;
-    try {
-      await builderService.publishProject(projectId, true);
-    } catch (error) {
-      publishError = error;
-    }
+    const publishResult = await builderService.publishProject(projectId, true);
 
-    expect(publishError).toBeInstanceOf(BuilderPublishValidationError);
-    if (publishError instanceof BuilderPublishValidationError) {
-      expect(publishError.issues.some((issue) => issue.code === "scene-node-asset-missing")).toBe(
+    expect(publishResult?.ok).toBe(false);
+    if (publishResult && !publishResult.ok) {
+      expect(publishResult.issues.some((issue) => issue.code === "scene-node-asset-missing")).toBe(
         true,
       );
     }
@@ -2817,26 +2817,15 @@ describe("HTMX partial rendering", () => {
     );
     const generationHtml = await generationResponse.text();
     expect(generationResponse.status).toBe(httpStatus.ok);
-    expect(generationHtml.includes("Queued")).toBe(true);
-    await builderService.processQueuedWork(projectId);
-    const refreshedAssetsResponse = await app.handle(
-      new Request(
-        toUrl(
-          withQueryParameters(appRoutes.builderAssets, {
-            projectId,
-            locale: "en-US",
-          }),
-        ),
-      ),
-    );
-    const refreshedAssetsHtml = await refreshedAssetsResponse.text();
-    expect(refreshedAssetsResponse.status).toBe(httpStatus.ok);
-    expect(refreshedAssetsHtml.includes("Awaiting approval")).toBe(true);
-    expect(refreshedAssetsHtml.includes("Review Portrait")).toBe(true);
-    expect(refreshedAssetsHtml.includes("Generated draft for")).toBe(true);
-    expect(refreshedAssetsHtml.includes("generation.artifact.label.review:portrait")).toBe(false);
-    expect(refreshedAssetsHtml.includes("generation.artifact.summary.target:")).toBe(false);
-    const generationJobIdMatch = refreshedAssetsHtml.match(/generation-jobs\/([^/"?]+)\/approve/);
+
+    // Job evaluates synchronously now, so we skip the Queued check
+    // and immediately see the generated draft awaiting approval in the response HTML.
+    expect(generationHtml.includes("Awaiting approval")).toBe(true);
+    expect(generationHtml.includes("Review Portrait")).toBe(true);
+    expect(generationHtml.includes("Generated draft for")).toBe(true);
+    expect(generationHtml.includes("generation.artifact.label.review:portrait")).toBe(false);
+    expect(generationHtml.includes("generation.artifact.summary.target:")).toBe(false);
+    const generationJobIdMatch = generationHtml.match(/generation-jobs\/([^/"?]+)\/approve/);
     expect(generationJobIdMatch).not.toBeNull();
     const generationJobId = generationJobIdMatch?.[1];
     expect(generationJobId).toBeDefined();

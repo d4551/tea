@@ -1,3 +1,19 @@
+import { createLogger } from "../lib/logger.ts";
+import {
+  readLocalStorageResult,
+  writeLocalStorageResult,
+} from "../shared/utils/browser-storage.ts";
+import { getHtmx, type HtmxLifecycleEvent, resolveExtensionElement } from "./shared.ts";
+
+const logger = createLogger("layout-controls");
+const htmx = getHtmx();
+
+/** Default request synchronization policy for interactive forms. */
+const FORM_SYNC_DEFAULT = "this:abort";
+
+/** Standard interactive form submission methods handled by HTMX. */
+const FORM_METHOD_ATTRS = ["hx-get", "hx-post", "hx-put", "hx-delete", "hx-patch"] as const;
+
 interface DrawerToggleControl extends HTMLElement {
   readonly dataset: DOMStringMap & {
     readonly drawerToggleTarget?: string;
@@ -6,13 +22,41 @@ interface DrawerToggleControl extends HTMLElement {
 }
 
 const drawerToggleSelector = "[data-drawer-toggle-target]";
+const themeStorageKey = "app-theme-preference";
+
+const resolveFocusTarget = (root: ParentNode): HTMLElement | null => {
+  const panelTarget =
+    root instanceof Element ? root.querySelector<HTMLElement>('[data-focus-panel="true"]') : null;
+  if (panelTarget instanceof HTMLElement) {
+    return panelTarget;
+  }
+
+  const target = document.getElementById("main-content");
+  if (!(target instanceof HTMLElement)) {
+    return null;
+  }
+
+  return target;
+};
+
+const focusAfterSwap = (root: ParentNode): void => {
+  const target = resolveFocusTarget(root);
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  if (!target.hasAttribute("tabindex")) {
+    target.setAttribute("tabindex", "-1");
+  }
+
+  target.focus({ preventScroll: false });
+};
 
 const resolveDrawerToggle = (targetId: string): HTMLInputElement | null => {
   const element = document.getElementById(targetId);
   if (!(element instanceof HTMLInputElement) || element.type !== "checkbox") {
     return null;
   }
-
   return element;
 };
 
@@ -58,6 +102,173 @@ const syncAllDrawerControls = (): void => {
   }
 };
 
+const parseThemeValue = (themeInput: unknown): string | null => {
+  if (typeof themeInput !== "string") {
+    return null;
+  }
+
+  const value = themeInput.trim();
+  return value.length > 0 ? value : null;
+};
+
+const findThemeRadio = (theme: string): HTMLInputElement | null => {
+  const escapedTheme = CSS.escape(theme);
+  return document.querySelector<HTMLInputElement>(
+    `input.theme-controller[value="${escapedTheme}"]`,
+  );
+};
+
+const applyThemeFromStorage = (theme: string): void => {
+  const radio = findThemeRadio(theme);
+  if (!radio) {
+    logger.warn("layout.theme.radio.missing", { theme });
+    return;
+  }
+
+  if (!radio.checked) {
+    radio.checked = true;
+    radio.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+};
+
+/** Restores persisted theme preference from localStorage into matching radios. */
+const restoreThemeSelection = (): void => {
+  const stored = readLocalStorageResult(themeStorageKey);
+  if (!stored.ok) {
+    logger.warn("layout.theme.storage.read_failed", { key: themeStorageKey });
+    return;
+  }
+
+  const storedTheme = parseThemeValue(stored.value);
+  if (!storedTheme) {
+    return;
+  }
+
+  applyThemeFromStorage(storedTheme);
+};
+
+const persistThemeSelection = (event: Event): void => {
+  if (
+    !(event.target instanceof HTMLInputElement) ||
+    !event.target.classList.contains("theme-controller")
+  ) {
+    return;
+  }
+
+  const theme = parseThemeValue(event.target.value);
+  if (!theme) {
+    return;
+  }
+
+  const result = writeLocalStorageResult(themeStorageKey, theme);
+  if (!result.ok) {
+    logger.warn("layout.theme.storage.write_failed", {
+      key: themeStorageKey,
+      theme,
+    });
+  }
+};
+
+const isInteractiveForm = (element: Element): element is HTMLFormElement =>
+  FORM_METHOD_ATTRS.some((attribute) => element.hasAttribute(attribute));
+
+const resolveForms = (root: ParentNode): readonly HTMLFormElement[] =>
+  Array.from(root.querySelectorAll("form")).filter(isInteractiveForm);
+
+const applyFormDefaults = (root: ParentNode): void => {
+  for (const form of resolveForms(root)) {
+    if (!form.hasAttribute("hx-sync")) {
+      form.setAttribute("hx-sync", FORM_SYNC_DEFAULT);
+    }
+
+    if (!form.hasAttribute("hx-disabled-elt")) {
+      form.setAttribute("hx-disabled-elt", "button, input, select, textarea, details");
+    }
+  }
+};
+
+const resolveRequestForm = (event: Event): HTMLFormElement | null => {
+  const detailElement =
+    event instanceof CustomEvent
+      ? event.detail?.elt instanceof Element
+        ? event.detail.elt
+        : null
+      : null;
+  const extensionElement =
+    resolveExtensionElement(event as HtmxLifecycleEvent) ??
+    detailElement ??
+    (event.target as Element | null);
+
+  if (!extensionElement) {
+    return null;
+  }
+
+  return extensionElement instanceof HTMLFormElement
+    ? extensionElement
+    : extensionElement.closest("form");
+};
+
+const setRequestBusyState = (form: HTMLFormElement | null, busy: boolean): void => {
+  if (!(form instanceof HTMLElement)) {
+    return;
+  }
+
+  if (busy) {
+    form.setAttribute("aria-busy", "true");
+    return;
+  }
+
+  form.removeAttribute("aria-busy");
+};
+
+const wireHtmxLifecycle = (): void => {
+  if (!htmx) {
+    applyFormDefaults(document);
+    return;
+  }
+
+  htmx.defineExtension("layout-controls", {
+    onEvent(name, event) {
+      const requestForm = resolveRequestForm(event as Event);
+
+      if (name === "htmx:beforeRequest") {
+        setRequestBusyState(requestForm, true);
+        return;
+      }
+
+      if (
+        name === "htmx:afterRequest" ||
+        name === "htmx:responseError" ||
+        name === "htmx:sendError" ||
+        name === "htmx:swapError"
+      ) {
+        setRequestBusyState(requestForm, false);
+        return;
+      }
+
+      if (name === "htmx:beforeSwap" && event instanceof CustomEvent) {
+        const status = event.detail?.xhr?.status;
+        if (status === 422) {
+          event.detail.shouldSwap = true;
+          event.detail.isError = false;
+        }
+        return;
+      }
+
+      if (name === "htmx:afterSwap") {
+        const target = resolveExtensionElement(event as HtmxLifecycleEvent);
+        const scope = target instanceof Element ? target : document;
+        applyFormDefaults(scope);
+      }
+
+      if (name === "htmx:afterSettle") {
+        const target = resolveExtensionElement(event as HtmxLifecycleEvent);
+        focusAfterSwap(target instanceof Element ? target : document);
+      }
+    },
+  });
+};
+
 document.addEventListener("click", (event) => {
   const control = (
     event.target instanceof Element
@@ -73,6 +284,8 @@ document.addEventListener("click", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  persistThemeSelection(event);
+
   if (!(event.target instanceof HTMLInputElement) || event.target.type !== "checkbox") {
     return;
   }
@@ -99,63 +312,15 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+wireHtmxLifecycle();
+
 document.addEventListener("DOMContentLoaded", () => {
   syncAllDrawerControls();
+  restoreThemeSelection();
+  applyFormDefaults(document);
 });
 
 document.addEventListener("htmx:afterSwap", () => {
   syncAllDrawerControls();
+  restoreThemeSelection();
 });
-
-// ── Theme persistence ────────────────────────────────────────────────────────
-
-const themeStorageKey = "app-theme-preference";
-
-/**
- * Persists the selected theme to localStorage when a theme-controller changes.
- */
-const persistThemeSelection = (event: Event): void => {
-  if (
-    !(event.target instanceof HTMLInputElement) ||
-    !event.target.classList.contains("theme-controller")
-  ) {
-    return;
-  }
-
-  const theme = event.target.value;
-  // SAFETY: localStorage writes can throw when quota is exceeded or storage is blocked.
-  try {
-    localStorage.setItem(themeStorageKey, theme);
-  } catch {
-    /* silently ignore storage failures */
-  }
-};
-
-/**
- * Restores the persisted theme selection to the matching radio input.
- */
-const restoreThemeSelection = (): void => {
-  // SAFETY: localStorage access can throw when browser privacy settings block site data.
-  let savedTheme: string | null = null;
-  try {
-    savedTheme = localStorage.getItem(themeStorageKey);
-  } catch {
-    /* silently ignore storage failures */
-  }
-
-  if (!savedTheme) {
-    return;
-  }
-
-  const radio = document.querySelector<HTMLInputElement>(
-    `input.theme-controller[value="${CSS.escape(savedTheme)}"]`,
-  );
-  if (radio && !radio.checked) {
-    radio.checked = true;
-    radio.dispatchEvent(new Event("change", { bubbles: true }));
-  }
-};
-
-document.addEventListener("change", persistThemeSelection);
-document.addEventListener("DOMContentLoaded", restoreThemeSelection);
-document.addEventListener("htmx:afterSwap", restoreThemeSelection);

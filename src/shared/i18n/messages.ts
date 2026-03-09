@@ -251,6 +251,7 @@ export interface Messages {
     readonly invalidPatchPlan: string;
     readonly publishValidationFailed: string;
     readonly publishValidationNoScenes: string;
+    readonly publishValidation3dSceneNeedsWebgpu: string;
     readonly publishValidationSceneSpawnOutOfBounds: string;
     readonly publishValidationSceneNpcOutOfBounds: string;
     readonly publishValidationNodeAssetMissing: string;
@@ -368,6 +369,7 @@ export interface Messages {
     readonly projectLastUpdated: string;
     readonly projectStatusDraft: string;
     readonly projectStatusPublished: string;
+    readonly versionPrefix: string;
     readonly projectStatusUnpublished: string;
     readonly createProject: string;
     readonly switchProject: string;
@@ -447,11 +449,15 @@ export interface Messages {
     readonly assetKindBackground: string;
     readonly assetKindModel: string;
     readonly assetKindAudio: string;
+    readonly assetKindDocument: string;
     readonly generationKindPortrait: string;
     readonly generationKindSpriteSheet: string;
     readonly generationKindTiles: string;
     readonly generationKindVoiceLine: string;
     readonly generationKindAnimationPlan: string;
+    readonly generationKindCombatEncounter: string;
+    readonly generationKindItemSet: string;
+    readonly generationKindCutsceneScript: string;
     readonly triggerEventLabel: string;
     readonly triggerEventSceneEnter: string;
     readonly triggerEventNpcInteract: string;
@@ -640,6 +646,23 @@ export interface Messages {
     readonly missingCountLabel: string;
     readonly sceneBaselineCountLabel: string;
     readonly spriteManifestCountLabel: string;
+    readonly draftVersionLabel: string;
+    readonly latestReleaseLabel: string;
+    readonly publishedReleaseLabel: string;
+    readonly sceneNodeCountLabel: string;
+    readonly collisionMaskCountLabel: string;
+    readonly modelAssetCountLabel: string;
+    readonly openUsdAssetCountLabel: string;
+    readonly animationTimelineCountLabel: string;
+    readonly dialogueGraphCountLabel: string;
+    readonly questCountLabel: string;
+    readonly triggerCountLabel: string;
+    readonly flagCountLabel: string;
+    readonly generationJobCountLabel: string;
+    readonly automationRunCountLabel: string;
+    readonly automationStepCountLabel: string;
+    readonly artifactCountLabel: string;
+    readonly providerCountLabel: string;
     readonly capabilityReleaseFlowTitle: string;
     readonly capabilityReleaseFlowDescription: string;
     readonly capability2dRuntimeTitle: string;
@@ -662,6 +685,67 @@ export interface Messages {
     readonly capabilityAiOnnxGpuDescription: string;
   };
 }
+
+type IsRecord<T> =
+  T extends Record<string, unknown> ? (T extends readonly unknown[] ? false : true) : false;
+type InternalMessageKey<T, TPrefix extends string = ""> = T extends string
+  ? TPrefix
+  : IsRecord<T> extends true
+    ? {
+        [K in Extract<keyof T, string>]: InternalMessageKey<
+          T[K],
+          `${TPrefix}${TPrefix extends "" ? "" : "."}${K}`
+        >;
+      }[Extract<keyof T, string>]
+    : never;
+
+/**
+ * Strictly typed message key union for user-facing strings.
+ */
+export type TranslatedMessageKey = InternalMessageKey<Messages>;
+
+/**
+ * Locale-aware string resolution for strict template rendering.
+ */
+export interface MessageLookupOptions {
+  /** Optional message suffix added when a lookup key is missing. */
+  readonly missingValueFallback?: string;
+}
+
+/**
+ * Resolves a typed message key for a resolved message catalog.
+ *
+ * @param messages Localized message catalog.
+ * @param key Typed message key.
+ * @param options Optional fallback options.
+ * @returns Human-readable message for the key.
+ */
+export const translateMessage = (
+  messages: Messages,
+  key: TranslatedMessageKey,
+  options: MessageLookupOptions = {},
+): string => {
+  const keyPath = String(key);
+  const parts = keyPath.split(".");
+  let current: unknown = messages;
+  for (const part of parts) {
+    if (typeof current !== "object" || current === null) {
+      return options.missingValueFallback ?? keyPath;
+    }
+
+    if (!(part in current)) {
+      return options.missingValueFallback ?? keyPath;
+    }
+
+    current = (current as Record<string, unknown>)[part];
+  }
+
+  if (typeof current !== "string") {
+    return options.missingValueFallback ?? keyPath;
+  }
+
+  return current;
+};
 
 /**
  * Translation table keyed by locale.
@@ -941,6 +1025,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       invalidPatchPlan: "Patch plan contains invalid operations",
       publishValidationFailed: "Publish blocked until builder validation passes.",
       publishValidationNoScenes: "Add at least one scene before publishing.",
+      publishValidation3dSceneNeedsWebgpu:
+        "Scene {sceneId} requires the WebGPU renderer preference.",
       publishValidationSceneSpawnOutOfBounds:
         "Scene {sceneId} places the player spawn outside scene bounds.",
       publishValidationSceneNpcOutOfBounds:
@@ -1077,6 +1163,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       projectLastUpdated: "Last updated",
       projectStatusDraft: "Draft only",
       projectStatusPublished: "Published",
+      versionPrefix: "v",
       projectStatusUnpublished: "Unpublished",
       createProject: "Create project",
       switchProject: "Switch project",
@@ -1095,7 +1182,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       speechToTextLabel: "Speech to Text",
       speechSynthesisLabel: "Text to Speech",
       voicePreviewTitle: "Voice Preview",
-      voicePreviewDescription: "Test speech synthesis and transcription capabilities using the configured AI providers.",
+      voicePreviewDescription:
+        "Test speech synthesis and transcription capabilities using the configured AI providers.",
       synthesizeTextPlaceholder: "Enter text to synthesize...",
       synthesizeSubmit: "Synthesize",
       transcribeSubmit: "Transcribe",
@@ -1157,11 +1245,15 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       assetKindBackground: "Background",
       assetKindModel: "3D model",
       assetKindAudio: "Audio",
+      assetKindDocument: "Document",
       generationKindPortrait: "Portrait",
       generationKindSpriteSheet: "Sprite sheet",
       generationKindTiles: "Tiles",
       generationKindVoiceLine: "Voice line",
       generationKindAnimationPlan: "Animation plan",
+      generationKindCombatEncounter: "Combat encounter",
+      generationKindItemSet: "Item set",
+      generationKindCutsceneScript: "Cutscene script",
       triggerEventLabel: "Trigger event",
       triggerEventSceneEnter: "Scene enter",
       triggerEventNpcInteract: "NPC interact",
@@ -1372,6 +1464,23 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       missingCountLabel: "Missing",
       sceneBaselineCountLabel: "Baseline scenes",
       spriteManifestCountLabel: "Sprite manifests",
+      draftVersionLabel: "Draft version",
+      latestReleaseLabel: "Latest release",
+      publishedReleaseLabel: "Published release",
+      sceneNodeCountLabel: "Scene nodes",
+      collisionMaskCountLabel: "Collision masks",
+      modelAssetCountLabel: "Model assets",
+      openUsdAssetCountLabel: "OpenUSD assets",
+      animationTimelineCountLabel: "Timelines",
+      dialogueGraphCountLabel: "Dialogue graphs",
+      questCountLabel: "Quests",
+      triggerCountLabel: "Triggers",
+      flagCountLabel: "Flags",
+      generationJobCountLabel: "Generation jobs",
+      automationRunCountLabel: "Automation runs",
+      automationStepCountLabel: "Automation steps",
+      artifactCountLabel: "Artifacts",
+      providerCountLabel: "Providers",
       capabilityReleaseFlowTitle: "Release flow",
       capabilityReleaseFlowDescription:
         "Projects can be authored, published into immutable releases, and opened in the player against a project-bound build.",
@@ -1660,6 +1769,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       invalidPatchPlan: "补丁方案包含无效操作",
       publishValidationFailed: "发布已被阻止，必须先通过构建器校验。",
       publishValidationNoScenes: "发布前至少需要一个场景。",
+      publishValidation3dSceneNeedsWebgpu: "场景 {sceneId} 需要优先使用 WebGPU 渲染器。",
       publishValidationSceneSpawnOutOfBounds: "场景 {sceneId} 的玩家出生点超出了场景边界。",
       publishValidationSceneNpcOutOfBounds: "场景 {sceneId} 中的 NPC {npcId} 超出了场景边界。",
       publishValidationNodeAssetMissing:
@@ -1789,6 +1899,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       projectLastUpdated: "最近更新",
       projectStatusDraft: "仅草稿",
       projectStatusPublished: "已发布",
+      versionPrefix: "v",
       projectStatusUnpublished: "未发布",
       createProject: "创建项目",
       switchProject: "切换项目",
@@ -1868,11 +1979,15 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       assetKindBackground: "背景",
       assetKindModel: "3D 模型",
       assetKindAudio: "音频",
+      assetKindDocument: "文档",
       generationKindPortrait: "立绘",
       generationKindSpriteSheet: "精灵表",
       generationKindTiles: "地块",
       generationKindVoiceLine: "语音台词",
       generationKindAnimationPlan: "动画方案",
+      generationKindCombatEncounter: "战斗遭遇战",
+      generationKindItemSet: "物品集",
+      generationKindCutsceneScript: "过场动画脚本",
       triggerEventLabel: "触发事件",
       triggerEventSceneEnter: "进入场景",
       triggerEventNpcInteract: "与 NPC 互动",
@@ -2066,6 +2181,23 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       missingCountLabel: "缺失",
       sceneBaselineCountLabel: "基线场景数",
       spriteManifestCountLabel: "精灵清单数",
+      draftVersionLabel: "草稿版本",
+      latestReleaseLabel: "最新版本",
+      publishedReleaseLabel: "已发布版本",
+      sceneNodeCountLabel: "场景节点",
+      collisionMaskCountLabel: "碰撞遮罩",
+      modelAssetCountLabel: "模型资源",
+      openUsdAssetCountLabel: "OpenUSD 资源",
+      animationTimelineCountLabel: "时间轴",
+      dialogueGraphCountLabel: "对话图",
+      questCountLabel: "任务",
+      triggerCountLabel: "触发器",
+      flagCountLabel: "标记",
+      generationJobCountLabel: "生成任务",
+      automationRunCountLabel: "自动化运行",
+      automationStepCountLabel: "自动化步骤",
+      artifactCountLabel: "产物",
+      providerCountLabel: "提供器",
       capabilityReleaseFlowTitle: "发布链路",
       capabilityReleaseFlowDescription:
         "项目已经可以创作、发布为不可变版本，并在玩家视图中按项目进入已发布构建。",

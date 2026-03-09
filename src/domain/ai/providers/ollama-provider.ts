@@ -8,6 +8,16 @@
 
 import { appConfig } from "../../../config/environment.ts";
 import { createLogger } from "../../../lib/logger.ts";
+import {
+  createHttpExternalFailure,
+  type ExternalBoundaryResult,
+  type ExternalFailure,
+  externalFailure,
+  externalSuccess,
+  toExternalFailure,
+  toRetryableError,
+} from "../../../shared/contracts/external-boundary.ts";
+import { readJsonResponse, settleAsync } from "../../../shared/utils/async-result.ts";
 import { safeJsonParse } from "../../../shared/utils/safe-json.ts";
 import type {
   AiCapability,
@@ -276,6 +286,16 @@ const detectModelCapabilities = (
   return caps;
 };
 
+const logBoundaryFailure = (event: string, failure: ExternalFailure): void => {
+  logger.warn(event, {
+    operation: failure.operation ?? "unknown",
+    code: failure.code,
+    retryable: failure.retryable,
+    statusCode: failure.statusCode ?? null,
+    message: failure.message,
+  });
+};
+
 /**
  * Ollama provider implementation using the local REST API.
  */
@@ -306,17 +326,105 @@ export class OllamaProvider implements AiProvider {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), appConfig.ai.ollamaTimeoutMs);
 
-    const response = await this.fetchImpl(url, {
-      ...options,
-      signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
-    });
+    try {
+      return await this.fetchImpl(url, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          ...options.headers,
+        },
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
 
-    clearTimeout(timeoutId);
-    return response;
+  /**
+   * Executes an Ollama request into the shared external-boundary result contract.
+   *
+   * @param path API path (for example `/api/chat`).
+   * @param operation Logical operation label.
+   * @param options Fetch options.
+   * @returns Fetch response result.
+   */
+  private async ollamaFetchResult(
+    path: string,
+    operation: string,
+    options: RequestInit = {},
+  ): Promise<ExternalBoundaryResult<Response>> {
+    const response = await settleAsync(this.ollamaFetch(path, options));
+    if (!response.ok) {
+      return externalFailure(
+        toExternalFailure({
+          source: "provider",
+          error: response.error,
+          provider: this.name,
+          operation,
+          fallbackCode: "network",
+        }),
+      );
+    }
+
+    return externalSuccess(response.value);
+  }
+
+  /**
+   * Reads and validates a JSON payload from an Ollama response.
+   *
+   * @template TPayload Parsed payload type.
+   * @param operation Logical operation label.
+   * @param response HTTP response.
+   * @param parser Payload parser.
+   * @param invalidMessage User-facing invalid-payload message.
+   * @returns Parsed response result.
+   */
+  private async readParsedJsonResponse<TPayload>(
+    operation: string,
+    response: Response,
+    parser: (value: unknown) => TPayload | null,
+    invalidMessage: string,
+  ): Promise<ExternalBoundaryResult<TPayload>> {
+    if (!response.ok) {
+      return externalFailure(
+        createHttpExternalFailure({
+          source: "provider",
+          response,
+          provider: this.name,
+          operation,
+          message: `Ollama provider returned HTTP ${response.status}`,
+        }),
+      );
+    }
+
+    const responseJson = await readJsonResponse<unknown>(response);
+    if (!responseJson.ok) {
+      return externalFailure(
+        toExternalFailure({
+          source: "provider",
+          error: responseJson.error,
+          provider: this.name,
+          operation,
+          message: invalidMessage,
+          fallbackCode: "invalid-response",
+          retryable: true,
+        }),
+      );
+    }
+
+    const payload = parser(responseJson.value);
+    if (!payload) {
+      return externalFailure({
+        source: "provider",
+        code: "invalid-response",
+        message: invalidMessage,
+        retryable: true,
+        provider: this.name,
+        operation,
+      });
+    }
+
+    return externalSuccess(payload);
   }
 
   /**
@@ -335,12 +443,14 @@ export class OllamaProvider implements AiProvider {
       appConfig.ai.ollamaAvailabilityTimeoutMs,
     );
 
-    const response = await this.fetchImpl(appConfig.ai.ollamaBaseUrl, {
-      signal: controller.signal,
-    }).catch(() => null);
+    const response = await settleAsync(
+      this.fetchImpl(appConfig.ai.ollamaBaseUrl, {
+        signal: controller.signal,
+      }),
+    );
 
     clearTimeout(timeoutId);
-    const available = response?.ok ?? false;
+    const available = response.ok && response.value.ok;
     if (!available) {
       this._lastFailureMs = Date.now();
       this._consecutiveFailures += 1;
@@ -386,30 +496,47 @@ export class OllamaProvider implements AiProvider {
       return this._cachedCapabilities;
     }
 
-    const response = await this.ollamaFetch("/api/tags").catch(() => null);
-    if (!response?.ok) {
-      logger.warn("ollama.tags.failed", {
-        status: response?.status ?? "unreachable",
-      });
+    const response = await this.ollamaFetchResult("/api/tags", "detect-capabilities");
+    if (!response.ok) {
+      logBoundaryFailure("ollama.tags.failed", response.failure);
       this._consecutiveFailures += 1;
       this._lastFailureMs = Date.now();
       return [];
     }
 
-    const data = parseOllamaTagsResponse(await response.json());
+    const dataResult = await this.readParsedJsonResponse(
+      "detect-capabilities",
+      response.data,
+      (value) => parseOllamaTagsResponse(value),
+      "Ollama tags response payload is invalid",
+    );
+    if (!dataResult.ok) {
+      logBoundaryFailure("ollama.tags.failed", dataResult.failure);
+      this._consecutiveFailures += 1;
+      this._lastFailureMs = Date.now();
+      return [];
+    }
 
     const capabilities: AiModelCapabilities[] = [];
 
-    for (const entry of data) {
+    for (const entry of dataResult.data) {
       let showData: OllamaShowResponse | null = null;
 
-      const showResponse = await this.ollamaFetch("/api/show", {
+      const showResponse = await this.ollamaFetchResult("/api/show", "show-model", {
         method: "POST",
         body: JSON.stringify({ name: entry.name }),
-      }).catch(() => null);
+      });
 
-      if (showResponse?.ok) {
-        showData = parseOllamaShowResponse(await showResponse.json());
+      if (showResponse.ok && showResponse.data.ok) {
+        const showPayload = await this.readParsedJsonResponse(
+          "show-model",
+          showResponse.data,
+          parseOllamaShowResponse,
+          "Ollama show-model payload is invalid",
+        );
+        if (showPayload.ok) {
+          showData = showPayload.data;
+        }
       }
 
       const caps = detectModelCapabilities(entry, showData);
@@ -464,7 +591,7 @@ export class OllamaProvider implements AiProvider {
       })),
     ];
 
-    const response = await this.ollamaFetch("/api/chat", {
+    const response = await this.ollamaFetchResult("/api/chat", "chat", {
       method: "POST",
       body: JSON.stringify({
         model,
@@ -476,33 +603,26 @@ export class OllamaProvider implements AiProvider {
         },
         keep_alive: `${appConfig.ai.ollamaKeepAliveMs}ms`,
       }),
-    }).catch((err: unknown) => {
-      logger.error("ollama.chat.fetch.failed", { error: String(err) });
-      return null;
     });
 
-    if (!response?.ok) {
-      const errorBody = response ? await response.text().catch(() => "unknown") : "unreachable";
-      return {
-        ok: false,
-        error: `Ollama chat failed: ${errorBody}`,
-        retryable: true,
-      };
+    if (!response.ok) {
+      return toRetryableError(response.failure);
     }
 
-    const result = parseOllamaChatResponse(await response.json());
-    if (!result) {
-      return {
-        ok: false,
-        error: "Ollama chat failed: invalid response payload",
-        retryable: true,
-      };
+    const result = await this.readParsedJsonResponse(
+      "chat",
+      response.data,
+      parseOllamaChatResponse,
+      "Ollama chat failed: invalid response payload",
+    );
+    if (!result.ok) {
+      return toRetryableError(result.failure);
     }
     const durationMs = Date.now() - startMs;
 
     return {
       ok: true,
-      text: result.message.content,
+      text: result.data.message.content,
       model,
       durationMs,
     };
@@ -526,7 +646,7 @@ export class OllamaProvider implements AiProvider {
       })),
     ];
 
-    const response = await this.ollamaFetch("/api/chat", {
+    const response = await this.ollamaFetchResult("/api/chat", "chat-stream", {
       method: "POST",
       body: JSON.stringify({
         model,
@@ -538,21 +658,36 @@ export class OllamaProvider implements AiProvider {
         },
         keep_alive: `${appConfig.ai.ollamaKeepAliveMs}ms`,
       }),
-    }).catch((err: unknown) => {
-      logger.error("ollama.chatStream.fetch.failed", { error: String(err) });
-      return null;
     });
 
-    if (!response?.ok || !response.body) {
+    if (!response.ok || !response.data.body) {
+      if (!response.ok) {
+        logBoundaryFailure("ollama.chat-stream.failed", response.failure);
+      }
       return;
     }
 
-    const reader = response.body.getReader();
+    const reader = response.data.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
 
     while (true) {
-      const { done, value } = await reader.read();
+      const chunk = await settleAsync(reader.read());
+      if (!chunk.ok) {
+        logBoundaryFailure(
+          "ollama.chat-stream.failed",
+          toExternalFailure({
+            source: "provider",
+            error: chunk.error,
+            provider: this.name,
+            operation: "chat-stream",
+            fallbackCode: "network",
+          }),
+        );
+        break;
+      }
+
+      const { done, value } = chunk.value;
       if (done) {
         break;
       }
@@ -657,17 +792,26 @@ export class OllamaProvider implements AiProvider {
   async generateEmbedding(text: string): Promise<Float32Array | null> {
     const model = appConfig.ai.ollamaChatModel;
 
-    const response = await this.ollamaFetch("/api/embeddings", {
+    const response = await this.ollamaFetchResult("/api/embeddings", "embedding", {
       method: "POST",
       body: JSON.stringify({ model, input: text }),
-    }).catch(() => null);
+    });
 
-    if (!response?.ok) {
+    if (!response.ok) {
       return null;
     }
 
-    const embeddings = parseOllamaEmbeddingsResponse(await response.json());
-    const firstEmbedding = embeddings[0];
+    const embeddingsResult = await this.readParsedJsonResponse(
+      "embedding",
+      response.data,
+      (value) => parseOllamaEmbeddingsResponse(value),
+      "Ollama embeddings payload is invalid",
+    );
+    if (!embeddingsResult.ok) {
+      return null;
+    }
+
+    const firstEmbedding = embeddingsResult.data[0];
     return firstEmbedding ? new Float32Array(firstEmbedding) : null;
   }
 

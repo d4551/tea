@@ -1,9 +1,10 @@
-# Leaves of the Fallen Kingdom — RPG Maker MZ Plugin Pack
-Date: 2026-03-05
+# Leaves of the Fallen Kingdom — RPG Maker MZ companion pack
 
 Eight RPG Maker MZ plugins for **Leaves of the Fallen Kingdom — 落叶王朝**,
 providing tea trade mechanics, Wuxing combat stances, sacred beast summons,
 faction diplomacy, corruption effects, day/night cycles, and shared utilities.
+
+This pack is maintained as a companion artifact to the main TEA app. It is outside the TypeScript compile surface, but it remains an active repo surface and must keep its docs aligned with the shipped plugin files.
 
 ## What's Inside
 
@@ -18,9 +19,8 @@ faction diplomacy, corruption effects, day/night cycles, and shared utilities.
 - **LOTFK_BeastSummon.js** — Sacred Beast summon gauges and finisher skills
 
 ### Documentation
-- `MASTER_PROMPT.md` — LLM mission prompt (architecture + acceptance tests)
 - `PLUGIN_SPEC.md` — Full data model, commands, pricing formula, Wuxing cycle
-- `IMPLEMENTATION_TICKETS.md` — Phased implementation checklist (all complete)
+- `STATUS.md` — Current implementation and maintenance status
 - `EVENT_HOOKUPS.md` — Recommended MZ editor event wiring
 
 ## Install in RPG Maker MZ

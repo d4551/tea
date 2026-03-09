@@ -10,7 +10,10 @@ import { appConfig } from "../config/environment.ts";
 import { knowledgeBaseService } from "../domain/ai/knowledge-base-service.ts";
 import { getAiRuntimeProfile } from "../domain/ai/local-runtime-profile.ts";
 import { builderService } from "../domain/builder/builder-service.ts";
-import { evaluateBuilderPlatformReadiness } from "../domain/builder/platform-readiness.ts";
+import {
+  deriveBuilderReadinessAudit,
+  evaluateBuilderPlatformReadiness,
+} from "../domain/builder/platform-readiness.ts";
 import { detectAvailableFeatures } from "../domain/game/ai/game-ai-service.ts";
 import { gameScenes, gameSpriteManifests } from "../domain/game/data/sprite-data.ts";
 import { gameLoop } from "../domain/game/game-loop.ts";
@@ -30,7 +33,6 @@ import {
 import { renderDialogueEditor } from "../views/builder/dialogue-editor.ts";
 import { renderMechanicsEditor } from "../views/builder/mechanics-editor.ts";
 import { renderNpcEditor } from "../views/builder/npc-editor.ts";
-import { renderPlatformReadinessSection } from "../views/builder/platform-readiness.ts";
 import { renderSceneEditor } from "../views/builder/scene-editor.ts";
 import {
   escapeHtml,
@@ -54,7 +56,19 @@ const wrapOrPartial = (
   scripts: readonly LayoutScript[] = [],
 ): string => {
   const isHtmx = request.headers.get("HX-Request") === "true";
-  if (isHtmx) return body;
+
+  const builderBody = renderBuilderLayout({
+    locale,
+    messages,
+    activeTab,
+    currentPath,
+    projectId,
+    project,
+    body,
+  });
+
+  if (isHtmx) return builderBody;
+
   const currentPathWithQuery = resolveRequestPathWithQuery(request);
   const baseScripts: readonly LayoutScript[] = [
     {
@@ -93,15 +107,6 @@ const wrapOrPartial = (
     body,
   });
 
-  const builderBody = renderBuilderLayout({
-    locale,
-    messages,
-    activeTab,
-    currentPath,
-    projectId,
-    project,
-    body,
-  });
   const layout: LayoutContext = {
     locale,
     messages,
@@ -175,9 +180,26 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
     }
     const totalScenes = project.scenes.size;
     const sceneValues = Array.from(project.scenes.values());
+    const assetValues = Array.from(project.assets.values());
+    const readinessAudit = deriveBuilderReadinessAudit({
+      scenes: project.scenes.values(),
+      assets: project.assets.values(),
+      animationClips: project.animationClips.values(),
+      animationTimelines: project.animationTimelines.values(),
+      dialogueGraphs: project.dialogueGraphs.values(),
+      quests: project.quests.values(),
+      triggers: project.triggers.values(),
+      flags: project.flags.values(),
+      generationJobs: project.generationJobs.values(),
+      automationRuns: project.automationRuns.values(),
+      latestReleaseVersion: project.latestReleaseVersion,
+      publishedReleaseVersion: project.publishedReleaseVersion,
+    });
     const scenes2d = sceneValues.filter((scene) => scene.sceneMode !== "3d").length;
     const scenes3d = sceneValues.filter((scene) => scene.sceneMode === "3d").length;
     const totalNpcs = sceneValues.reduce((acc, scene) => acc + scene.npcs.length, 0);
+    const sceneNodeCount = sceneValues.reduce((acc, scene) => acc + (scene.nodes?.length ?? 0), 0);
+    const collisionMaskCount = sceneValues.reduce((acc, scene) => acc + scene.collisions.length, 0);
 
     const stats: DashboardStats = {
       activeSessions: await gameLoop.countActiveSessions(),
@@ -185,14 +207,41 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
       scenes2d,
       scenes3d,
       totalNpcs,
+      sceneNodeCount,
+      collisionMaskCount,
+      assetCount: readinessAudit.assetCount,
+      spriteAssetCount: assetValues.filter((asset) =>
+        ["background", "sprite-sheet", "portrait", "tiles", "tile-set"].includes(asset.kind),
+      ).length,
+      modelAssetCount: readinessAudit.modelAssetCount,
+      openUsdAssetCount: readinessAudit.openUsdAssetCount,
+      spriteAtlasCount: project.spriteAtlases.size,
+      animationClipCount: readinessAudit.animationClipCount,
+      animationTimelineCount: readinessAudit.animationTimelineCount,
+      dialogueGraphCount: project.dialogueGraphs.size,
+      questCount: project.quests.size,
+      triggerCount: project.triggers.size,
+      flagCount: project.flags.size,
+      generationJobCount: readinessAudit.generationJobCount,
+      artifactCount: project.artifacts.size,
+      automationRunCount: readinessAudit.automationRunCount,
+      automationStepCount: readinessAudit.automationStepCount,
       aiAvailable: features.providers.length > 0,
       providers: [...features.providers],
+      aiProviderCount: features.providers.length,
+      draftVersion: project.version,
+      latestReleaseVersion: project.latestReleaseVersion,
+      publishedReleaseVersion: project.publishedReleaseVersion,
+      published: project.published,
+      rendererPreference: appConfig.playableGame.rendererPreference,
+      onnxDevice: appConfig.ai.onnxDevice,
       readiness: evaluateBuilderPlatformReadiness({
         sceneCount: totalScenes,
         spriteManifestCount: Object.keys(gameSpriteManifests).length,
         aiFeatures: features,
         rendererPreference: appConfig.playableGame.rendererPreference,
         onnxDevice: appConfig.ai.onnxDevice,
+        audit: readinessAudit,
       }),
     };
     const body = renderBuilderDashboard(
@@ -228,8 +277,16 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
         chromeProject,
       );
     }
+    const features = await detectAvailableFeatures();
+    const readiness = evaluateBuilderPlatformReadiness({
+      sceneCount: project.scenes.size,
+      spriteManifestCount: project.spriteAtlases.size,
+      aiFeatures: features,
+      rendererPreference: appConfig.playableGame.rendererPreference,
+      onnxDevice: appConfig.ai.onnxDevice,
+    });
     const scenes = toRecord(project.scenes);
-    const body = renderSceneEditor(messages, scenes, builderLocale, builderProjectId);
+    const body = renderSceneEditor(messages, scenes, builderLocale, builderProjectId, readiness);
     return wrapOrPartial(
       request,
       builderLocale,
@@ -325,35 +382,16 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
       onnxDevice: appConfig.ai.onnxDevice,
     });
 
-    const body = `
-      <section class="space-y-8">
-        <div class="flex flex-col gap-2">
-          <h1 class="text-3xl font-bold">${escapeHtml(messages.builder.assets)}</h1>
-          <p class="max-w-3xl text-base-content/70">${escapeHtml(messages.builder.assetPlaceholder)}</p>
-        </div>
-
-        <div role="alert" class="alert alert-warning alert-soft">
-          <span>${escapeHtml(messages.builder.platformReadinessWarning)}</span>
-        </div>
-
-        ${renderPlatformReadinessSection({
-          messages,
-          locale: builderLocale,
-          projectId: builderProjectId,
-          readiness,
-          keys: ["runtime2d", "runtime3d", "spritePipeline", "animationPipeline"],
-        })}
-
-        ${renderAssetsEditor(
-          messages,
-          builderLocale,
-          builderProjectId,
-          Array.from(project.assets.values()),
-          Array.from(project.animationClips.values()),
-          Array.from(project.generationJobs.values()),
-          Array.from(project.artifacts.values()),
-        )}
-      </section>`;
+    const body = renderAssetsEditor(
+      messages,
+      builderLocale,
+      builderProjectId,
+      Array.from(project.assets.values()),
+      Array.from(project.animationClips.values()),
+      Array.from(project.generationJobs.values()),
+      Array.from(project.artifacts.values()),
+      readiness,
+    );
     return wrapOrPartial(
       request,
       builderLocale,

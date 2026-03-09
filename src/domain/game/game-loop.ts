@@ -1175,11 +1175,11 @@ export class GameLoopService {
     this.tickTimeouts.set(sessionId, timeout);
   }
 
-  private ensureTicking(sessionId: string): void {
+  private ensureTicking(sessionId: string, delayMs: number = defaultGameConfig.tickMs): void {
     if (this.tickTimeouts.has(sessionId)) {
       return;
     }
-    this.scheduleTick(sessionId, defaultGameConfig.tickMs);
+    this.scheduleTick(sessionId, delayMs);
   }
 
   private shouldKeepTicking(sessionId: string, state: GameSceneState): boolean {
@@ -1305,7 +1305,7 @@ export class GameLoopService {
 
     if (queue.length < defaultGameConfig.maxCommandsPerTick) {
       queue.push({ envelope, participantSessionId });
-      this.ensureTicking(sessionId);
+      this.ensureTicking(sessionId, 0);
       return {
         sessionId,
         commandId: envelope.commandId,

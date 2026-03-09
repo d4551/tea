@@ -40,9 +40,23 @@ import {
   normalizeBuilderLocale,
 } from "./builder-project-state-store.ts";
 import {
-  BuilderPublishValidationError,
+  type BuilderPublishValidationIssue,
   validateBuilderProjectForPublish,
 } from "./builder-publish-validation.ts";
+
+/**
+ * Result of attempting to publish a builder project.
+ */
+export type BuilderPublishResult =
+  | {
+      readonly ok: true;
+      readonly snapshot: BuilderProjectSnapshot;
+    }
+  | {
+      readonly ok: false;
+      readonly issues: readonly BuilderPublishValidationIssue[];
+    };
+
 import { executeAutomationRun, executeGenerationJob } from "./creator-worker.ts";
 
 /**
@@ -405,7 +419,7 @@ export interface BuilderService {
     key: string,
   ): Promise<BuilderMutation<string | null> | null>;
   /** Publishes or unpublishes a project. */
-  publishProject(projectId: string, published: boolean): Promise<BuilderProjectSnapshot | null>;
+  publishProject(projectId: string, published: boolean): Promise<BuilderPublishResult | null>;
   /** Resolves a transport publish flag into a canonical boolean state. */
   resolvePublishState(value: boolean | string): boolean;
   /** Finds a scene by project and scene id. */
@@ -840,7 +854,12 @@ const resolvePublicAssetFilePath = (publicUrl: string): string | null => {
 
 const toGeneratedAssetKind = (
   kind: Exclude<GenerationJob["kind"], "voice-line" | "animation-plan">,
-): BuilderAsset["kind"] => (kind === "tiles" ? "tile-set" : kind);
+): BuilderAsset["kind"] => {
+  if (kind === "tiles") return "tile-set";
+  if (kind === "combat-encounter" || kind === "item-set" || kind === "cutscene-script")
+    return "document";
+  return kind;
+};
 
 const inferAssetSourceFormat = (source: string): string => {
   const normalized = source.trim().toLowerCase();
@@ -1657,9 +1676,10 @@ class PrismaBuilderService implements BuilderService {
   public async publishProject(
     projectId: string,
     published: boolean,
-  ): Promise<BuilderProjectSnapshot | null> {
+  ): Promise<BuilderPublishResult | null> {
     if (!published) {
-      return this.stateStore.publishProject(projectId, false);
+      const snapshot = await this.stateStore.publishProject(projectId, false);
+      return snapshot ? { ok: true, snapshot } : null;
     }
 
     const entry = await this.readProjectEntry(projectId);
@@ -1667,12 +1687,13 @@ class PrismaBuilderService implements BuilderService {
       return null;
     }
 
-    const issues = validateBuilderProjectForPublish(entry.state);
-    if (issues.length > 0) {
-      throw new BuilderPublishValidationError(issues);
+    const validation = validateBuilderProjectForPublish(entry.state);
+    if (!validation.ok) {
+      return { ok: false, issues: validation.issues };
     }
 
-    return this.stateStore.publishProject(projectId, published);
+    const snapshot = await this.stateStore.publishProject(projectId, true);
+    return snapshot ? { ok: true, snapshot } : null;
   }
 
   /**

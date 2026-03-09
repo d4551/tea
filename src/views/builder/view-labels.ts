@@ -63,6 +63,8 @@ export const getAssetKindLabel = (messages: Messages, kind: BuilderAssetKind): s
       return messages.builder.generationKindTiles;
     case "material":
       return messages.builder.assetKindModel;
+    case "document":
+      return messages.builder.assetKindDocument;
   }
 };
 
@@ -88,6 +90,12 @@ export const getGenerationJobKindLabel = (
       return messages.builder.generationKindVoiceLine;
     case "animation-plan":
       return messages.builder.generationKindAnimationPlan;
+    case "combat-encounter":
+      return messages.builder.generationKindCombatEncounter;
+    case "item-set":
+      return messages.builder.generationKindItemSet;
+    case "cutscene-script":
+      return messages.builder.generationKindCutsceneScript;
   }
 };
 

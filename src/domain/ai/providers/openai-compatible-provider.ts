@@ -9,6 +9,16 @@
 
 import { appConfig } from "../../../config/environment.ts";
 import { createLogger } from "../../../lib/logger.ts";
+import {
+  createHttpExternalFailure,
+  type ExternalBoundaryResult,
+  type ExternalFailure,
+  externalFailure,
+  externalSuccess,
+  toExternalFailure,
+  toRetryableError,
+} from "../../../shared/contracts/external-boundary.ts";
+import { readJsonResponse, settleAsync } from "../../../shared/utils/async-result.ts";
 import { safeJsonParse } from "../../../shared/utils/safe-json.ts";
 import { encodeMonoWavAudio, safeDecodeWavAudio } from "../../../shared/utils/wav-audio.ts";
 import type {
@@ -349,6 +359,89 @@ const buildJsonHeaders = (apiKey: string): HeadersInit => ({
   ...buildAuthHeaders(apiKey),
 });
 
+const logBoundaryFailure = (event: string, failure: ExternalFailure): void => {
+  logger.warn(event, {
+    provider: failure.provider ?? "unknown",
+    operation: failure.operation ?? "unknown",
+    code: failure.code,
+    retryable: failure.retryable,
+    statusCode: failure.statusCode ?? null,
+    message: failure.message,
+  });
+};
+
+const fetchProviderResponse = async (
+  fetchImpl: typeof fetch,
+  providerName: string,
+  operation: string,
+  input: string,
+  init: RequestInit,
+): Promise<ExternalBoundaryResult<Response>> => {
+  const responseResult = await settleAsync(fetchImpl(input, init));
+  if (!responseResult.ok) {
+    return externalFailure(
+      toExternalFailure({
+        source: "provider",
+        error: responseResult.error,
+        provider: providerName,
+        operation,
+        fallbackCode: "network",
+      }),
+    );
+  }
+
+  return externalSuccess(responseResult.value);
+};
+
+const readParsedJsonResponse = async <TPayload>(
+  providerName: string,
+  operation: string,
+  response: Response,
+  parser: (value: unknown) => TPayload | null,
+  invalidMessage: string,
+): Promise<ExternalBoundaryResult<TPayload>> => {
+  if (!response.ok) {
+    return externalFailure(
+      createHttpExternalFailure({
+        source: "provider",
+        response,
+        provider: providerName,
+        operation,
+        message: `OpenAI-compatible provider returned HTTP ${response.status}`,
+      }),
+    );
+  }
+
+  const responseJson = await readJsonResponse<unknown>(response);
+  if (!responseJson.ok) {
+    return externalFailure(
+      toExternalFailure({
+        source: "provider",
+        error: responseJson.error,
+        provider: providerName,
+        operation,
+        message: invalidMessage,
+        fallbackCode: "invalid-response",
+        retryable: true,
+      }),
+    );
+  }
+
+  const payload = parser(responseJson.value);
+  if (!payload) {
+    return externalFailure({
+      source: "provider",
+      code: "invalid-response",
+      message: invalidMessage,
+      retryable: true,
+      provider: providerName,
+      operation,
+    });
+  }
+
+  return externalSuccess(payload);
+};
+
 const buildCapabilities = (
   providerName: string,
   model: string,
@@ -427,21 +520,24 @@ export class OpenAiCompatibleProvider implements AiProvider {
    * @returns True when `/models` responds successfully.
    */
   public async isAvailable(): Promise<boolean> {
-    // SAFETY: External HTTP fetch to provider /models endpoint may throw on network failure.
-    try {
-      const fetchResult = await this.fetchImpl(`${this.config.baseUrl}/models`, {
+    const response = await fetchProviderResponse(
+      this.fetchImpl,
+      this.name,
+      "availability",
+      `${this.config.baseUrl}/models`,
+      {
         method: "GET",
         headers: buildAuthHeaders(this.config.apiKey),
         signal: AbortSignal.timeout(this.config.availabilityTimeoutMs),
-      });
-      return fetchResult.ok;
-    } catch (error: unknown) {
-      logger.warn("openai-compatible.availability.failed", {
-        provider: this.name,
-        error: String(error),
-      });
+      },
+    );
+
+    if (!response.ok) {
+      logBoundaryFailure("openai-compatible.availability.failed", response.failure);
       return false;
     }
+
+    return response.data.ok;
   }
 
   /**
@@ -459,39 +555,32 @@ export class OpenAiCompatibleProvider implements AiProvider {
    * @returns Capability list for available models.
    */
   public async detectCapabilities(): Promise<readonly AiModelCapabilities[]> {
-    let response: Response;
-    // SAFETY: External HTTP fetch to provider /models endpoint may throw on network failure.
-    try {
-      response = await this.fetchImpl(`${this.config.baseUrl}/models`, {
+    const response = await fetchProviderResponse(
+      this.fetchImpl,
+      this.name,
+      "detect-capabilities",
+      `${this.config.baseUrl}/models`,
+      {
         method: "GET",
         headers: buildAuthHeaders(this.config.apiKey),
         signal: AbortSignal.timeout(this.config.availabilityTimeoutMs),
-      });
-    } catch (error: unknown) {
-      logger.warn("openai-compatible.capabilities.failed", {
-        provider: this.name,
-        error: String(error),
-      });
-      return [];
-    }
+      },
+    );
 
     if (!response.ok) {
+      logBoundaryFailure("openai-compatible.capabilities.failed", response.failure);
       return [];
     }
 
-    let responseJson: unknown;
-    // SAFETY: Response.json() may throw on malformed JSON body from external provider.
-    try {
-      responseJson = await response.json();
-    } catch {
-      responseJson = null;
-    }
-    if (!responseJson) {
-      return [];
-    }
-
-    const payload = parseModelsResponse(responseJson);
-    if (!payload) {
+    const payload = await readParsedJsonResponse(
+      this.name,
+      "detect-capabilities",
+      response.data,
+      parseModelsResponse,
+      "OpenAI-compatible provider returned an invalid models payload",
+    );
+    if (!payload.ok) {
+      logBoundaryFailure("openai-compatible.capabilities.failed", payload.failure);
       return [];
     }
 
@@ -503,7 +592,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
       ...(this.config.speechModel ? [this.config.speechModel] : []),
       ...(this.config.moderationModel ? [this.config.moderationModel] : []),
     ]);
-    const listedModels = new Set(payload.data.map((entry) => entry.id));
+    const listedModels = new Set(payload.data.data.map((entry) => entry.id));
     const modelIds = [...new Set([...listedModels, ...configuredModels])];
     return modelIds.map((model) => buildCapabilities(this.name, model, this.config));
   }
@@ -516,11 +605,12 @@ export class OpenAiCompatibleProvider implements AiProvider {
    */
   public async chat(params: AiChatParams): Promise<AiGenerationResult> {
     const startedAt = performance.now();
-
-    let response: Response;
-    // SAFETY: External HTTP fetch to provider chat endpoint may throw on network failure.
-    try {
-      response = await this.fetchImpl(`${this.config.baseUrl}/chat/completions`, {
+    const response = await fetchProviderResponse(
+      this.fetchImpl,
+      this.name,
+      "chat",
+      `${this.config.baseUrl}/chat/completions`,
+      {
         method: "POST",
         headers: buildJsonHeaders(this.config.apiKey),
         body: JSON.stringify({
@@ -536,43 +626,27 @@ export class OpenAiCompatibleProvider implements AiProvider {
           stream: false,
         }),
         signal: AbortSignal.timeout(appConfig.ai.requestTimeoutMs),
-      });
-    } catch (error: unknown) {
-      return {
-        ok: false,
-        error: String(error),
-        retryable: true,
-      };
-    }
-
+      },
+    );
     if (!response.ok) {
-      return {
-        ok: false,
-        error: `OpenAI-compatible provider returned HTTP ${response.status}`,
-        retryable: response.status >= 500,
-      };
+      return toRetryableError(response.failure);
     }
 
-    let responseJson: unknown;
-    // SAFETY: Response.json() may throw on malformed JSON body from external provider.
-    try {
-      responseJson = await response.json();
-    } catch {
-      responseJson = null;
-    }
-    const payload = responseJson ? parseChatCompletionResponse(responseJson) : null;
-    if (!payload) {
-      return {
-        ok: false,
-        error: "OpenAI-compatible provider returned an invalid response payload",
-        retryable: true,
-      };
+    const payload = await readParsedJsonResponse(
+      this.name,
+      "chat",
+      response.data,
+      parseChatCompletionResponse,
+      "OpenAI-compatible provider returned an invalid response payload",
+    );
+    if (!payload.ok) {
+      return toRetryableError(payload.failure);
     }
 
     return {
       ok: true,
-      text: normalizeMessageContent(payload.choices[0]?.message.content ?? ""),
-      model: payload.model,
+      text: normalizeMessageContent(payload.data.choices[0]?.message.content ?? ""),
+      model: payload.data.model,
       durationMs: Math.round(performance.now() - startedAt),
     };
   }
@@ -584,45 +658,54 @@ export class OpenAiCompatibleProvider implements AiProvider {
    * @yields Text chunks.
    */
   public async *chatStream(params: AiChatParams): AsyncGenerator<string> {
-    const response = await this.fetchImpl(`${this.config.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: buildJsonHeaders(this.config.apiKey),
-      body: JSON.stringify({
-        model: params.model ?? this.config.chatModel,
-        messages: [
-          ...(params.systemPrompt
-            ? [{ role: "system" as const, content: params.systemPrompt }]
-            : []),
-          ...params.messages.map(toChatMessagePayload),
-        ],
-        temperature: params.temperature,
-        max_tokens: params.maxTokens,
-        stream: true,
-      }),
-      signal: AbortSignal.timeout(appConfig.ai.requestTimeoutMs),
-    });
+    const response = await fetchProviderResponse(
+      this.fetchImpl,
+      this.name,
+      "chat-stream",
+      `${this.config.baseUrl}/chat/completions`,
+      {
+        method: "POST",
+        headers: buildJsonHeaders(this.config.apiKey),
+        body: JSON.stringify({
+          model: params.model ?? this.config.chatModel,
+          messages: [
+            ...(params.systemPrompt
+              ? [{ role: "system" as const, content: params.systemPrompt }]
+              : []),
+            ...params.messages.map(toChatMessagePayload),
+          ],
+          temperature: params.temperature,
+          max_tokens: params.maxTokens,
+          stream: true,
+        }),
+        signal: AbortSignal.timeout(appConfig.ai.requestTimeoutMs),
+      },
+    );
 
-    if (!response.ok || !response.body) {
+    if (!response.ok || !response.data.body) {
       return;
     }
 
-    const reader = response.body.getReader();
+    const reader = response.data.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
 
     while (true) {
-      let chunk: { done?: boolean; value?: Uint8Array };
-      // SAFETY: ReadableStream.read() may throw if the connection is reset mid-stream.
-      try {
-        chunk = await reader.read();
-      } catch {
-        chunk = { done: true, value: undefined };
+      const chunk = await settleAsync(reader.read());
+      if (!chunk.ok) {
+        logger.warn("openai-compatible.chat-stream.failed", {
+          provider: this.name,
+          operation: "chat-stream",
+          code: "network",
+          message: chunk.error.message,
+        });
+        break;
       }
-      if (chunk.done || !chunk.value) {
+      if (chunk.value.done || !chunk.value.value) {
         break;
       }
 
-      buffer += decoder.decode(chunk.value, { stream: true });
+      buffer += decoder.decode(chunk.value.value, { stream: true });
       const events = buffer.split("\n\n");
       buffer = events.pop() ?? "";
 
@@ -667,10 +750,12 @@ export class OpenAiCompatibleProvider implements AiProvider {
       return null;
     }
 
-    let response: Response;
-    // SAFETY: External HTTP fetch to provider moderation endpoint may throw on network failure.
-    try {
-      response = await this.fetchImpl(`${this.config.baseUrl}/moderations`, {
+    const response = await fetchProviderResponse(
+      this.fetchImpl,
+      this.name,
+      "moderation",
+      `${this.config.baseUrl}/moderations`,
+      {
         method: "POST",
         headers: buildJsonHeaders(this.config.apiKey),
         body: JSON.stringify({
@@ -678,28 +763,26 @@ export class OpenAiCompatibleProvider implements AiProvider {
           input: text,
         }),
         signal: AbortSignal.timeout(appConfig.ai.requestTimeoutMs),
-      });
-    } catch (error: unknown) {
-      logger.warn("openai-compatible.moderation.failed", {
-        provider: this.name,
-        error: String(error),
-      });
-      return null;
-    }
-
+      },
+    );
     if (!response.ok) {
+      logBoundaryFailure("openai-compatible.moderation.failed", response.failure);
       return null;
     }
 
-    let responseJson: unknown;
-    // SAFETY: Response.json() may throw on malformed JSON body from external provider.
-    try {
-      responseJson = await response.json();
-    } catch {
-      responseJson = null;
+    const payload = await readParsedJsonResponse(
+      this.name,
+      "moderation",
+      response.data,
+      parseModerationResponse,
+      "OpenAI-compatible provider returned an invalid moderation payload",
+    );
+    if (!payload.ok) {
+      logBoundaryFailure("openai-compatible.moderation.failed", payload.failure);
+      return null;
     }
-    const payload = responseJson ? parseModerationResponse(responseJson) : null;
-    const result = payload?.results[0];
+
+    const result = payload.data.results[0];
     if (!result) {
       return null;
     }
@@ -752,38 +835,35 @@ export class OpenAiCompatibleProvider implements AiProvider {
       form.append("prompt", params.prompt);
     }
 
-    let response: Response;
-    // SAFETY: External HTTP fetch to provider audio transcription endpoint may throw on network failure.
-    try {
-      response = await this.fetchImpl(`${this.config.baseUrl}/audio/transcriptions`, {
+    const response = await fetchProviderResponse(
+      this.fetchImpl,
+      this.name,
+      "transcription",
+      `${this.config.baseUrl}/audio/transcriptions`,
+      {
         method: "POST",
         headers: buildAuthHeaders(this.config.apiKey),
         body: form,
         signal: AbortSignal.timeout(appConfig.ai.requestTimeoutMs),
-      });
-    } catch (error: unknown) {
-      return {
-        ok: false,
-        error: String(error),
-        retryable: true,
-      };
-    }
-
+      },
+    );
     if (!response.ok) {
-      return {
-        ok: false,
-        error: `OpenAI-compatible provider returned HTTP ${response.status}`,
-        retryable: response.status >= 500,
-      };
+      return toRetryableError(response.failure);
+    }
+    if (!response.data.ok) {
+      return toRetryableError(
+        createHttpExternalFailure({
+          source: "provider",
+          response: response.data,
+          provider: this.name,
+          operation: "transcription",
+          message: `OpenAI-compatible provider returned HTTP ${response.data.status}`,
+        }),
+      );
     }
 
-    let textPayload: string;
-    // SAFETY: Response.text() may throw on corrupted HTTP body from external provider.
-    try {
-      textPayload = await response.text();
-    } catch {
-      textPayload = "";
-    }
+    const textPayloadResult = await settleAsync(response.data.text());
+    const textPayload = textPayloadResult.ok ? textPayloadResult.value : "";
     const payload = parseTranscriptionResponse(safeJsonParse<unknown>(textPayload, null)) ?? {
       text: textPayload.trim(),
     };
@@ -828,10 +908,12 @@ export class OpenAiCompatibleProvider implements AiProvider {
     }
 
     const startedAt = performance.now();
-    let response: Response;
-    // SAFETY: External HTTP fetch to provider speech endpoint may throw on network failure.
-    try {
-      response = await this.fetchImpl(`${this.config.baseUrl}/audio/speech`, {
+    const response = await fetchProviderResponse(
+      this.fetchImpl,
+      this.name,
+      "speech",
+      `${this.config.baseUrl}/audio/speech`,
+      {
         method: "POST",
         headers: buildJsonHeaders(this.config.apiKey),
         body: JSON.stringify({
@@ -841,31 +923,25 @@ export class OpenAiCompatibleProvider implements AiProvider {
           response_format: "wav",
         }),
         signal: AbortSignal.timeout(appConfig.ai.requestTimeoutMs),
-      });
-    } catch (error: unknown) {
-      return {
-        ok: false,
-        error: String(error),
-        retryable: true,
-      };
-    }
-
+      },
+    );
     if (!response.ok) {
-      return {
-        ok: false,
-        error: `OpenAI-compatible provider returned HTTP ${response.status}`,
-        retryable: response.status >= 500,
-      };
+      return toRetryableError(response.failure);
+    }
+    if (!response.data.ok) {
+      return toRetryableError(
+        createHttpExternalFailure({
+          source: "provider",
+          response: response.data,
+          provider: this.name,
+          operation: "speech",
+          message: `OpenAI-compatible provider returned HTTP ${response.data.status}`,
+        }),
+      );
     }
 
-    let arrayBufferResult: ArrayBuffer | null = null;
-    // SAFETY: Response.arrayBuffer() may throw on corrupted HTTP body from external provider.
-    try {
-      arrayBufferResult = await response.arrayBuffer();
-    } catch {
-      arrayBufferResult = null;
-    }
-    if (!arrayBufferResult) {
+    const arrayBufferResult = await settleAsync(response.data.arrayBuffer());
+    if (!arrayBufferResult.ok) {
       return {
         ok: false,
         error: "OpenAI-compatible provider returned an unreadable response payload",
@@ -873,7 +949,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
       };
     }
 
-    const audioBytes = new Uint8Array(arrayBufferResult);
+    const audioBytes = new Uint8Array(arrayBufferResult.value);
     const decoded = safeDecodeWavAudio(audioBytes);
     if (!decoded.ok) {
       return {
@@ -931,10 +1007,12 @@ export class OpenAiCompatibleProvider implements AiProvider {
       return null;
     }
 
-    let response: Response;
-    // SAFETY: External HTTP fetch to provider embeddings endpoint may throw on network failure.
-    try {
-      response = await this.fetchImpl(`${this.config.baseUrl}/embeddings`, {
+    const response = await fetchProviderResponse(
+      this.fetchImpl,
+      this.name,
+      "embedding",
+      `${this.config.baseUrl}/embeddings`,
+      {
         method: "POST",
         headers: buildJsonHeaders(this.config.apiKey),
         body: JSON.stringify({
@@ -942,31 +1020,26 @@ export class OpenAiCompatibleProvider implements AiProvider {
           input: text,
         }),
         signal: AbortSignal.timeout(appConfig.ai.requestTimeoutMs),
-      });
-    } catch (error: unknown) {
-      logger.warn("openai-compatible.embedding.failed", {
-        provider: this.name,
-        error: String(error),
-      });
-      return null;
-    }
-
+      },
+    );
     if (!response.ok) {
+      logBoundaryFailure("openai-compatible.embedding.failed", response.failure);
       return null;
     }
 
-    let responseJson: unknown;
-    try {
-      responseJson = await response.json();
-    } catch {
-      responseJson = null;
-    }
-    if (!responseJson) {
+    const payload = await readParsedJsonResponse(
+      this.name,
+      "embedding",
+      response.data,
+      parseEmbeddingResponse,
+      "OpenAI-compatible provider returned an invalid embeddings payload",
+    );
+    if (!payload.ok) {
+      logBoundaryFailure("openai-compatible.embedding.failed", payload.failure);
       return null;
     }
 
-    const payload = parseEmbeddingResponse(responseJson);
-    const embedding = payload?.data[0]?.embedding;
+    const embedding = payload.data.data[0]?.embedding;
     return embedding ? new Float32Array(embedding) : null;
   }
 

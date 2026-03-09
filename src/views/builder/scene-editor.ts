@@ -4,11 +4,14 @@
  * Scene library and detail workspace with inline HTMX editing.
  */
 import type { LocaleCode } from "../../config/environment.ts";
+import type { BuilderPlatformReadiness } from "../../domain/builder/platform-readiness.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { SceneDefinition, SceneNodeDefinition } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
+import { renderPlatformReadinessSection } from "./platform-readiness.ts";
 import { getSceneNodeTypeLabel } from "./view-labels.ts";
+import { renderWorkspaceShell } from "./workspace-shell.ts";
 
 const renderScenePreview = (scene: SceneDefinition, spawnLabel: string): string => {
   const npcMarkers = scene.npcs
@@ -289,10 +292,15 @@ export const renderSceneEditor = (
   scenes: Record<string, SceneDefinition>,
   locale: LocaleCode,
   projectId: string,
+  readiness?: BuilderPlatformReadiness,
 ): string => {
   const sceneIds = Object.keys(scenes);
   const selectedSceneId = sceneIds[0] ?? null;
   const selectedScene = selectedSceneId ? (scenes[selectedSceneId] ?? null) : null;
+  const sceneValues = Object.values(scenes);
+  const scenes2d = sceneValues.filter((scene) => scene.sceneMode !== "3d").length;
+  const scenes3d = sceneValues.filter((scene) => scene.sceneMode === "3d").length;
+  const nodeCount = sceneValues.reduce((total, scene) => total + (scene.nodes?.length ?? 0), 0);
   const sceneCards = sceneIds
     .map((id) => {
       const scene = scenes[id];
@@ -335,7 +343,58 @@ export const renderSceneEditor = (
   const createAction = `${appRoutes.builderApiScenes}/create/form`;
 
   return `
-    <section class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+    <section class="space-y-6 animate-fade-in-up">
+      ${renderWorkspaceShell({
+        eyebrow: messages.builder.scenes,
+        title: messages.builder.sceneLibraryTitle,
+        description: messages.builder.sceneCreateDescription,
+        facets: [
+          {
+            label: `${messages.builder.sceneMode2d}: ${[
+              messages.builder.sceneNodeTypeSprite,
+              messages.builder.sceneNodeTypeTile,
+              messages.builder.sceneNodeTypeCamera,
+              messages.builder.sceneNodeTypeSpawn,
+              messages.builder.sceneNodeTypeTrigger,
+            ].join(" / ")}`,
+          },
+          {
+            label: `${messages.builder.sceneMode3d}: ${[
+              messages.builder.sceneNodeTypeModel,
+              messages.builder.sceneNodeTypeLight,
+              messages.builder.sceneNodeTypeCamera,
+              messages.builder.sceneNodeTypeSpawn,
+              messages.builder.sceneNodeTypeTrigger,
+            ].join(" / ")}`,
+          },
+        ],
+        metrics: [
+          {
+            label: messages.builder.totalScenes,
+            value: sceneValues.length,
+            toneClassName: "text-primary",
+          },
+          { label: messages.builder.sceneMode2d, value: scenes2d },
+          {
+            label: messages.builder.sceneMode3d,
+            value: scenes3d,
+            toneClassName: scenes3d > 0 ? "text-secondary" : "text-base-content",
+          },
+          { label: messages.builder.sceneNodes, value: nodeCount },
+        ],
+      })}
+      ${
+        readiness
+          ? renderPlatformReadinessSection({
+              messages,
+              locale,
+              projectId,
+              readiness,
+              keys: ["runtime2d", "runtime3d", "mechanics"],
+            })
+          : ""
+      }
+      <section class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <div class="space-y-4">
         <article class="card card-border bg-base-100 shadow-sm">
           <form
@@ -396,6 +455,7 @@ export const renderSceneEditor = (
             : `<div role="alert" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noScenes)}</span></div>`
         }
       </div>
+    </section>
     </section>`;
 };
 

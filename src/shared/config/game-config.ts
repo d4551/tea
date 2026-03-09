@@ -66,6 +66,8 @@ export interface RuntimeGameConfig {
   readonly worldTimeWrapMs: number;
   /** Damage multiplier applied to attacker stat in combat formula. */
   readonly combatDamageMultiplier: number;
+  /** Base damage value applied to skill-type combat actions before mitigation. */
+  readonly combatSkillBaseDamage: number;
   /** Maximum sprite atlas strip width in pixels before row wrapping. */
   readonly spriteAtlasMaxWidth: number;
 }
@@ -107,6 +109,7 @@ export const defaultGameConfig: RuntimeGameConfig = {
   restoreMaxAttempts: appConfig.game.restoreMaxAttempts,
   worldTimeWrapMs: appConfig.game.worldTimeWrapMs,
   combatDamageMultiplier: appConfig.game.combatDamageMultiplier,
+  combatSkillBaseDamage: appConfig.game.combatSkillBaseDamage,
   spriteAtlasMaxWidth: appConfig.game.spriteAtlasMaxWidth,
 };
 

@@ -37,7 +37,7 @@ describe("AnimationTimelineService", () => {
           {
             id: "t1",
             property: "opacity",
-            keyframes: [{ timeMs: 0, value: 0.5, easing: "linear" }],
+            keyframes: [{ id: "kf-1", timeMs: 0, value: 0.5, easing: "linear" }],
           },
         ],
       });
@@ -52,8 +52,8 @@ describe("AnimationTimelineService", () => {
             id: "t1",
             property: "position.y",
             keyframes: [
-              { timeMs: 0, value: 0, easing: "linear" },
-              { timeMs: 1000, value: 100, easing: "linear" },
+              { id: "kf-1", timeMs: 0, value: 0, easing: "linear" },
+              { id: "kf-2", timeMs: 1000, value: 100, easing: "linear" },
             ],
           },
         ],
@@ -70,8 +70,8 @@ describe("AnimationTimelineService", () => {
             id: "t1",
             property: "frame",
             keyframes: [
-              { timeMs: 0, value: 0, easing: "linear" },
-              { timeMs: 1000, value: 10, easing: "linear" },
+              { id: "kf-1", timeMs: 0, value: 0, easing: "linear" },
+              { id: "kf-2", timeMs: 1000, value: 10, easing: "linear" },
             ],
           },
         ],
@@ -88,8 +88,8 @@ describe("AnimationTimelineService", () => {
             id: "t1",
             property: "frame",
             keyframes: [
-              { timeMs: 0, value: 0, easing: "linear" },
-              { timeMs: 1000, value: 10, easing: "linear" },
+              { id: "kf-1", timeMs: 0, value: 0, easing: "linear" },
+              { id: "kf-2", timeMs: 1000, value: 10, easing: "linear" },
             ],
           },
         ],
@@ -106,8 +106,8 @@ describe("AnimationTimelineService", () => {
             id: "t1",
             property: "frame",
             keyframes: [
-              { timeMs: 0, value: 0, easing: "step" },
-              { timeMs: 1000, value: 10, easing: "step" },
+              { id: "kf-1", timeMs: 0, value: 0, easing: "step" },
+              { id: "kf-2", timeMs: 1000, value: 10, easing: "step" },
             ],
           },
         ],
@@ -123,16 +123,16 @@ describe("AnimationTimelineService", () => {
             id: "t1",
             property: "position.x",
             keyframes: [
-              { timeMs: 0, value: 0, easing: "linear" },
-              { timeMs: 1000, value: 100, easing: "linear" },
+              { id: "kf-1", timeMs: 0, value: 0, easing: "linear" },
+              { id: "kf-2", timeMs: 1000, value: 100, easing: "linear" },
             ],
           },
           {
             id: "t2",
             property: "opacity",
             keyframes: [
-              { timeMs: 0, value: 1, easing: "linear" },
-              { timeMs: 1000, value: 0, easing: "linear" },
+              { id: "kf-3", timeMs: 0, value: 1, easing: "linear" },
+              { id: "kf-4", timeMs: 1000, value: 0, easing: "linear" },
             ],
           },
         ],
@@ -149,7 +149,7 @@ describe("AnimationTimelineService", () => {
           {
             id: "t2",
             property: "opacity",
-            keyframes: [{ timeMs: 0, value: 1, easing: "linear" }],
+            keyframes: [{ id: "kf-1", timeMs: 0, value: 1, easing: "linear" }],
           },
         ],
       });

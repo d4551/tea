@@ -194,6 +194,46 @@ export const gameScenes: Record<string, SceneDefinition> = {
     ],
     collisions: teaHouseCollisions,
   },
+  crystalCavern: {
+    id: "crystalCavern",
+    sceneMode: "3d",
+    titleKey: "scene.crystalCavern.title",
+    background: gameAssetUrls.teaHouseBackground,
+    geometry: {
+      width: 1000,
+      height: 1000,
+    },
+    spawn: {
+      x: 0,
+      y: 0,
+    },
+    nodes: [
+      {
+        id: "node.crystalCavern.model",
+        nodeType: "model",
+        assetId: "asset.model.cavernModel",
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+      },
+      {
+        id: "node.crystalCavern.light",
+        nodeType: "light",
+        position: { x: 5, y: 10, z: 5 },
+        rotation: { x: -0.5, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+      },
+      {
+        id: "node.crystalCavern.spawn",
+        nodeType: "spawn",
+        position: { x: 0, y: 0, z: 2 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+      },
+    ],
+    npcs: [],
+    collisions: [],
+  },
 };
 
 /**
@@ -202,6 +242,7 @@ export const gameScenes: Record<string, SceneDefinition> = {
 export const gameTextKeys = {
   scenes: {
     "scene.teaHouse.title": "scene.teaHouse.title",
+    "scene.crystalCavern.title": "scene.crystalCavern.title",
   },
   npcs: {
     "npc.teaMonk.label": "npc.teaMonk.label",

@@ -16,12 +16,11 @@ if (htmx) {
       const indicatorId =
         dataset.oracleIndicatorId ?? rootDataset.oracleIndicatorId ?? "oracle-loading";
       const panelId = dataset.oraclePanelId ?? rootDataset.oraclePanelId ?? "oracle-panel";
-      const loadingTitle = dataset.loadingTitle ?? rootDataset.loadingTitle ?? "Loading";
+      const loadingTitle = dataset.loadingTitle ?? rootDataset.loadingTitle ?? "";
       const loadingDescription = dataset.loadingDescription ?? rootDataset.loadingDescription ?? "";
-      const sendErrorMessage =
-        dataset.sendErrorMessage ?? rootDataset.sendErrorMessage ?? "Network error";
+      const sendErrorMessage = dataset.sendErrorMessage ?? rootDataset.sendErrorMessage ?? "";
       const responseErrorMessage =
-        dataset.responseErrorMessage ?? rootDataset.responseErrorMessage ?? "Request failed";
+        dataset.responseErrorMessage ?? rootDataset.responseErrorMessage ?? "";
       const indicator =
         root?.querySelector(`#${indicatorId}`) ?? document.getElementById(indicatorId);
       const panel = document.getElementById(panelId);

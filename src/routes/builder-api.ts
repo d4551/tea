@@ -8,10 +8,7 @@ import { appConfig, type LocaleCode, normalizeLocale } from "../config/environme
 import { knowledgeBaseService } from "../domain/ai/knowledge-base-service.ts";
 import { ProviderRegistry } from "../domain/ai/providers/provider-registry.ts";
 import { persistBuilderFile } from "../domain/builder/asset-storage.ts";
-import {
-  BuilderPublishValidationError,
-  type BuilderPublishValidationIssue,
-} from "../domain/builder/builder-publish-validation.ts";
+import type { BuilderPublishValidationIssue } from "../domain/builder/builder-publish-validation.ts";
 import {
   type BuilderAnimationClipCreatePayload,
   type BuilderAssetCreatePayload,
@@ -25,7 +22,10 @@ import {
   type BuilderSceneNodePayload,
   builderService,
 } from "../domain/builder/builder-service.ts";
-import { evaluateBuilderPlatformReadiness } from "../domain/builder/platform-readiness.ts";
+import {
+  deriveBuilderReadinessAudit,
+  evaluateBuilderPlatformReadiness,
+} from "../domain/builder/platform-readiness.ts";
 import {
   detectAvailableFeatures,
   generateNpcDialogue,
@@ -537,10 +537,28 @@ const toChromeProject = async (projectId: string) => {
   };
 };
 
+const baselineReadinessFeatures = {
+  richDialogue: false,
+  visionAnalysis: false,
+  sentimentAnalysis: false,
+  embeddings: false,
+  speechToText: false,
+  speechSynthesis: false,
+  localInference: false,
+  providers: [],
+} as const;
+
 const renderSceneWorkspace = async (locale: LocaleCode, projectId: string): Promise<string> => {
   const project = await builderService.getProject(projectId);
   const scenes = Object.fromEntries(project?.scenes.entries() ?? []);
-  return renderSceneEditor(getMessages(locale), scenes, locale, projectId);
+  const readiness = evaluateBuilderPlatformReadiness({
+    sceneCount: project?.scenes.size ?? Object.keys(gameScenes).length,
+    spriteManifestCount: project?.spriteAtlases.size ?? 0,
+    aiFeatures: baselineReadinessFeatures,
+    rendererPreference: appConfig.playableGame.rendererPreference,
+    onnxDevice: appConfig.ai.onnxDevice,
+  });
+  return renderSceneEditor(getMessages(locale), scenes, locale, projectId, readiness);
 };
 
 const renderNpcWorkspace = async (locale: LocaleCode, projectId: string): Promise<string> => {
@@ -564,6 +582,13 @@ const renderDialogueWorkspace = async (
 
 const renderAssetsWorkspace = async (locale: LocaleCode, projectId: string): Promise<string> => {
   const project = await builderService.getProject(projectId);
+  const readiness = evaluateBuilderPlatformReadiness({
+    sceneCount: project?.scenes.size ?? Object.keys(gameScenes).length,
+    spriteManifestCount: project?.spriteAtlases.size ?? 0,
+    aiFeatures: baselineReadinessFeatures,
+    rendererPreference: appConfig.playableGame.rendererPreference,
+    onnxDevice: appConfig.ai.onnxDevice,
+  });
   return renderAssetsEditor(
     getMessages(locale),
     locale,
@@ -572,6 +597,7 @@ const renderAssetsWorkspace = async (locale: LocaleCode, projectId: string): Pro
     Array.from(project?.animationClips.values() ?? []),
     Array.from(project?.generationJobs.values() ?? []),
     Array.from(project?.artifacts.values() ?? []),
+    readiness,
   );
 };
 
@@ -665,6 +691,10 @@ const describePublishValidationIssue = (
   switch (issue.code) {
     case "no-scenes":
       return messages.publishValidationNoScenes;
+    case "3d-scene-needs-webgpu":
+      return formatBuilderTemplate(messages.publishValidation3dSceneNeedsWebgpu, {
+        sceneId: issue.sceneId ?? "",
+      });
     case "scene-spawn-out-of-bounds":
       return formatBuilderTemplate(messages.publishValidationSceneSpawnOutOfBounds, {
         sceneId: issue.sceneId ?? "",
@@ -935,12 +965,30 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   .get(route(appRoutes.builderPlatformReadiness), async ({ builderProjectId }) => {
     const project = await builderService.peekProject(builderProjectId);
     const features = await detectAvailableFeatures();
+    const readinessAudit =
+      project === null
+        ? undefined
+        : deriveBuilderReadinessAudit({
+            scenes: project.scenes.values(),
+            assets: project.assets.values(),
+            animationClips: project.animationClips.values(),
+            animationTimelines: project.animationTimelines.values(),
+            dialogueGraphs: project.dialogueGraphs.values(),
+            quests: project.quests.values(),
+            triggers: project.triggers.values(),
+            flags: project.flags.values(),
+            generationJobs: project.generationJobs.values(),
+            automationRuns: project.automationRuns.values(),
+            latestReleaseVersion: project.latestReleaseVersion,
+            publishedReleaseVersion: project.publishedReleaseVersion,
+          });
     const readiness = evaluateBuilderPlatformReadiness({
       sceneCount: project?.scenes.size ?? Object.keys(gameScenes).length,
       spriteManifestCount: Object.keys(gameSpriteManifests).length,
       aiFeatures: features,
       rendererPreference: appConfig.playableGame.rendererPreference,
       onnxDevice: appConfig.ai.onnxDevice,
+      audit: readinessAudit,
     });
 
     return successEnvelope(readiness);
@@ -1697,30 +1745,29 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         builderCurrentPath: actionCurrentPath,
       } = actionContext;
       const shouldPublish = builderService.resolvePublishState(body.published);
-      let project: Awaited<ReturnType<typeof builderService.publishProject>>;
-      try {
-        project = await builderService.publishProject(actionProjectId, shouldPublish);
-      } catch (error) {
-        if (error instanceof BuilderPublishValidationError) {
-          return status(
-            httpStatus.unprocessableEntity,
-            buildError(
-              request,
-              set.headers,
-              "VALIDATION_ERROR",
-              httpStatus.unprocessableEntity,
-              describePublishValidationIssues(actionLocale, error.issues),
-            ),
-          );
-        }
-        throw error;
-      }
-      if (!project) {
+      const result = await builderService.publishProject(actionProjectId, shouldPublish);
+      if (!result) {
         return status(
           httpStatus.notFound,
           buildBuilderNotFoundError(request, set.headers, undefined, "projectNotFound"),
         );
       }
+
+      if (!result.ok) {
+        return status(
+          httpStatus.unprocessableEntity,
+          buildError(
+            request,
+            set.headers,
+            "VALIDATION_ERROR",
+            httpStatus.unprocessableEntity,
+            describePublishValidationIssues(actionLocale, result.issues),
+          ),
+        );
+      }
+
+      const project = result.snapshot;
+
       if (wantsHtml(request.headers.get("accept"))) {
         return renderBuilderProjectShell(
           getMessages(actionLocale),
@@ -3100,6 +3147,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         );
       }
 
+      await builderService.processQueuedWork(projectId);
+
       return withProjectChromeRefresh(
         locale,
         projectId,
@@ -3117,6 +3166,9 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
           t.Literal("tiles"),
           t.Literal("voice-line"),
           t.Literal("animation-plan"),
+          t.Literal("combat-encounter"),
+          t.Literal("item-set"),
+          t.Literal("cutscene-script"),
         ]),
         prompt: t.String(),
         targetId: t.Optional(t.String()),

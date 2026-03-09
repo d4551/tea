@@ -2,6 +2,8 @@ import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
 import { getMessages } from "../../shared/i18n/translator.ts";
 import { prisma } from "../../shared/services/db.ts";
+import { toPrismaExternalFailure } from "../../shared/services/prisma-failure.ts";
+import { settleAsync } from "../../shared/utils/async-result.ts";
 import { ProviderRegistry } from "../ai/providers/provider-registry.ts";
 import type {
   OracleEmptyState,
@@ -69,15 +71,20 @@ export const createOracleService = (): OracleService => ({
 
     const answer = await buildAnswer(trimmedQuestion, messages);
 
-    // SAFETY: Persistence is fire-and-forget; DB write failure must not block the user response.
-    try {
-      await persistInteraction(
+    const persistence = await settleAsync(
+      persistInteraction(
         trimmedQuestion,
         answer.text,
         answer.source === "fallback" ? "UNKNOWN" : undefined,
-      );
-    } catch (err: unknown) {
-      logger.error("oracle.persist.failed", { err: String(err) });
+      ),
+    );
+    if (!persistence.ok) {
+      const failure = toPrismaExternalFailure(persistence.error, "record oracle interaction");
+      logger.warn("oracle.persist.failed", {
+        code: failure.code,
+        retryable: failure.retryable,
+        message: failure.message,
+      });
     }
 
     return {
@@ -97,8 +104,15 @@ const buildAnswer = async (
   question: string,
   messages: ReturnType<typeof getMessages>,
 ): Promise<OracleAnswer> => {
-  const registry = await ProviderRegistry.getInstance();
-  const provider = registry.selectProvider("chat");
+  const registry = await settleAsync(ProviderRegistry.getInstance());
+  if (!registry.ok) {
+    return {
+      text: buildDeterministicAnswer(question, messages),
+      source: "fallback",
+    };
+  }
+
+  const provider = registry.value.selectProvider("chat");
   if (!provider || provider.name === "transformers") {
     return {
       text: buildDeterministicAnswer(question, messages),
@@ -106,7 +120,7 @@ const buildAnswer = async (
     };
   }
 
-  const generation = await registry.chat({
+  const generation = await registry.value.chat({
     messages: [
       {
         role: "user",
@@ -138,10 +152,13 @@ const persistInteraction = async (
   fortune: string,
   sentimentOverride?: string,
 ): Promise<void> => {
+  const registry = await settleAsync(ProviderRegistry.getInstance());
+  const sentimentResult =
+    registry.ok && sentimentOverride === undefined
+      ? await settleAsync(registry.value.classify(prompt))
+      : null;
   const sentiment =
-    sentimentOverride ??
-    (await ProviderRegistry.getInstance().then((registry) => registry.classify(prompt)))?.label ??
-    "UNKNOWN";
+    sentimentOverride ?? (sentimentResult?.ok ? sentimentResult.value?.label : null) ?? "UNKNOWN";
 
   await prisma.oracleInteraction.recordWithSentiment(prompt, sentiment, fortune);
 };

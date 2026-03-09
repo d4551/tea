@@ -1,27 +1,87 @@
 import { appConfig, type LocaleCode } from "../config/environment.ts";
 import type { OracleMode, OracleOutcome } from "../domain/oracle/oracle-types.ts";
 import { appRoutes } from "../shared/constants/routes.ts";
+import type { UiErrorState } from "../shared/contracts/ui-state.ts";
 import type { Messages } from "../shared/i18n/messages.ts";
 import { escapeHtml } from "./layout.ts";
+
+type BaseOraclePanelState = {
+  readonly mode: OracleMode;
+  readonly question: string;
+};
+
+type OracleResolvedPanelState =
+  | {
+      readonly state: "success";
+      readonly answer: string;
+    }
+  | {
+      readonly state: "empty";
+      readonly message: string;
+    }
+  | {
+      readonly state: "unauthorized";
+      readonly message: string;
+    }
+  | {
+      readonly state: UiErrorState;
+      readonly message: string;
+    };
 
 /**
  * Oracle panel state for initial rendering and HTMX partial updates.
  */
 export type OraclePanelState =
-  | {
-      readonly state: "idle";
-      readonly mode: OracleMode;
-      readonly question: string;
-    }
-  | {
-      readonly state: "loading";
-      readonly mode: OracleMode;
-      readonly question: string;
-    }
-  | ({
-      readonly mode: OracleMode;
-      readonly question: string;
-    } & OracleOutcome);
+  | (BaseOraclePanelState & { readonly state: "idle" | "loading" })
+  | (BaseOraclePanelState & OracleResolvedPanelState);
+
+/**
+ * Adapts normalized service outcomes to panel-render states.
+ *
+ * @param outcome Oracle service outcome.
+ * @param mode Current oracle mode.
+ * @param question User-entered question.
+ * @returns Typed oracle panel state for deterministic rendering.
+ */
+export const toOraclePanelState = (
+  outcome: OracleOutcome,
+  mode: OracleMode,
+  question: string,
+): OraclePanelState => {
+  if (outcome.state === "success") {
+    return {
+      state: "success",
+      mode,
+      question,
+      answer: outcome.answer,
+    };
+  }
+
+  if (outcome.state === "empty") {
+    return {
+      state: "empty",
+      mode,
+      question,
+      message: outcome.message,
+    };
+  }
+
+  if (outcome.state === "unauthorized") {
+    return {
+      state: "unauthorized",
+      mode,
+      question,
+      message: outcome.message,
+    };
+  }
+
+  return {
+    state: outcome.retryable ? "error-retryable" : "error-non-retryable",
+    mode,
+    question,
+    message: outcome.message,
+  };
+};
 
 /**
  * Renders the oracle interaction form and stateful result panel.
@@ -172,7 +232,7 @@ export const renderOraclePanel = (messages: Messages, panelState: OraclePanelSta
     </article>`;
   }
 
-  if (panelState.retryable) {
+  if (panelState.state === "error-retryable") {
     return `<article id="oracle-panel" class="card border border-info/30 bg-info/10" role="status" aria-live="polite" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
       <div class="card-body gap-3">
         <div role="alert" class="alert alert-info alert-vertical sm:alert-horizontal">
@@ -188,12 +248,17 @@ export const renderOraclePanel = (messages: Messages, panelState: OraclePanelSta
     </article>`;
   }
 
+  const message =
+    "message" in panelState
+      ? panelState.message
+      : messages.aiPlayground.nonRetryableErrorDescription;
+
   return `<article id="oracle-panel" class="card border border-error/30 bg-error/10" role="status" aria-live="polite" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
     <div class="card-body">
       <div role="alert" class="alert alert-error alert-vertical sm:alert-horizontal">
         <div>
           <h3 class="font-bold">${escapeHtml(messages.aiPlayground.nonRetryableErrorTitle)}</h3>
-          <div class="text-sm">${escapeHtml(panelState.message)}</div>
+          <div class="text-sm">${escapeHtml(message)}</div>
         </div>
       </div>
     </div>

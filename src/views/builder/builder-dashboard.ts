@@ -1,9 +1,13 @@
 import { appConfig, type LocaleCode } from "../../config/environment.ts";
-import type { BuilderPlatformReadiness } from "../../domain/builder/platform-readiness.ts";
+import type {
+  BuilderCapabilityKey,
+  BuilderCapabilityReadiness,
+  BuilderPlatformReadiness,
+} from "../../domain/builder/platform-readiness.ts";
 import { appRoutes, withLocaleQuery, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
-import { renderPlatformReadinessSection } from "./platform-readiness.ts";
+import { renderWorkspaceShell } from "./workspace-shell.ts";
 
 /**
  * Summary metrics for the builder landing page.
@@ -19,13 +23,330 @@ export interface DashboardStats {
   readonly scenes3d: number;
   /** Total NPCs in the current builder project. */
   readonly totalNpcs: number;
+  /** Total authored scene nodes. */
+  readonly sceneNodeCount: number;
+  /** Total authored collision masks. */
+  readonly collisionMaskCount: number;
+  /** Total authored assets. */
+  readonly assetCount: number;
+  /** Total authored sprite-facing assets. */
+  readonly spriteAssetCount: number;
+  /** Total authored model assets. */
+  readonly modelAssetCount: number;
+  /** Total authored OpenUSD assets. */
+  readonly openUsdAssetCount: number;
+  /** Total authored sprite atlases. */
+  readonly spriteAtlasCount: number;
+  /** Total animation clips. */
+  readonly animationClipCount: number;
+  /** Total animation timelines. */
+  readonly animationTimelineCount: number;
+  /** Total dialogue graphs. */
+  readonly dialogueGraphCount: number;
+  /** Total quests. */
+  readonly questCount: number;
+  /** Total triggers. */
+  readonly triggerCount: number;
+  /** Total flags. */
+  readonly flagCount: number;
+  /** Total generation jobs. */
+  readonly generationJobCount: number;
+  /** Total generated artifacts. */
+  readonly artifactCount: number;
+  /** Total automation runs. */
+  readonly automationRunCount: number;
+  /** Total automation steps. */
+  readonly automationStepCount: number;
   /** Whether any AI provider is currently available. */
   readonly aiAvailable: boolean;
   /** Available provider names for the current runtime. */
   readonly providers: readonly string[];
+  /** Number of available AI providers. */
+  readonly aiProviderCount: number;
+  /** Current mutable draft version. */
+  readonly draftVersion: number;
+  /** Latest immutable release version. */
+  readonly latestReleaseVersion: number;
+  /** Currently published immutable release version, if any. */
+  readonly publishedReleaseVersion: number | null;
+  /** Whether the project is currently published. */
+  readonly published: boolean;
+  /** Runtime renderer preference. */
+  readonly rendererPreference: "webgpu" | "webgl";
+  /** ONNX execution device preference. */
+  readonly onnxDevice: "wasm" | "webgpu" | "cpu";
   /** Platform capability status summary. */
   readonly readiness: BuilderPlatformReadiness;
 }
+
+interface CapabilityMetric {
+  readonly label: string;
+  readonly value: string | number;
+  readonly tone?: "default" | "primary" | "secondary" | "accent";
+}
+
+const capabilityTone = (status: BuilderCapabilityReadiness["status"]): string => {
+  switch (status) {
+    case "implemented":
+      return "badge-success";
+    case "partial":
+      return "badge-warning";
+    default:
+      return "badge-error";
+  }
+};
+
+const capabilityStatusLabel = (
+  messages: Messages,
+  status: BuilderCapabilityReadiness["status"],
+): string => {
+  switch (status) {
+    case "implemented":
+      return messages.builder.readinessImplemented;
+    case "partial":
+      return messages.builder.readinessPartial;
+    default:
+      return messages.builder.readinessMissing;
+  }
+};
+
+const metricToneClass = (tone: CapabilityMetric["tone"]): string => {
+  switch (tone) {
+    case "primary":
+      return "text-primary";
+    case "secondary":
+      return "text-secondary";
+    case "accent":
+      return "text-accent";
+    default:
+      return "text-base-content";
+  }
+};
+
+const renderMetric = (metric: CapabilityMetric): string => `
+  <div class="rounded-box border border-base-300/60 bg-base-100/80 px-3 py-2">
+    <dt class="text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-base-content/55">${escapeHtml(metric.label)}</dt>
+    <dd class="mt-2 text-lg font-semibold ${metricToneClass(metric.tone)}">${escapeHtml(String(metric.value))}</dd>
+  </div>`;
+
+const capabilityHref = (
+  capability: BuilderCapabilityKey,
+  locale: LocaleCode,
+  projectId: string,
+): string => {
+  switch (capability) {
+    case "releaseFlow":
+    case "webgpuRenderer":
+      return withQueryParameters(appRoutes.builder, { lang: locale, projectId });
+    case "runtime2d":
+      return withQueryParameters(appRoutes.builderScenes, { lang: locale, projectId });
+    case "runtime3d":
+      return withQueryParameters(appRoutes.game, { lang: locale, projectId });
+    case "spritePipeline":
+    case "animationPipeline":
+      return withQueryParameters(appRoutes.builderAssets, { lang: locale, projectId });
+    case "mechanics":
+      return withQueryParameters(appRoutes.builderMechanics, { lang: locale, projectId });
+    case "aiAuthoring":
+    case "aiOnnxGpu":
+      return withQueryParameters(appRoutes.builderAi, { lang: locale, projectId });
+    case "automation":
+      return withQueryParameters(appRoutes.builderAutomation, { lang: locale, projectId });
+  }
+};
+
+const capabilityCopy = (
+  messages: Messages,
+  capability: BuilderCapabilityKey,
+): Readonly<{ title: string; description: string }> => {
+  switch (capability) {
+    case "releaseFlow":
+      return {
+        title: messages.builder.capabilityReleaseFlowTitle,
+        description: messages.builder.capabilityReleaseFlowDescription,
+      };
+    case "runtime2d":
+      return {
+        title: messages.builder.capability2dRuntimeTitle,
+        description: messages.builder.capability2dRuntimeDescription,
+      };
+    case "runtime3d":
+      return {
+        title: messages.builder.capability3dRuntimeTitle,
+        description: messages.builder.capability3dRuntimeDescription,
+      };
+    case "spritePipeline":
+      return {
+        title: messages.builder.capabilitySpritePipelineTitle,
+        description: messages.builder.capabilitySpritePipelineDescription,
+      };
+    case "animationPipeline":
+      return {
+        title: messages.builder.capabilityAnimationPipelineTitle,
+        description: messages.builder.capabilityAnimationPipelineDescription,
+      };
+    case "mechanics":
+      return {
+        title: messages.builder.capabilityMechanicsTitle,
+        description: messages.builder.capabilityMechanicsDescription,
+      };
+    case "aiAuthoring":
+      return {
+        title: messages.builder.capabilityAiAuthoringTitle,
+        description: messages.builder.capabilityAiAuthoringDescription,
+      };
+    case "automation":
+      return {
+        title: messages.builder.capabilityAutomationTitle,
+        description: messages.builder.capabilityAutomationDescription,
+      };
+    case "webgpuRenderer":
+      return {
+        title: messages.builder.capabilityWebgpuRendererTitle,
+        description: messages.builder.capabilityWebgpuRendererDescription,
+      };
+    case "aiOnnxGpu":
+      return {
+        title: messages.builder.capabilityAiOnnxGpuTitle,
+        description: messages.builder.capabilityAiOnnxGpuDescription,
+      };
+  }
+};
+
+const releaseValue = (value: number | null, fallback: string): string =>
+  value === null ? fallback : String(value);
+
+const capabilityMetrics = (
+  messages: Messages,
+  capability: BuilderCapabilityKey,
+  stats: DashboardStats,
+): readonly CapabilityMetric[] => {
+  switch (capability) {
+    case "releaseFlow":
+      return [
+        { label: messages.builder.draftVersionLabel, value: stats.draftVersion, tone: "primary" },
+        {
+          label: messages.builder.latestReleaseLabel,
+          value: stats.latestReleaseVersion,
+          tone: "secondary",
+        },
+        {
+          label: messages.builder.publishedReleaseLabel,
+          value: releaseValue(stats.publishedReleaseVersion, messages.builder.noPublishedRelease),
+          tone: "accent",
+        },
+      ];
+    case "runtime2d":
+      return [
+        { label: messages.builder.scenes, value: stats.scenes2d, tone: "primary" },
+        { label: messages.builder.totalNpcs, value: stats.totalNpcs },
+        { label: messages.builder.sceneNodeCountLabel, value: stats.sceneNodeCount },
+        { label: messages.builder.collisionMaskCountLabel, value: stats.collisionMaskCount },
+      ];
+    case "runtime3d":
+      return [
+        { label: messages.builder.scenes, value: stats.scenes3d, tone: "secondary" },
+        { label: messages.builder.modelAssetCountLabel, value: stats.modelAssetCount },
+        { label: messages.builder.openUsdAssetCountLabel, value: stats.openUsdAssetCount },
+      ];
+    case "spritePipeline":
+      return [
+        { label: messages.builder.assets, value: stats.spriteAssetCount, tone: "primary" },
+        { label: messages.builder.spriteManifestCountLabel, value: stats.spriteAtlasCount },
+        { label: messages.builder.modelAssetCountLabel, value: stats.modelAssetCount },
+      ];
+    case "animationPipeline":
+      return [
+        { label: messages.builder.animations, value: stats.animationClipCount, tone: "primary" },
+        {
+          label: messages.builder.animationTimelineCountLabel,
+          value: stats.animationTimelineCount,
+        },
+        { label: messages.builder.spriteManifestCountLabel, value: stats.spriteAtlasCount },
+      ];
+    case "mechanics":
+      return [
+        { label: messages.builder.dialogueGraphCountLabel, value: stats.dialogueGraphCount },
+        { label: messages.builder.questCountLabel, value: stats.questCount, tone: "primary" },
+        { label: messages.builder.triggerCountLabel, value: stats.triggerCount },
+        { label: messages.builder.flagCountLabel, value: stats.flagCount },
+      ];
+    case "aiAuthoring":
+      return [
+        {
+          label: messages.builder.providerCountLabel,
+          value: stats.aiProviderCount,
+          tone: "primary",
+        },
+        { label: messages.builder.generationJobCountLabel, value: stats.generationJobCount },
+        { label: messages.builder.artifactCountLabel, value: stats.artifactCount },
+      ];
+    case "automation":
+      return [
+        { label: messages.builder.automationRunCountLabel, value: stats.automationRunCount },
+        { label: messages.builder.automationStepCountLabel, value: stats.automationStepCount },
+        { label: messages.builder.artifactCountLabel, value: stats.artifactCount, tone: "accent" },
+      ];
+    case "webgpuRenderer":
+      return [
+        {
+          label: messages.builder.runtimeLabel,
+          value: stats.rendererPreference.toUpperCase(),
+          tone: "secondary",
+        },
+        { label: messages.builder.scenes, value: stats.totalScenes },
+        { label: messages.builder.modelAssetCountLabel, value: stats.modelAssetCount },
+      ];
+    case "aiOnnxGpu":
+      return [
+        {
+          label: messages.builder.modelLabel,
+          value: stats.onnxDevice.toUpperCase(),
+          tone: "secondary",
+        },
+        { label: messages.builder.providerCountLabel, value: stats.aiProviderCount },
+        { label: messages.builder.generationJobCountLabel, value: stats.generationJobCount },
+      ];
+  }
+};
+
+const renderCapabilityCard = (
+  messages: Messages,
+  locale: LocaleCode,
+  projectId: string,
+  capability: BuilderCapabilityReadiness,
+  stats: DashboardStats,
+): string => {
+  const copy = capabilityCopy(messages, capability.key);
+  const metrics = capabilityMetrics(messages, capability.key, stats).map(renderMetric).join("");
+  const href = capabilityHref(capability.key, locale, projectId);
+  const statusLabel = capabilityStatusLabel(messages, capability.status);
+
+  return `<article class="card card-border bg-base-100/90 shadow-sm backdrop-blur-sm">
+    <div class="card-body gap-4">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="space-y-2">
+          <h2 class="card-title text-xl">${escapeHtml(copy.title)}</h2>
+          <p class="max-w-2xl text-sm leading-6 text-base-content/72">${escapeHtml(copy.description)}</p>
+        </div>
+        <span class="badge ${capabilityTone(capability.status)} badge-soft badge-lg" role="status" aria-label="${escapeHtml(statusLabel)}">${escapeHtml(statusLabel)}</span>
+      </div>
+      <dl class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">${metrics}</dl>
+      <div class="card-actions justify-end">
+        <a class="btn btn-ghost btn-sm" href="${escapeHtml(href)}" aria-label="${escapeHtml(messages.builder.openDetails)}: ${escapeHtml(copy.title)}">${escapeHtml(messages.builder.openDetails)}</a>
+      </div>
+    </div>
+  </article>`;
+};
+
+const findCapability = (
+  readiness: BuilderPlatformReadiness,
+  capability: BuilderCapabilityKey,
+): BuilderCapabilityReadiness =>
+  readiness.capabilities.find((entry) => entry.key === capability) ?? {
+    key: capability,
+    status: "missing",
+  };
 
 /**
  * Renders the builder dashboard landing view.
@@ -44,263 +365,141 @@ export const renderBuilderDashboard = (
   projectId: string,
   published: boolean,
 ): string => {
-  const scenesHref = withQueryParameters(appRoutes.builderScenes, { lang: locale, projectId });
-  const npcsHref = withQueryParameters(appRoutes.builderNpcs, { lang: locale, projectId });
-  const dialogueHref = withQueryParameters(appRoutes.builderDialogue, { lang: locale, projectId });
-  const aiHref = withQueryParameters(appRoutes.builderAi, { lang: locale, projectId });
-  const assetsHref = withQueryParameters(appRoutes.builderAssets, { lang: locale, projectId });
-  const mechanicsHref = withQueryParameters(appRoutes.builderMechanics, {
-    lang: locale,
-    projectId,
-  });
-  const automationHref = withQueryParameters(appRoutes.builderAutomation, {
-    lang: locale,
-    projectId,
-  });
-  const gameHref = published
-    ? withQueryParameters(appRoutes.game, { lang: locale, projectId })
-    : scenesHref;
-  const primaryCtaLabel = published
-    ? messages.builder.playPublishedBuild
-    : messages.builder.continueAuthoring;
-  const aiStatusLabel = stats.aiAvailable
-    ? messages.ai.statusAvailable
-    : messages.ai.statusUnavailable;
-  const providersLabel =
+  const builderHref = withQueryParameters(appRoutes.builderScenes, { lang: locale, projectId });
+  const gameHref = withQueryParameters(appRoutes.game, { lang: locale, projectId });
+  const docsHref = withLocaleQuery(appConfig.api.docsPath, locale);
+  const providerSummary =
     stats.providers.length > 0 ? stats.providers.join(", ") : messages.ai.noProviderAvailable;
+  const capabilityCards = [
+    "releaseFlow",
+    "runtime2d",
+    "runtime3d",
+    "spritePipeline",
+    "animationPipeline",
+    "mechanics",
+    "aiAuthoring",
+    "automation",
+    "webgpuRenderer",
+    "aiOnnxGpu",
+  ].map((key) =>
+    renderCapabilityCard(
+      messages,
+      locale,
+      projectId,
+      findCapability(stats.readiness, key as BuilderCapabilityKey),
+      stats,
+    ),
+  );
 
   return `
-    <div class="space-y-6 animate-fade-in-up">
-
-      <!-- Hero welcome strip -->
-      <section class="card border border-primary/20 bg-gradient-to-r from-primary/8 via-base-100 to-base-100 shadow-lg">
-        <div class="card-body gap-4">
-          <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div class="space-y-1">
-              <div class="flex flex-wrap items-center gap-2">
-                <h1 class="text-2xl font-bold">${escapeHtml(messages.builder.dashboard)}</h1>
-                <span class="badge ${published ? "badge-success" : "badge-warning"} badge-soft text-xs">${escapeHtml(published ? messages.builder.projectStatusPublished : messages.builder.projectStatusDraft)}</span>
-              </div>
-              <p class="text-sm text-base-content/60">${escapeHtml(messages.builder.flowDescription)}</p>
-            </div>
-            <div class="flex flex-wrap gap-2 self-start">
-              <a class="btn btn-primary btn-sm shadow-md hover:shadow-primary/25 transition-all" href="${escapeHtml(gameHref)}" aria-label="${escapeHtml(primaryCtaLabel)}">
-                <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                ${escapeHtml(primaryCtaLabel)}
-              </a>
-              <a class="btn btn-ghost btn-sm" href="${escapeHtml(withLocaleQuery(appConfig.api.docsPath, locale))}" aria-label="${escapeHtml(messages.builder.docsLabel)}">
-                ${escapeHtml(messages.builder.docsLabel)}
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Live stats strip -->
-      <section class="stats stats-vertical border border-base-300/50 bg-base-100/50 shadow-md lg:stats-horizontal w-full" aria-label="${escapeHtml(messages.builder.dashboard)}">
-        <div class="stat">
-          <div class="stat-figure text-primary">
-            <svg xmlns="http://www.w3.org/2000/svg" class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-          </div>
-          <div class="stat-title">${escapeHtml(messages.builder.activeSessions)}</div>
-          <div class="stat-value text-primary">${stats.activeSessions}</div>
-        </div>
-        <div class="stat">
-          <div class="stat-figure text-secondary">
-            <svg xmlns="http://www.w3.org/2000/svg" class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" /></svg>
-          </div>
-          <div class="stat-title">${escapeHtml(messages.builder.totalScenes)}</div>
-          <div class="stat-value">${stats.totalScenes}</div>
-          <div class="stat-desc">${escapeHtml(messages.builder.sceneMode2d)} ${stats.scenes2d} · ${escapeHtml(messages.builder.sceneMode3d)} ${stats.scenes3d}</div>
-        </div>
-        <div class="stat">
-          <div class="stat-figure text-accent">
-            <svg xmlns="http://www.w3.org/2000/svg" class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-          </div>
-          <div class="stat-title">${escapeHtml(messages.builder.totalNpcs)}</div>
-          <div class="stat-value">${stats.totalNpcs}</div>
-        </div>
-        <div class="stat">
-          <div class="stat-figure ${stats.aiAvailable ? "text-success" : "text-warning"}">
-            <svg xmlns="http://www.w3.org/2000/svg" class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
-          </div>
-          <div class="stat-title">${escapeHtml(messages.builder.aiStatus)}</div>
-          <div class="stat-value text-lg">${escapeHtml(aiStatusLabel)}</div>
-          <div class="stat-desc">${escapeHtml(providersLabel)}</div>
-        </div>
-      </section>
-
-      <!-- Quick actions grid with counts -->
-      <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 stagger-children">
-        ${renderQuickAction({
-          href: scenesHref,
-          label: messages.builder.quickActionScene,
-          desc: messages.builder.quickActionSceneDesc,
-          count: stats.totalScenes,
-          colorToken: "primary",
-          icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />`,
-        })}
-        ${renderQuickAction({
-          href: npcsHref,
-          label: messages.builder.quickActionNpc,
-          desc: messages.builder.quickActionNpcDesc,
-          count: stats.totalNpcs,
-          colorToken: "secondary",
-          icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />`,
-        })}
-        ${renderQuickAction({
-          href: dialogueHref,
-          label: messages.builder.quickActionDialogue,
-          desc: messages.builder.quickActionDialogueDesc,
-          colorToken: "accent",
-          icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />`,
-        })}
-        ${renderQuickAction({
-          href: aiHref,
-          label: messages.builder.quickActionAi,
-          desc: messages.builder.quickActionAiDesc,
-          colorToken: "warning",
-          icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />`,
-        })}
-      </section>
-
-      <!-- Two-column workspace grid -->
-      <section class="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-
-        <!-- Workspace navigation -->
-        <article class="card border border-base-300/50 bg-base-100/50 shadow-md">
-          <div class="card-body gap-4">
-            <h2 class="card-title text-lg">${escapeHtml(messages.builder.flowTitle)}</h2>
-            <div class="grid gap-2 sm:grid-cols-2">
-              ${renderWorkspaceLink({
-                href: scenesHref,
-                label: messages.builder.scenes,
-                colorToken: "primary",
-                icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />`,
-              })}
-              ${renderWorkspaceLink({
-                href: assetsHref,
-                label: messages.builder.assets,
-                colorToken: "secondary",
-                icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />`,
-              })}
-              ${renderWorkspaceLink({
-                href: mechanicsHref,
-                label: messages.builder.mechanics,
-                colorToken: "info",
-                icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />`,
-              })}
-              ${renderWorkspaceLink({
-                href: automationHref,
-                label: messages.builder.automation,
-                colorToken: "warning",
-                icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />`,
-              })}
-              ${renderWorkspaceLink({
-                href: aiHref,
-                label: messages.builder.ai,
-                colorToken: "error",
-                icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />`,
-              })}
-            </div>
-          </div>
-        </article>
-
-        <!-- AI co-pilot status -->
-        <article class="card border border-base-300/50 bg-base-100/50 shadow-md">
-          <div class="card-body gap-4">
-            <div role="alert" class="alert ${stats.aiAvailable ? "alert-success" : "alert-warning"} alert-soft">
-              <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
-              <span>${escapeHtml(aiStatusLabel)}</span>
-            </div>
-            <div class="space-y-2">
-              <h2 class="card-title text-lg">${escapeHtml(messages.builder.localRuntimeTitle)}</h2>
-              <p class="text-sm text-base-content/60">${escapeHtml(messages.builder.localRuntimeDescription)}</p>
-            </div>
-            <div class="grid gap-2 text-sm">
-              <div class="flex items-center justify-between rounded-box bg-base-200/60 px-3 py-2">
-                <span>${escapeHtml(messages.builder.runtimeLabel)}</span>
-                <span class="badge badge-primary badge-soft badge-sm">${escapeHtml(messages.builder.runtimeStackValue)}</span>
-              </div>
-              <div class="flex items-center justify-between rounded-box bg-base-200/60 px-3 py-2">
-                <span>${escapeHtml(messages.builder.modelLabel)}</span>
-                <span class="badge badge-secondary badge-soft badge-sm">${escapeHtml(providersLabel)}</span>
-              </div>
-            </div>
-            <div class="card-actions">
-              <a class="btn btn-primary btn-soft btn-sm w-full" href="${escapeHtml(aiHref)}" aria-label="${escapeHtml(messages.builder.ai)}">
-                <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                ${escapeHtml(messages.builder.quickActionAi)}
-              </a>
-            </div>
-          </div>
-        </article>
-      </section>
-
-      ${renderPlatformReadinessSection({
-        messages,
-        locale,
-        projectId,
-        readiness: stats.readiness,
+    <div class="space-y-6">
+      ${renderWorkspaceShell({
+        eyebrow: published
+          ? messages.builder.projectStatusPublished
+          : messages.builder.projectStatusDraft,
+        title: messages.builder.dashboard,
+        description: messages.builder.platformReadinessDescription,
+        facets: [
+          {
+            label: `${messages.builder.implementedCountLabel}: ${stats.readiness.implementedCount}`,
+            badgeClassName: "badge-success badge-soft",
+          },
+          {
+            label: `${messages.builder.partialCountLabel}: ${stats.readiness.partialCount}`,
+            badgeClassName: "badge-warning badge-soft",
+          },
+          {
+            label: `${messages.builder.missingCountLabel}: ${stats.readiness.missingCount}`,
+            badgeClassName: "badge-error badge-soft",
+          },
+          {
+            label: providerSummary,
+            badgeClassName: stats.aiAvailable ? "badge-secondary badge-soft" : "badge-ghost",
+          },
+        ],
+        metrics: [
+          {
+            label: messages.builder.scenes,
+            value: stats.totalScenes,
+            toneClassName: "text-primary",
+          },
+          {
+            label: messages.builder.assets,
+            value: stats.assetCount,
+            toneClassName: "text-secondary",
+          },
+          {
+            label: messages.builder.automation,
+            value: stats.automationRunCount,
+            toneClassName: "text-accent",
+          },
+          { label: messages.builder.activeSessions, value: stats.activeSessions },
+        ],
+        actions: `
+          <a class="btn btn-primary btn-sm" href="${escapeHtml(published ? gameHref : builderHref)}" aria-label="${escapeHtml(published ? messages.builder.playPublishedBuild : messages.builder.continueAuthoring)}">
+            ${escapeHtml(published ? messages.builder.playPublishedBuild : messages.builder.continueAuthoring)}
+          </a>
+          <a class="btn btn-ghost btn-sm" href="${escapeHtml(docsHref)}" aria-label="${escapeHtml(messages.builder.docsLabel)}">
+            ${escapeHtml(messages.builder.docsLabel)}
+          </a>
+        `,
       })}
+
+      <section class="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">
+        <article class="card card-border bg-base-100/90 shadow-sm">
+          <div class="card-body gap-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="space-y-2">
+                <h2 class="card-title text-xl">${escapeHtml(messages.builder.flowTitle)}</h2>
+                <p class="max-w-3xl text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.flowDescription)}</p>
+              </div>
+              <span class="badge ${published ? "badge-success" : "badge-warning"} badge-soft">${escapeHtml(published ? messages.builder.projectStatusPublished : messages.builder.projectStatusDraft)}</span>
+            </div>
+            <ul class="steps steps-vertical gap-3 lg:steps-horizontal lg:gap-0" aria-label="${escapeHtml(messages.builder.flowTitle)}">
+              <li class="step step-primary">${escapeHtml(messages.builder.scenes)}</li>
+              <li class="step step-secondary">${escapeHtml(messages.builder.assets)}</li>
+              <li class="step step-accent">${escapeHtml(messages.builder.mechanics)}</li>
+              <li class="step ${published ? "step-success" : ""}">${escapeHtml(messages.builder.playPublishedBuild)}</li>
+            </ul>
+            <dl class="grid gap-3 md:grid-cols-3">
+              ${renderMetric({ label: messages.builder.draftVersionLabel, value: stats.draftVersion, tone: "primary" })}
+              ${renderMetric({ label: messages.builder.latestReleaseLabel, value: stats.latestReleaseVersion, tone: "secondary" })}
+              ${renderMetric({
+                label: messages.builder.publishedReleaseLabel,
+                value: releaseValue(
+                  stats.publishedReleaseVersion,
+                  messages.builder.noPublishedRelease,
+                ),
+                tone: "accent",
+              })}
+            </dl>
+          </div>
+        </article>
+
+        <article class="card card-border bg-base-100/90 shadow-sm">
+          <div class="card-body gap-4">
+            <div class="space-y-2">
+              <h2 class="card-title text-xl">${escapeHtml(messages.builder.localRuntimeTitle)}</h2>
+              <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.platformReadinessWarning)}</p>
+            </div>
+            <dl class="grid gap-3">
+              ${renderMetric({ label: messages.builder.providerCountLabel, value: stats.aiProviderCount, tone: "primary" })}
+              ${renderMetric({ label: messages.builder.runtimeLabel, value: stats.rendererPreference.toUpperCase(), tone: "secondary" })}
+              ${renderMetric({ label: messages.builder.modelLabel, value: stats.onnxDevice.toUpperCase(), tone: "accent" })}
+              ${renderMetric({ label: messages.builder.generationJobCountLabel, value: stats.generationJobCount })}
+            </dl>
+          </div>
+        </article>
+      </section>
+
+      <section id="builder-platform-readiness" class="space-y-4" aria-labelledby="builder-platform-readiness-heading">
+        <div class="space-y-2">
+          <h2 id="builder-platform-readiness-heading" class="text-2xl font-semibold tracking-tight">${escapeHtml(messages.builder.platformReadinessTitle)}</h2>
+          <p class="max-w-4xl text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.platformReadinessDescription)}</p>
+        </div>
+        <div class="grid gap-4 2xl:grid-cols-2">
+          ${capabilityCards.join("")}
+        </div>
+      </section>
     </div>`;
 };
-
-/**
- * Quick action card configuration.
- */
-interface QuickActionConfig {
-  readonly href: string;
-  readonly label: string;
-  readonly desc: string;
-  readonly count?: number;
-  readonly colorToken: string;
-  readonly icon: string;
-}
-
-/**
- * Renders a single quick action card.
- *
- * @param config Quick action configuration.
- * @returns HTML string for the card.
- */
-const renderQuickAction = (config: QuickActionConfig): string => `
-  <a href="${escapeHtml(config.href)}" class="card border border-${config.colorToken}/15 bg-gradient-to-br from-${config.colorToken}/5 via-base-100 to-base-100 shadow-sm hover:shadow-lg hover:border-${config.colorToken}/30 transition-all group" aria-label="${escapeHtml(config.label)}">
-    <div class="card-body gap-3 p-4">
-      <div class="flex items-center justify-between">
-        <div class="rounded-btn bg-${config.colorToken}/15 p-2.5 group-hover:bg-${config.colorToken}/25 transition-colors">
-          <svg xmlns="http://www.w3.org/2000/svg" class="size-5 text-${config.colorToken}" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">${config.icon}</svg>
-        </div>
-        ${config.count !== undefined ? `<span class="badge badge-${config.colorToken} badge-soft badge-sm">${config.count}</span>` : ""}
-      </div>
-      <div>
-        <h3 class="font-semibold">${escapeHtml(config.label)}</h3>
-        <p class="text-xs text-base-content/60 mt-0.5">${escapeHtml(config.desc)}</p>
-      </div>
-    </div>
-  </a>`;
-
-/**
- * Workspace link configuration.
- */
-interface WorkspaceLinkConfig {
-  readonly href: string;
-  readonly label: string;
-  readonly colorToken: string;
-  readonly icon: string;
-}
-
-/**
- * Renders a workspace navigation link.
- *
- * @param config Workspace link configuration.
- * @returns HTML string for the link.
- */
-const renderWorkspaceLink = (config: WorkspaceLinkConfig): string => `
-  <a href="${escapeHtml(config.href)}" class="flex items-center gap-3 rounded-btn px-3 py-2.5 hover:bg-${config.colorToken}/10 transition-colors group" aria-label="${escapeHtml(config.label)}">
-    <div class="rounded-btn bg-${config.colorToken}/10 p-1.5 group-hover:bg-${config.colorToken}/20 transition-colors">
-      <svg xmlns="http://www.w3.org/2000/svg" class="size-4 text-${config.colorToken}" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">${config.icon}</svg>
-    </div>
-    <span class="text-sm font-medium">${escapeHtml(config.label)}</span>
-    <svg xmlns="http://www.w3.org/2000/svg" class="size-3.5 ml-auto opacity-0 group-hover:opacity-60 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
-  </a>`;

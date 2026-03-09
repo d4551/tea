@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { appConfig, type LocaleCode, normalizeLocale } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
 import { prismaBase } from "../../shared/services/db.ts";
+import { settleAsync } from "../../shared/utils/async-result.ts";
 import {
   extractKnowledgeSearchTerms,
   type KnowledgeSearchTerm,
@@ -278,20 +279,17 @@ const resolveEmbedding = async (text: string): Promise<Float32Array> => {
     return createFallbackEmbedding(text);
   }
 
-  const registry = await ProviderRegistry.getInstance().catch((error: unknown) => {
-    logger.warn("knowledge.embedding.provider.failed", { error: String(error) });
+  const registry = await settleAsync(ProviderRegistry.getInstance());
+  if (!registry.ok) {
+    logger.warn("knowledge.embedding.provider.failed", { error: registry.error.message });
     embeddingFallbackUntilMs = Date.now() + embeddingFallbackCooldownMs();
-    return null;
-  });
-
-  if (registry) {
-    const embedding = await registry.generateEmbedding(text).catch((error: unknown) => {
-      logger.warn("knowledge.embedding.provider.failed", { error: String(error) });
+  } else {
+    const embedding = await settleAsync(registry.value.generateEmbedding(text));
+    if (!embedding.ok) {
+      logger.warn("knowledge.embedding.provider.failed", { error: embedding.error.message });
       embeddingFallbackUntilMs = Date.now() + embeddingFallbackCooldownMs();
-      return null;
-    });
-    if (embedding) {
-      return embedding;
+    } else if (embedding.value) {
+      return embedding.value;
     }
   }
 

@@ -7,6 +7,7 @@ import type { LocaleCode } from "../../config/environment.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
+import { renderWorkspaceShell } from "./workspace-shell.ts";
 
 /**
  * Renders the dialogue editor panel.
@@ -53,6 +54,10 @@ export const renderDialogueEditor = (
     locale,
     projectId,
   });
+  const totalLines = Array.from(npcGroups.values()).reduce(
+    (total, lines) => total + lines.length,
+    0,
+  );
 
   const groupHtml = Array.from(npcGroups.entries())
     .map(([npcId, lines]) => {
@@ -114,7 +119,22 @@ export const renderDialogueEditor = (
     .join("");
 
   return `
-    <section class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr] animate-fade-in-up">
+    <section class="space-y-6 animate-fade-in-up">
+      ${renderWorkspaceShell({
+        eyebrow: messages.builder.dialogue,
+        title: messages.builder.dialogueWorkspaceTitle,
+        description: messages.builder.dialogueCreateDescription,
+        facets: [
+          { label: locale, badgeClassName: "badge-secondary" },
+          { label: messages.builder.generateDialogue, badgeClassName: "badge-accent" },
+        ],
+        metrics: [
+          { label: messages.builder.dialogue, value: totalLines, toneClassName: "text-primary" },
+          { label: messages.builder.npcs, value: npcGroups.size },
+          { label: messages.navigation.localeLabel, value: locale },
+        ],
+      })}
+      <section class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <div class="space-y-4">
         <article class="card card-border bg-base-100 shadow-sm">
           <div class="card-body gap-4">
@@ -173,6 +193,7 @@ export const renderDialogueEditor = (
             : `<div role="alert" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noDialogues)}</span></div>`
         }
       </div>
+    </section>
     </section>`;
 };
 

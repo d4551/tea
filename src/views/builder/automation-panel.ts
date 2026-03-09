@@ -11,6 +11,7 @@ import {
   getAutomationStepSummaryLabel,
   getLongRunningStatusLabel,
 } from "./view-labels.ts";
+import { renderWorkspaceShell } from "./workspace-shell.ts";
 
 /**
  * Renders the automation review and orchestration workspace.
@@ -31,6 +32,8 @@ export const renderAutomationPanel = (
 ): string => {
   const createRunAction = `${appRoutes.builderApiAutomationRuns}/create/form`;
   const artifactLookup = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
+  const blockedRuns = runs.filter((run) => run.status === "blocked_for_approval").length;
+  const completedRuns = runs.filter((run) => run.status === "succeeded").length;
   const runCards = runs
     .map((run) => {
       const reviewAction = withQueryParameters(
@@ -117,11 +120,30 @@ export const renderAutomationPanel = (
   const emptyRunAlert = `<div role="status" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noAutomationRuns)}</span></div>`;
 
   return `<section class="space-y-6 animate-fade-in-up">
+    ${renderWorkspaceShell({
+      eyebrow: messages.builder.automation,
+      title: messages.builder.automationWorkspaceTitle,
+      description: messages.builder.capabilityAutomationDescription,
+      facets: [
+        { label: messages.builder.readinessPartial, badgeClassName: "badge-warning" },
+        { label: messages.builder.automationArtifactsLabel, badgeClassName: "badge-secondary" },
+      ],
+      metrics: [
+        { label: messages.builder.automation, value: runs.length, toneClassName: "text-primary" },
+        { label: messages.builder.automationArtifactsLabel, value: artifacts.length },
+        {
+          label: messages.builder.readinessPartial,
+          value: blockedRuns,
+          toneClassName: blockedRuns > 0 ? "text-warning" : "text-base-content",
+        },
+        { label: messages.builder.readinessImplemented, value: completedRuns },
+      ],
+    })}
     <article class="card card-border bg-base-100 shadow-sm">
       <form class="card-body gap-3" hx-post="${escapeHtml(createRunAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#automation-create-spinner" hx-disabled-elt="button, input, select, textarea">
         <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
         <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
-        <h1 class="card-title text-2xl">${escapeHtml(messages.builder.automationWorkspaceTitle)}</h1>
+        <h2 class="card-title text-2xl">${escapeHtml(messages.builder.createAutomationRun)}</h2>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.automationGoalLabel)}</legend>
           <textarea name="goal" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.automationGoalPlaceholder)}" aria-required="true" required></textarea>

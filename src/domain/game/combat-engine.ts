@@ -80,8 +80,7 @@ export class CombatEngine {
           defeated: target.stats.hp <= 0,
         });
       } else if (action.type === "skill") {
-        // Skill logic
-        const rawDamage = 15;
+        const rawDamage = defaultGameConfig.combatSkillBaseDamage;
         const finalDamage = Math.max(1, rawDamage - target.stats.magicDefense);
         const defeated = target.stats.hp - finalDamage <= 0;
 

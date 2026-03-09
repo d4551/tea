@@ -8,6 +8,7 @@
 
 import { appConfig } from "../../../config/environment.ts";
 import { createLogger } from "../../../lib/logger.ts";
+import type { LocalModelRuntime } from "../local-model-runtime.ts";
 import { ModelManager } from "../model-manager.ts";
 import { MODEL_REGISTRY, type ModelKey } from "../model-registry.ts";
 import type {
@@ -56,6 +57,16 @@ export class TransformersProvider implements AiProvider {
   private _lastFailureAtMs = 0;
 
   /**
+   * Creates a Transformers.js provider.
+   *
+   * @param resolveManager Async resolver for the local model runtime facade.
+   */
+  constructor(
+    private readonly resolveManager: () => Promise<LocalModelRuntime> = () =>
+      ModelManager.getInstance(),
+  ) {}
+
+  /**
    * Transformers.js is always available since it runs locally via ONNX/WASM.
    *
    * @returns Always true.
@@ -70,7 +81,7 @@ export class TransformersProvider implements AiProvider {
    * @returns Provider readiness.
    */
   async readiness(): Promise<"ready" | "degraded" | "offline"> {
-    const modelManager = await ModelManager.getInstance();
+    const modelManager = await this.resolveManager();
     const warmState = modelManager.isReady;
     if (!warmState) {
       this._lastFailureAtMs = Date.now();
@@ -122,7 +133,7 @@ export class TransformersProvider implements AiProvider {
    */
   async chat(params: AiChatParams): Promise<AiGenerationResult> {
     const startMs = Date.now();
-    const manager = await ModelManager.getInstance();
+    const manager = await this.resolveManager();
 
     const lastUserMessage = [...params.messages].reverse().find((m) => m.role === "user");
 
@@ -143,20 +154,20 @@ export class TransformersProvider implements AiProvider {
         : lastUserMessage.content;
     const result =
       pipelineKey === "npcDialogue"
-        ? await manager.generateText("npcDialogue", prompt)
-        : await manager.generateOracle(prompt);
+        ? await manager.generateTextResult("npcDialogue", prompt)
+        : await manager.generateTextResult("oracle", prompt, prompt);
 
-    if (result === null) {
+    if (!result.ok) {
       return {
         ok: false,
-        error: "Transformers.js generation returned null",
-        retryable: true,
+        error: result.failure.message,
+        retryable: result.failure.retryable,
       };
     }
 
     return {
       ok: true,
-      text: result,
+      text: result.value.text,
       model: MODEL_REGISTRY[pipelineKey].model,
       durationMs: Date.now() - startMs,
     };
@@ -183,17 +194,17 @@ export class TransformersProvider implements AiProvider {
    * @returns Classification result or null on failure.
    */
   async classify(text: string, _model?: string): Promise<AiClassificationResult | null> {
-    const manager = await ModelManager.getInstance();
-    const result = await manager.analyzeSentiment(text);
+    const manager = await this.resolveManager();
+    const result = await manager.analyzeSentimentResult(text);
 
-    if (!result) {
+    if (!result.ok) {
       return null;
     }
 
     return {
       ok: true,
-      label: result.label,
-      score: result.score,
+      label: result.value.label,
+      score: result.value.score,
       model: MODEL_REGISTRY.sentiment.model,
     };
   }
@@ -214,20 +225,20 @@ export class TransformersProvider implements AiProvider {
     }
 
     const startMs = Date.now();
-    const manager = await ModelManager.getInstance();
-    const result = await manager.transcribeAudio(params.audio);
+    const manager = await this.resolveManager();
+    const result = await manager.transcribeAudioResult(params.audio);
 
-    if (result === null) {
+    if (!result.ok) {
       return {
         ok: false,
-        error: "Transformers.js speech recognition returned no text.",
-        retryable: true,
+        error: result.failure.message,
+        retryable: result.failure.retryable,
       };
     }
 
     return {
       ok: true,
-      text: result,
+      text: result.value.text,
       model: params.model ?? MODEL_REGISTRY.speechToText.model,
       durationMs: Date.now() - startMs,
     };
@@ -249,21 +260,21 @@ export class TransformersProvider implements AiProvider {
     }
 
     const startMs = Date.now();
-    const manager = await ModelManager.getInstance();
-    const result = await manager.synthesizeSpeech(params.text);
+    const manager = await this.resolveManager();
+    const result = await manager.synthesizeSpeechResult(params.text);
 
-    if (result === null) {
+    if (!result.ok) {
       return {
         ok: false,
-        error: "Transformers.js speech synthesis returned no audio.",
-        retryable: true,
+        error: result.failure.message,
+        retryable: result.failure.retryable,
       };
     }
 
     return {
       ok: true,
-      audio: result.audio,
-      sampleRate: result.sampleRate,
+      audio: result.value.audio,
+      sampleRate: result.value.sampleRate,
       model: params.model ?? MODEL_REGISTRY.textToSpeech.model,
       durationMs: Date.now() - startMs,
     };
@@ -295,18 +306,17 @@ export class TransformersProvider implements AiProvider {
       return null;
     }
 
-    const manager = await ModelManager.getInstance();
-    return manager.generateEmbedding(text);
+    const manager = await this.resolveManager();
+    const result = await manager.generateEmbeddingResult(text);
+    return result.ok ? result.value.embedding : null;
   }
 
   /**
    * Disposes the underlying ModelManager singleton.
    */
   async dispose(): Promise<void> {
-    const manager = ModelManager.peekInstance();
-    if (manager) {
-      await manager.dispose();
-    }
+    const manager = await this.resolveManager();
+    await manager.dispose();
     logger.info("transformers.provider.disposed");
   }
 }

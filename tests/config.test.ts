@@ -66,7 +66,9 @@ describe("environment parsing", () => {
     expect(appConfig.staticAssets.assetsDirectory.length).toBeGreaterThan(0);
     expect(appConfig.staticAssets.rmmzPackDirectory.length).toBeGreaterThan(0);
     expect(appConfig.builder.workerPollIntervalMs).toBeGreaterThanOrEqual(100);
-    expect(appConfig.builder.localAutomationOrigin).toBe("http://127.0.0.1:3088");
+    const configuredAutomationOrigin = Bun.env.BUILDER_LOCAL_AUTOMATION_ORIGIN;
+    expect(typeof configuredAutomationOrigin).toBe("string");
+    expect(appConfig.builder.localAutomationOrigin).toBe(configuredAutomationOrigin ?? "");
     expect(appConfig.builder.automationProbeTimeoutMs).toBeGreaterThanOrEqual(100);
     expect(appConfig.ui.defaultTheme.length).toBeGreaterThan(0);
     expect(

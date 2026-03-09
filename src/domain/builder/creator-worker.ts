@@ -11,6 +11,8 @@ import type {
   GenerationArtifact,
   GenerationJob,
 } from "../../shared/contracts/game.ts";
+import { ProviderRegistry } from "../ai/providers/provider-registry.ts";
+import { AiAuthoringService } from "./ai-authoring.ts";
 import { persistBuilderFile } from "./asset-storage.ts";
 
 interface WorkerSuccess<TPayload> {
@@ -240,24 +242,64 @@ const buildGenerationArtifact = async (
     };
   }
 
-  if (job.kind === "animation-plan") {
-    const payload = JSON.stringify(
-      {
-        prompt: job.prompt,
-        targetId: job.targetId,
-        suggestedClips: [
-          { id: `${job.id}.idle`, stateTag: "idle", frameCount: 4, playbackFps: 8 },
-          { id: `${job.id}.walk`, stateTag: "walk", frameCount: 6, playbackFps: 10 },
-        ],
-      },
-      null,
-      2,
-    );
+  if (
+    job.kind === "animation-plan" ||
+    job.kind === "combat-encounter" ||
+    job.kind === "item-set" ||
+    job.kind === "cutscene-script"
+  ) {
+    let payloadStr = "";
+
+    if (job.kind === "animation-plan") {
+      payloadStr = JSON.stringify(
+        {
+          prompt: job.prompt,
+          targetId: job.targetId,
+          suggestedClips: [
+            { id: `${job.id}.idle`, stateTag: "idle", frameCount: 4, playbackFps: 8 },
+            { id: `${job.id}.walk`, stateTag: "walk", frameCount: 6, playbackFps: 10 },
+          ],
+        },
+        null,
+        2,
+      );
+    } else {
+      const registry = await ProviderRegistry.getInstance();
+      const provider = registry.selectProvider("text-generation");
+      if (!provider) {
+        throw new Error(`ai-provider-unavailable-for-generation`);
+      }
+      const authoring = new AiAuthoringService(provider);
+
+      if (job.kind === "combat-encounter") {
+        const result = await authoring.generateCombatEncounter({
+          sceneId: job.targetId ?? "unknown",
+          difficulty: "normal",
+          playerLevel: 1,
+        });
+        payloadStr = JSON.stringify(result ?? {}, null, 2);
+      } else if (job.kind === "item-set") {
+        const result = await authoring.generateItemSet({
+          theme: job.prompt,
+          count: 3,
+          rarity: "common",
+        });
+        payloadStr = JSON.stringify(result ?? [], null, 2);
+      } else if (job.kind === "cutscene-script") {
+        const result = await authoring.generateCutsceneScript({
+          sceneId: job.targetId ?? "unknown",
+          characters: [],
+          mood: "neutral",
+        });
+        payloadStr = JSON.stringify(result ?? [], null, 2);
+      }
+    }
+
     const persisted = await persistBuilderFile(
       projectId,
       "generated",
       artifactId,
-      new TextEncoder().encode(payload),
+      new TextEncoder().encode(payloadStr),
       `${artifactId}.json`,
       "application/json",
     );
@@ -265,7 +307,7 @@ const buildGenerationArtifact = async (
     return {
       id: artifactId,
       jobId: job.id,
-      kind: "animation-plan",
+      kind: job.kind,
       label: `generation.artifact.label.review:${job.kind}`,
       previewSource: persisted.publicUrl,
       summary: toArtifactSummary(job),
@@ -388,7 +430,7 @@ const executeBrowserAutomationStep = async (
       return { ...step, status: "completed" };
     }
     case "assert-text": {
-      await page.getByText(spec.text).waitFor();
+      await page.getByText(spec.text).first().waitFor();
       return { ...step, status: "completed" };
     }
     case "screenshot": {

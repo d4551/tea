@@ -2,6 +2,7 @@ import { appConfig } from "../config/environment.ts";
 import { createLogger } from "../lib/logger.ts";
 import { assetRelativePaths, joinLocalPath } from "../shared/constants/assets.ts";
 import { prisma } from "../shared/services/db.ts";
+import { settleAsync } from "../shared/utils/async-result.ts";
 
 const runtimeReadinessLogger = createLogger("bootstrap.runtime-readiness");
 
@@ -72,9 +73,8 @@ const resolveRequiredDirectories = (): readonly string[] => {
 
 const verifyWritableDirectory = async (directoryPath: string): Promise<RuntimeReadinessCheck> => {
   const probePath = `${directoryPath}/.bun-probe`;
-  const ok = await Bun.write(probePath, "ok")
-    .then((bytes) => bytes > 0)
-    .catch(() => false);
+  const writeResult = await settleAsync(Bun.write(probePath, "ok"));
+  const ok = writeResult.ok && writeResult.value > 0;
   return {
     key: `directory:${directoryPath}`,
     label: "Writable directory",

@@ -1,4 +1,5 @@
 import type { LocaleCode } from "../../config/environment.ts";
+import type { BuilderPlatformReadiness } from "../../domain/builder/platform-readiness.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type {
   AnimationClip,
@@ -9,6 +10,7 @@ import type {
 } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
+import { renderPlatformReadinessSection } from "./platform-readiness.ts";
 import {
   getArtifactLabel,
   getArtifactSummaryLabel,
@@ -18,6 +20,7 @@ import {
   getLongRunningStatusLabel,
   getSceneModeLabel,
 } from "./view-labels.ts";
+import { renderWorkspaceShell } from "./workspace-shell.ts";
 
 /**
  * Renders the authored asset, clip, and generation job workspace.
@@ -39,6 +42,7 @@ export const renderAssetsEditor = (
   clips: readonly AnimationClip[],
   jobs: readonly GenerationJob[],
   artifacts: readonly GenerationArtifact[],
+  readiness?: BuilderPlatformReadiness,
 ): string => {
   const createAssetAction = `${appRoutes.builderApiAssets}/create/form`;
   const uploadAssetAction = appRoutes.builderApiAssetsUpload;
@@ -93,9 +97,10 @@ export const renderAssetsEditor = (
 
   const clipCards = clips
     .map((clip) => {
-      const durationMs = clip.frameCount > 0 && clip.playbackFps > 0
-        ? Math.round((clip.frameCount / clip.playbackFps) * 1000)
-        : 0;
+      const durationMs =
+        clip.frameCount > 0 && clip.playbackFps > 0
+          ? Math.round((clip.frameCount / clip.playbackFps) * 1000)
+          : 0;
       const durationLabel = durationMs > 0 ? `${(durationMs / 1000).toFixed(2)}s` : "—";
       const loopLabel = clip.loop
         ? messages.builder.clipTimelineLoop
@@ -195,8 +200,44 @@ export const renderAssetsEditor = (
   const emptyClipAlert = `<div role="status" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noAnimationClips)}</span></div>`;
   const emptyJobAlert = `<div role="status" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noGenerationJobs)}</span></div>`;
 
+  const assets2d = assets.filter((asset) => asset.sceneMode !== "3d").length;
+  const assets3d = assets.filter((asset) => asset.sceneMode === "3d").length;
+
   return `<section class="space-y-6 animate-fade-in-up">
-    <h1 class="text-2xl font-bold">${escapeHtml(messages.builder.assetsWorkspaceTitle)}</h1>
+    ${renderWorkspaceShell({
+      eyebrow: messages.builder.assets,
+      title: messages.builder.assetsWorkspaceTitle,
+      description: messages.builder.assetPlaceholder,
+      facets: [
+        { label: messages.builder.capabilitySpritePipelineTitle, badgeClassName: "badge-warning" },
+        {
+          label: messages.builder.capabilityAnimationPipelineTitle,
+          badgeClassName: "badge-warning",
+        },
+        { label: messages.builder.capability3dRuntimeTitle, badgeClassName: "badge-secondary" },
+      ],
+      metrics: [
+        { label: messages.builder.assets, value: assets.length, toneClassName: "text-primary" },
+        { label: messages.builder.animationClipsTitle, value: clips.length },
+        { label: messages.builder.sceneMode2d, value: assets2d },
+        {
+          label: messages.builder.sceneMode3d,
+          value: assets3d,
+          toneClassName: assets3d > 0 ? "text-secondary" : "text-base-content",
+        },
+      ],
+    })}
+    ${
+      readiness
+        ? renderPlatformReadinessSection({
+            messages,
+            locale,
+            projectId,
+            readiness,
+            keys: ["runtime2d", "runtime3d", "spritePipeline", "animationPipeline"],
+          })
+        : ""
+    }
     <div class="grid gap-4 xl:grid-cols-3">
       <article class="card card-border bg-base-100 shadow-sm">
         <div class="card-body gap-3">

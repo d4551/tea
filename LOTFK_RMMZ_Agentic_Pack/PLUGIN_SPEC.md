@@ -1,4 +1,6 @@
-# LOTFK RPG Maker MZ Plugin Spec (Implementation Contract)
+# LOTFK RPG Maker MZ plugin spec
+
+Current-state implementation contract for the companion pack. This document is maintained as a live reference, not a speculative implementation prompt.
 
 ## Sources / conventions
 - Plugins are placed in `js/plugins` and activated via Plugin Manager.

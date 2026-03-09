@@ -9,6 +9,7 @@
 import { appConfig } from "../../../config/environment.ts";
 import { createLogger } from "../../../lib/logger.ts";
 import type { ProviderReadiness } from "../../../shared/contracts/game.ts";
+import { settleAsync } from "../../../shared/utils/async-result.ts";
 import { OllamaProvider } from "./ollama-provider.ts";
 import { OpenAiCompatibleProvider } from "./openai-compatible-provider.ts";
 import type {
@@ -141,9 +142,10 @@ export class ProviderRegistry {
 
     const registry = new ProviderRegistry(providers);
     ProviderRegistry._instance = registry;
-    await registry._ensureCapabilitiesReady().catch((error: unknown) => {
-      logger.warn("registry.initial-refresh.failed", { error: String(error) });
-    });
+    const readinessResult = await settleAsync(registry._ensureCapabilitiesReady());
+    if (!readinessResult.ok) {
+      logger.warn("registry.initial-refresh.failed", { error: readinessResult.error.message });
+    }
     return registry;
   }
 
@@ -464,15 +466,33 @@ export class ProviderRegistry {
     const allCapabilities: AiModelCapabilities[] = [];
 
     for (const provider of this._providers) {
-      const readiness = await provider.readiness().catch(() => "offline" as ProviderReadiness);
+      const readinessResult = await settleAsync(provider.readiness());
+      const readiness = readinessResult.ok
+        ? readinessResult.value
+        : ("offline" as ProviderReadiness);
       const available = readiness !== "offline";
       this._providerAvailability.set(provider.name, available);
       this._providerReadiness.set(provider.name, readiness);
-      this._providerReasons.set(provider.name, readiness === "degraded" ? "recovering" : "");
+      this._providerReasons.set(
+        provider.name,
+        readinessResult.ok
+          ? readiness === "degraded"
+            ? "recovering"
+            : ""
+          : readinessResult.error.message,
+      );
 
       if (available) {
-        const caps = await provider.detectCapabilities().catch(() => []);
-        allCapabilities.push(...caps);
+        const capabilitiesResult = await settleAsync(provider.detectCapabilities());
+        if (capabilitiesResult.ok) {
+          allCapabilities.push(...capabilitiesResult.value);
+        } else {
+          this._providerReasons.set(provider.name, capabilitiesResult.error.message);
+          logger.warn("registry.capabilities.provider-failed", {
+            provider: provider.name,
+            error: capabilitiesResult.error.message,
+          });
+        }
       }
     }
 

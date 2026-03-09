@@ -1,295 +1,287 @@
-# System Architecture Trace
+# TEA architecture
 
-## Runtime Topology
+This document is the source-of-truth overview for TEA’s current runtime boundaries.
 
-```mermaid
-graph TB
-  subgraph Browser["Browser"]
-    HOME["SSR + HTMX pages"]
-    GAME["Playable client (Pixi + Three)"]
-    SSE["HUD SSE stream"]
-    WS["Command WebSocket"]
-  end
-
-  subgraph App["Elysia app.ts"]
-    RC["request-context"]
-    EH["global onError"]
-    CT["onAfterHandle content-type"]
-    SW["swagger"]
-    SA["static-assets"]
-    PR["page-routes"]
-    GR["game-routes (SSR game bootstrap)"]
-    AR["api-routes"]
-    AIR["ai-routes"]
-    AIP["ai-provider-plugin"]
-    GRC["game-request-context"]
-    GP["game-plugin"]
-    BR["builder-routes"]
-    BA["builder-api-routes"]
-    SP["session-purge"]
-    CW["creator-worker"]
-  end
-
-  subgraph Domain["Domain Services"]
-    LOOP["GameLoopService"]
-    STORE["GameStateStore"]
-    SCENE["SceneEngine + NpcAiEngine"]
-    BUILDER["PrismaBuilderService"]
-    AI["ProviderRegistry + game-ai-service + knowledge-base-service"]
-  end
-
-  subgraph Data["Prisma Models"]
-    GS["gameSession"]
-    GSP["gameSessionParticipant"]
-    PP["playerProgress"]
-    BP["builderProject"]
-    BPR["builderProjectRelease"]
-  end
-
-  HOME --> RC
-  GAME --> GP
-  GAME --> SSE
-  GAME --> WS
-  RC --> EH --> CT --> SW --> SA --> PR --> GR --> AR --> AIR --> AIP --> GRC --> GP --> BR --> BA --> SP --> CW
-  GP --> LOOP --> STORE --> GS
-  STORE --> GSP
-  LOOP --> SCENE
-  LOOP --> AI
-  STORE --> PP
-  BA --> BUILDER --> BP
-  BUILDER --> BPR
-  AIR --> AI
-```
-
-## Ownership Boundaries
-
-- `request-context` owns correlation-id creation and per-request completion logs.
-- `builder-request-context` owns canonical builder locale, project id, current path, and scoped body/query/param merges from request URL and handler inputs, and exposes that context through a scoped Elysia derive plugin so builder page/API handlers do not recompose request context independently.
-- `oracle-service` owns stable oracle answer composition. It uses provider-routed chat only when a non-Transformers chat backend is available; otherwise it falls back to deterministic SSR-safe oracle copy while still routing sentiment persistence through the shared provider registry.
-- `layout.ts` owns the shared SSR `LayoutContext` and document renderer, so page, builder, and game shells consume one route-derived layout contract instead of rebuilding nav/path state independently.
-- `auth-session` owns anonymous cookie identity plus request-scoped auth-session context for page/API handlers, and that cookie identity is now the ownership boundary for game sessions.
-- `game-request-context` owns canonical gameplay transport identity: HTTP participant/locale resolution plus playable-page `sessionId` / `projectId` / `invite` query resolution for SSR and API handlers, plus websocket participant/resume-token resolution for session restore and command lanes.
-- `game-plugin` owns game transport contracts:
-  - REST lifecycle routes (`create`, `state`, `restore`, `save`, `close`, `delete`)
-  - multiplayer invite/join routes
-  - command enqueue route
-  - canonical HUD SSE stream
-  - command/state websocket endpoint
-  - websocket tick registration/cleanup and session-scoped transport teardown
-- `game-loop` owns authoritative simulation, canonical session resolution, owner/controller avatar movement, dashboard/session metrics, expired-session purging, HUD state projection, token verification, tick scheduling, throttled persistence, and chat rate limiting.
-- `playerProgressStore` owns XP, level, visited-scene, and one-time interaction persistence consumed by the game loop and HUD projection, backed by normalized `PlayerProgressVisitedScene` and `PlayerProgressInteraction` rows instead of JSON blobs.
-- `shared/contracts/game.ts` owns boundary validation for persisted scene state, trigger definitions, and realtime websocket frames before they reach runtime or client renderers.
-- `GameStateStore` stays the persistence boundary behind `game-loop`, including persisted shared-session participants plus normalized session scene, actor, runtime-state, NPC, trigger, quest, and flag rows.
-- `builder-project-state-store` owns builder project JSON decode/normalize, optimistic versioned saves, snapshot projection, published-release reads, and the projection of normalized scene metadata/collision/NPC/node rows back into builder scene contracts.
-- `builder-service` owns builder domain mutations, canonical create-form defaults for scenes/assets/animation clips/mechanics/generation/automation, publish/unpublish orchestration, AI patch preview/apply flows, and canonical asset metadata for OpenUSD-aware ingestion.
-- `knowledge-base-service` owns RAG chunking, embedding resolution, knowledge-document persistence, lexical term indexing, semantic retrieval, and retrieval-augmented assist prompts.
-- `ProviderRegistry` owns provider lifecycle, capability routing, embeddings routing, and structured tool planning across Ollama, Transformers.js, and generic OpenAI-compatible local/cloud lanes. `knowledge-base-service` consumes that registry rather than binding to local/cloud providers directly.
-- `runtime-readiness` owns setup/doctor/startup verification for DB reachability, required assets, writable directories, Bun version policy, and AI routing configuration.
-- `ai-provider-plugin` owns provider-registry boot, periodic capability refresh, and shutdown disposal.
-- `creator-worker-plugin` owns lifecycle-managed generation-job and automation-run draining.
-
-## Session Security Contract
-
-```mermaid
-sequenceDiagram
-  participant Client as Client
-  participant Cookie as auth-session cookie
-  participant Plugin as game-plugin
-  participant Loop as game-loop
-  participant Store as game-state-store
-  participant DB as Prisma
-
-  Client->>Plugin: POST /api/game/session
-  Plugin->>Cookie: resolveAuthSession()
-  Plugin->>Loop: createSession(..., ownerSessionId)
-  Loop->>Store: createSession(ownerSessionId)
-  Store->>DB: INSERT gameSession
-  DB-->>Store: session row
-  Loop-->>Plugin: snapshot + resume token
-  Plugin-->>Client: 200 + token + expiresAt
-
-  Client->>Plugin: POST /api/game/session/:id/invite
-  Plugin->>Loop: createInviteToken(sessionId, ownerSessionId, role)
-  Loop-->>Plugin: invite token
-  Plugin-->>Client: join link
-
-  Client->>Plugin: POST /api/game/session/:id/join
-  Plugin->>Cookie: resolve participant session id
-  Plugin->>Loop: joinSession(inviteToken, participantSessionId)
-  Loop->>Store: saveParticipant(sessionId, participantSessionId, role)
-  Plugin-->>Client: participant-scoped resume token
-
-  Client->>Plugin: WS /api/game/session/:id/ws?resumeToken=...
-  Plugin->>Cookie: resolve actor session id
-  Plugin->>Loop: restoreSession(sessionId, resumeToken, participantSessionId)
-  Loop-->>Plugin: accept/reject
-  Plugin-->>Client: state stream or close(4408/4404)
-```
-
-Enforced rules:
-
-- Resume token payload includes `sessionId`, `ownerSessionId`, `participantSessionId`, `expiresAtMs`, `tokenVersion`, and a signature.
-- Restore is POST-only with JSON body: `{ "resumeToken": "..." }`.
-- Token possession is insufficient; the cookie-backed actor session must match the signed participant identity.
-- Token version rotates on successful restore, invalidating stale actor tokens.
-- Spectators can restore and observe, but `game-plugin` rejects gameplay commands for spectator roles.
-
-## Game Transport Contract
-
-| Surface | Endpoint | Contract |
-|---|---|---|
-| SSR bootstrap | `GET /game` | Emits session meta + resume token meta + client runtime config meta tags |
-| Create | `POST /api/game/session` | Creates authoritative session and returns lifecycle state |
-| Invite | `POST /api/game/session/:id/invite` | Owner-scoped role invite issuance |
-| Join | `POST /api/game/session/:id/join` | Invite-token admission into an existing session |
-| State | `GET /api/game/session/:id/state` | Participant-scoped state read |
-| Restore | `POST /api/game/session/:id` | Body token verification + participant identity check |
-| Command | `POST /api/game/session/:id/command` | Schema validated command enqueue for owner/controller roles |
-| HUD | `GET /api/game/session/:id/hud` | Canonical SSE HTML stream (`scene-title`, `xp`, `dialogue`, `participants`, `close`) |
-| WS | `/api/game/session/:id/ws` | Token-gated command/state realtime lane |
-
-Removed retired transport surfaces:
-
-- `/api/game/session/:id/partials/dialogue` is removed.
-- HUD rendering now has one source of truth: the SSE stream.
-- Session close/delete now actively tear down websocket tick owners for that session instead of
-  waiting for the socket to disappear later.
-
-## Tick and Persistence Model
-
-- Tick ownership is not coupled to websocket presence.
-- `startTick()` registers optional callbacks; ticks continue when queue/dialogue state requires it.
-- Async overlap is prevented with `tickInFlight` and per-session timeout scheduling.
-- Persistence is throttled by `sessionPersistIntervalMs`.
-- Manual save uses `saveSessionNow()` plus cooldown gate from `saveCooldownMs`.
-- Optimistic versioning is maintained with `stateVersion` and guarded writes in persistence stores.
-
-## Builder/Player Loop
+## System topology
 
 ```mermaid
 flowchart TB
-  subgraph Builder["Builder"]
-    B1["Author content"]
-    B2["Scenes, NPCs, Dialogue"]
-    B3["Assets, Clips, Mechanics"]
-    B4["AI patch review"]
-    B5["Publish release"]
+  subgraph Browser["Browser surfaces"]
+    SSR["SSR documents"]
+    HTMX["HTMX fragments"]
+    Runtime["Playable runtime"]
+    SSE["HUD SSE"]
+    WS["Command websocket"]
   end
 
-  subgraph Player["Player"]
-    P1["Play published build"]
-    P2["Validate content"]
-    P3["Back to builder"]
+  subgraph Server["Elysia application"]
+    RC["request-context"]
+    LC["i18n-context"]
+    ERR["global onError"]
+    Views["SSR views"]
+    Routes["route handlers"]
+    Ext["HTMX extension assets"]
   end
 
-  B1 --> B2
-  B2 --> B3
-  B3 --> B4
-  B4 --> B5
-  B5 -->|"projectId"| P1
-  P1 --> P2
-  P2 --> P3
-  P3 --> B1
+  subgraph Domain["Domain owners"]
+    Loop["game-loop"]
+    Builder["builder-service"]
+    Registry["provider-registry"]
+    Knowledge["knowledge-base-service"]
+    Oracle["oracle-service"]
+  end
+
+  subgraph RuntimeOwners["Runtime owners"]
+    Client["playable client modules"]
+    ModelFacade["model-manager facade"]
+    ModelInternals["health + cache + loader + runner"]
+  end
+
+  subgraph Data["Persistence and artifacts"]
+    Prisma["Prisma data"]
+    Assets["public assets"]
+  end
+
+  SSR --> RC
+  HTMX --> Routes
+  Runtime --> Client
+  SSE --> Routes
+  WS --> Routes
+
+  RC --> LC
+  LC --> ERR
+  ERR --> Views
+  Views --> Ext
+  Routes --> Loop
+  Routes --> Builder
+  Routes --> Registry
+  Routes --> Knowledge
+  Routes --> Oracle
+
+  Loop --> Prisma
+  Builder --> Prisma
+  Registry --> ModelFacade
+  ModelFacade --> ModelInternals
+  Knowledge --> Prisma
+  Views --> Assets
+  Client --> Assets
 ```
 
-## Builder Publishing and Runtime Seeding
+## Request lifecycle
 
 ```mermaid
-flowchart TD
-  DRAFT["Draft mutations (scenes, NPCs, dialogue, mechanics)"] --> PROJECT["builderProject.state + version + checksum"]
-  DRAFT --> CONTENT["builderProjectScene + builderProjectDialogueEntry"]
-  DRAFT --> MEDIA["builderProjectAsset + builderProjectAnimationClip"]
-  DRAFT --> MECHANICS["builderProjectDialogueGraph + builderProjectQuest + builderProjectTrigger + builderProjectFlag"]
-  DRAFT --> KNOWLEDGE["aiKnowledgeDocument + aiKnowledgeChunk"]
-  PROJECT --> PUBLISH["publishProject(true)"]
-  CONTENT --> PUBLISH
-  MEDIA --> PUBLISH
-  MECHANICS --> PUBLISH
-  KNOWLEDGE --> PUBLISH
-  PUBLISH --> SNAPSHOT["Create immutable builderProjectRelease"]
-  SNAPSHOT --> POINTER["Update publishedReleaseVersion"]
-  POINTER --> RUNTIME["gameLoop.createSession(projectId)"]
-  RUNTIME --> RELEASE["load published release state"]
-  RELEASE --> SESSION["seed runtime scene, dialogue, media from immutable release"]
+sequenceDiagram
+  participant Browser
+  participant Request as request-context
+  participant Locale as i18n-context
+  participant Route as route handler
+  participant Domain as domain owner
+  participant View as SSR view / API envelope
+  participant Error as global onError
+
+  Browser->>Request: request
+  Request->>Locale: correlation id + locale derivation
+  Locale->>Route: typed context
+  Route->>Domain: typed boundary call
+  Domain-->>Route: success or typed failure
+  Route-->>View: document / fragment / API body
+  Route-->>Error: framework or unexpected error
+  Error-->>View: deterministic error envelope
 ```
 
-Current behavior:
+## Ownership boundaries
 
-- Draft edits mutate `builderProject.state` only for residual draft metadata, while scenes, dialogue catalogs, assets, animation clips, dialogue graph nodes/edges, quest steps, trigger flag conditions/effects, flags, generation-job artifact links, automation run steps/artifact links, artifacts, and automation runs live in relational draft tables.
-- Asset upload via `POST /api/builder/assets/upload`; mechanics CRUD via quest/trigger/dialogue-graph routes.
-- Asset ingestion accepts images, audio, glTF/GLB, and OpenUSD source files (`.usd`, `.usda`, `.usdc`, `.usdz`).
-- Published runtime currently treats `usdz` as the directly loadable OpenUSD variant in Three.js, while `.usd/.usda/.usdc` remain authoritative source variants for later import or conversion workflows.
-- Generation review streams via `GET /api/builder/generation-jobs/:jobId/stream`; automation evidence review via builder automation routes.
-- AI knowledge ingestion/list/search/assist live behind `/api/ai/knowledge/documents`, `/api/ai/knowledge/search`, and `/api/ai/assist/retrieval`.
-- Publish creates a new immutable release snapshot that materializes residual draft JSON plus relational content, media, mechanics, and worker state.
-- Runtime session seeding consumes the published snapshot, not mutable draft state.
-- Unpublish clears `publishedReleaseVersion` without deleting historical releases.
+| Concern | Owner | Notes |
+| --- | --- | --- |
+| Correlation ids and request completion logs | `request-context` | One request-scoped logging boundary |
+| Locale negotiation and translator selection | `i18n-context`, `translator.ts` | Tracks explicit override, query, header, and default fallback |
+| Shared shell and theme wiring | `src/views/layout.ts` | One layout owner for the SSR shell |
+| HTMX lifecycle behavior | `src/htmx-extensions/layout-controls.ts` | Busy state, validation swaps, focus return |
+| Game page bootstrap contract | `src/shared/contracts/game-client-bootstrap.ts` | Single SSR-to-browser contract |
+| Playable runtime entry | `src/playable-game/game-client.ts` | Orchestration only |
+| Authoritative simulation | `src/domain/game/game-loop.ts` | Session restore, queue advancement, persistence coordination |
+| Builder mutations and release flow | `src/domain/builder/builder-service.ts` | Draft mutation and publish orchestration |
+| AI capability routing | `src/domain/ai/providers/provider-registry.ts` | One provider switchboard |
+| Local model execution | `src/domain/ai/model-manager.ts` | Facade over health/cache/loader/runner modules |
+| Prisma failure mapping | `src/shared/services/prisma-failure.ts` | Explicit DB failure translation |
 
-## AI / RAG Topology
+## UI state model
+
+All SSR fragments and runtime fallback surfaces map to one state vocabulary.
+
+```mermaid
+stateDiagram-v2
+  [*] --> idle
+  idle --> loading
+  loading --> success
+  loading --> empty
+  loading --> unauthorized
+  loading --> retryable_error
+  loading --> non_retryable_error
+  retryable_error --> loading
+  success --> loading
+  empty --> loading
+  unauthorized --> [*]
+  non_retryable_error --> [*]
+```
+
+## Shared shell and HTMX ownership
+
+The shell is DaisyUI-first and HTMX-first.
+
+- Shared primitives: `navbar`, `drawer`, `card`, `alert`, `loading`, `table`, `toast`
+- Request behavior is driven by HTMX lifecycle events instead of page-local scripts
+- Validation responses can intentionally swap on `422`
+- Post-swap focus returns to `[data-focus-panel="true"]` first, then `#main-content`
 
 ```mermaid
 flowchart LR
-  DOC["Knowledge document payload"] --> KBS["knowledge-base-service"]
-  KBS --> CHUNK["Chunk + overlap projection"]
-  CHUNK --> EMBED["ProviderRegistry.generateEmbedding()"]
-  EMBED -->|ready| STORE["AiKnowledgeDocument + AiKnowledgeChunk"]
-  EMBED -->|cold / degraded| HASH["Deterministic fallback embedding"]
-  HASH --> STORE
-  QUERY["Search / retrieval assist request"] --> KBS
-  STORE --> KBS
-  KBS --> PLAN["ProviderRegistry.planTools()"]
-  KBS --> CHAT["ProviderRegistry.chat()"]
+  Request["HTMX request"] --> Busy["busy state on"]
+  Busy --> Swap{"response"}
+  Swap -->|2xx| Success["swap fragment"]
+  Swap -->|422| Validation["swap validation fragment"]
+  Swap -->|401/403| Unauthorized["render unauthorized state"]
+  Swap -->|5xx / failure| Error["render error or toast"]
+  Success --> Focus["restore focus"]
+  Validation --> Focus
+  Unauthorized --> Focus
+  Error --> Focus
 ```
 
-Notes:
+## Playable runtime decomposition
 
-- RAG corpus is persisted in Prisma so retrieval is available across requests and boots.
-- Retrieval uses a Prisma-backed lexical term index before semantic reranking so the app no longer fetches the entire chunk corpus for every search.
-- Embedding generation remains provider-routed and local-first, but the service uses deterministic fallback embeddings when the configured embedding backend cannot answer within the configured pipeline timeout budget.
-- The recommended local API-compatible runtime target is Ramalama (or any equivalent OpenAI-compatible local server) exposed through the generic `/v1` provider lane rather than bespoke route logic.
-- The OpenAI-compatible local/cloud lanes now expose chat, embeddings, vision, audio transcription, speech synthesis, and moderation-backed classification when the corresponding lane models are configured.
-- Structured tool planning is routed through `ProviderRegistry.planTools()` so local/cloud providers share one contract instead of each route inventing its own planner surface.
+The playable client is decomposed into focused modules under one entrypoint.
 
-## Setup and Audit Surface
+```mermaid
+flowchart LR
+  Entry["game-client.ts"]
+  Bootstrap["bootstrap/session"]
+  Transport["transport/reconnect"]
+  Input["input/runtime status"]
+  Renderer["renderer lifecycle"]
+  Types["shared client types"]
+  Contract["SSR bootstrap contract"]
 
-- `scripts/install-macos.sh`, `scripts/install-linux.sh`, and `scripts/install-windows.ps1` are the repo-owned fresh-machine bootstrap entrypoints.
-- `bun run setup` is the canonical Bun-native bootstrap workflow once Bun is present.
-- `bun run doctor` emits the same typed readiness envelope used by startup preflight.
-- Builder AI knowledge management and tool-plan review live on the SSR builder AI page; route handlers delegate to `knowledge-base-service` and `ProviderRegistry` instead of duplicating RAG/planning logic in transport handlers.
+  Entry --> Bootstrap
+  Entry --> Transport
+  Entry --> Input
+  Entry --> Renderer
+  Entry --> Types
+  Bootstrap --> Contract
+```
 
-## Client Runtime Config Contract
+### Playable connection state machine
 
-The SSR game page emits these required runtime meta tags consumed by `game-client.ts`:
+```mermaid
+stateDiagram-v2
+  [*] --> connecting
+  connecting --> connected
+  connecting --> missing
+  connecting --> expired
+  connected --> reconnecting
+  reconnecting --> connected
+  reconnecting --> expired
+  reconnecting --> disconnected
+  missing --> [*]
+  expired --> [*]
+  disconnected --> [*]
+```
 
-- `game-client-command-send-interval-ms`
-- `game-client-command-ttl-ms`
-- `game-client-socket-reconnect-delay-ms`
-- `game-client-restore-request-timeout-ms`
-- `game-client-restore-max-attempts`
+Rules:
 
-If these are missing/invalid, the playable client aborts initialization instead of silently using hidden hardcoded values.
+- Restore-first logic is limited to token-expiry and recoverable-close paths.
+- Session persistence is owned by the bootstrap/session module.
+- Websocket lifecycle, queue depth sync, and retry budget are transport-owned.
+- Renderer lifecycle is isolated from connection logic.
 
-## Configuration Sources of Truth
+## Local AI runtime decomposition
 
-| Concern | Source |
-|---|---|
-| Environment parsing and defaults | `src/config/environment.ts` |
-| i18n message catalogs (en-US, zh-CN) | `src/shared/i18n/messages.ts` |
-| Locale resolution (Accept-Language, ?lang=) | `src/shared/i18n/translator.ts` |
-| Builder request locale/project/path resolution | `src/plugins/builder-request-context.ts` |
-| Shared SSR layout context + document rendering | `src/views/layout.ts` |
-| Runtime game contract | `src/shared/config/game-config.ts` |
-| Public route constants | `src/shared/constants/routes.ts` |
-| Game type contracts | `src/shared/contracts/game.ts` |
-| Session persistence + repair | `src/domain/game/services/GameStateStore.ts` |
-| Authoritative simulation loop | `src/domain/game/game-loop.ts` |
-| Builder draft/release domain mutations | `src/domain/builder/builder-service.ts` |
-| Builder project state codec + snapshot persistence | `src/domain/builder/builder-project-state-store.ts` |
-| Builder project/release persistence primitives | `src/shared/services/db.ts` |
+The local model runtime uses one public facade and typed internal boundaries.
 
-## Verification Gates
+```mermaid
+flowchart LR
+  Provider["transformers-provider.ts"]
+  Facade["model-manager.ts"]
+  Health["model-runtime-health.ts"]
+  Cache["model-pipeline-cache.ts"]
+  Loader["model-pipeline-loader.ts"]
+  Runner["model-operation-runner.ts"]
+  Contract["local-model-contract.ts"]
 
-- `bun run build:assets`
-- `bun run lint`
-- `bun run typecheck`
-- `bun test`
+  Provider --> Facade
+  Facade --> Health
+  Facade --> Cache
+  Facade --> Loader
+  Facade --> Runner
+  Facade --> Contract
+```
+
+### Local runtime result model
+
+```mermaid
+flowchart TD
+  Operation["local model operation"] --> Result{"result"}
+  Result -->|ok| Value["typed value"]
+  Result -->|failure| Failure["typed LocalModelFailure"]
+  Failure --> Timeout["timeout"]
+  Failure --> Circuit["circuit-open"]
+  Failure --> CacheRecover["cache-corruption-recovered"]
+  Failure --> Unavailable["unavailable"]
+  Failure --> Invalid["invalid-output"]
+  Failure --> Unexpected["unexpected"]
+```
+
+## Builder publish and runtime seeding
+
+Runtime sessions seed from immutable published releases, not mutable draft state.
+
+```mermaid
+flowchart LR
+  Draft["Draft builder edits"]
+  DraftRows["Normalized draft rows"]
+  Publish["publishProject()"]
+  Release["Immutable release snapshot"]
+  Session["game-loop.createSession()"]
+  Runtime["Live runtime session"]
+
+  Draft --> DraftRows
+  DraftRows --> Publish
+  Publish --> Release
+  Release --> Session
+  Session --> Runtime
+```
+
+## Transport surfaces
+
+```mermaid
+flowchart LR
+  GamePage["GET /game"] --> Bootstrap["bootstrap payload"]
+  Create["POST /api/game/session"] --> Session["authoritative session"]
+  Restore["POST /api/game/session/:id"] --> Session
+  Command["POST /api/game/session/:id/command"] --> Session
+  Hud["GET /api/game/session/:id/hud"] --> SSEOut["SSE HUD"]
+  Socket["WS /api/game/session/:id/ws"] --> WSOut["realtime state lane"]
+```
+
+## Contract-first boundaries
+
+| Boundary | Contract owner |
+| --- | --- |
+| SSR game bootstrap | `src/shared/contracts/game-client-bootstrap.ts` |
+| Game transport frames and scene state | `src/shared/contracts/game.ts` |
+| UI fragment state | `src/shared/contracts/ui-state.ts` |
+| External provider/network/DB failures | `src/shared/contracts/external-boundary.ts` |
+| Local model runtime failures | `src/domain/ai/local-model-contract.ts` |
+| Locale ids and messages | `src/shared/i18n/messages.ts`, `translator.ts` |
+
+## Documentation index
+
+- [Docs index](/Users/brandondonnelly/Downloads/tea/docs/index.md)
+- [README](/Users/brandondonnelly/Downloads/tea/README.md)
+- [API and transport contracts](/Users/brandondonnelly/Downloads/tea/docs/api-contracts.md)
+- [Builder domain](/Users/brandondonnelly/Downloads/tea/docs/builder-domain.md)
+- [HTMX extensions](/Users/brandondonnelly/Downloads/tea/docs/htmx-extensions.md)
+- [Playable runtime](/Users/brandondonnelly/Downloads/tea/docs/playable-runtime.md)
+- [Local AI runtime](/Users/brandondonnelly/Downloads/tea/docs/local-ai-runtime.md)
+- [Operator runbook](/Users/brandondonnelly/Downloads/tea/docs/operator-runbook.md)
+- [RMMZ companion pack](/Users/brandondonnelly/Downloads/tea/docs/rmmz-pack.md)

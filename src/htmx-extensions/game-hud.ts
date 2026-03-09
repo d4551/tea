@@ -8,6 +8,8 @@
  * of "hud-xp", "hud-dialogue", or "hud-scene". Data attributes on the element
  * control localised label text.
  */
+
+import { safeJsonParse } from "../shared/utils/safe-json.ts";
 import { escapeHtml, getHtmx } from "./shared.ts";
 
 interface HudProgress {
@@ -26,26 +28,16 @@ interface HudPayload {
   readonly dialogue?: HudDialogue;
 }
 
-// SAFETY: JSON.parse is the sole standard API that throws on invalid input.
-// This client-side variant cannot import the server-side safe-json util.
-const safeJsonParse = (text: string): HudPayload | null => {
-  try {
-    return JSON.parse(text) as HudPayload;
-  } catch {
-    return null;
-  }
-};
-
 const htmx = getHtmx();
 if (htmx) {
   htmx.defineExtension("game-hud", {
     transformResponse(text: string, _xhr: XMLHttpRequest, element: HTMLElement): string {
-      const json = safeJsonParse(text);
+      const json = safeJsonParse<HudPayload | null>(text, null);
       if (!json) return text;
 
       const slot = element.dataset.hudSlot ?? element.id;
-      const xpLabel = escapeHtml(element.dataset.xpLabel ?? "XP");
-      const levelLabel = escapeHtml(element.dataset.levelLabel ?? "Lv");
+      const xpLabel = escapeHtml(element.dataset.xpLabel ?? "");
+      const levelLabel = escapeHtml(element.dataset.levelLabel ?? "");
 
       if (slot === "hud-xp") {
         const xp = json.progress?.xp ?? 0;

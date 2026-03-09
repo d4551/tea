@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import type { LocaleCode } from "../config/environment.ts";
+import { appConfig } from "../config/environment.ts";
 import { builderService } from "../domain/builder/builder-service.ts";
 import { gameLoop } from "../domain/game/game-loop.ts";
 import { authSessionGuard } from "../plugins/auth-session.ts";
@@ -41,6 +42,7 @@ const buildPlayablePageProps = (session: GameSessionState, locale: LocaleCode): 
     socketReconnectDelayMs: defaultGameConfig.socketReconnectDelayMs,
     restoreRequestTimeoutMs: defaultGameConfig.restoreRequestTimeoutMs,
     restoreMaxAttempts: defaultGameConfig.restoreMaxAttempts,
+    rendererPreference: appConfig.playableGame.rendererPreference,
   },
 });
 

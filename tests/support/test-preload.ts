@@ -20,6 +20,8 @@ process.env.NODE_ENV = "test";
 Bun.env.NODE_ENV = "test";
 process.env.AI_LOCAL_EMBEDDINGS_ENABLED = "false";
 Bun.env.AI_LOCAL_EMBEDDINGS_ENABLED = "false";
+process.env.BUILDER_LOCAL_AUTOMATION_ORIGIN = "http://127.0.0.1:1";
+Bun.env.BUILDER_LOCAL_AUTOMATION_ORIGIN = "http://127.0.0.1:1";
 
 const schemaScriptPath = resolve(
   process.cwd(),

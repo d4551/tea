@@ -5,6 +5,11 @@ import { gameAssetUrls } from "../../../shared/constants/game-assets.ts";
 import type {
   AssetVariant,
   BuilderAsset,
+  Combatant,
+  CombatantStats,
+  CombatEncounterState,
+  CombatPhase,
+  CombatTurnResult,
   EntityState,
   Facing,
   GameActionState,
@@ -28,10 +33,12 @@ import type {
   SceneNode2D,
   SceneNode3D,
   SceneNodeDefinition,
+  StatusEffect,
   TriggerDefinition,
 } from "../../../shared/contracts/game.ts";
 import { validateGameSceneState } from "../../../shared/contracts/game.ts";
 import { prismaBase } from "../../../shared/services/db.ts";
+import { safeJsonParse } from "../../../shared/utils/safe-json.ts";
 import { buildSessionSceneState } from "../utils/session-state.ts";
 
 const logger = createLogger("game.state-store");
@@ -644,6 +651,38 @@ interface GameSessionEquipmentRow {
   readonly armor: string | null;
   readonly accessory: string | null;
   readonly currency: number;
+}
+
+interface GameSessionCombatStateRow {
+  readonly sessionId: string;
+  readonly encounterId: string;
+  readonly phase: string;
+  readonly turnIndex: number;
+  readonly activeActorIndex: number;
+  readonly lootTableId: string | null;
+  readonly combatLog: string;
+}
+
+interface GameSessionCombatantRow {
+  readonly sessionId: string;
+  readonly id: string;
+  readonly label: string;
+  readonly characterKey: string;
+  readonly isPlayer: boolean;
+  readonly maxHp: number;
+  readonly hp: number;
+  readonly maxMp: number;
+  readonly mp: number;
+  readonly attack: number;
+  readonly defense: number;
+  readonly magicAttack: number;
+  readonly magicDefense: number;
+  readonly speed: number;
+  readonly critRate: number;
+  readonly critMultiplier: number;
+  readonly alive: boolean;
+  readonly ordinal: number;
+  readonly statusEffects: string;
 }
 
 /**
@@ -1424,6 +1463,121 @@ const toInventoryStateFromRows = (
   };
 };
 
+/**
+ * Serializes a CombatEncounterState into a Prisma-compatible combat state row.
+ *
+ * @param sessionId Session identifier.
+ * @param combat Optional combat encounter state to serialize.
+ * @returns Prisma-compatible row or undefined if no active combat.
+ */
+const toPersistedCombatStateRow = (
+  sessionId: string,
+  combat?: CombatEncounterState,
+): GameSessionCombatStateRow | undefined => {
+  if (!combat) {
+    return undefined;
+  }
+  return {
+    sessionId,
+    encounterId: combat.id,
+    phase: combat.phase,
+    turnIndex: combat.turnIndex,
+    activeActorIndex: combat.activeActorIndex,
+    lootTableId: combat.lootTableId ?? null,
+    combatLog: JSON.stringify(combat.log),
+  };
+};
+
+/**
+ * Serializes combatants from a CombatEncounterState into Prisma-compatible rows.
+ *
+ * @param sessionId Session identifier.
+ * @param combat Optional combat encounter state to serialize.
+ * @returns Array of combatant rows.
+ */
+const toPersistedCombatantRows = (
+  sessionId: string,
+  combat?: CombatEncounterState,
+): GameSessionCombatantRow[] =>
+  (combat?.combatants ?? []).map((c, index) => ({
+    sessionId,
+    id: c.id,
+    label: c.label,
+    characterKey: c.characterKey,
+    isPlayer: c.isPlayer,
+    maxHp: c.stats.maxHp,
+    hp: c.stats.hp,
+    maxMp: c.stats.maxMp,
+    mp: c.stats.mp,
+    attack: c.stats.attack,
+    defense: c.stats.defense,
+    magicAttack: c.stats.magicAttack,
+    magicDefense: c.stats.magicDefense,
+    speed: c.stats.speed,
+    critRate: c.stats.critRate,
+    critMultiplier: c.stats.critMultiplier,
+    alive: c.alive,
+    ordinal: index,
+    statusEffects: JSON.stringify(c.statusEffects),
+  }));
+
+/**
+ * Hydrates a CombatEncounterState from persisted combat state and combatant rows.
+ *
+ * @param stateRow Persisted combat state row (or null if no active encounter).
+ * @param combatantRows Persisted combatant rows.
+ * @returns Hydrated CombatEncounterState or undefined.
+ */
+const toCombatEncounterStateFromRows = (
+  stateRow: GameSessionCombatStateRow | null,
+  combatantRows: readonly GameSessionCombatantRow[],
+): CombatEncounterState | undefined => {
+  if (!stateRow) {
+    return undefined;
+  }
+
+  const combatants: Combatant[] = [...combatantRows]
+    .sort((a, b) => a.ordinal - b.ordinal)
+    .map((row) => {
+      const stats: CombatantStats = {
+        maxHp: row.maxHp,
+        hp: row.hp,
+        maxMp: row.maxMp,
+        mp: row.mp,
+        attack: row.attack,
+        defense: row.defense,
+        magicAttack: row.magicAttack,
+        magicDefense: row.magicDefense,
+        speed: row.speed,
+        critRate: row.critRate,
+        critMultiplier: row.critMultiplier,
+      };
+      const statusEffects = safeJsonParse<StatusEffect[]>(row.statusEffects, []);
+      return {
+        id: row.id,
+        label: row.label,
+        characterKey: row.characterKey,
+        isPlayer: row.isPlayer,
+        stats,
+        statusEffects: Array.isArray(statusEffects) ? statusEffects : [],
+        alive: row.alive,
+      };
+    });
+
+  const log = safeJsonParse<CombatTurnResult[]>(stateRow.combatLog, []);
+
+  return {
+    id: stateRow.encounterId,
+    phase: stateRow.phase as CombatPhase,
+    turnIndex: stateRow.turnIndex,
+    combatants,
+    turnOrder: combatants.map((c) => c.id),
+    activeActorIndex: stateRow.activeActorIndex,
+    log: Array.isArray(log) ? log : [],
+    lootTableId: stateRow.lootTableId ?? undefined,
+  };
+};
+
 const toTriggerDefinitionsFromRows = (
   triggerRows: readonly GameSessionTriggerRow[],
   requiredFlagRows: readonly GameSessionTriggerFlagRow[],
@@ -1509,9 +1663,12 @@ const restoreSceneState = (
   flagRows: readonly GameSessionFlagRow[],
   inventorySlotRows: readonly GameSessionInventorySlotRow[],
   equipmentRow: GameSessionEquipmentRow | null,
+  combatStateRow: GameSessionCombatStateRow | null,
+  combatantRows: readonly GameSessionCombatantRow[],
 ): SceneStateRestoreResult => {
   const persistedNpcs = toNpcStatesFromRows(npcRows, npcDialogueKeyRows, npcDialogueEntryRows);
   const persistedInventory = toInventoryStateFromRows(inventorySlotRows, equipmentRow);
+  const persistedCombat = toCombatEncounterStateFromRows(combatStateRow, combatantRows);
   const persistedTriggers = toTriggerDefinitionsFromRows(
     triggerRows,
     requiredFlagRows,
@@ -1570,6 +1727,7 @@ const restoreSceneState = (
       quests: persistedQuests,
       flags: persistedFlags ?? {},
       inventory: persistedInventory,
+      combat: persistedCombat,
     };
     const sceneValidation = validateGameSceneState(candidateScene);
     if (sceneValidation.ok) {
@@ -1672,6 +1830,8 @@ const toGameSessionFromRow = (
   flagRows: readonly GameSessionFlagRow[],
   inventorySlotRows: readonly GameSessionInventorySlotRow[],
   equipmentRow: GameSessionEquipmentRow | null,
+  combatStateRow: GameSessionCombatStateRow | null,
+  combatantRows: readonly GameSessionCombatantRow[],
 ): { readonly session: GameSession; readonly repaired: boolean } => {
   const restored = restoreSceneState(
     row,
@@ -1694,6 +1854,8 @@ const toGameSessionFromRow = (
     flagRows,
     inventorySlotRows,
     equipmentRow,
+    combatStateRow,
+    combatantRows,
   );
   const ownerParticipant = toOwnerParticipant({
     ownerSessionId: row.ownerSessionId,
@@ -1895,6 +2057,8 @@ class PrismaGameStateStore implements GameStateStore {
     const persistedNpcs = toPersistedNpcRows(resolvedId, seed.scene.npcs);
     const persistedInventorySlots = toPersistedInventorySlotRows(resolvedId, seed.scene.inventory);
     const persistedEquipment = toPersistedEquipmentRow(resolvedId, seed.scene.inventory);
+    const persistedCombatState = toPersistedCombatStateRow(resolvedId, seed.scene.combat);
+    const persistedCombatants = toPersistedCombatantRows(resolvedId, seed.scene.combat);
 
     const [persisted] = await prismaBase.$transaction([
       prismaBase.gameSession.create({
@@ -1971,6 +2135,20 @@ class PrismaGameStateStore implements GameStateStore {
       prismaBase.gameSessionEquipment.create({
         data: persistedEquipment,
       }),
+      ...(persistedCombatState
+        ? [
+            prismaBase.gameSessionCombatState.create({
+              data: persistedCombatState,
+            }),
+          ]
+        : []),
+      ...(persistedCombatants.length > 0
+        ? [
+            prismaBase.gameSessionCombatant.createMany({
+              data: persistedCombatants,
+            }),
+          ]
+        : []),
     ]);
 
     return {
@@ -2164,6 +2342,8 @@ class PrismaGameStateStore implements GameStateStore {
         })),
         persistedInventorySlots,
         persistedEquipment,
+        persistedCombatState ?? null,
+        persistedCombatants,
       ).session,
       projectId: seed.projectId,
       releaseVersion: seed.releaseVersion,
@@ -2201,6 +2381,8 @@ class PrismaGameStateStore implements GameStateStore {
       flagRows,
       inventorySlotRows,
       equipmentRow,
+      combatStateRow,
+      combatantRows,
     ] = await prismaBase.$transaction([
       prismaBase.gameSession.findUnique({
         where: { id: sessionId },
@@ -2278,6 +2460,13 @@ class PrismaGameStateStore implements GameStateStore {
       prismaBase.gameSessionEquipment.findUnique({
         where: { sessionId },
       }),
+      prismaBase.gameSessionCombatState.findUnique({
+        where: { sessionId },
+      }),
+      prismaBase.gameSessionCombatant.findMany({
+        where: { sessionId },
+        orderBy: { ordinal: "asc" },
+      }),
     ]);
 
     if (!persisted) {
@@ -2310,6 +2499,8 @@ class PrismaGameStateStore implements GameStateStore {
       flagRows,
       inventorySlotRows,
       equipmentRow,
+      combatStateRow,
+      combatantRows,
     );
     if (restored.repaired) {
       logger.warn("session.state.repaired", {
@@ -2338,6 +2529,14 @@ class PrismaGameStateStore implements GameStateStore {
       const persistedEquipment = toPersistedEquipmentRow(
         sessionId,
         restored.session.scene.inventory,
+      );
+      const persistedCombatState = toPersistedCombatStateRow(
+        sessionId,
+        restored.session.scene.combat,
+      );
+      const persistedCombatants = toPersistedCombatantRows(
+        sessionId,
+        restored.session.scene.combat,
       );
 
       await prismaBase.$transaction([
@@ -2427,6 +2626,12 @@ class PrismaGameStateStore implements GameStateStore {
         prismaBase.gameSessionEquipment.deleteMany({
           where: { sessionId },
         }),
+        prismaBase.gameSessionCombatState.deleteMany({
+          where: { sessionId },
+        }),
+        prismaBase.gameSessionCombatant.deleteMany({
+          where: { sessionId },
+        }),
         prismaBase.gameSessionRuntimeState.create({
           data: persistedRuntimeState,
         }),
@@ -2463,6 +2668,20 @@ class PrismaGameStateStore implements GameStateStore {
         prismaBase.gameSessionEquipment.create({
           data: persistedEquipment,
         }),
+        ...(persistedCombatState
+          ? [
+              prismaBase.gameSessionCombatState.create({
+                data: persistedCombatState,
+              }),
+            ]
+          : []),
+        ...(persistedCombatants.length > 0
+          ? [
+              prismaBase.gameSessionCombatant.createMany({
+                data: persistedCombatants,
+              }),
+            ]
+          : []),
       ]);
     }
 
@@ -2503,6 +2722,8 @@ class PrismaGameStateStore implements GameStateStore {
       session.scene.inventory,
     );
     const persistedEquipment = toPersistedEquipmentRow(session.id, session.scene.inventory);
+    const persistedCombatState = toPersistedCombatStateRow(session.id, session.scene.combat);
+    const persistedCombatants = toPersistedCombatantRows(session.id, session.scene.combat);
 
     const updated = await prismaBase.$transaction(async (tx) => {
       const result = await tx.gameSession.updateMany({
@@ -2602,6 +2823,12 @@ class PrismaGameStateStore implements GameStateStore {
         await tx.gameSessionEquipment.deleteMany({
           where: { sessionId: session.id },
         });
+        await tx.gameSessionCombatState.deleteMany({
+          where: { sessionId: session.id },
+        });
+        await tx.gameSessionCombatant.deleteMany({
+          where: { sessionId: session.id },
+        });
         await tx.gameSessionRuntimeState.create({
           data: persistedRuntimeState,
         });
@@ -2638,6 +2865,16 @@ class PrismaGameStateStore implements GameStateStore {
         await tx.gameSessionEquipment.create({
           data: persistedEquipment,
         });
+        if (persistedCombatState) {
+          await tx.gameSessionCombatState.create({
+            data: persistedCombatState,
+          });
+        }
+        if (persistedCombatants.length > 0) {
+          await tx.gameSessionCombatant.createMany({
+            data: persistedCombatants,
+          });
+        }
       }
 
       return result;

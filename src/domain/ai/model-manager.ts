@@ -5,40 +5,33 @@
  *  - Configure ONNX Runtime backend once
  *  - Lazy-load pipelines on first use and keep them resident in memory
  *  - Provide typed inference methods consumed by oracle-service and game-loop
- *  - Graceful fallback: return null when model work cannot be completed
+ *  - Keep circuit-breaker and pipeline-cache ownership behind one facade
  */
 
-import { env, pipeline } from "@huggingface/transformers";
-import { $ } from "bun";
 import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
+import {
+  type LocalEmbeddingOperationResult,
+  type LocalModelFailure,
+  type LocalModelResult,
+  type LocalSentimentOperationResult,
+  type LocalSpeechSynthesisOperationResult,
+  type LocalTextGenerationOperationResult,
+  type LocalTranscriptionOperationResult,
+  localModelFailure,
+  localModelSuccess,
+  type SentimentResult,
+  unwrapLocalModelResult,
+} from "./local-model-contract.ts";
+import type { LocalModelRuntime } from "./local-model-runtime.ts";
+import { localModelFailureToLogData, runLocalModelOperation } from "./model-operation-runner.ts";
+import { LocalModelPipelineCache } from "./model-pipeline-cache.ts";
+import { type AnyPipeline, loadModelPipeline } from "./model-pipeline-loader.ts";
 import { MODEL_REGISTRY, type ModelKey } from "./model-registry.ts";
+import { LocalModelRuntimeHealth } from "./model-runtime-health.ts";
 
 const logger = createLogger("ai.model-manager");
-const corruptedCacheErrorFragments = [
-  "protobuf",
-  "invalid wire type",
-  "index out of range",
-] as const;
 
-// Serve ONNX WASM binaries locally rather than fetching from CDN.
-if (env.backends.onnx.wasm) {
-  env.backends.onnx.wasm.wasmPaths = appConfig.ai.onnxWasmPath;
-  env.backends.onnx.wasm.numThreads = appConfig.ai.onnxThreadCount;
-  env.backends.onnx.wasm.proxy = appConfig.ai.onnxProxyEnabled;
-}
-
-// Cache downloaded model weights locally between restarts.
-env.cacheDir = appConfig.ai.transformersCacheDirectory;
-env.localModelPath = appConfig.ai.transformersLocalModelPath;
-env.allowLocalModels = appConfig.ai.transformersAllowLocalModels;
-env.allowRemoteModels = appConfig.ai.transformersAllowRemoteModels;
-
-interface DisposablePipeline {
-  readonly dispose?: () => void | Promise<void>;
-}
-
-type AnyPipeline = DisposablePipeline & object;
 type TensorLike = { readonly data: Float32Array | Float64Array | readonly number[] };
 
 interface AsrOutput {
@@ -50,59 +43,20 @@ interface TtsOutput {
   readonly sampling_rate: number;
 }
 
-const isCorruptedCacheError = (error: unknown): boolean => {
-  const message = String(error).toLowerCase();
-  return corruptedCacheErrorFragments.some((fragment) => message.includes(fragment));
-};
-
-const resolveModelCachePath = (modelId: string): string =>
-  [appConfig.ai.transformersCacheDirectory, ...modelId.split("/")].join("/").replace(/\/+/g, "/");
-
-/**
- * Sentiment inference output contract.
- */
-export interface SentimentResult {
-  /** Model label. */
-  label: "POSITIVE" | "NEGATIVE";
-  /** Confidence score from the model. */
-  score: number;
-}
-
-/**
- * Timeout wrapper for async model operations.
- *
- * @param task Task promise to execute.
- * @param timeoutMs Timeout in milliseconds.
- * @param label Operation label for diagnostics.
- * @returns Resolved task result when completed in time.
- */
-const withTimeout = async <T>(task: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
-  const controller = new AbortController();
-  const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
-
-  const timeoutTask = new Promise<never>((_, reject) => {
-    controller.signal.addEventListener("abort", () => {
-      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
-    });
-  });
-
-  const result = await Promise.race([task, timeoutTask]);
-  clearTimeout(timeoutHandle);
-  return result;
-};
-
 /**
  * Singleton local AI model manager with lazy warmup and circuit-breaker backoff.
  */
-export class ModelManager {
+export class ModelManager implements LocalModelRuntime {
   private static _instance: ModelManager | null = null;
   private static _instancePromise: Promise<ModelManager> | null = null;
 
-  private readonly _pipelines = new Map<ModelKey, AnyPipeline>();
+  private readonly _pipelineCache = new LocalModelPipelineCache();
+  private readonly _health = new LocalModelRuntimeHealth({
+    circuitBreakerThreshold: appConfig.ai.circuitBreakerThreshold,
+    cooldownMs: appConfig.ai.pipelineTimeoutMs * appConfig.ai.circuitBreakerCooldownMultiplier,
+  });
   private _ready = false;
   private _warmupPromise: Promise<void> | null = null;
-  private _consecutiveFailures = 0;
-  private _circuitOpenUntilMs = 0;
 
   private constructor() {}
 
@@ -143,7 +97,7 @@ export class ModelManager {
    * Performs best-effort warmup without blocking request lifecycle.
    */
   public async ensureWarmup(): Promise<void> {
-    if (this._ready || this._isCircuitOpen()) {
+    if (this._ready || this._health.isCircuitOpen()) {
       return;
     }
 
@@ -159,65 +113,134 @@ export class ModelManager {
   /**
    * Returns (and caches) a pipeline for the given registry key.
    */
-  async getPipeline(key: ModelKey): Promise<AnyPipeline> {
-    const cached = this._pipelines.get(key);
-    if (cached) {
-      return cached;
+  public async getPipeline(key: ModelKey): Promise<AnyPipeline> {
+    const result = await this._getPipelineResult(key);
+    if (!result.ok) {
+      throw new Error(result.failure.message);
     }
 
-    if (this._isCircuitOpen()) {
-      throw new Error("AI_PROVIDER_FAILURE");
+    return result.value;
+  }
+
+  /**
+   * Classifies text sentiment with a typed local-model result.
+   *
+   * @param text Input text.
+   * @returns Typed sentiment result.
+   */
+  public async analyzeSentimentResult(text: string): Promise<LocalSentimentOperationResult> {
+    const pipe = await this._getPipelineResult("sentiment");
+    if (!pipe.ok) {
+      return localModelFailure(pipe.failure);
     }
 
-    let loaded: AnyPipeline;
-    // SAFETY: ONNX runtime pipeline load may throw on native dep failures or timeout.
-    try {
-      loaded = await withTimeout(
-        this._loadPipeline(key),
-        appConfig.ai.pipelineTimeoutMs,
-        `pipeline:${key}`,
-      );
-    } catch (error: unknown) {
-      this._registerFailure(error);
-      throw error;
+    const result = await runLocalModelOperation<SentimentResult[]>({
+      operation: "sentiment.classify",
+      modelKey: "sentiment",
+      timeoutMs: appConfig.ai.pipelineTimeoutMs,
+      execute: () => (pipe.value as (input: string) => Promise<SentimentResult[]>)(text),
+      validate: (value) => Array.isArray(value) && value.length > 0,
+      invalidMessage: "Sentiment model returned an invalid payload.",
+    });
+    if (!result.ok) {
+      return this._failOperation("model.sentiment.failed", result.failure);
     }
 
-    this._consecutiveFailures = 0;
-    return loaded;
+    this._health.markSuccess();
+    return localModelSuccess(result.value[0] as SentimentResult);
   }
 
   /**
    * Classifies text sentiment.
+   *
+   * @param text Input text.
+   * @returns Sentiment result or null.
    */
   async analyzeSentiment(text: string): Promise<SentimentResult | null> {
-    let pipe: AnyPipeline;
-    // SAFETY: ONNX runtime pipeline acquisition may throw on native FFI failures.
-    try {
-      pipe = await this.getPipeline("sentiment");
-    } catch (error: unknown) {
-      logger.error("model.sentiment.failed", { err: String(error) });
-      return null;
-    }
-    if (!pipe) return null;
-
-    let result: SentimentResult[] | null = null;
-    // SAFETY: ONNX model inference call may throw on invalid input or runtime errors.
-    try {
-      result = await (pipe as (t: string) => Promise<SentimentResult[]>)(text);
-    } catch (error: unknown) {
-      logger.error("model.sentiment.failed", { err: String(error) });
-      return null;
-    }
-
-    return result?.[0] ?? null;
+    return unwrapLocalModelResult(await this.analyzeSentimentResult(text));
   }
 
   /**
    * Generates an oracle fortune string from user prompt.
+   *
+   * @param question User prompt.
+   * @returns Generated oracle text or null.
    */
   async generateOracle(question: string): Promise<string | null> {
     const prompt = `Respond creatively to this game design prompt: "${question}" `;
-    return this.generateText("oracle", prompt, prompt);
+    const result = await this.generateTextResult("oracle", prompt, prompt);
+    return result.ok ? result.value.text : null;
+  }
+
+  /**
+   * Generates text from a configured local text-generation pipeline with a typed result.
+   *
+   * @param modelKey Target model registry key.
+   * @param prompt Prompt passed to the local pipeline.
+   * @param stripPrefix Optional prefix to strip from generated text.
+   * @returns Typed text-generation result.
+   */
+  async generateTextResult(
+    modelKey: Extract<ModelKey, "oracle" | "npcDialogue">,
+    prompt: string,
+    stripPrefix?: string,
+  ): Promise<LocalTextGenerationOperationResult> {
+    const pipe = await this._getPipelineResult(modelKey);
+    if (!pipe.ok) {
+      return localModelFailure(pipe.failure);
+    }
+
+    const entry = MODEL_REGISTRY[modelKey];
+    const result = await runLocalModelOperation<Array<{ readonly generated_text: string }>>({
+      operation: `${modelKey}.generate`,
+      modelKey,
+      timeoutMs: appConfig.ai.pipelineTimeoutMs,
+      execute: () =>
+        (
+          pipe.value as (
+            text: string,
+            options: Record<string, unknown>,
+          ) => Promise<Array<{ readonly generated_text: string }>>
+        )(prompt, entry.generationConfig ?? {}),
+      validate: (value) =>
+        Array.isArray(value) &&
+        typeof value[0]?.generated_text === "string" &&
+        value[0].generated_text.trim().length > 0,
+      invalidMessage: `${modelKey} generation returned an invalid payload.`,
+    });
+    if (!result.ok) {
+      return this._failOperation(`model.${modelKey}.failed`, result.failure);
+    }
+
+    const firstGeneration = result.value[0];
+    if (!firstGeneration) {
+      return this._failOperation(`model.${modelKey}.failed`, {
+        code: "invalid-output",
+        message: `${modelKey} generation returned an empty payload.`,
+        retryable: false,
+        operation: `${modelKey}.generate`,
+        modelKey,
+      });
+    }
+
+    const generated = firstGeneration.generated_text;
+    const text =
+      typeof stripPrefix === "string" && stripPrefix.length > 0 && generated.startsWith(stripPrefix)
+        ? generated.slice(stripPrefix.length).trim()
+        : generated.trim();
+
+    if (text.length === 0) {
+      return this._failOperation(`model.${modelKey}.failed`, {
+        code: "invalid-output",
+        message: `${modelKey} generation returned empty text.`,
+        retryable: false,
+        operation: `${modelKey}.generate`,
+        modelKey,
+      });
+    }
+
+    this._health.markSuccess();
+    return localModelSuccess({ text });
   }
 
   /**
@@ -233,51 +256,50 @@ export class ModelManager {
     prompt: string,
     stripPrefix?: string,
   ): Promise<string | null> {
-    let pipe: AnyPipeline;
-    // SAFETY: ONNX runtime pipeline acquisition may throw on native FFI failures.
-    try {
-      pipe = await this.getPipeline(modelKey);
-    } catch (error: unknown) {
-      logger.error(`model.${modelKey}.failed`, { err: String(error) });
-      return null;
-    }
-    if (!pipe) {
-      return null;
+    const result = await this.generateTextResult(modelKey, prompt, stripPrefix);
+    return result.ok ? result.value.text : null;
+  }
+
+  /**
+   * Generates a normalized embedding vector with a typed result.
+   *
+   * @param text Input text.
+   * @returns Typed embedding result.
+   */
+  async generateEmbeddingResult(text: string): Promise<LocalEmbeddingOperationResult> {
+    const pipe = await this._getPipelineResult("embeddings");
+    if (!pipe.ok) {
+      return localModelFailure(pipe.failure);
     }
 
-    const entry = MODEL_REGISTRY[modelKey];
-    let result: Array<{ generated_text: string }> | null = null;
-    // SAFETY: Text generation crosses ONNX runtime FFI boundary with timeout.
-    try {
-      result = await withTimeout(
-        (
-          pipe as (
-            text: string,
-            opts: Record<string, unknown>,
-          ) => Promise<Array<{ generated_text: string }>>
-        )(prompt, entry.generationConfig ?? {}),
-        appConfig.ai.pipelineTimeoutMs,
-        `${modelKey}:generate`,
-      );
-    } catch (error: unknown) {
-      logger.error(`model.${modelKey}.failed`, { err: String(error) });
-      return null;
+    const result = await runLocalModelOperation<TensorLike>({
+      operation: "embeddings.generate",
+      modelKey: "embeddings",
+      timeoutMs: appConfig.ai.pipelineTimeoutMs,
+      execute: () =>
+        (pipe.value as (input: string, options: Record<string, unknown>) => Promise<TensorLike>)(
+          text,
+          {
+            pooling: "mean",
+            normalize: true,
+          },
+        ),
+      validate: (value) => value.data.length > 0,
+      invalidMessage: "Embedding model returned an invalid payload.",
+    });
+    if (!result.ok) {
+      return this._failOperation("model.embeddings.failed", result.failure);
     }
 
-    if (!result) {
-      return null;
-    }
+    const values =
+      result.value.data instanceof Float32Array
+        ? result.value.data
+        : result.value.data instanceof Float64Array
+          ? Float32Array.from(result.value.data)
+          : Float32Array.from(result.value.data);
 
-    const generated = result[0]?.generated_text ?? "";
-    if (
-      typeof stripPrefix === "string" &&
-      stripPrefix.length > 0 &&
-      generated.startsWith(stripPrefix)
-    ) {
-      return generated.slice(stripPrefix.length).trim();
-    }
-
-    return generated.trim();
+    this._health.markSuccess();
+    return localModelSuccess({ embedding: values });
   }
 
   /**
@@ -287,44 +309,55 @@ export class ModelManager {
    * @returns Embedding vector or null when the model fails.
    */
   async generateEmbedding(text: string): Promise<Float32Array | null> {
-    let pipe: AnyPipeline;
-    // SAFETY: ONNX runtime pipeline acquisition may throw on native FFI failures.
-    try {
-      pipe = await this.getPipeline("embeddings");
-    } catch (error: unknown) {
-      logger.error("model.embeddings.failed", { err: String(error) });
-      return null;
-    }
-    if (!pipe) return null;
+    const result = await this.generateEmbeddingResult(text);
+    return result.ok ? result.value.embedding : null;
+  }
 
-    let result: TensorLike | null = null;
-    // SAFETY: Embedding generation crosses ONNX runtime FFI boundary with timeout.
-    try {
-      result = await withTimeout(
-        (pipe as (input: string, options: Record<string, unknown>) => Promise<TensorLike>)(text, {
-          pooling: "mean",
-          normalize: true,
-        }),
-        appConfig.ai.pipelineTimeoutMs,
-        "embedding:generate",
-      );
-    } catch (error: unknown) {
-      logger.error("model.embeddings.failed", { err: String(error) });
-      return null;
+  /**
+   * Runs automatic speech recognition against mono PCM audio with a typed result.
+   *
+   * @param audio Mono PCM audio.
+   * @returns Typed transcription result.
+   */
+  async transcribeAudioResult(audio: Float32Array): Promise<LocalTranscriptionOperationResult> {
+    const pipe = await this._getPipelineResult("speechToText");
+    if (!pipe.ok) {
+      return localModelFailure(pipe.failure);
     }
 
-    if (!result) {
-      return null;
+    const result = await runLocalModelOperation<AsrOutput | string>({
+      operation: "speech-to-text.transcribe",
+      modelKey: "speechToText",
+      timeoutMs: appConfig.ai.pipelineTimeoutMs * 4,
+      execute: () =>
+        (
+          pipe.value as (
+            input: Float32Array,
+            options: Record<string, unknown>,
+          ) => Promise<AsrOutput | string>
+        )(audio, {}),
+      validate: (value) =>
+        (typeof value === "string" && value.trim().length > 0) ||
+        (typeof value === "object" && value !== null && typeof value.text === "string"),
+      invalidMessage: "Speech-to-text model returned an invalid payload.",
+    });
+    if (!result.ok) {
+      return this._failOperation("model.stt.failed", result.failure);
     }
 
-    const values =
-      result.data instanceof Float32Array
-        ? result.data
-        : result.data instanceof Float64Array
-          ? Float32Array.from(result.data)
-          : Float32Array.from(result.data);
+    const text = typeof result.value === "string" ? result.value.trim() : result.value.text?.trim();
+    if (!text || text.length === 0) {
+      return this._failOperation("model.stt.failed", {
+        code: "invalid-output",
+        message: "Speech-to-text model returned empty text.",
+        retryable: false,
+        operation: "speech-to-text.transcribe",
+        modelKey: "speechToText",
+      });
+    }
 
-    return values;
+    this._health.markSuccess();
+    return localModelSuccess({ text });
   }
 
   /**
@@ -334,39 +367,45 @@ export class ModelManager {
    * @returns Recognized text or null on failure.
    */
   async transcribeAudio(audio: Float32Array): Promise<string | null> {
-    let pipe: AnyPipeline;
-    // SAFETY: ONNX runtime pipeline acquisition may throw on native FFI failures.
-    try {
-      pipe = await this.getPipeline("speechToText");
-    } catch (error: unknown) {
-      logger.error("model.stt.failed", { err: String(error) });
-      return null;
-    }
-    if (!pipe) return null;
+    const result = await this.transcribeAudioResult(audio);
+    return result.ok ? result.value.text : null;
+  }
 
-    let result: AsrOutput | string | null = null;
-    // SAFETY: Speech-to-text inference crosses ONNX runtime FFI boundary with timeout.
-    try {
-      result = await withTimeout(
-        (
-          pipe as (
-            input: Float32Array,
-            options: Record<string, unknown>,
-          ) => Promise<AsrOutput | string>
-        )(audio, {}),
-        appConfig.ai.pipelineTimeoutMs * 4,
-        "speech-to-text:transcribe",
-      );
-    } catch (error: unknown) {
-      logger.error("model.stt.failed", { err: String(error) });
-      return null;
+  /**
+   * Synthesizes mono PCM audio from text with a typed result.
+   *
+   * @param text Input text to synthesize.
+   * @returns Typed speech-synthesis result.
+   */
+  async synthesizeSpeechResult(text: string): Promise<LocalSpeechSynthesisOperationResult> {
+    const pipe = await this._getPipelineResult("textToSpeech");
+    if (!pipe.ok) {
+      return localModelFailure(pipe.failure);
     }
 
-    if (typeof result === "string") {
-      return result.trim();
+    const result = await runLocalModelOperation<TtsOutput>({
+      operation: "text-to-speech.synthesize",
+      modelKey: "textToSpeech",
+      timeoutMs: appConfig.ai.pipelineTimeoutMs * 4,
+      execute: () =>
+        (pipe.value as (input: string, options: Record<string, unknown>) => Promise<TtsOutput>)(
+          text,
+          {
+            speaker_embeddings: appConfig.ai.textToSpeechSpeakerEmbeddings,
+          },
+        ),
+      validate: (value) => value.audio.length > 0 && value.sampling_rate > 0,
+      invalidMessage: "Text-to-speech model returned an invalid payload.",
+    });
+    if (!result.ok) {
+      return this._failOperation("model.tts.failed", result.failure);
     }
 
-    return result?.text?.trim() ?? null;
+    this._health.markSuccess();
+    return localModelSuccess({
+      audio: result.value.audio,
+      sampleRate: result.value.sampling_rate,
+    });
   }
 
   /**
@@ -378,39 +417,8 @@ export class ModelManager {
   async synthesizeSpeech(
     text: string,
   ): Promise<{ readonly audio: Float32Array; readonly sampleRate: number } | null> {
-    let pipe: AnyPipeline;
-    // SAFETY: ONNX runtime pipeline acquisition may throw on native FFI failures.
-    try {
-      pipe = await this.getPipeline("textToSpeech");
-    } catch (error: unknown) {
-      logger.error("model.tts.failed", { err: String(error) });
-      return null;
-    }
-    if (!pipe) return null;
-
-    let result: TtsOutput | null = null;
-    // SAFETY: TTS synthesis crosses ONNX runtime FFI boundary with timeout.
-    try {
-      result = await withTimeout(
-        (pipe as (input: string, options: Record<string, unknown>) => Promise<TtsOutput>)(text, {
-          speaker_embeddings: appConfig.ai.textToSpeechSpeakerEmbeddings,
-        }),
-        appConfig.ai.pipelineTimeoutMs * 4,
-        "text-to-speech:synthesize",
-      );
-    } catch (error: unknown) {
-      logger.error("model.tts.failed", { err: String(error) });
-      return null;
-    }
-
-    if (!result) {
-      return null;
-    }
-
-    return {
-      audio: result.audio,
-      sampleRate: result.sampling_rate,
-    };
+    const result = await this.synthesizeSpeechResult(text);
+    return result.ok ? result.value : null;
   }
 
   /**
@@ -422,11 +430,10 @@ export class ModelManager {
    * resets JS ownership and lets process exit reclaim the underlying resources safely.
    */
   async dispose(): Promise<void> {
-    this._pipelines.clear();
+    this._pipelineCache.clear();
     this._ready = false;
     this._warmupPromise = null;
-    this._consecutiveFailures = 0;
-    this._circuitOpenUntilMs = 0;
+    this._health.reset();
     ModelManager._instance = null;
     ModelManager._instancePromise = null;
 
@@ -434,110 +441,97 @@ export class ModelManager {
   }
 
   /**
-   * Loads and caches a model pipeline.
+   * Loads a pipeline into the cache and returns a typed local-model result.
+   *
+   * @param key Registry key.
+   * @returns Typed pipeline load result.
    */
-  private async _loadPipeline(
-    key: ModelKey,
-    allowCacheRecovery: boolean = true,
-  ): Promise<AnyPipeline> {
-    const entry = MODEL_REGISTRY[key];
-    if (!entry.enabled) {
-      throw new Error(`Model target "${key}" is disabled.`);
+  private async _getPipelineResult(key: ModelKey): Promise<LocalModelResult<AnyPipeline>> {
+    const cached = this._pipelineCache.get(key);
+    if (cached) {
+      return localModelSuccess(cached);
     }
-    logger.info("model.loading", { key, model: entry.model });
 
-    let pipeResult: AnyPipeline;
-    // SAFETY: Pipeline loading downloads models and calls ONNX native runtime; may throw on corrupted cache.
-    try {
-      // The pipeline function has task-specific overloads; we use a typed cast
-      // based on the registry entry's declared task type
-      const taskPipeline = pipeline as (
-        task: typeof entry.task,
-        model: string,
-        options: { dtype?: string; device?: string },
-      ) => Promise<AnyPipeline>;
-      pipeResult = await taskPipeline(entry.task, entry.model, {
-        dtype: entry.dtype,
-        device: entry.device,
+    if (this._health.isCircuitOpen()) {
+      const failure: LocalModelFailure = {
+        code: "circuit-open",
+        message: "Local model runtime is cooling down after repeated failures.",
+        retryable: true,
+        operation: "pipeline.load",
+        modelKey: key,
+      };
+      this._logFailure("model.pipeline.circuit-open", failure);
+      return localModelFailure(failure);
+    }
+
+    const loadResult = await loadModelPipeline(key);
+    if (!loadResult.ok) {
+      return this._failOperation("model.pipeline.load.failed", loadResult.failure);
+    }
+
+    this._health.markSuccess();
+    this._pipelineCache.set(key, loadResult.value.pipeline);
+    if (loadResult.value.recoveredCache) {
+      logger.warn("model.cache.recovered", {
+        key,
+        model: MODEL_REGISTRY[key].model,
+        recovery: "cache-corruption-recovered",
       });
-    } catch (error: unknown) {
-      if (allowCacheRecovery && isCorruptedCacheError(error)) {
-        await this._purgeModelCache(key);
-        return this._loadPipeline(key, false);
-      }
-      throw error;
     }
-
-    this._pipelines.set(key, pipeResult);
-    logger.info("model.loaded", { key, model: entry.model });
-    return pipeResult;
+    logger.info("model.loaded", {
+      key,
+      model: MODEL_REGISTRY[key].model,
+      recoveredCache: loadResult.value.recoveredCache,
+      cacheRecovery: loadResult.value.recoveredCache ? "cache-corruption-recovered" : "none",
+    });
+    return localModelSuccess(loadResult.value.pipeline);
   }
 
   /**
    * Performs a single warmup attempt with timeout safeguards.
    */
   private async _warmup(): Promise<void> {
-    let result: unknown = null;
-    // SAFETY: Warmup runs a quick inference to trigger JIT compilation; may throw on ONNX failures.
-    try {
-      result = await withTimeout(
-        this._loadPipeline("sentiment"),
-        appConfig.ai.modelWarmupTimeoutMs,
-        "warmup:sentiment",
-      );
-    } catch (error: unknown) {
-      this._registerFailure(error);
-      logger.warn("model.warmup.failed", { err: String(error) });
+    const result = await this._getPipelineResult("sentiment");
+    if (!result.ok) {
+      logger.warn("model.warmup.failed", localModelFailureToLogData(result.failure));
+      return;
     }
 
-    if (result !== null) {
-      this._ready = true;
-      this._consecutiveFailures = 0;
-      logger.info("model.warmup.complete", { model: MODEL_REGISTRY.sentiment.model });
-    }
+    this._ready = true;
+    logger.info("model.warmup.complete", { model: MODEL_REGISTRY.sentiment.model });
   }
 
   /**
-   * Tracks failures and opens a short circuit on repeated provider errors.
-   */
-  private _registerFailure(error: unknown): void {
-    this._consecutiveFailures += 1;
-    if (this._consecutiveFailures >= appConfig.ai.circuitBreakerThreshold) {
-      this._circuitOpenUntilMs =
-        Date.now() +
-        Math.max(
-          appConfig.ai.pipelineTimeoutMs * appConfig.ai.circuitBreakerCooldownMultiplier,
-          2_000,
-        );
-    }
-
-    logger.warn("model.failure.recorded", {
-      consecutiveFailures: this._consecutiveFailures,
-      circuitOpenUntilMs: this._circuitOpenUntilMs,
-      error: String(error),
-    });
-  }
-
-  /**
-   * Returns true when the AI provider circuit breaker is currently open.
-   */
-  private _isCircuitOpen(nowMs: number = Date.now()): boolean {
-    return nowMs < this._circuitOpenUntilMs;
-  }
-
-  /**
-   * Removes a corrupted cached model directory so the next load can rehydrate it cleanly.
+   * Tracks and logs one structured local-model failure.
    *
-   * @param key Registry key for the affected model.
+   * @template TValue Result payload type.
+   * @param event Log event name.
+   * @param failure Structured failure payload.
+   * @returns Failed local-model result.
    */
-  private async _purgeModelCache(key: ModelKey): Promise<void> {
-    const modelId = MODEL_REGISTRY[key].model;
-    const modelCachePath = resolveModelCachePath(modelId);
-    await $`rm -rf ${modelCachePath}`;
-    logger.warn("model.cache.purged", {
-      key,
-      model: modelId,
-      path: modelCachePath,
+  private _failOperation<TValue>(
+    event: string,
+    failure: LocalModelFailure,
+  ): ReturnType<typeof localModelFailure<TValue>> {
+    const health = this._health.recordFailure(failure);
+    logger.warn("model.failure.recorded", {
+      ...localModelFailureToLogData(failure),
+      consecutiveFailures: health.consecutiveFailures,
+      circuitOpenUntilMs: health.circuitOpenUntilMs,
     });
+    this._logFailure(event, failure);
+    return localModelFailure(failure);
+  }
+
+  /**
+   * Emits consistent structured logging for local-model failures.
+   *
+   * @param event Log event name.
+   * @param failure Structured failure payload.
+   */
+  private _logFailure(event: string, failure: LocalModelFailure): void {
+    logger.error(event, localModelFailureToLogData(failure));
   }
 }
+
+export type { SentimentResult } from "./local-model-contract.ts";

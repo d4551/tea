@@ -108,6 +108,7 @@ export interface AppConfig {
     readonly restoreMaxAttempts: number;
     readonly worldTimeWrapMs: number;
     readonly combatDamageMultiplier: number;
+    readonly combatSkillBaseDamage: number;
     readonly spriteAtlasMaxWidth: number;
   };
   readonly ai: {
@@ -224,6 +225,7 @@ const DEFAULT_GAME_RESTORE_MAX_ATTEMPTS = 2;
 const DEFAULT_GAME_DEFAULT_SCENE_ID = "teaHouse";
 const DEFAULT_GAME_WORLD_TIME_WRAP_MS = 86_400_007;
 const DEFAULT_GAME_COMBAT_DAMAGE_MULTIPLIER = 1.5;
+const DEFAULT_GAME_COMBAT_SKILL_BASE_DAMAGE = 15;
 const DEFAULT_GAME_SPRITE_ATLAS_MAX_WIDTH = 2048;
 const DEFAULT_AI_EMBEDDING_DIMENSION = 384;
 const DEFAULT_AI_CIRCUIT_BREAKER_THRESHOLD = 2;
@@ -851,6 +853,12 @@ export const appConfig: AppConfig = {
     ),
     combatDamageMultiplier: Number(
       Bun.env.GAME_COMBAT_DAMAGE_MULTIPLIER ?? String(DEFAULT_GAME_COMBAT_DAMAGE_MULTIPLIER),
+    ),
+    combatSkillBaseDamage: parseInteger(
+      Bun.env.GAME_COMBAT_SKILL_BASE_DAMAGE,
+      DEFAULT_GAME_COMBAT_SKILL_BASE_DAMAGE,
+      1,
+      "GAME_COMBAT_SKILL_BASE_DAMAGE",
     ),
     spriteAtlasMaxWidth: parseInteger(
       Bun.env.GAME_SPRITE_ATLAS_MAX_WIDTH,

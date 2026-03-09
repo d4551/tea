@@ -30,9 +30,10 @@ describe("SpritePacker", () => {
 
       expect(result.atlasWidth).toBe(300);
       expect(result.atlasHeight).toBe(80); // tallest frame
-      expect(result.frames[0]).toEqual({ id: "a", x: 0, y: 0, width: 100, height: 50 });
-      expect(result.frames[1]).toEqual({ id: "b", x: 100, y: 0, width: 100, height: 80 });
-      expect(result.frames[2]).toEqual({ id: "c", x: 200, y: 0, width: 100, height: 60 });
+      const getFrame = (id: string) => result.frames.find((f) => f.id === id);
+      expect(getFrame("b")).toEqual({ id: "b", x: 0, y: 0, width: 100, height: 80 });
+      expect(getFrame("c")).toEqual({ id: "c", x: 100, y: 0, width: 100, height: 60 });
+      expect(getFrame("a")).toEqual({ id: "a", x: 200, y: 0, width: 100, height: 50 });
     });
 
     it("wraps to a new row when exceeding max width", () => {
@@ -61,10 +62,14 @@ describe("SpritePacker", () => {
       ];
       const result = packFrames(frames);
 
-      expect(result.frames[0]).toEqual({ id: "a", x: 0, y: 0, width: 1200, height: 200 });
-      expect(result.frames[1]).toEqual({ id: "b", x: 1200, y: 0, width: 800, height: 150 });
-      expect(result.frames[2]).toEqual({ id: "c", x: 0, y: 200, width: 1400, height: 100 });
-      expect(result.frames[3]).toEqual({ id: "d", x: 0, y: 300, width: 700, height: 300 });
+      const getFrame = (id: string) => result.frames.find((f) => f.id === id);
+      // Sort order: d (300), a (200), b (150), c (100)
+      expect(getFrame("d")).toEqual({ id: "d", x: 0, y: 0, width: 700, height: 300 });
+      expect(getFrame("a")).toEqual({ id: "a", x: 700, y: 0, width: 1200, height: 200 }); // wraps after this (1900)
+      expect(getFrame("b")).toEqual({ id: "b", x: 0, y: 300, width: 800, height: 150 }); // wrapped
+      expect(getFrame("c")).toEqual({ id: "c", x: 0, y: 450, width: 1400, height: 100 }); // wrapped again
+      expect(result.atlasWidth).toBe(1900);
+      expect(result.atlasHeight).toBe(550);
     });
   });
 });

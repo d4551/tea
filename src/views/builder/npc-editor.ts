@@ -13,6 +13,7 @@ import type {
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 import { getBooleanLabel } from "./view-labels.ts";
+import { renderWorkspaceShell } from "./workspace-shell.ts";
 
 /**
  * Renders the NPC roster workspace.
@@ -40,6 +41,8 @@ export const renderNpcEditor = (
 
   const selectedNpc = allNpcs[0] ?? null;
   const createAction = `${appRoutes.builderApiNpcs}/create/form`;
+  const sceneCount = Object.keys(scenes).length;
+  const manifestCount = Object.keys(manifests).length;
   const sceneOptions = Object.values(scenes)
     .map(
       (scene) =>
@@ -93,7 +96,22 @@ export const renderNpcEditor = (
     .join("");
 
   return `
-    <section class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr] animate-fade-in-up">
+    <section class="space-y-6 animate-fade-in-up">
+      ${renderWorkspaceShell({
+        eyebrow: messages.builder.npcs,
+        title: messages.builder.npcRosterTitle,
+        description: messages.builder.npcCreateDescription,
+        facets: [
+          { label: messages.builder.sceneMode2d, badgeClassName: "badge-primary" },
+          { label: messages.builder.dialogue, badgeClassName: "badge-secondary" },
+        ],
+        metrics: [
+          { label: messages.builder.npcs, value: allNpcs.length, toneClassName: "text-primary" },
+          { label: messages.builder.totalScenes, value: sceneCount },
+          { label: messages.builder.spriteManifestCountLabel, value: manifestCount },
+        ],
+      })}
+      <section class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <div class="space-y-4">
         <article class="card card-border bg-base-100 shadow-sm">
           <form
@@ -150,6 +168,7 @@ export const renderNpcEditor = (
             : `<div role="alert" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noNpcs)}</span></div>`
         }
       </div>
+    </section>
     </section>`;
 };
 
@@ -210,7 +229,7 @@ export const renderNpcDetail = (
           </div>
           <form hx-delete="${escapeHtml(deleteAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#npc-delete-spinner" hx-disabled-elt="button">
             <span class="flex items-center gap-2">
-              <button type="submit" class="btn btn-error btn-outline btn-sm">${escapeHtml(messages.builder.delete)}</button>
+              <button type="submit" class="btn btn-error btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(npc.characterKey)}">${escapeHtml(messages.builder.delete)}</button>
               <span id="npc-delete-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
             </span>
           </form>

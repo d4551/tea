@@ -367,8 +367,53 @@ const buildBaselineAssets = (): Record<string, BuilderAsset> => {
     updatedAtMs: baselineCreatedAtMs,
   }));
 
+  const modelAssets: BuilderAsset[] = [
+    {
+      id: "asset.model.cavernModel",
+      kind: "model",
+      label: "Crystal Cavern (GLB)",
+      sceneMode: "3d",
+      source: "/assets/geometry/placeholder.glb",
+      sourceFormat: "glb",
+      tags: ["baseline", "environment", "3d"],
+      variants: [
+        {
+          id: "variant.model.cavernModel.runtime",
+          format: "glb",
+          source: "/assets/geometry/placeholder.glb",
+          usage: "runtime",
+          mimeType: "model/gltf-binary",
+        },
+      ],
+      approved: true,
+      createdAtMs: baselineCreatedAtMs,
+      updatedAtMs: baselineCreatedAtMs,
+    },
+    {
+      id: "asset.model.cavernUsd",
+      kind: "model",
+      label: "Crystal Cavern (USDZ)",
+      sceneMode: "3d",
+      source: "/assets/geometry/placeholder.usdz",
+      sourceFormat: "usdz",
+      tags: ["baseline", "environment", "3d", "usd"],
+      variants: [
+        {
+          id: "variant.model.cavernUsd.runtime",
+          format: "usdz",
+          source: "/assets/geometry/placeholder.usdz",
+          usage: "runtime",
+          mimeType: "model/vnd.usdz+zip",
+        },
+      ],
+      approved: true,
+      createdAtMs: baselineCreatedAtMs,
+      updatedAtMs: baselineCreatedAtMs,
+    },
+  ];
+
   return Object.fromEntries(
-    [...backgroundAssets, ...spriteAssets].map((asset) => [asset.id, asset]),
+    [...backgroundAssets, ...spriteAssets, ...modelAssets].map((asset) => [asset.id, asset]),
   ) as Record<string, BuilderAsset>;
 };
 
@@ -635,21 +680,24 @@ const _toSceneNodes = (
       continue;
     }
 
-    const x = toNumberValue(record.positionX ?? asRecord(record.position).x);
-    const y = toNumberValue(record.positionY ?? asRecord(record.position).y);
-    const z = toNumberValue(record.positionZ ?? asRecord(record.position).z);
+    const positionRecord = asRecord(record.position);
+    const x = toNumberValue(positionRecord.x);
+    const y = toNumberValue(positionRecord.y);
+    const z = toNumberValue(positionRecord.z);
 
     const position = x !== null && y !== null ? (z !== null ? { x, y, z } : { x, y }) : null;
 
-    const rotX = toNumberValue(record.rotationX ?? asRecord(record.rotation).x);
-    const rotY = toNumberValue(record.rotationY ?? asRecord(record.rotation).y);
-    const rotZ = toNumberValue(record.rotationZ ?? asRecord(record.rotation).z);
+    const rotationRecord = asRecord(record.rotation);
+    const rotX = toNumberValue(rotationRecord.x);
+    const rotY = toNumberValue(rotationRecord.y);
+    const rotZ = toNumberValue(rotationRecord.z);
     const rotation =
       rotX !== null && rotY !== null && rotZ !== null ? { x: rotX, y: rotY, z: rotZ } : null;
 
-    const scaleX = toNumberValue(record.scaleX ?? asRecord(record.scale).x);
-    const scaleY = toNumberValue(record.scaleY ?? asRecord(record.scale).y);
-    const scaleZ = toNumberValue(record.scaleZ ?? asRecord(record.scale).z);
+    const scaleRecord = asRecord(record.scale);
+    const scaleX = toNumberValue(scaleRecord.x);
+    const scaleY = toNumberValue(scaleRecord.y);
+    const scaleZ = toNumberValue(scaleRecord.z);
     const scale =
       scaleX !== null && scaleY !== null && scaleZ !== null
         ? { x: scaleX, y: scaleY, z: scaleZ }
@@ -666,8 +714,9 @@ const _toSceneNodes = (
         record.nodeType === "trigger" ||
         record.nodeType === "camera")
     ) {
-      const width = toNumberValue(record.sizeWidth ?? asRecord(record.size).width);
-      const height = toNumberValue(record.sizeHeight ?? asRecord(record.size).height);
+      const sizeRecord = asRecord(record.size);
+      const width = toNumberValue(sizeRecord.width);
+      const height = toNumberValue(sizeRecord.height);
       if (
         position === null ||
         width === null ||
@@ -1062,16 +1111,28 @@ const parseTrackKeyframes = (raw: string): AnimationTimeline["tracks"][number]["
     if (
       item !== null &&
       typeof item === "object" &&
+      "id" in item &&
       "timeMs" in item &&
       "value" in item &&
       "easing" in item &&
+      typeof (item as Record<string, unknown>).id === "string" &&
       typeof (item as Record<string, unknown>).timeMs === "number" &&
       typeof (item as Record<string, unknown>).value === "number" &&
       typeof (item as Record<string, unknown>).easing === "string"
     ) {
-      const kf = item as { timeMs: number; value: number; easing: AnimationKeyframe["easing"] };
+      const kf = item as {
+        id: string;
+        timeMs: number;
+        value: number;
+        easing: AnimationKeyframe["easing"];
+      };
       return [
-        { timeMs: kf.timeMs, value: kf.value, easing: kf.easing } satisfies AnimationKeyframe,
+        {
+          id: kf.id,
+          timeMs: kf.timeMs,
+          value: kf.value,
+          easing: kf.easing,
+        } satisfies AnimationKeyframe,
       ];
     }
     return [];

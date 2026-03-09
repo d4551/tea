@@ -8,6 +8,10 @@ import type {
   GameSessionParticipant,
   GameSessionParticipantRole,
 } from "../shared/contracts/game.ts";
+import {
+  type GameClientBootstrapData,
+  serializeGameClientBootstrap,
+} from "../shared/contracts/game-client-bootstrap.ts";
 import type { Messages } from "../shared/i18n/messages.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
 import { escapeHtml, type LayoutContext, renderDocument } from "./layout.ts";
@@ -30,13 +34,7 @@ interface PlayableGamePageProps {
   readonly version: number;
   readonly participantRole: GameSessionParticipantRole;
   readonly participants: readonly GameSessionParticipant[];
-  readonly clientRuntimeConfig: {
-    readonly commandSendIntervalMs: number;
-    readonly commandTtlMs: number;
-    readonly socketReconnectDelayMs: number;
-    readonly restoreRequestTimeoutMs: number;
-    readonly restoreMaxAttempts: number;
-  };
+  readonly clientRuntimeConfig: GameClientBootstrapData["runtime"];
 }
 
 /**
@@ -180,6 +178,22 @@ export function GamePage(props: GamePageProps) {
   const gameHudStreamPath = interpolateRoutePath(appRoutes.gameApiSessionHud, { id: sessionId });
   const builderHref = withQueryParameters(appRoutes.builder, { lang: locale, projectId });
   const inviteAction = interpolateRoutePath(appRoutes.gameApiSessionInvite, { id: sessionId });
+  const clientBootstrap: GameClientBootstrapData = {
+    session: {
+      sessionId,
+      participantSessionId,
+      resumeToken,
+      locale,
+      resumeTokenExpiresAtMs,
+      commandQueueDepth,
+      version,
+      participantRole,
+    },
+    runtime: {
+      ...clientRuntimeConfig,
+      rendererPreference: appConfig.playableGame.rendererPreference,
+    },
+  };
   const pageScripts = [
     {
       src: appConfig.playableGame.clientScriptPath,
@@ -188,93 +202,104 @@ export function GamePage(props: GamePageProps) {
   ] as const;
 
   const content = `
-    <meta name="game-session-id" data-session-id="${escapeHtml(sessionId)}" />
-    <meta name="game-session-participant-id" data-game-session-participant-id="${escapeHtml(participantSessionId)}" />
-    <meta name="game-session-resume-token" data-session-resume-token="${escapeHtml(resumeToken)}" />
-    <meta name="game-session-locale" data-game-session-locale="${escapeHtml(locale)}" />
-    <meta name="game-session-resume-expires-at-ms" data-game-session-resume-expires-at-ms="${escapeHtml(String(resumeTokenExpiresAtMs))}" />
-    <meta name="game-session-command-queue-depth" data-game-session-command-queue-depth="${commandQueueDepth}" />
-    <meta name="game-session-version" data-game-session-version="${version}" />
-    <meta name="game-session-participant-role" data-game-session-participant-role="${escapeHtml(participantRole)}" />
-    <meta name="game-client-command-send-interval-ms" data-game-client-command-send-interval-ms="${escapeHtml(String(clientRuntimeConfig.commandSendIntervalMs))}" />
-    <meta name="game-client-command-ttl-ms" data-game-client-command-ttl-ms="${escapeHtml(String(clientRuntimeConfig.commandTtlMs))}" />
-    <meta name="game-client-socket-reconnect-delay-ms" data-game-client-socket-reconnect-delay-ms="${escapeHtml(String(clientRuntimeConfig.socketReconnectDelayMs))}" />
-    <meta name="game-client-restore-request-timeout-ms" data-game-client-restore-request-timeout-ms="${escapeHtml(String(clientRuntimeConfig.restoreRequestTimeoutMs))}" />
-    <meta name="game-client-restore-max-attempts" data-game-client-restore-max-attempts="${escapeHtml(String(clientRuntimeConfig.restoreMaxAttempts))}" />
-    <meta name="game-client-renderer-preference" data-game-client-renderer-preference="${escapeHtml(appConfig.playableGame.rendererPreference)}" />
-    <div class="grid gap-6 font-serif" hx-boost="false" hx-ext="sse" sse-connect="${escapeHtml(gameHudStreamPath)}">
-      <section class="card card-border bg-base-100/95 shadow-sm">
-        <div class="card-body flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div class="space-y-2">
-            <h1
-              id="game-scene-title-heading"
-              sse-swap="scene-title-heading"
-              hx-swap="outerHTML"
-              class="text-3xl font-semibold"
-            >${escapeHtml(sceneTitle)}</h1>
-            <p
-              id="game-objective-summary"
-              sse-swap="objective-summary"
-              hx-swap="outerHTML"
-              class="text-sm text-base-content/70"
-            >${escapeHtml(activeQuestTitle ?? messages.game.objectiveDescription)}</p>
+    <script id="game-client-bootstrap" type="application/json">${serializeGameClientBootstrap(clientBootstrap)}</script>
+    <div class="grid gap-5 font-serif animate-fade-in-up" hx-boost="false" hx-ext="sse" sse-connect="${escapeHtml(gameHudStreamPath)}">
+      <!-- Game Header Bar -->
+      <header class="card card-elevated bg-base-100/95 backdrop-blur-sm border border-base-300/50 shadow-lg">
+        <div class="card-body p-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div class="flex items-center gap-3">
+            <div class="rounded-lg w-10 h-10 flex items-center justify-center bg-primary/15 text-primary shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+            </div>
+            <div class="min-w-0">
+              <h1
+                id="game-scene-title-heading"
+                sse-swap="scene-title-heading"
+                hx-swap="outerHTML"
+                class="text-xl lg:text-2xl font-bold tracking-tight truncate"
+              >${escapeHtml(sceneTitle)}</h1>
+              <p
+                id="game-objective-summary"
+                sse-swap="objective-summary"
+                hx-swap="outerHTML"
+                class="text-sm text-base-content/60 truncate"
+              >${escapeHtml(activeQuestTitle ?? messages.game.objectiveDescription)}</p>
+            </div>
           </div>
           <div class="flex flex-wrap items-center gap-2">
-          <a href="${escapeHtml(builderHref)}" class="btn btn-outline btn-sm">${escapeHtml(messages.game.builderReturn)}</a>
-          <span id="game-session-meta" class="hidden"
-            data-session-id="${escapeHtml(sessionId)}"
-            data-participant-session-id="${escapeHtml(participantSessionId)}"
-            data-resume-token="${escapeHtml(resumeToken)}"
-            data-command-queue-depth="${commandQueueDepth}"
-            data-version="${version}"
-            data-locale="${escapeHtml(locale)}"
-            role="status" aria-live="polite">
-          </span>
-          <span
-            id="game-connection-status"
-            class="badge badge-neutral badge-sm"
-            aria-label="${escapeHtml(messages.game.connectionStatus)}"
-            data-connecting-label="${escapeHtml(messages.game.connectionStatus)}"
-            data-connected-label="${escapeHtml(messages.game.connectionConnected)}"
-            data-disconnected-prefix="${escapeHtml(messages.game.connectionDisconnected)}"
-            data-reconnecting-label="${escapeHtml(messages.game.connectionReconnecting)}"
-            data-expired-label="${escapeHtml(messages.game.connectionExpired)}"
-            data-missing-label="${escapeHtml(messages.game.connectionMissing)}"
-          >${escapeHtml(messages.game.connectionStatus)}</span>
-          <span
-            id="game-command-queue"
-            class="badge badge-outline badge-sm"
-            aria-label="${escapeHtml(messages.game.queueLabel)}"
-            data-queue-label="${escapeHtml(messages.game.queueLabel)}"
-          >${escapeHtml(messages.game.queueLabel)}: ${commandQueueDepth}</span>
-          <button
-            id="game-reconnect"
-            type="button"
-            class="btn btn-xs btn-warning hidden"
-            aria-label="${escapeHtml(messages.game.reconnectAction)}"
-            data-reconnect-label="${escapeHtml(messages.game.reconnectAction)}"
-          >${escapeHtml(messages.game.reconnectAction)}</button>
-          <div
-            id="game-connection-alert"
-            class="alert alert-warning alert-soft hidden max-w-xs px-2 py-1"
-            role="status"
-            aria-live="polite"
-          >
-            <span id="game-connection-alert-text" class="text-xs">${escapeHtml(messages.game.connectionStatus)}</span>
+            <a href="${escapeHtml(builderHref)}" class="btn btn-ghost btn-sm gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+              ${escapeHtml(messages.game.builderReturn)}
+            </a>
+            <span id="game-session-meta" class="hidden"
+              data-session-id="${escapeHtml(sessionId)}"
+              data-participant-session-id="${escapeHtml(participantSessionId)}"
+              data-resume-token="${escapeHtml(resumeToken)}"
+              data-command-queue-depth="${commandQueueDepth}"
+              data-version="${version}"
+              data-locale="${escapeHtml(locale)}"
+              role="status" aria-live="polite">
+            </span>
+            <div
+              id="game-connection-status"
+              class="connection-status connection-status-connecting"
+              aria-label="${escapeHtml(messages.game.connectionStatus)}"
+              data-connecting-label="${escapeHtml(messages.game.connectionStatus)}"
+              data-connected-label="${escapeHtml(messages.game.connectionConnected)}"
+              data-disconnected-prefix="${escapeHtml(messages.game.connectionDisconnected)}"
+              data-reconnecting-label="${escapeHtml(messages.game.connectionReconnecting)}"
+              data-expired-label="${escapeHtml(messages.game.connectionExpired)}"
+              data-missing-label="${escapeHtml(messages.game.connectionMissing)}"
+            >
+              <span>${escapeHtml(messages.game.connectionStatus)}</span>
+            </div>
+            <span
+              id="game-command-queue"
+              class="badge badge-outline badge-sm gap-1"
+              aria-label="${escapeHtml(messages.game.queueLabel)}"
+              data-queue-label="${escapeHtml(messages.game.queueLabel)}"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              ${commandQueueDepth}
+            </span>
+            <button
+              id="game-reconnect"
+              type="button"
+              class="btn btn-xs btn-warning hidden gap-1"
+              aria-label="${escapeHtml(messages.game.reconnectAction)}"
+              data-reconnect-label="${escapeHtml(messages.game.reconnectAction)}"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 11-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+              ${escapeHtml(messages.game.reconnectAction)}
+            </button>
+            <div
+              id="hud-xp"
+              data-hud-slot="hud-xp"
+              sse-swap="xp"
+              hx-swap="outerHTML"
+              data-xp-label="${escapeHtml(messages.game.xpLabel)}"
+              data-level-label="${escapeHtml(messages.game.levelLabel)}"
+              class="badge badge-primary badge-lg px-4 shadow-md gap-1"
+              aria-live="polite"
+              role="status"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              ${escapeHtml(messages.game.initialXp)}
+            </div>
           </div>
-          <div
-            id="hud-xp"
-            data-hud-slot="hud-xp"
-            sse-swap="xp"
-            hx-swap="outerHTML"
-            data-xp-label="${escapeHtml(messages.game.xpLabel)}"
-            data-level-label="${escapeHtml(messages.game.levelLabel)}"
-            class="badge badge-primary badge-lg px-4 shadow-sm"
-            aria-live="polite"
-            role="status"
-          >${escapeHtml(messages.game.initialXp)}</div>
         </div>
-      </section>
+        <div
+          id="game-connection-alert"
+          class="hidden border-t border-base-300/50 bg-warning/10 px-4 py-2 text-sm"
+          role="alert"
+          aria-live="polite"
+        >
+          <div class="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="size-4 text-warning shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span id="game-connection-alert-text">${escapeHtml(messages.game.connectionStatus)}</span>
+          </div>
+        </div>
+      </header>
 
       <section class="grid gap-6 lg:grid-cols-[0.82fr_0.18fr]">
           <div class="relative aspect-video overflow-hidden rounded-xl border border-base-content/20 bg-black shadow-2xl">

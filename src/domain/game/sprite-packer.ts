@@ -43,13 +43,15 @@ export const packFrames = (frames: readonly PackableFrame[]): PackResult => {
     return { atlasWidth: 0, atlasHeight: 0, frames: [] };
   }
 
+  // Sort frames by height descending to minimize vertical space waste in rows.
+  const sortedFrames = [...frames].sort((a, b) => b.height - a.height);
   const positioned: SpriteAtlasFrame[] = [];
   let cursorX = 0;
   let cursorY = 0;
   let rowHeight = 0;
   let maxWidth = 0;
 
-  for (const frame of frames) {
+  for (const frame of sortedFrames) {
     if (cursorX + frame.width > MAX_STRIP_WIDTH && cursorX > 0) {
       cursorY += rowHeight;
       cursorX = 0;

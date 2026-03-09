@@ -3,6 +3,7 @@ import { assertStartupReadiness } from "./bootstrap/preflight.ts";
 import { appConfig } from "./config/environment.ts";
 import { ModelManager } from "./domain/ai/model-manager.ts";
 import { createLogger } from "./lib/logger.ts";
+import { settleAsync } from "./shared/utils/async-result.ts";
 
 const bootstrapLogger = createLogger("bootstrap");
 
@@ -29,14 +30,23 @@ export const startServer = async (): Promise<void> => {
   }
 
   void (async () => {
-    // SAFETY: AI model warmup crosses into ONNX runtime FFI and may fail on missing native deps.
-    try {
-      const manager = await ModelManager.getInstance();
-      await manager.ensureWarmup();
-      bootstrapLogger.info("ai.models.ready");
-    } catch (err: unknown) {
-      bootstrapLogger.error("ai.models.warmup.failed", { err: String(err) });
+    const managerResult = await settleAsync(ModelManager.getInstance());
+    if (!managerResult.ok) {
+      bootstrapLogger.error("ai.models.warmup.failed", {
+        err: managerResult.error.message,
+      });
+      return;
     }
+
+    const warmupResult = await settleAsync(managerResult.value.ensureWarmup());
+    if (!warmupResult.ok) {
+      bootstrapLogger.error("ai.models.warmup.failed", {
+        err: warmupResult.error.message,
+      });
+      return;
+    }
+
+    bootstrapLogger.info("ai.models.ready");
   })();
 };
 

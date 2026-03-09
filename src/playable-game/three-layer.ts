@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { USDLoader } from "three/addons/loaders/USDLoader.js";
+import { WebGPURenderer } from "three/webgpu";
 import type { GameSceneState, SceneNode3D } from "../shared/contracts/game.ts";
 
 const LEAF_COUNT = 80;
@@ -14,7 +15,7 @@ const LEAF_DRIFT_AMPLITUDE = 0.003;
  * Shared Three.js environment layer rendered beneath the Pixi sprite scene.
  */
 export class ThreeLayer {
-  readonly renderer: THREE.WebGLRenderer;
+  readonly renderer: THREE.WebGLRenderer | WebGPURenderer;
   readonly scene = new THREE.Scene();
   readonly camera: THREE.PerspectiveCamera;
 
@@ -28,13 +29,23 @@ export class ThreeLayer {
   private _nodeRenderVersion = 0;
   private readonly _gltfLoader = new GLTFLoader();
   private readonly _usdLoader = new USDLoader();
+  private readonly _useWebGpu: boolean;
 
-  constructor(width: number, height: number) {
-    this.renderer = new THREE.WebGLRenderer({
-      antialias: false,
-      stencil: true,
-      alpha: true,
-    });
+  constructor(width: number, height: number, useWebGpu = false) {
+    this._useWebGpu = useWebGpu;
+    if (useWebGpu) {
+      this.renderer = new WebGPURenderer({
+        antialias: false,
+        alpha: true,
+      });
+    } else {
+      this.renderer = new THREE.WebGLRenderer({
+        antialias: false,
+        stencil: true,
+        alpha: true,
+      });
+    }
+
     this.renderer.setSize(width, height);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
@@ -42,13 +53,22 @@ export class ThreeLayer {
     this.camera.position.set(0, 0, 5);
   }
 
+  async init(): Promise<void> {
+    if (this._useWebGpu && "init" in this.renderer) {
+      await this.renderer.init();
+    }
+  }
+
   /**
    * Returns the shared WebGL context used by Pixi.
    *
    * @returns Active renderer context.
    */
-  getContext(): WebGLRenderingContext | WebGL2RenderingContext {
-    return this.renderer.getContext() as WebGLRenderingContext | WebGL2RenderingContext;
+  getContext(): WebGLRenderingContext | WebGL2RenderingContext | null {
+    if (this.renderer instanceof THREE.WebGLRenderer) {
+      return this.renderer.getContext() as WebGLRenderingContext | WebGL2RenderingContext;
+    }
+    return null;
   }
 
   /**
@@ -87,6 +107,7 @@ export class ThreeLayer {
           ? [
               node.id,
               node.nodeType,
+              node.assetId,
               node.position.x,
               node.position.y,
               node.position.z,
@@ -97,7 +118,7 @@ export class ThreeLayer {
               node.scale.y,
               node.scale.z,
             ]
-          : [node.id, node.nodeType],
+          : [node.id, node.nodeType, node.assetId],
       ),
     );
     if (signature === this._lastNodeSignature) {
@@ -130,7 +151,9 @@ export class ThreeLayer {
     this._elapsedMs += deltaMs;
     this._updateLeaves();
 
-    this.renderer.resetState();
+    if (this.renderer instanceof THREE.WebGLRenderer) {
+      this.renderer.resetState();
+    }
     this.renderer.render(this.scene, this.camera);
   }
 

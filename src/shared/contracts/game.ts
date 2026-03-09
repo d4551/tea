@@ -111,7 +111,8 @@ export type BuilderAssetKind =
   | "portrait"
   | "tiles"
   | "tile-set"
-  | "material";
+  | "material"
+  | "document";
 
 /**
  * Optional authored asset variant derived from a canonical asset.
@@ -505,7 +506,13 @@ export interface GenerationArtifact {
   /** Owning generation job identifier. */
   readonly jobId: string;
   /** Artifact kind. */
-  readonly kind: BuilderAssetKind | "animation-plan" | "automation-evidence";
+  readonly kind:
+    | BuilderAssetKind
+    | "animation-plan"
+    | "automation-evidence"
+    | "combat-encounter"
+    | "item-set"
+    | "cutscene-script";
   /** Human-readable artifact label. */
   readonly label: string;
   /** Browser-accessible preview source or URL. */
@@ -527,7 +534,15 @@ export interface GenerationJob {
   /** Stable job identifier. */
   readonly id: string;
   /** Requested output kind. */
-  readonly kind: "sprite-sheet" | "portrait" | "tiles" | "voice-line" | "animation-plan";
+  readonly kind:
+    | "sprite-sheet"
+    | "portrait"
+    | "tiles"
+    | "voice-line"
+    | "animation-plan"
+    | "combat-encounter"
+    | "item-set"
+    | "cutscene-script";
   /** Current job status. */
   readonly status: GenerationJobStatus;
   /** User prompt or request summary. */
@@ -1150,6 +1165,8 @@ export interface CutscenePlaybackState {
  * Numeric keyframe in an animation track.
  */
 export interface AnimationKeyframe {
+  /** Stable keyframe identifier. */
+  readonly id: string;
   /** Time position in ms. */
   readonly timeMs: number;
   /** Numeric value at this keyframe. */
@@ -1167,6 +1184,36 @@ export interface AnimationTrack {
   readonly property: string;
   /** Keyframes in chronological order. */
   readonly keyframes: readonly AnimationKeyframe[];
+}
+
+/**
+ * Event triggered at a specific time in an animation timeline.
+ */
+export interface AnimationTimelineEvent {
+  /** Stable event identifier. */
+  readonly id: string;
+  /** Time position in ms. */
+  readonly timeMs: number;
+  /** Event payload or trigger name (e.g., "footstep", "hit"). */
+  readonly payload: string;
+}
+
+/**
+ * Editor-specific state for an animation timeline.
+ */
+export interface AnimationFrameEditorState {
+  /** Selected track ID. */
+  readonly selectedTrackId?: string;
+  /** Selected keyframe ID. */
+  readonly selectedKeyframeId?: string;
+  /** Selected event ID. */
+  readonly selectedEventId?: string;
+  /** Current playback cursor position in ms. */
+  readonly cursorTimeMs: number;
+  /** Zoom level for the timeline view. */
+  readonly zoom: number;
+  /** Pan offset for the timeline view in ms. */
+  readonly panMs: number;
 }
 
 /**
@@ -1189,6 +1236,10 @@ export interface AnimationTimeline {
   readonly loop: boolean;
   /** Animation tracks. */
   readonly tracks: readonly AnimationTrack[];
+  /** Timeline discrete events. */
+  readonly events?: readonly AnimationTimelineEvent[];
+  /** Optional transient editor state. */
+  readonly editorState?: AnimationFrameEditorState;
   /** Creation timestamp in ms since epoch. */
   readonly createdAtMs: number;
   /** Last update timestamp in ms since epoch. */

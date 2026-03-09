@@ -1,3 +1,4 @@
+import { settleAsync } from "../shared/utils/async-result.ts";
 import type { JsonObject, StructuredLogger } from "./logger.ts";
 
 /**
@@ -25,9 +26,6 @@ export interface ManagedIntervalTaskOptions<TResult> {
   readonly mapFailureData?: (error: Error) => JsonObject;
 }
 
-const toError = (error: unknown): Error =>
-  error instanceof Error ? error : new Error(String(error));
-
 /**
  * Executes one guarded async interval tick and prevents overlapping runs.
  *
@@ -42,21 +40,16 @@ export const executeManagedIntervalTask = async <TResult>(
 
   options.setInFlight(true);
 
-  const ran = await options
-    .run()
-    .then((data) => ({ ok: true as const, data }))
-    .catch((error: unknown) => {
-      const normalizedError = toError(error);
-      options.logger.warn(options.failureEvent, {
-        message: normalizedError.message,
-        ...(options.mapFailureData?.(normalizedError) ?? {}),
-      });
-      return { ok: false as const };
+  const result = await settleAsync(options.run());
+  if (result.ok) {
+    options.onSuccess?.(result.value);
+  } else {
+    options.logger.warn(options.failureEvent, {
+      message: result.error.message,
+      ...(options.mapFailureData?.(result.error) ?? {}),
     });
-
-  if (ran.ok) {
-    options.onSuccess?.(ran.data);
   }
+
   options.setInFlight(false);
 };
 

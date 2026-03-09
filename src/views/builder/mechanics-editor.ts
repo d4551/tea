@@ -9,6 +9,7 @@ import type {
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 import { getTriggerEventLabel } from "./view-labels.ts";
+import { renderWorkspaceShell } from "./workspace-shell.ts";
 
 const questFormAction = (base: string, id: string) => `${base}/${encodeURIComponent(id)}/form`;
 const questDeleteAction = (base: string, id: string) => `${base}/${encodeURIComponent(id)}`;
@@ -325,7 +326,27 @@ export const renderMechanicsEditor = (
   const emptyGraphAlert = `<div role="status" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noDialogueGraphs)}</span></div>`;
 
   return `<section class="space-y-6 animate-fade-in-up">
-    <h1 class="text-2xl font-bold">${escapeHtml(messages.builder.mechanics)}</h1>
+    ${renderWorkspaceShell({
+      eyebrow: messages.builder.mechanics,
+      title: messages.builder.mechanics,
+      description: messages.builder.capabilityMechanicsDescription,
+      facets: [
+        { label: messages.builder.questsTitle, badgeClassName: "badge-primary" },
+        { label: messages.builder.triggersTitle, badgeClassName: "badge-secondary" },
+        { label: messages.builder.dialogueGraphsTitle, badgeClassName: "badge-accent" },
+        { label: messages.builder.flagsTitle, badgeClassName: "badge-outline" },
+      ],
+      metrics: [
+        {
+          label: messages.builder.questsTitle,
+          value: quests.length,
+          toneClassName: "text-primary",
+        },
+        { label: messages.builder.triggersTitle, value: triggers.length },
+        { label: messages.builder.dialogueGraphsTitle, value: dialogueGraphs.length },
+        { label: messages.builder.flagsTitle, value: flags.length },
+      ],
+    })}
     <div class="grid gap-4 xl:grid-cols-3">
       <article class="card card-border bg-base-100 shadow-sm">
         <form class="card-body gap-3" hx-post="${escapeHtml(createQuestAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#quest-create-spinner" hx-disabled-elt="button, input, select, textarea">

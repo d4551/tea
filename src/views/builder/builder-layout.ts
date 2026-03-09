@@ -194,7 +194,11 @@ export const renderBuilderProjectShell = (
     <div class="flex flex-wrap items-center gap-3 px-6 py-2.5">
       <span class="font-semibold text-sm">${escapeHtml(project?.id ?? projectId)}</span>
       <span class="badge ${statusTone} badge-soft badge-xs">${escapeHtml(statusLabel)}</span>
-      ${project !== null ? `<span class="text-xs text-base-content/50">v${project.version}</span>` : ""}
+      ${
+        project !== null
+          ? `<span class="text-xs text-base-content/50">${escapeHtml(messages.builder.versionPrefix)}${project.version}</span>`
+          : ""
+      }
       <div class="flex-1"></div>
       <div class="flex items-center gap-2">
         ${publishForm}
@@ -373,6 +377,7 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
               <span class="badge badge-ghost badge-xs">0</span>
             </div>
           </div>
+        </footer>
         <nav class="dock dock-sm lg:hidden z-40 fixed bottom-0 w-full" aria-label="${escapeHtml(messages.builder.title)}">
           <a href="${escapeHtml(withBuilderQuery(appRoutes.builder, locale, project?.id ?? projectId))}" class="${activeTab === "dashboard" ? "dock-active" : ""}" aria-label="${escapeHtml(messages.builder.dashboard)}">
             ${iconDashboard()}

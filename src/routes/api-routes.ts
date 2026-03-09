@@ -1,5 +1,7 @@
 import { Elysia, t } from "elysia";
 import type { OracleService } from "../domain/oracle/oracle-service.ts";
+import type { OracleOutcome } from "../domain/oracle/oracle-types.ts";
+import type { AppErrorCode } from "../lib/error-envelope.ts";
 import { ApplicationError, errorEnvelope, successEnvelope } from "../lib/error-envelope.ts";
 import { authSessionContextPlugin, authSessionGuard } from "../plugins/auth-session.ts";
 import { i18nContextPlugin } from "../plugins/i18n-context.ts";
@@ -79,7 +81,7 @@ const createOracleRoutes = (oracleService: OracleService) =>
     .guard(authSessionGuard, (app) =>
       app.post(
         appRoutes.oracleApi,
-        async ({ body, request, status, authHasSession, correlationId }) => {
+        async ({ body, request, status, authHasSession, correlationId, messages }) => {
           const { locale } = resolveRequestI18nWithOverride(request, body.lang);
           const mode = parseOracleMode(body.mode);
           const outcome = await oracleService.evaluate({
@@ -88,6 +90,12 @@ const createOracleRoutes = (oracleService: OracleService) =>
             mode,
             hasSession: authHasSession,
           });
+
+          const mapOracleRetryableToError = (
+            oracleOutcome: Extract<OracleOutcome, { readonly state: "error" }>,
+            nonRetryableCode: AppErrorCode,
+            retryableCode: AppErrorCode,
+          ): AppErrorCode => (oracleOutcome.retryable ? retryableCode : nonRetryableCode);
 
           if (outcome.state === "success") {
             return status(
@@ -119,23 +127,33 @@ const createOracleRoutes = (oracleService: OracleService) =>
             return status(httpStatus.unauthorized, errorEnvelope(appError, correlationId));
           }
 
-          if (outcome.retryable) {
-            const appError = new ApplicationError(
+          if (outcome.state === "error") {
+            const errorCode = mapOracleRetryableToError(
+              outcome,
+              "VALIDATION_ERROR",
               "UPSTREAM_ERROR",
-              outcome.message,
-              httpStatus.serviceUnavailable,
-              true,
             );
-            return status(httpStatus.serviceUnavailable, errorEnvelope(appError, correlationId));
+            const isRetryable = errorCode === "UPSTREAM_ERROR";
+
+            const appError = new ApplicationError(
+              errorCode,
+              outcome.message,
+              isRetryable ? httpStatus.serviceUnavailable : httpStatus.unprocessableEntity,
+              isRetryable,
+            );
+
+            return status(
+              isRetryable ? httpStatus.serviceUnavailable : httpStatus.unprocessableEntity,
+              errorEnvelope(appError, correlationId),
+            );
           }
 
-          const appError = new ApplicationError(
-            "VALIDATION_ERROR",
-            outcome.message,
-            httpStatus.unprocessableEntity,
-            false,
+          throw new ApplicationError(
+            "INTERNAL_ERROR",
+            messages.api.frameworkErrors.internal,
+            httpStatus.internalServerError,
+            true,
           );
-          return status(httpStatus.unprocessableEntity, errorEnvelope(appError, correlationId));
         },
         {
           body: oracleBodySchema,

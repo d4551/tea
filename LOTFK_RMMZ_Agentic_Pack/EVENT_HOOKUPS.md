@@ -1,4 +1,6 @@
-# Event Hookups (MZ Editor)
+# Event hookups (MZ Editor)
+
+Current recommended editor wiring for the shipped companion pack plugins.
 
 These are recommended event/common event configurations for wiring
 LOTFK plugin commands into your RPG Maker MZ project.
