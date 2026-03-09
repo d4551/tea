@@ -1,14 +1,54 @@
 # TEA
 
-[中文文档](./README.zh-CN.md) | [Architecture](./ARCHITECTURE.md) | [Docs index](./docs/index.md)
+<p align="center">
+  <strong>SSR-first game runtime, builder workspace, and AI-assisted tooling on Bun.</strong>
+</p>
+
+<p align="center">
+  <a href="./README.md">English</a>
+  ·
+  <a href="./README.zh-CN.md">中文</a>
+  ·
+  <a href="./ARCHITECTURE.md">Architecture</a>
+  ·
+  <a href="./docs/index.md">Docs Index</a>
+</p>
+
+<p align="center">
+  <a href="./README.md"><img alt="Docs in English" src="https://img.shields.io/badge/docs-English-0f766e?style=flat-square"></a>
+  <a href="./README.zh-CN.md"><img alt="Chinese documentation available" src="https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87-c2410c?style=flat-square"></a>
+  <img alt="Bun 1.3.10" src="https://img.shields.io/badge/Bun-1.3.10-111827?style=flat-square">
+  <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-2563eb?style=flat-square">
+  <img alt="Elysia 1.4.27" src="https://img.shields.io/badge/Elysia-1.4.27-059669?style=flat-square">
+  <img alt="Prisma 7.4.2" src="https://img.shields.io/badge/Prisma-7.4.2-1f2937?style=flat-square">
+  <img alt="HTMX 2.0.8" src="https://img.shields.io/badge/HTMX-2.0.8-1d4ed8?style=flat-square">
+  <img alt="SSR first" src="https://img.shields.io/badge/rendering-SSR--first-7c3aed?style=flat-square">
+  <img alt="Verify with bun run verify" src="https://img.shields.io/badge/verify-bun%20run%20verify-0f766e?style=flat-square">
+</p>
+
+> Need Chinese docs? Open [README.zh-CN.md](./README.zh-CN.md).
+>
+> 需要中文文档？请直接打开 [README.zh-CN.md](./README.zh-CN.md)。
 
 TEA is an SSR-first game runtime and builder platform built on Bun, Elysia, HTMX, Tailwind CSS, DaisyUI, Prisma, PixiJS, and Three.js. The repository combines a server-rendered web app, a game builder workspace, a server-authoritative multiplayer runtime, AI-assisted tooling, and an RPG Maker MZ companion pack in one Bun workspace.
+
+## At a glance
+
+| Area | Current implementation |
+| --- | --- |
+| Delivery model | SSR by default, HTMX for progressive enhancement, browser runtime only where necessary |
+| Main surfaces | Home/oracle SSR, builder workspace, game session runtime, AI APIs, knowledge retrieval |
+| Backend | Elysia app composed in `src/app.ts`, bootstrapped from `src/server.ts` |
+| State and persistence | Prisma + SQLite for sessions, knowledge chunks, oracle data, and builder-backed runtime state |
+| Rendering stack | Tailwind CSS 4, DaisyUI 5, HTMX 2, PixiJS 8, Three.js 0.183 |
+| Locales | `en-US` and `zh-CN` from `src/config/environment.ts` |
+| Verification path | `bun run verify` |
 
 ## What the codebase contains
 
 - SSR document rendering for the home page, builder workspace, AI surfaces, and game routes
-- HTMX-driven fragment updates for forms, navigation, and panel refreshes
-- A server-authoritative game loop with restore, invites, HUD transport, and persistence
+- HTMX-driven fragment updates for forms, navigation, validation, and panel refreshes
+- A server-authoritative game loop with restore, invite, HUD, websocket, and persistence behavior
 - A builder domain that edits draft project state, validates publishability, and seeds immutable releases into runtime sessions
 - AI provider routing across local Transformers, Ollama, and OpenAI-compatible providers
 - Prisma-backed persistence for game sessions, builder artifacts, and AI knowledge retrieval
@@ -37,46 +77,70 @@ The app is wired in `src/app.ts`. `createApp()` composes shared request plugins,
 
 ```mermaid
 flowchart LR
-  subgraph Browser["Browser surfaces"]
-    SSR["SSR documents"]
-    HTMX["HTMX fragments"]
-    Runtime["Playable client"]
+  subgraph Browser [Browser surfaces]
+    Home["SSR pages"]
+    Htmx["HTMX swaps"]
+    Playable["Playable client"]
+    Hud["SSE and websocket"]
   end
 
-  subgraph Server["Elysia app"]
+  subgraph Server [Elysia application]
     Request["request-context"]
     I18n["i18n-context"]
-    Routes["route handlers"]
+    Error["global onError"]
+    Pages["page-routes"]
+    GameRoutes["game-routes"]
+    Api["api-routes"]
+    BuilderRoutes["builder-routes"]
+    BuilderApi["builder-api"]
+    AiRoutes["ai-routes"]
     Views["SSR views"]
-    Plugins["shared plugins"]
+    Plugins["static, auth, swagger, lifecycle plugins"]
   end
 
-  subgraph Domain["Domain owners"]
+  subgraph Domain [Domain owners]
+    Oracle["oracle-service"]
     Game["game-loop"]
     Builder["builder-service"]
-    AI["provider-registry"]
-    Oracle["oracle-service"]
+    Registry["provider-registry"]
     Knowledge["knowledge-base-service"]
+    Worker["creator-worker"]
   end
 
-  subgraph Data["Persistence and assets"]
-    Prisma["Prisma + SQLite"]
+  subgraph Data [Persistence and assets]
+    Prisma["Prisma and SQLite"]
     Public["public assets"]
-    Uploads["builder uploads"]
+    Uploads["uploads and builder artifacts"]
   end
 
-  SSR --> Request
-  HTMX --> Routes
-  Runtime --> Routes
-  Request --> I18n
-  I18n --> Routes
-  Routes --> Views
-  Routes --> Plugins
-  Routes --> Game
-  Routes --> Builder
-  Routes --> AI
-  Routes --> Oracle
-  Routes --> Knowledge
+  Home --> Request
+  Htmx --> Request
+  Playable --> Request
+  Hud --> Request
+  Request --> I18n --> Error
+  Error --> Pages
+  Error --> GameRoutes
+  Error --> Api
+  Error --> BuilderRoutes
+  Error --> BuilderApi
+  Error --> AiRoutes
+  Pages --> Views
+  GameRoutes --> Game
+  GameRoutes --> Builder
+  Api --> Oracle
+  BuilderRoutes --> Builder
+  BuilderRoutes --> Registry
+  BuilderRoutes --> Knowledge
+  BuilderApi --> Builder
+  BuilderApi --> Worker
+  BuilderApi --> Registry
+  BuilderApi --> Knowledge
+  AiRoutes --> Registry
+  AiRoutes --> Knowledge
+  Pages --> Plugins
+  GameRoutes --> Plugins
+  BuilderRoutes --> Plugins
+  BuilderApi --> Plugins
   Game --> Prisma
   Builder --> Prisma
   Knowledge --> Prisma
@@ -84,12 +148,13 @@ flowchart LR
   Builder --> Uploads
 ```
 
-## Request and error flow
+## Request lifecycle
 
 The shared HTTP path is deterministic: request context and locale resolution are applied up front, route handlers call typed domain services, and unexpected failures collapse into a single error envelope via the global Elysia `onError` handler.
 
 ```mermaid
 sequenceDiagram
+  autonumber
   participant Browser
   participant Request as request-context
   participant Locale as i18n-context
@@ -99,34 +164,52 @@ sequenceDiagram
   participant Error as global onError
 
   Browser->>Request: HTTP request
-  Request->>Locale: correlation id + locale negotiation
+  Request->>Locale: correlation id and locale negotiation
   Locale->>Route: typed request context
   Route->>Domain: boundary call
-  Domain-->>Route: success or typed failure
-  Route-->>View: document, fragment, or JSON body
-  Route-->>Error: unexpected framework error
-  Error-->>View: deterministic error envelope
+  alt success
+    Domain-->>Route: typed data
+    Route-->>View: document, fragment, or JSON body
+  else typed failure
+    Domain-->>Route: typed failure result
+    Route-->>View: deterministic state or envelope
+  else unexpected failure
+    Route->>Error: thrown framework or runtime error
+    Error-->>View: normalized error envelope
+  end
+  View-->>Browser: final response
 ```
 
-## Builder-to-runtime publish model
+## Builder release pipeline
 
 The builder surface edits draft project state. Runtime sessions do not read from mutable drafts. Instead, the builder validates and publishes an immutable release snapshot, and the game loop seeds live sessions from that release.
 
 ```mermaid
 flowchart LR
-  Draft["Draft builder state"]
-  Validate["publish validation"]
-  Release["Immutable release snapshot"]
-  Session["game-loop.createSession()"]
-  Runtime["Live runtime session"]
+  subgraph Authoring [Builder authoring]
+    Draft["Draft project state"]
+    Assets["Assets, scenes, dialogue, quests, automation specs"]
+    Audit["Readiness audit"]
+  end
 
-  Draft --> Validate
-  Validate --> Release
-  Release --> Session
-  Session --> Runtime
+  subgraph Publish [Publish boundary]
+    Validate["validateBuilderProjectForPublish()"]
+    Snapshot["Immutable release snapshot"]
+  end
+
+  subgraph Runtime [Runtime seeding]
+    Create["game-loop.createSession()"]
+    Session["Persisted game session"]
+    Client["Playable bootstrap contract"]
+  end
+
+  Draft --> Assets --> Audit --> Validate
+  Validate -->|pass| Snapshot
+  Validate -->|issues| Audit
+  Snapshot --> Create --> Session --> Client
 ```
 
-## Persistence model at a glance
+## Persistence map
 
 The Prisma schema splits persistent concerns into a few clear groups:
 
@@ -137,14 +220,50 @@ The Prisma schema splits persistent concerns into a few clear groups:
 
 ```mermaid
 flowchart TD
-  Oracle["OracleInteraction"] --> DB["SQLite via Prisma"]
-  Docs["AiKnowledgeDocument"] --> Chunks["AiKnowledgeChunk"]
-  Chunks --> Terms["AiKnowledgeChunkTerm"]
-  Session["GameSession"] --> Scene["Scene, nodes, collisions"]
-  Session --> Actors["Participants, actors, NPCs"]
-  Session --> Runtime["Runtime, inventory, combat, cutscenes"]
-  Docs --> DB
+  subgraph Knowledge [AI knowledge]
+    Doc["AiKnowledgeDocument"]
+    Chunk["AiKnowledgeChunk"]
+    Term["AiKnowledgeChunkTerm"]
+    Doc --> Chunk --> Term
+  end
+
+  subgraph Runtime [Game runtime]
+    Session["GameSession"]
+    Scene["Scene state, nodes, collisions, assets"]
+    Actors["Participants, actors, NPCs"]
+    Play["Runtime state, inventory, combat, cutscenes"]
+    Session --> Scene
+    Session --> Actors
+    Session --> Play
+  end
+
+  subgraph Utility [Other persisted records]
+    Oracle["OracleInteraction"]
+  end
+
+  Doc --> DB["SQLite via Prisma"]
   Session --> DB
+  Oracle --> DB
+```
+
+## State model
+
+The repo uses a narrow state vocabulary across SSR fragments and fallback UI surfaces.
+
+```mermaid
+stateDiagram-v2
+  [*] --> idle
+  idle --> loading
+  loading --> success
+  loading --> empty
+  loading --> unauthorized
+  loading --> retryable_error
+  loading --> non_retryable_error
+  retryable_error --> loading: retry
+  success --> loading: refresh or mutate
+  empty --> loading: retry or create
+  unauthorized --> [*]
+  non_retryable_error --> [*]
 ```
 
 ## Repository map
