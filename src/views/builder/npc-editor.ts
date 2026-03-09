@@ -141,7 +141,7 @@ export const renderNpcEditor = (
               <input name="labelKey" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.npcCreateLabelPlaceholder)}" aria-required="true" required />
             </fieldset>
             <div class="flex items-center gap-2">
-              <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.addNpc)}</button>
+              <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.addNpc)}">${escapeHtml(messages.builder.addNpc)}</button>
               <span id="npc-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
             </div>
           </form>
@@ -294,7 +294,7 @@ export const renderNpcDetail = (
           </fieldset>
 
           <div class="lg:col-span-2 flex items-center justify-end gap-2">
-            <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
+            <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.save)}">${escapeHtml(messages.builder.save)}</button>
             <span id="npc-detail-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>

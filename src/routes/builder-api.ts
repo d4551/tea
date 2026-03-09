@@ -953,7 +953,7 @@ const renderPatchPreviewHtml = (
         <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
         <input type="hidden" name="expectedVersion" value="${version}" />
         <textarea name="operationsJson" class="hidden">${serializedOperations}</textarea>
-        <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.applyChanges)}</button>
+        <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.applyChanges)}">${escapeHtml(messages.builder.applyChanges)}</button>
       </form>
     </div>
   </article>`;
@@ -1177,7 +1177,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
             <input type="hidden" name="projectId" value="${escapeHtml(actionProjectId)}" />
             <input type="hidden" name="locale" value="${escapeHtml(actionLocale)}" />
             <textarea name="operationsJson" class="hidden">${serializedOperations}</textarea>
-            <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(getMessages(actionLocale).builder.previewChanges)}</button>
+            <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(getMessages(actionLocale).builder.previewChanges)}">${escapeHtml(getMessages(actionLocale).builder.previewChanges)}</button>
           </form>
         </div>
       </article>`;

@@ -214,7 +214,7 @@ export const renderBuilderProjectShell = (
                   <legend class="fieldset-legend text-xs">${escapeHtml(messages.builder.switchProject)}</legend>
                   <input name="projectId" type="text" value="${escapeHtml(project?.id ?? projectId)}" class="input w-full input-sm" placeholder="${escapeHtml(messages.builder.projectIdPlaceholder)}" />
                   <input type="hidden" name="lang" value="${escapeHtml(locale)}" />
-                  <button type="submit" class="btn btn-outline btn-xs w-full">${escapeHtml(messages.builder.switchProject)}</button>
+                  <button type="submit" class="btn btn-outline btn-xs w-full" aria-label="${escapeHtml(messages.builder.switchProject)}">${escapeHtml(messages.builder.switchProject)}</button>
                 </fieldset>
               </form>
               <div class="divider my-0"></div>
@@ -225,7 +225,7 @@ export const renderBuilderProjectShell = (
                   <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
                   <input type="hidden" name="redirectPath" value="${escapeHtml(currentPath)}" />
                   <div class="flex items-center gap-2">
-                    <button type="submit" class="btn btn-primary btn-xs w-full">${escapeHtml(messages.builder.createProject)}</button>
+                    <button type="submit" class="btn btn-primary btn-xs w-full" aria-label="${escapeHtml(messages.builder.createProject)}">${escapeHtml(messages.builder.createProject)}</button>
                     <span id="builder-project-create-spinner" class="loading loading-spinner loading-xs htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
                   </div>
                 </fieldset>
@@ -302,7 +302,7 @@ export const renderBuilderSidebar = (props: BuilderLayoutProps): string => {
       </ul>
       
       <div class="p-4 border-t border-base-300">
-        <a href="${escapeHtml(withQueryParameters(appRoutes.home, { lang: locale }))}" class="btn btn-outline btn-block btn-sm gap-2">
+        <a href="${escapeHtml(withQueryParameters(appRoutes.home, { lang: locale }))}" class="btn btn-outline btn-block btn-sm gap-2" aria-label="${escapeHtml(messages.builder.exitBuilder)}">
           <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
           ${escapeHtml(messages.builder.exitBuilder)}
         </a>

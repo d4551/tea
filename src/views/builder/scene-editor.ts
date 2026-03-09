@@ -158,7 +158,7 @@ const renderNodeForm = (
             <p class="text-xs text-base-content/60">${escapeHtml(node.layer)}</p>
           </div>
           <div class="flex gap-2">${renderNodeBadge(messages, node)}
-            <button type="button" class="btn btn-ghost btn-xs" data-scene-node-select="${escapeHtml(node.id)}" aria-pressed="false">${escapeHtml(messages.builder.selectNode)}</button>
+            <button type="button" class="btn btn-ghost btn-xs" data-scene-node-select="${escapeHtml(node.id)}" aria-pressed="false" aria-label="${escapeHtml(messages.builder.selectNode)}: ${escapeHtml(node.id)}">${escapeHtml(messages.builder.selectNode)}</button>
           </div>
         </div>
         <div class="grid gap-3 md:grid-cols-2">
@@ -196,7 +196,7 @@ const renderNodeForm = (
           </fieldset>
         </div>
         <div class="card-actions justify-end gap-2">
-          <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
+          <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.save)}: ${escapeHtml(node.id)}">${escapeHtml(messages.builder.save)}</button>
           <span id="${nodeSpinnerId}" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
       </form>
@@ -217,7 +217,7 @@ const renderNodeForm = (
       <div class="flex items-center justify-between gap-3">
         <h3 class="card-title text-base">${escapeHtml(node.id)}</h3>
         <div class="flex gap-2">${renderNodeBadge(messages, node)}
-          <button type="button" class="btn btn-ghost btn-xs" data-scene-node-select="${escapeHtml(node.id)}" aria-pressed="false">${escapeHtml(messages.builder.selectNode)}</button>
+            <button type="button" class="btn btn-ghost btn-xs" data-scene-node-select="${escapeHtml(node.id)}" aria-pressed="false" aria-label="${escapeHtml(messages.builder.selectNode)}: ${escapeHtml(node.id)}">${escapeHtml(messages.builder.selectNode)}</button>
         </div>
       </div>
       <div class="grid gap-3 md:grid-cols-3">
@@ -271,7 +271,7 @@ const renderNodeForm = (
         </fieldset>
       </div>
       <div class="card-actions justify-end gap-2">
-        <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
+        <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.save)}: ${escapeHtml(node.id)}">${escapeHtml(messages.builder.save)}</button>
         <span id="${nodeSpinnerId}" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
       </div>
     </form>
@@ -435,7 +435,7 @@ export const renderSceneEditor = (
             <input type="hidden" name="spawnX" value="320" />
             <input type="hidden" name="spawnY" value="180" />
             <div class="flex items-center gap-2">
-              <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.addScene)}</button>
+              <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.addScene)}">${escapeHtml(messages.builder.addScene)}</button>
               <span id="scene-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
             </div>
           </form>
@@ -526,7 +526,7 @@ export const renderSceneDetail = (
             <span class="badge badge-soft">${scene.nodes?.length ?? 0} ${escapeHtml(messages.builder.sceneNodes)}</span>
             <form hx-delete="${escapeHtml(deleteAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#scene-delete-spinner" hx-disabled-elt="button">
               <span class="flex items-center gap-2">
-                <button type="submit" class="btn btn-error btn-outline btn-sm">${escapeHtml(messages.builder.delete)}</button>
+              <button type="submit" class="btn btn-error btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(scene.id)}">${escapeHtml(messages.builder.delete)}</button>
                 <span id="scene-delete-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
               </span>
             </form>
@@ -556,9 +556,9 @@ export const renderSceneDetail = (
                   ${
                     scene.sceneMode === "3d"
                       ? `<div class="join" role="group" aria-label="${escapeHtml(messages.builder.runtimePreviewTitle)}">
-                           <button type="button" class="btn btn-xs join-item btn-active" data-scene-transform-mode="translate" aria-pressed="true">${escapeHtml(messages.builder.transformModeTranslate)}</button>
-                           <button type="button" class="btn btn-xs join-item" data-scene-transform-mode="rotate" aria-pressed="false">${escapeHtml(messages.builder.transformModeRotate)}</button>
-                           <button type="button" class="btn btn-xs join-item" data-scene-transform-mode="scale" aria-pressed="false">${escapeHtml(messages.builder.transformModeScale)}</button>
+                           <button type="button" class="btn btn-xs join-item btn-active" data-scene-transform-mode="translate" aria-pressed="true" aria-label="${escapeHtml(messages.builder.transformModeTranslate)}">${escapeHtml(messages.builder.transformModeTranslate)}</button>
+                           <button type="button" class="btn btn-xs join-item" data-scene-transform-mode="rotate" aria-pressed="false" aria-label="${escapeHtml(messages.builder.transformModeRotate)}">${escapeHtml(messages.builder.transformModeRotate)}</button>
+                           <button type="button" class="btn btn-xs join-item" data-scene-transform-mode="scale" aria-pressed="false" aria-label="${escapeHtml(messages.builder.transformModeScale)}">${escapeHtml(messages.builder.transformModeScale)}</button>
                          </div>`
                       : ""
                   }
@@ -624,7 +624,7 @@ export const renderSceneDetail = (
                 }
               </div>
               <div class="flex items-center gap-2">
-                <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.builder.createSceneNode)}</button>
+                <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.createSceneNode)}">${escapeHtml(messages.builder.createSceneNode)}</button>
                 <span id="scene-node-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
               </div>
             </form>
@@ -678,7 +678,7 @@ export const renderSceneDetail = (
           </div>
 
           <div class="lg:col-span-2 flex items-center justify-end gap-2">
-            <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
+            <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.save)}: ${escapeHtml(scene.id)}">${escapeHtml(messages.builder.save)}</button>
             <span id="scene-detail-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>

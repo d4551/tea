@@ -352,6 +352,7 @@ const variantClasses: Record<string, string> = {
 export const renderButton = (config: ButtonConfig): string => {
   const size = config.size ?? "sm";
   const variant = config.variant ?? "primary";
+  const ariaLabel = config.ariaLabel ?? config.label;
 
   const classes = [
     "btn",
@@ -365,7 +366,7 @@ export const renderButton = (config: ButtonConfig): string => {
 
   const typeAttr = config.type ? ` type="${config.type}"` : "";
   const disabledAttr = config.disabled ? " disabled" : "";
-  const ariaLabelAttr = config.ariaLabel ? ` aria-label="${escapeHtml(config.ariaLabel)}"` : "";
+  const ariaLabelAttr = ariaLabel ? ` aria-label="${escapeHtml(ariaLabel)}"` : "";
   const idAttr = config.id ? ` id="${escapeHtml(config.id)}"` : "";
 
   const htmxAttrs = config.htmx ? renderHtmxAttrs(config.htmx) : "";
@@ -557,7 +558,7 @@ export const renderTabs = (config: TabsConfig): string => {
         return `<a href="${escapeHtml(tab.href)}" class="tab ${activeClass}" role="tab"${activeAttr}${disabledAttr}>${content}</a>`;
       }
 
-      return `<button type="button" class="tab ${activeClass}" role="tab"${activeAttr}${disabledAttr}${htmxAttrs}>${content}</button>`;
+      return `<button type="button" class="tab ${activeClass}" role="tab"${activeAttr}${disabledAttr} aria-label="${escapeHtml(tab.label)}"${htmxAttrs}>${content}</button>`;
     })
     .join("");
 

@@ -162,7 +162,7 @@ export const renderAutomationPanel = (
           </p>
         </fieldset>
         <div class="flex items-center gap-2">
-          <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.createAutomationRun)}</button>
+          <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.createAutomationRun)}">${escapeHtml(messages.builder.createAutomationRun)}</button>
           <span id="automation-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
       </form>

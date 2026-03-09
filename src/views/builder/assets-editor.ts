@@ -269,7 +269,7 @@ export const renderAssetsEditor = (
               <input name="file" type="file" class="file-input file-input-sm w-full" accept="image/*,audio/*,.glb,.gltf,.usd,.usda,.usdc,.usdz,.json" aria-required="true" required />
             </fieldset>
             <div class="flex items-center gap-2">
-              <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.addAssetFile)}</button>
+              <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.addAssetFile)}">${escapeHtml(messages.builder.addAssetFile)}</button>
               <span id="asset-upload-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
             </div>
           </form>
@@ -301,7 +301,7 @@ export const renderAssetsEditor = (
               <input name="source" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.sourcePathPlaceholder)}" aria-required="true" required />
             </fieldset>
             <div class="flex items-center gap-2">
-              <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.builder.addAssetPath)}</button>
+              <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.addAssetPath)}">${escapeHtml(messages.builder.addAssetPath)}</button>
               <span id="asset-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
             </div>
           </form>
@@ -334,7 +334,7 @@ export const renderAssetsEditor = (
             <input name="playbackFps" type="number" class="input w-full" value="8" min="1" />
           </fieldset>
           <div class="flex items-center gap-2">
-            <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.builder.createAnimationClip)}</button>
+            <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.createAnimationClip)}">${escapeHtml(messages.builder.createAnimationClip)}</button>
             <span id="clip-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>
@@ -358,7 +358,7 @@ export const renderAssetsEditor = (
             <input name="targetId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.generationTargetPlaceholder)}" />
           </fieldset>
           <div class="flex items-center gap-2">
-            <button type="submit" class="btn btn-secondary btn-sm">${escapeHtml(messages.builder.createGenerationJob)}</button>
+            <button type="submit" class="btn btn-secondary btn-sm" aria-label="${escapeHtml(messages.builder.createGenerationJob)}">${escapeHtml(messages.builder.createGenerationJob)}</button>
             <span id="job-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>

@@ -440,7 +440,7 @@ const renderAiKnowledgeWorkspace = (
           <textarea id="knowledge-text" name="text" class="textarea w-full min-h-36" required aria-required="true"></textarea>
         </fieldset>
         <div class="flex items-center gap-2">
-          <button type="submit" class="btn btn-primary btn-sm">
+          <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.ingestKnowledgeDocument)}">
             ${escapeHtml(messages.builder.ingestKnowledgeDocument)}
             <span id="ai-ingest-spinner" class="loading loading-spinner loading-xs htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </button>
@@ -492,7 +492,7 @@ const renderAiRetrievalAndToolPlan = (
             <legend class="fieldset-legend">${escapeHtml(messages.builder.promptLabel)}</legend>
             <textarea id="retrieval-prompt" name="prompt" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.retrievalPromptPlaceholder)}" required aria-required="true"></textarea>
           </fieldset>
-          <button type="submit" class="btn btn-primary btn-sm">
+          <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.runRetrievalAssist)}">
             ${escapeHtml(messages.builder.runRetrievalAssist)}
             <span id="ai-retrieval-spinner" class="loading loading-spinner loading-xs htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </button>
@@ -517,7 +517,7 @@ const renderAiRetrievalAndToolPlan = (
             <legend class="fieldset-legend">${escapeHtml(messages.builder.automationGoalLabel)}</legend>
             <textarea id="tool-plan-goal" name="goal" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.toolPlanGoalPlaceholder)}" required aria-required="true"></textarea>
           </fieldset>
-          <button type="submit" class="btn btn-outline btn-sm">
+          <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.previewToolPlan)}">
             ${escapeHtml(messages.builder.previewToolPlan)}
             <span id="ai-plan-spinner" class="loading loading-spinner loading-xs htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </button>
@@ -578,7 +578,7 @@ const renderAiPatchAndApiSurface = (
             <textarea name="operationsJson" class="textarea w-full min-h-28" placeholder="${escapeHtml(messages.builder.operationsJsonPlaceholder)}"></textarea>
           </fieldset>
           <div class="flex items-center gap-2">
-            <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.builder.previewChanges)}</button>
+            <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.previewChanges)}">${escapeHtml(messages.builder.previewChanges)}</button>
             <span id="ai-patch-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>

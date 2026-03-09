@@ -57,7 +57,7 @@ export const renderQuestEditForm = (
       <div class="flex items-center justify-between gap-3">
         <h3 class="card-title">${escapeHtml(messages.builder.editQuest)}: ${escapeHtml(quest.id)}</h3>
         <form hx-delete="${escapeHtml(deleteAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#quest-edit-spinner" hx-disabled-elt="button">
-          <button type="submit" class="btn btn-error btn-outline btn-sm">${escapeHtml(messages.builder.delete)}</button>
+          <button type="submit" class="btn btn-error btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(quest.id)}">${escapeHtml(messages.builder.delete)}</button>
         </form>
       </div>
       <form hx-post="${escapeHtml(formAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#quest-edit-spinner" hx-disabled-elt="button, input, select, textarea">
@@ -77,7 +77,7 @@ export const renderQuestEditForm = (
           <input name="triggerId" type="text" class="input w-full" value="${escapeHtml(firstStep?.triggerId ?? "")}" aria-required="true" required />
         </fieldset>
         <div class="flex items-center gap-2">
-          <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
+          <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.save)}">${escapeHtml(messages.builder.save)}</button>
           <span id="quest-edit-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
       </form>
@@ -113,7 +113,7 @@ export const renderTriggerEditForm = (
       <div class="flex items-center justify-between gap-3">
         <h3 class="card-title">${escapeHtml(messages.builder.editTrigger)}: ${escapeHtml(trigger.id)}</h3>
         <form hx-delete="${escapeHtml(deleteAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#trigger-edit-spinner" hx-disabled-elt="button">
-          <button type="submit" class="btn btn-error btn-outline btn-sm">${escapeHtml(messages.builder.delete)}</button>
+          <button type="submit" class="btn btn-error btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(trigger.id)}">${escapeHtml(messages.builder.delete)}</button>
         </form>
       </div>
       <form hx-post="${escapeHtml(formAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#trigger-edit-spinner" hx-disabled-elt="button, input, select, textarea">
@@ -137,7 +137,7 @@ export const renderTriggerEditForm = (
           <input name="npcId" type="text" class="input w-full" value="${escapeHtml(trigger.npcId ?? "")}" placeholder="${escapeHtml(messages.builder.dialogueNpcIdPlaceholder)}" />
         </fieldset>
         <div class="flex items-center gap-2">
-          <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
+          <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.save)}">${escapeHtml(messages.builder.save)}</button>
           <span id="trigger-edit-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
       </form>
@@ -176,7 +176,7 @@ export const renderDialogueGraphEditForm = (
       <div class="flex items-center justify-between gap-3">
         <h3 class="card-title">${escapeHtml(messages.builder.editDialogueGraph)}: ${escapeHtml(graph.id)}</h3>
         <form hx-delete="${escapeHtml(deleteAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#graph-edit-spinner" hx-disabled-elt="button">
-          <button type="submit" class="btn btn-error btn-outline btn-sm">${escapeHtml(messages.builder.delete)}</button>
+          <button type="submit" class="btn btn-error btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(graph.id)}">${escapeHtml(messages.builder.delete)}</button>
         </form>
       </div>
       <form hx-post="${escapeHtml(formAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#graph-edit-spinner" hx-disabled-elt="button, input, select, textarea">
@@ -196,7 +196,7 @@ export const renderDialogueGraphEditForm = (
           <textarea name="line" class="textarea w-full" rows="3" aria-required="true" required>${escapeHtml(line)}</textarea>
         </fieldset>
         <div class="flex items-center gap-2">
-          <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
+          <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.save)}">${escapeHtml(messages.builder.save)}</button>
           <span id="graph-edit-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
       </form>
@@ -370,7 +370,7 @@ export const renderMechanicsEditor = (
             <input name="triggerId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.triggerIdPlaceholder)}" aria-required="true" required />
           </fieldset>
           <div class="flex items-center gap-2">
-            <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.createQuest)}</button>
+            <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.createQuest)}">${escapeHtml(messages.builder.createQuest)}</button>
             <span id="quest-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>
@@ -402,7 +402,7 @@ export const renderMechanicsEditor = (
             <input name="npcId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.dialogueNpcIdPlaceholder)}" />
           </fieldset>
           <div class="flex items-center gap-2">
-            <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.builder.createTrigger)}</button>
+            <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.createTrigger)}">${escapeHtml(messages.builder.createTrigger)}</button>
             <span id="trigger-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>
@@ -430,7 +430,7 @@ export const renderMechanicsEditor = (
             <textarea name="line" class="textarea w-full" rows="3" placeholder="${escapeHtml(messages.builder.addLinePlaceholder)}" aria-required="true" required></textarea>
           </fieldset>
           <div class="flex items-center gap-2">
-            <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.builder.createDialogueGraph)}</button>
+            <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.createDialogueGraph)}">${escapeHtml(messages.builder.createDialogueGraph)}</button>
             <span id="graph-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>

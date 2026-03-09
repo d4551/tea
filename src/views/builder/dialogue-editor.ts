@@ -150,7 +150,7 @@ export const renderDialogueEditor = (
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueSearchLabel)}</legend>
                 <input name="search" type="text" class="input w-full" value="${escapeHtml(search)}" placeholder="${escapeHtml(messages.builder.dialogueSearchPlaceholder)}" />
               </fieldset>
-              <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(messages.builder.filterAction)}</button>
+              <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.filterAction)}">${escapeHtml(messages.builder.filterAction)}</button>
             </form>
 
             <form
@@ -172,7 +172,7 @@ export const renderDialogueEditor = (
                 <textarea name="text" class="textarea w-full" rows="3" placeholder="${escapeHtml(messages.builder.addLinePlaceholder)}" aria-required="true" required></textarea>
               </fieldset>
               <div class="flex items-center gap-2">
-                <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.addDialogue)}</button>
+                <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.addDialogue)}">${escapeHtml(messages.builder.addDialogue)}</button>
                 <span id="dialogue-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
               </div>
             </form>
@@ -262,7 +262,7 @@ export const renderDialogueDetail = (
           >${escapeHtml(text)}</textarea>
         </fieldset>
         <div class="flex items-center justify-end gap-2">
-          <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(messages.builder.save)}</button>
+          <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.save)}">${escapeHtml(messages.builder.save)}</button>
           <span id="dialogue-detail-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
       </form>

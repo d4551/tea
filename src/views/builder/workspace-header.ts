@@ -90,7 +90,7 @@ export const renderWorkspaceHeader = (config: WorkspaceHeaderConfig): string => 
         return `<a href="${escapeHtml(tab.href)}" class="tab ${activeClass}" role="tab"${activeAttr}${disabledAttr}>${content}</a>`;
       }
 
-      return `<button type="button" class="tab ${activeClass}" role="tab"${activeAttr}${disabledAttr}${htmxAttrs}>${content}</button>`;
+      return `<button type="button" class="tab ${activeClass}" role="tab"${activeAttr}${disabledAttr} aria-label="${escapeHtml(tab.label)}"${htmxAttrs}>${content}</button>`;
     })
     .join("");
 
