@@ -7,6 +7,7 @@ Use this page as the entrypoint for the current documentation set.
 | Document | Purpose |
 | --- | --- |
 | [README](/Users/brandondonnelly/Downloads/tea/README.md) | Top-level product, stack, workflow, and contributor rules |
+| [README (Chinese)](/Users/brandondonnelly/Downloads/tea/README.zh-CN.md) | Chinese translation of the top-level product, stack, workflow, and contributor rules |
 | [Architecture](/Users/brandondonnelly/Downloads/tea/ARCHITECTURE.md) | Runtime topology, ownership boundaries, state models, and transport surfaces |
 | [Operator runbook](/Users/brandondonnelly/Downloads/tea/docs/operator-runbook.md) | Bootstrap, readiness, verification, drift checks, and triage workflows |
 | [API and transport contracts](/Users/brandondonnelly/Downloads/tea/docs/api-contracts.md) | Current HTTP, SSE, websocket, and envelope surface map |
@@ -23,7 +24,7 @@ Use this page as the entrypoint for the current documentation set.
 
 ## Reading order
 
-1. Start with [README](/Users/brandondonnelly/Downloads/tea/README.md).
+1. Start with [README](/Users/brandondonnelly/Downloads/tea/README.md) or [README (Chinese)](/Users/brandondonnelly/Downloads/tea/README.zh-CN.md).
 2. Read [Architecture](/Users/brandondonnelly/Downloads/tea/ARCHITECTURE.md) for system boundaries.
 3. Read [API and transport contracts](/Users/brandondonnelly/Downloads/tea/docs/api-contracts.md) and [Builder domain](/Users/brandondonnelly/Downloads/tea/docs/builder-domain.md) before changing route or publish behavior.
 4. Use [Operator runbook](/Users/brandondonnelly/Downloads/tea/docs/operator-runbook.md) for day-to-day workflows.
