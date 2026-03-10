@@ -1,10 +1,32 @@
 # TEA
 
+![Bun](https://img.shields.io/badge/Bun%20Runtime-1.3+-black?logo=bun&logoColor=white&style=for-the-badge)
+![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript&logoColor=white&style=for-the-badge)
+![Prisma](https://img.shields.io/badge/Prisma-7%2B-2D3748?logo=prisma&style=for-the-badge)
+![Tailwind](https://img.shields.io/badge/Tailwind-4%2A-38B2AC?logo=tailwindcss&logoColor=white&style=for-the-badge)
+![HTMX](https://img.shields.io/badge/HTMX-Server%20Driven-336791?style=for-the-badge)
+![Docs](https://img.shields.io/badge/Docs-Archive%20First-0F766E?style=for-the-badge)
+![License](https://img.shields.io/badge/License-MIT-2EA44F?style=for-the-badge)
+
 **SSR-first game runtime, builder workspace, and AI-assisted tooling on Bun + TypeScript.**
 **基于 Bun + TypeScript 的 SSR 优先游戏运行时、构建器和 AI 辅助工具平台。**
 
+**Runtime stack at a glance / 一览技术栈**
+**Bun 1.3+ · TypeScript Strict · Prisma 7+ · Tailwind 4 / DaisyUI 5**
+
+## Quick reference / 快速索引
+
+- Architecture / 架构一览
+- Request lifecycle / 请求生命周期
+- Builder publish flow / 构建器发布链路
+- AI routing / AI 路由
+- Quality gates / 质量门禁
+
 ## Documentation
 ## 文档
+
+- Documentation is intentionally bilingual and mirror-driven: documentation source of record now lives in text archive entries.
+- 文档采用双语和归档驱动设计：文档源由文本归档条目统一承载。
 
 - English at top, Chinese below line-by-line.
 - 英文在上、中文紧随其后逐行对照。
@@ -37,7 +59,7 @@
 TEA is a production-oriented platform that combines SSR pages, a web builder, a server-authoritative game loop, and AI tooling in one Bun stack.
 TEA 是一个面向生产环境的统一平台，将 SSR 页面、网页构建器、服务端权威游戏循环与 AI 工具链整合在同一套 Bun 栈中。
 
-The platform is optimized for predictable behavior and deterministic outputs under multi-surface usage (pages, fragments, APIs, and runtime transport).
+The platform is optimized for predictable behavior and deterministic outputs across pages, fragments, APIs, and runtime transport.
 平台按多表面使用方式（页面、片段、API 和运行时通信）设计，优先保证可预测性与确定性输出。
 
 Current core value:
@@ -49,8 +71,8 @@ Current core value:
 - **Archive-based docs**: every markdown-style source is mirrored to text artifacts.
 - **归档化文档**：所有文档类内容均镜像到文本归档。
 
-The platform currently supports:
-当前平台当前支持：
+Current platform capabilities:
+当前平台能力如下：
 - Home and oracle pages rendered on SSR with minimal client hydration.
 - 首页和 Oracle 页面以 SSR 渲染为主，仅在必要时进行最小化客户端 hydration。
 - Game sessions with join/rejoin, combat/cutscene progress, and resumable state.
@@ -60,8 +82,7 @@ The platform currently supports:
 - Multi-provider AI orchestration with retrieval and fallback handling.
 - 多供应商 AI 编排，包含检索增强与失败回退机制。
 
-## Architecture at a glance
-## 架构一览
+## Architecture at a glance / 架构一览
 
 `src/app.ts` wires the complete platform as a single Elysia composition:
 `src/app.ts` 将整个平台按单个 Elysia 应用组装：
@@ -111,6 +132,7 @@ flowchart TB
     P_Assets["public + uploads"]
     P_Artifacts["builder artifacts"]
     P_Pack["RMMZ pack data"]
+    P_Audit["migrations + seed metadata"]
   end
 
   B_Page --> A_Ctx
@@ -125,6 +147,7 @@ flowchart TB
   A_Route --> D_Knowledge
   A_Route --> D_Worker
   A_Route --> A_Contract
+  A_Contract --> A_Error
   A_Route --> A_Error
 
   D_Game --> P_DB
@@ -134,6 +157,7 @@ flowchart TB
   D_AI --> P_DB
   D_Knowledge --> P_DB
   D_Worker --> P_Artifacts
+  A_Contract --> P_Audit --> D_Builder
   P_Assets --> B_Game
   P_Pack --> D_Game
 ```
@@ -141,7 +165,7 @@ flowchart TB
 </details>
 
 <details>
-<summary>架构数据流（中文）</summary>
+<summary>Architecture data flow (Chinese / 中文)</summary>
 
 ```mermaid
 flowchart TB
@@ -174,6 +198,7 @@ flowchart TB
     P_Assets["public + 上传资源"]
     P_Artifacts["构建器产物"]
     P_Pack["RMMZ 包数据"]
+    P_Audit["迁移 + 种子元数据"]
   end
 
   B_Page --> A_Ctx
@@ -188,6 +213,7 @@ flowchart TB
   A_Route --> D_Knowledge
   A_Route --> D_Worker
   A_Route --> A_Contract
+  A_Contract --> A_Error
   A_Route --> A_Error
 
   D_Game --> P_DB
@@ -197,24 +223,26 @@ flowchart TB
   D_AI --> P_DB
   D_Knowledge --> P_DB
   D_Worker --> P_Artifacts
+  A_Contract --> P_Audit --> D_Builder
   P_Assets --> B_Game
   P_Pack --> D_Game
 ```
 
 </details>
 
-## Request and error flow
-## 请求与错误流
+## Request and error flow / 请求与错误流
 
 Every request follows a deterministic lifecycle:
 每个请求都遵循确定性的生命周期：
 
 1. Request context and locale are resolved before route logic.
-2. 请求上下文与语言先于路由逻辑完成解析。
-3. Route logic calls domain contracts with explicit result models.
-3. 路由层以显式结果模型调用领域契约。
-4. Errors are converted into predictable envelopes through a global handler.
-4. 错误通过统一处理器转换为可预测的信封响应。
+1. 路由上下文与语言先于路由逻辑完成解析。
+2. Route logic calls domain contracts with explicit result models.
+2. 路由层以领域结果模型调用边界函数。
+3. Route-level errors are converted into predictable envelopes through the global handler.
+3. 失败会通过全局 onError 转换为可预测信封。
+4. HTML/fragment/JSON responses all honor the same contract surface.
+4. HTTP、片段、JSON 响应都共享同一契约形态。
 
 <details>
 <summary>Request lifecycle sequence (English)</summary>
@@ -284,8 +312,7 @@ sequenceDiagram
 
 </details>
 
-## Builder to playable runtime pipeline
-## 构建器到运行时的发布链路
+## Builder to playable runtime pipeline / 构建器到运行时的发布链路
 
 The system only allows runtime sessions from immutable releases.
 系统只允许从不可变发布快照创建运行时会话。
@@ -323,6 +350,8 @@ flowchart TD
   P_Validate -->|pass| P_Contract --> P_Release --> P_Output --> R_Create
   P_Validate -->|fail| A_Report
   R_Create --> R_Session --> R_Hydrate --> R_Join
+  R_Join -->|reconnect| R_Session
+  R_Join -->|rejection| A_Report
 ```
 
 </details>
@@ -357,6 +386,8 @@ flowchart TD
   P_Validate -->|通过| P_Contract --> P_Release --> P_Output --> R_Create
   P_Validate -->|未通过| A_Report
   R_Create --> R_Session --> R_Hydrate --> R_Join
+  R_Join -->|重连成功| R_Session
+  R_Join -->|进入阻断| A_Report
 ```
 
 </details>
@@ -560,6 +591,46 @@ Hardening controls are layered:
 - 所有失败返回遵循确定性信封。
 - Archive checks in scripts to prevent documentation drift.
 - 脚本内置文档归档检查防止文档漂移。
+
+<details>
+<summary>Security and hardening pipeline (English)</summary>
+
+```mermaid
+flowchart TD
+  S0[Incoming HTTP request] --> S1[Path decode + normalize]
+  S1 --> S2{Asset request?}
+  S2 -->|Yes| S3[Static asset root validator]
+  S2 -->|No| S4[Route boundary + typed contract]
+  S3 -->|pass| S5[Safe file read]
+  S3 -->|fail| S6[404 with envelope]
+  S4 --> S7[Builder/AI payload parser]
+  S7 -->|invalid| S6
+  S7 -->|valid| S8[Domain service]
+  S8 --> S9[Audit + persistence]
+  S9 --> S10[Response + observability tags]
+```
+
+</details>
+
+<details>
+<summary>安全与加固链路（中文）</summary>
+
+```mermaid
+flowchart TD
+  S0[进入 HTTP 请求] --> S1[路径解码 + 规范化]
+  S1 --> S2{静态资源路径吗？}
+  S2 -->|是| S3[静态资源根目录校验]
+  S2 -->|否| S4[路由边界 + 类型化契约]
+  S3 -->|通过| S5[安全文件读取]
+  S3 -->|拒绝| S6[返回 404 信封]
+  S4 --> S7[构建器 / AI 输入解析]
+  S7 -->|非法| S6
+  S7 -->|合法| S8[领域服务]
+  S8 --> S9[审计与持久化]
+  S9 --> S10[返回 + 可观测标签]
+```
+
+</details>
 
 ## Repository map
 ## 仓库结构
