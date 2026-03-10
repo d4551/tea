@@ -1,103 +1,25 @@
-# Local AI runtime
-
-This document describes the local Transformers.js / ONNX runtime after the model-manager decomposition.
-
-## Current shape
-
-`src/domain/ai/model-manager.ts` remains the public facade, but its internal responsibilities are now split into focused modules.
-
-```mermaid
-flowchart TD
-  Facade["model-manager.ts"]
-  Runtime["local-model-runtime.ts"]
-  Health["model-runtime-health.ts"]
-  Cache["model-pipeline-cache.ts"]
-  Loader["model-pipeline-loader.ts"]
-  Runner["model-operation-runner.ts"]
-  Contract["local-model-contract.ts"]
-  Provider["providers/transformers-provider.ts"]
-
-  Facade --> Runtime
-  Facade --> Health
-  Facade --> Cache
-  Facade --> Loader
-  Facade --> Runner
-  Facade --> Contract
-  Provider --> Facade
-```
-
-## Module responsibilities
-
-| Module | Responsibility |
-| --- | --- |
-| `model-manager.ts` | Public singleton facade and operation entrypoints |
-| `local-model-runtime.ts` | Shared facade types and runtime contract |
-| `model-runtime-health.ts` | Warmup state, failure thresholds, circuit-open cooldown |
-| `model-pipeline-cache.ts` | In-memory pipeline reuse and ownership |
-| `model-pipeline-loader.ts` | Pipeline construction, cache recovery, registry resolution |
-| `model-operation-runner.ts` | Timeout wrapping, validation, error normalization, logging |
-| `local-model-contract.ts` | Typed local result and failure contracts |
-| `transformers-provider.ts` | Stable `AiProvider` adapter over typed local results |
-
-## Local runtime result model
-
-All local operations return typed results instead of `null`-or-throw control flow internally.
-
-```mermaid
-flowchart LR
-  Operation["Local model operation"] --> Result{"Result"}
-  Result -->|ok| Success["Typed value"]
-  Result -->|failure| Failure["LocalModelFailure"]
-  Failure --> Code["Failure code"]
-```
-
-### Failure codes
-
-| Code | Meaning |
-| --- | --- |
-| `timeout` | Operation exceeded the configured runtime budget |
-| `circuit-open` | Runtime health blocked execution after repeated failures |
-| `cache-corruption-recovered` | Cache corruption required purge/recovery |
-| `unavailable` | Model lane disabled or pipeline unavailable |
-| `invalid-output` | Pipeline responded with an unusable payload |
-| `unexpected` | Unclassified runtime failure |
-
-## Supported operation families
-
-- sentiment classification
-- text generation
-- embeddings
-- speech-to-text
-- text-to-speech
-
-Each family keeps the same external provider-facing behavior, but the internal manager now uses one typed failure language.
-
-## Design rules
-
-- Pipelines are lazy-loaded.
-- Pipeline instances are cached and reused.
-- Operation execution is wrapped once through the runner.
-- Health state is managed separately from pipeline loading.
-- Provider adaptation happens in `transformers-provider.ts`, not in route handlers.
-
-## Adapter boundary
-
-`transformers-provider.ts` still implements the existing `AiProvider` interface. It is responsible for translating typed local results back into:
-
-- `AiGenerationResult`
-- `AiClassificationResult`
-- `AiTranscriptionResult`
-- `AiSpeechSynthesisResult`
-- `Float32Array | null` for embeddings
-
-This preserves the public provider registry contract while allowing the local runtime to use stricter typed semantics internally.
-
-## Operational guidance
-
-The current structure follows the same recommended pattern used in current Transformers.js documentation:
-
-- singleton or cached pipeline instances
-- lazy construction on first use
-- no route-level model ownership
-
-That keeps expensive model setup isolated and reusable without introducing route-specific shortcuts.
+# Local AI runtime (providers, health, and failure contracts)\n
+This document describes the local inference and provider path that backs AI APIs and keeps model execution isolated from route handlers.\n
+## 1) Layered owner model\n
+```mermaid\nflowchart TB\n  subgraph Entry\n    A1["/api/ai/* routes"]\n  end\n  subgraph AI domain\n    D1["provider-registry.ts"]\n    D2["creator-worker.ts"]\n    D3["knowledge-base-service.ts"]\n  end\n  subgraph Local runtime\n    L1["model-manager.ts"]\n    L2["local-model-runtime.ts"]\n    L3["model-runtime-health.ts"]\n    L4["model-pipeline-loader.ts"]\n    L5["model-pipeline-cache.ts"]\n    L6["model-operation-runner.ts"]\n    L7["local-model-contract.ts"]\n    L8["providers/transformers-provider.ts"]\n  end\n  subgraph Contracts\n    C1["provider-boundary contracts"]\n    C2["local-result contracts"]\n    C3["knowledge chunk/search contracts"]\n  end\n\n  A1 --> D1\n  D1 --> D2\n  D1 --> D3\n  D1 --> L1\n  D2 --> L1\n  L1 --> L2 --> L3 --> L4 --> L5 --> L6 --> L7 --> L8\n  L1 --> C1 --> D1\n  D3 --> C3\n```\n
+## 2) Execution sequence\n
+```mermaid\nsequenceDiagram\n  autonumber\n  participant Route as /api/builder/ai or /api/oracle\n  participant Registry as provider-registry\n  participant Worker as creator-worker / generator\n  participant Manager as model-manager\n  participant Health as model-runtime-health\n  participant Loader as pipeline-loader\n  participant Runner as operation-runner\n  participant Provider as transformers-provider\n  participant DB as knowledge tables\n\n  Route->>Registry: resolve provider\n  Registry->>Manager: execute operation\n  Manager->>Health: gate by circuit/health budget\n  Health-->>Manager: open or openWithWarnings\n  Manager->>Loader: load pipeline lazily\n  Loader->>Runner: execute wrapped operation\n  Runner->>Provider: typed operation run\n  Provider-->>Runner: typed operation result\n  Runner-->>Manager: Result<T>/Failure\n  alt success\n    Manager->>Route: normalized provider result\n  else failure\n    Manager->>Route: failure envelope (retryable + code)\n    Route->>Route: return error envelope\n  end\n  Route->>DB: optionally enrich knowledge context\n```\n
+## 3) Failure taxonomy\n\n| Failure code | Semantics | Recovery |\n| --- | --- | --- |\n| `timeout` | budget exceeded before operation completes | retry with backoff if upstream transient |\n| `circuit-open` | repeated failures caused model gate open | wait for cooldown + reset |\n| `cache-corruption-recovered` | pipeline cache mismatch repaired | single auto-recovery then retry |\n| `unavailable` | model/provider disabled or missing config | surface non-retryable unless operator reconfigures |\n| `invalid-output` | malformed provider response | retry once, then report non-retryable with diagnostics |\n| `unexpected` | unknown internal failure | operator triage + optional retry |\n
+## 4) Contract guarantees\n
+- All local outputs are normalized into internal typed result contracts before route return.\n
+- Route handlers never inspect raw transformer output.\n
+- Provider health and warmup state are tracked independently from pipeline loading.\n
+- Pipeline cache is reused within process with explicit recovery boundaries.\n
+## 5) Local knowledge integration\n
+- Documents/chunks/terms live under persistent AI tables and are reused by retrieval flows.\n
+- Retrieval-assisted generation must include a deterministic context window and explicit truncation strategy.\n
+- Search + generation failures stay independent; a retrieval miss should not hard fail generation unless business config requests hard context.\n
+## 6) Latency and observability\n
+- Each local operation emits timing + model/pipeline identifiers.\n
+- Failures are wrapped in a single typed envelope shape and logged with correlation ids.\n
+- Health endpoint should expose warmup state, circuit status, and recent failure counts.\n
+## 7) 组件演进建议（中文）\n
+- 本地模型能力建议保持“单一路径、单一 owner”：\n+  - 路由 -> provider-registry -> model-manager。\n
+- 避免在路由里直接拼 prompt 或直接解析模型返回。\n
+- 缓存错误应可自恢复：检测到损坏后清理并重建 pipeline。\n
+- 健康检查失败与用户可见的生成失败要分离，避免把系统健康问题误报给业务流程。\n*** End Patch

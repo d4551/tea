@@ -32,9 +32,9 @@ This pack provides the RPG Maker MZ plugin-side implementation for:
 
 ## Documentation contract
 
-- `README.md` describes install flow and pack overview.
-- `PLUGIN_SPEC.md` is the current implementation contract.
-- `EVENT_HOOKUPS.md` is the current editor integration guide.
+- `README.txt` describes install flow and pack overview.
+- `PLUGIN_SPEC.txt` is the current implementation contract.
+- `EVENT_HOOKUPS.txt` is the current editor integration guide.
 - This file replaces the old implementation-ticket checklist and prompt-pack artifacts.
 
 ## Maintenance rules

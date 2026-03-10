@@ -1,7 +1,7 @@
-# TEA
+# TEA — Bun-native game runtime + builder + AI platform
 
 <p align="center">
-  <strong>SSR-first game runtime, builder workspace, and AI-assisted tooling on Bun.</strong>
+  <strong>SSR-first game authoring and runtime stack built on Bun, Elysia, HTMX, and TypeScript strict.</strong>
 </p>
 
 <p align="center">
@@ -11,244 +11,256 @@
   ·
   <a href="notes/doc-archive/ARCHITECTURE.txt">Architecture</a>
   ·
-  <a href="notes/doc-archive/docs__index.txt">Docs Index</a>
+  <a href="notes/doc-archive/docs__index.txt">Docs index</a>
 </p>
 
 <p align="center">
-  <a href="notes/doc-archive/README.txt"><img alt="Docs in English" src="https://img.shields.io/badge/docs-English-0f766e?style=flat-square"></a>
-  <a href="notes/doc-archive/README.zh-CN.txt"><img alt="Chinese documentation available" src="https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87-c2410c?style=flat-square"></a>
-  <img alt="Bun 1.3.10" src="https://img.shields.io/badge/Bun-1.3.10-111827?style=flat-square">
-  <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-2563eb?style=flat-square">
-  <img alt="Elysia 1.4.27" src="https://img.shields.io/badge/Elysia-1.4.27-059669?style=flat-square">
-  <img alt="Prisma 7.4.2" src="https://img.shields.io/badge/Prisma-7.4.2-1f2937?style=flat-square">
-  <img alt="HTMX 2.0.8" src="https://img.shields.io/badge/HTMX-2.0.8-1d4ed8?style=flat-square">
+  <img alt="Bun" src="https://img.shields.io/badge/Bun-1.3.x-111827?style=flat-square">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-2563eb?style=flat-square">
+  <img alt="Elysia" src="https://img.shields.io/badge/Elysia-1.4.x-059669?style=flat-square">
+  <img alt="Prisma" src="https://img.shields.io/badge/Prisma-7.x-1f2937?style=flat-square">
+  <img alt="HTMX" src="https://img.shields.io/badge/HTMX-2.x-1d4ed8?style=flat-square">
   <img alt="SSR first" src="https://img.shields.io/badge/rendering-SSR--first-7c3aed?style=flat-square">
-  <img alt="Verify with bun run verify" src="https://img.shields.io/badge/verify-bun%20run%20verify-0f766e?style=flat-square">
 </p>
 
-> Need Chinese docs? Open [README.zh-CN.md](notes/doc-archive/README.zh-CN.txt).
->
-> 需要中文文档？请直接打开 [README.zh-CN.md](notes/doc-archive/README.zh-CN.txt)。
+> This archive is the canonical, no-markdown documentation surface for operating and extending TEA.
 
-TEA is an SSR-first game runtime and builder platform built on Bun, Elysia, HTMX, Tailwind CSS, DaisyUI, Prisma, PixiJS, and Three.js. The repository combines a server-rendered web app, a game builder workspace, a server-authoritative multiplayer runtime, AI-assisted tooling, and an RPG Maker MZ companion pack in one Bun workspace.
+## 1) What TEA is and how it is intended to work
 
-## At a glance
+TEA is a single Bun server application with four coupled but separable concerns:
 
-| Area | Current implementation |
-| --- | --- |
-| Delivery model | SSR by default, HTMX for progressive enhancement, browser runtime only where necessary |
-| Main surfaces | Home/oracle SSR, builder workspace, game session runtime, AI APIs, knowledge retrieval |
-| Backend | Elysia app composed in `src/app.ts`, bootstrapped from `src/server.ts` |
-| State and persistence | Prisma + SQLite for sessions, knowledge chunks, oracle data, and builder-backed runtime state |
-| Rendering stack | Tailwind CSS 4, DaisyUI 5, HTMX 2, PixiJS 8, Three.js 0.183 |
-| Locales | `en-US` and `zh-CN` from `src/config/environment.ts` |
-| Verification path | `bun run verify` |
+- `Builder` area (authoring): create and mutate draft projects via HTMX-enhanced SSR pages.
+- `Publish` boundary: validate mutable draft → materialize immutable published snapshot.
+- `Game runtime`: run authoritative sessions from snapshots and emit live updates.
+- `AI services`: local/Ollama/OpenAI-compatible orchestration for generation, retrieval, and assistant tooling.
 
-## What the codebase contains
+The strict rule: **runtime never reads draft state directly**. Every play session starts from a published snapshot.
 
-- SSR document rendering for the home page, builder workspace, AI surfaces, and game routes
-- HTMX-driven fragment updates for forms, navigation, validation, and panel refreshes
-- A server-authoritative game loop with restore, invite, HUD, websocket, and persistence behavior
-- A builder domain that edits draft project state, validates publishability, and seeds immutable releases into runtime sessions
-- AI provider routing across local Transformers, Ollama, and OpenAI-compatible providers
-- Prisma-backed persistence for game sessions, builder artifacts, and AI knowledge retrieval
-- A companion `LOTFK_RMMZ_Agentic_Pack` artifact that ships beside the main TypeScript app
+## 2) End-to-end operational model
 
-## Stack and pinned versions
-
-| Layer | Package | Version |
-| --- | --- | --- |
-| Runtime | Bun | `1.3.10` |
-| Language | TypeScript | `5.9.3` |
-| Server | Elysia | `1.4.27` |
-| ORM | Prisma / `@prisma/client` | `7.4.2` |
-| Progressive enhancement | `htmx.org` | `2.0.8` |
-| UI kit | DaisyUI | `5.5.19` |
-| CSS | Tailwind CSS | `4.2.1` |
-| 2D renderer | PixiJS | `8.17.0` |
-| 3D renderer | Three.js | `0.183.2` |
-| Browser automation/tests | Playwright | `1.58.2` |
-
-Version governance lives in `scripts/dependency-drift-check.ts` and is enforced by `bun run dependency:drift`.
-
-## Runtime architecture
-
-The app is wired in `src/app.ts`. `createApp()` composes shared request plugins, SSR routes, typed API routes, AI routes, the playable game runtime, and the builder workspace into one Elysia application.
+### Top-level architecture
 
 ```mermaid
-flowchart LR
-  subgraph Browser [Browser surfaces]
-    Home["SSR pages"]
-    Htmx["HTMX swaps"]
-    Playable["Playable client"]
-    Hud["SSE and websocket"]
+flowchart TB
+  subgraph BrowserSurface["Browser surfaces"]
+    B1[Home SSR]
+    B2[Builder SSR + HTMX]
+    B3[Playable SSR page]
+    B4[WebSocket + HUD SSE + command POST]
   end
 
-  subgraph Server [Elysia application]
-    Request["request-context"]
-    I18n["i18n-context"]
-    Error["global onError"]
-    Pages["page-routes"]
-    GameRoutes["game-routes"]
-    Api["api-routes"]
-    BuilderRoutes["builder-routes"]
-    BuilderApi["builder-api"]
-    AiRoutes["ai-routes"]
-    Views["SSR views"]
-    Plugins["static, auth, swagger, lifecycle plugins"]
+  subgraph AppKernel["src/app.ts composition"]
+    K1[requestContext plugin]
+    K2[i18n + locale plugin]
+    K3[error-handler]
+    K4[staticAssets plugin]
+    K5[swagger + session/creator/ai plugins]
   end
 
-  subgraph Domain [Domain owners]
-    Oracle["oracle-service"]
-    Game["game-loop"]
-    Builder["builder-service"]
-    Registry["provider-registry"]
-    Knowledge["knowledge-base-service"]
-    Worker["creator-worker"]
+  subgraph RouteSurfaces["Route layer"]
+    R1[page-routes.ts]
+    R2[builder-routes.ts]
+    R3[builder-api.ts]
+    R4[game-routes.ts]
+    R5[game-plugin.ts]
+    R6[api-routes.ts]
+    R7[ai-routes.ts]
   end
 
-  subgraph Data [Persistence and assets]
-    Prisma["Prisma and SQLite"]
-    Public["public assets"]
-    Uploads["uploads and builder artifacts"]
+  subgraph DomainCore["Domain layer"]
+    D1[builder-service.ts]
+    D2[game-loop.ts]
+    D3[builder-publish-validation.ts]
+    D4[provider-registry.ts]
+    D5[knowledge-base-service.ts]
+    D6[oracle-service.ts]
+    D7[creator-worker.ts]
   end
 
-  Home --> Request
-  Htmx --> Request
-  Playable --> Request
-  Hud --> Request
-  Request --> I18n --> Error
-  Error --> Pages
-  Error --> GameRoutes
-  Error --> Api
-  Error --> BuilderRoutes
-  Error --> BuilderApi
-  Error --> AiRoutes
-  Pages --> Views
-  GameRoutes --> Game
-  GameRoutes --> Builder
-  Api --> Oracle
-  BuilderRoutes --> Builder
-  BuilderRoutes --> Registry
-  BuilderRoutes --> Knowledge
-  BuilderApi --> Builder
-  BuilderApi --> Worker
-  BuilderApi --> Registry
-  BuilderApi --> Knowledge
-  AiRoutes --> Registry
-  AiRoutes --> Knowledge
-  Pages --> Plugins
-  GameRoutes --> Plugins
-  BuilderRoutes --> Plugins
-  BuilderApi --> Plugins
-  Game --> Prisma
-  Builder --> Prisma
-  Knowledge --> Prisma
-  Views --> Public
-  Builder --> Uploads
+  subgraph Persistence["Storage and assets"]
+    S1[Prisma + SQLite]
+    S2[uploads + builder artifacts]
+    S3[public static output]
+  end
+
+  B1 --> K1
+  B2 --> K1
+  B3 --> K1
+  B4 --> K1
+
+  K1 --> K2 --> K3 --> K4 --> K5
+  K5 --> R1
+  K5 --> R2
+  K5 --> R3
+  K5 --> R4
+  K5 --> R5
+  K5 --> R6
+  K5 --> R7
+
+  R2 --> D1
+  R3 --> D1
+  R3 --> D4
+  R3 --> D5
+  R4 --> D1
+  R4 --> D2
+  R5 --> D2
+  R5 --> D1
+  R7 --> D4
+  R7 --> D5
+  R6 --> D6
+  R6 --> D7
+  R1 --> K5
+
+  D1 --> S1
+  D2 --> S1
+  D1 --> S2
+  D3 --> S1
+  D2 --> S2
+  D4 --> S3
+  D5 --> S1
 ```
 
-## Request lifecycle
+### Why this topology exists
 
-The shared HTTP path is deterministic: request context and locale resolution are applied up front, route handlers call typed domain services, and unexpected failures collapse into a single error envelope via the global Elysia `onError` handler.
+- SSR pages are always server-driven, so initial paint, permission checks, and critical bootstrapping are deterministic.
+- HTMX handles incremental updates where appropriate to avoid full SPA complexity.
+- Game transport is explicit (`POST`, `WS`, `SSE`) with bounded surfaces.
+- Builder mutations flow through one domain owner (`builder-service`) for coherence.
+
+## 3) Complete create-game flow (UI wired end-to-end)
 
 ```mermaid
 sequenceDiagram
   autonumber
-  participant Browser
-  participant Request as request-context
-  participant Locale as i18n-context
-  participant Route as route handler
-  participant Domain as domain service
-  participant View as SSR view or API envelope
-  participant Error as global onError
+  actor User
+  participant BuilderUI as /builder UI
+  participant BuilderAPI as /api/builder
+  participant BuilderSvc as builderService
+  participant PublishVal as publish validation
+  participant Store as Prisma project store
+  participant GameRoute as /game page
+  participant GameAPI as game-plugin.ts
+  participant GameLoop as game-loop.ts
+  participant HUD as HUD SSE endpoint
 
-  Browser->>Request: HTTP request
-  Request->>Locale: correlation id and locale negotiation
-  Locale->>Route: typed request context
-  Route->>Domain: boundary call
-  alt success
-    Domain-->>Route: typed data
-    Route-->>View: document, fragment, or JSON body
-  else typed failure
-    Domain-->>Route: typed failure result
-    Route-->>View: deterministic state or envelope
-  else unexpected failure
-    Route->>Error: thrown framework or runtime error
-    Error-->>View: normalized error envelope
+  User->>BuilderUI: open /builder?projectId=hero-fort
+  BuilderUI->>BuilderAPI: GET /builder shell + draft lookup
+  BuilderAPI->>BuilderSvc: getProject(projectId)
+  BuilderSvc->>Store: load mutable draft + dependencies
+  Store-->>BuilderSvc: scenes, assets, npcs, dialogue, automation
+  BuilderSvc-->>BuilderAPI: typed draft model
+  BuilderAPI-->>BuilderUI: SSR builder shell + HTMX-initialized editor tabs
+
+  User->>BuilderAPI: POST /api/builder/projects {projectId, locale, redirectPath}
+  BuilderAPI-->>BuilderAPI: sanitize redirectPath, contract validation
+  BuilderAPI->>BuilderSvc: createProject()
+  BuilderSvc->>Store: insert project + initial draft records
+  Store-->>BuilderSvc: draft id and defaults
+  BuilderSvc-->>BuilderAPI: created project
+  BuilderAPI-->>BuilderUI: HX-Redirect to /builder?projectId=<id>
+
+  User->>BuilderUI: edit builder domains (scenes/npc/dialogue/quests/assets)
+  BuilderUI->>BuilderAPI: patch endpoints (HTMX posts)
+  BuilderAPI->>BuilderSvc: updateProjectDraft()
+  BuilderSvc->>Store: versioned mutable writes
+
+  User->>BuilderUI: click Publish
+  BuilderUI->>BuilderAPI: PATCH /api/builder/projects/:id/publish {published:true}
+  BuilderAPI->>BuilderSvc: publishProject(true)
+  BuilderSvc->>PublishVal: validateBuilderProjectForPublish()
+  PublishVal-->>BuilderSvc: issues[] or OK
+  alt passes
+    BuilderSvc->>Store: materialize immutable release snapshot
+    Store-->>BuilderSvc: released snapshot + releaseVersion
+    BuilderSvc-->>BuilderAPI: 200 with published release flags
+    BuilderAPI-->>BuilderUI: render play-enabled shell
+  else fails
+    BuilderSvc-->>BuilderAPI: validation issues + context
+    BuilderAPI-->>BuilderUI: fragment with error state
   end
-  View-->>Browser: final response
+
+  User->>GameRoute: open /game?projectId=<id>
+  GameRoute->>BuilderSvc: getPublishedProject(projectId)
+  BuilderSvc-->>GameRoute: snapshot + build config
+  GameRoute->>BuilderSvc: getScene bootstrap
+  GameRoute->>GameAPI: POST /api/game/session {projectId, locale}
+  GameAPI->>GameLoop: createSession()
+  GameLoop->>Store: create authoritative session state
+  Store-->>GameLoop: sessionId + resume token
+  GameLoop-->>BuilderSvc: bootstrap payload
+  GameRoute-->>User: SSR playable page with bootstrap JSON
+
+  User->>GameAPI: POST /api/game/session/:id/command {type, payload}
+  GameAPI->>GameLoop: processCommand()
+  GameLoop->>Store: command outcome persistence
+  GameLoop-->>GameAPI: deterministic command outcome
+  GameAPI-->>User: 200 outcome + next render hints
+
+  par
+    User->>GameAPI: GET /api/game/session/:id/hud
+    GameAPI->>GameLoop: subscribe HUD stream
+    GameLoop-->>User: SSE event stream
+  and
+    User->>GameAPI: WS /api/game/session/:id/ws
+    GameAPI->>GameLoop: subscribe WS channel
+    GameLoop-->>User: incremental state frames
+  end
+
+  User->>GameAPI: POST /api/game/session/:id {sessionId,resumetoken}
+  GameAPI->>GameLoop: restoreSession()
+  GameLoop-->>User: restored state if token and session valid
 ```
 
-## Builder release pipeline
-
-The builder surface edits draft project state. Runtime sessions do not read from mutable drafts. Instead, the builder validates and publishes an immutable release snapshot, and the game loop seeds live sessions from that release.
+## 4) Request lifecycle and error envelope contract
 
 ```mermaid
 flowchart LR
-  subgraph Authoring [Builder authoring]
-    Draft["Draft project state"]
-    Assets["Assets, scenes, dialogue, quests, automation specs"]
-    Audit["Readiness audit"]
-  end
+  Req[Incoming HTTP/WS/SSE request]
+  Ctx[requestContextPlugin]
+  Locale[i18n + locale resolution]
+  Guard[auth and scoped guards]
+  Validate[Typed schema validation]
+  Domain[Domain service call]
+  Success[Success envelope]
+  Failure[error-envelope]
+  Resp[SSR doc / partial / JSON]
 
-  subgraph Publish [Publish boundary]
-    Validate["validateBuilderProjectForPublish()"]
-    Snapshot["Immutable release snapshot"]
-  end
-
-  subgraph Runtime [Runtime seeding]
-    Create["game-loop.createSession()"]
-    Session["Persisted game session"]
-    Client["Playable bootstrap contract"]
-  end
-
-  Draft --> Assets --> Audit --> Validate
-  Validate -->|pass| Snapshot
-  Validate -->|issues| Audit
-  Snapshot --> Create --> Session --> Client
+  Req --> Ctx --> Locale --> Guard --> Validate --> Domain
+  Domain --> Success --> Resp
+  Validate --> Failure --> Resp
+  Domain --> Failure --> Resp
 ```
 
-## Persistence map
+For every JSON API surface, success/failure are meant to be deterministic and serializable so client code can render predictable UI states.
 
-The Prisma schema splits persistent concerns into a few clear groups:
+## 5) Route and contract inventory (current, non-markdown)
 
-- `OracleInteraction` stores oracle prompts and responses.
-- `AiKnowledgeDocument`, `AiKnowledgeChunk`, and `AiKnowledgeChunkTerm` back retrieval and search.
-- `GameSession` and related tables persist authoritative runtime state, actors, scene data, inventory, combat, and cutscenes.
-- Builder release and artifact data flows through the builder domain and into runtime session snapshots.
+### Pages and partials
 
-```mermaid
-flowchart TD
-  subgraph Knowledge [AI knowledge]
-    Doc["AiKnowledgeDocument"]
-    Chunk["AiKnowledgeChunk"]
-    Term["AiKnowledgeChunkTerm"]
-    Doc --> Chunk --> Term
-  end
+- `src/routes/page-routes.ts`: SSR routes and navigation shells.
+- `src/routes/builder-routes.ts`: builder layout and editor entry route.
+- `src/routes/game-routes.ts`: playable route and bootstrap page.
+- `src/shared/constants/routes.ts`: canonical route map.
 
-  subgraph Runtime [Game runtime]
-    Session["GameSession"]
-    Scene["Scene state, nodes, collisions, assets"]
-    Actors["Participants, actors, NPCs"]
-    Play["Runtime state, inventory, combat, cutscenes"]
-    Session --> Scene
-    Session --> Actors
-    Session --> Play
-  end
+### Builder and authoring APIs
 
-  subgraph Utility [Other persisted records]
-    Oracle["OracleInteraction"]
-  end
+- `POST /api/builder/projects` create draft.
+- `PATCH /api/builder/projects/:projectId/publish` publish/unpublish.
+- Asset upload and metadata normalization APIs.
+- Scene / NPC / dialogue / quest / automation patch APIs.
+- `GET/POST /api/builder/ai/*` generation and retrieval APIs.
 
-  Doc --> DB["SQLite via Prisma"]
-  Session --> DB
-  Oracle --> DB
-```
+### Gameplay transport APIs
 
-## State model
+- `POST /api/game/session` create session.
+- `POST /api/game/session/:sessionId` restore session.
+- `POST /api/game/session/:sessionId/command` submit command.
+- `POST /api/game/session/:sessionId/invite` / `join` for session invite workflows.
+- `GET /api/game/session/:sessionId/state` status/state polling.
+- `GET /api/game/session/:sessionId/hud` live HUD stream.
+- `WS /api/game/session/:sessionId/ws` real-time state stream.
 
-The repo uses a narrow state vocabulary across SSR fragments and fallback UI surfaces.
+## 6) Internal state model and transitions
 
 ```mermaid
 stateDiagram-v2
@@ -257,138 +269,107 @@ stateDiagram-v2
   loading --> success
   loading --> empty
   loading --> unauthorized
-  loading --> retryable_error
-  loading --> non_retryable_error
-  retryable_error --> loading: retry
-  success --> loading: refresh or mutate
-  empty --> loading: retry or create
-  unauthorized --> [*]
-  non_retryable_error --> [*]
+  loading --> invalid
+  success --> running
+  running --> success
+  running --> transition
+  success --> error_retryable
+  success --> error_non_retryable
+  transition --> running
+  transition --> error_retryable
+  error_retryable --> loading
+  error_non_retryable --> idle
 ```
 
-## Repository map
+This state machine maps to SSR fragments and API envelopes used across builder and gameplay UIs.
 
-| Path | Responsibility |
-| --- | --- |
-| `src/app.ts` | Top-level Elysia composition |
-| `src/server.ts` | Startup, readiness checks, and optional AI warmup |
-| `src/routes/page-routes.ts` | SSR home page and oracle fragment routes |
-| `src/routes/game-routes.ts` | Game page bootstrap, invite flow, and session hydration |
-| `src/routes/api-routes.ts` | Health and oracle JSON APIs with typed envelopes |
-| `src/routes/ai-routes.ts` | AI health, capability, speech, and knowledge APIs |
-| `src/routes/builder-routes.ts` | SSR builder workspace pages and panels |
-| `src/routes/builder-api.ts` | Builder mutations, publish flow, AI helpers, and SSE |
-| `src/domain/game/` | Authoritative gameplay, combat, scene, inventory, and progression logic |
-| `src/domain/builder/` | Draft state, publish orchestration, creator worker, readiness, and asset storage |
-| `src/domain/ai/` | Provider registry, local model runtime, RAG, and AI adapters |
-| `src/views/` | SSR layout, pages, builder panels, and shared UI rendering |
-| `src/htmx-extensions/` | Shared HTMX lifecycle behavior for shell and panels |
-| `src/playable-game/` | Browser-side runtime, renderer, transport, and bootstrap contract consumers |
-| `src/shared/` | Contracts, config, constants, i18n, DB services, and utility functions |
-| `prisma/` | Schema, migrations, and local SQLite DB files |
-| `scripts/` | Setup, build, doctor, migration, dev, and docs verification workflows |
-| `tests/` | Contract, route, provider, runtime, and bootstrap coverage |
-| `packages/` | Workspace packages for shared contracts and seeded PRNG |
-| `LOTFK_RMMZ_Agentic_Pack/` | Companion RPG Maker MZ pack |
+## 7) Dataflow breakdown by responsibility
 
-## Route groups and ownership
+### 7.1 Builder dataflow
 
-| Surface | Owner | Notes |
+```mermaid
+flowchart LR
+  U[User interactions] --> UI[Builder HTMX form and tabs]
+  UI --> API[builder-api.ts]
+  API --> SVC[builder-service.ts]
+  SVC --> DB[(Prisma draft and relation tables)]
+  DB --> SVC --> API
+  API --> U
+  SVC --> PublishCheck[builder-publish-validation.ts]
+  PublishCheck --> SVC
+```
+
+### 7.2 Gameplay dataflow
+
+```mermaid
+flowchart LR
+  U[Player browser] --> CMD[/api/game/session/*]
+  CMD --> SVC[game-plugin.ts]
+  SVC --> LOOP[game-loop.ts]
+  LOOP --> DB[(Prisma session store)]
+  LOOP --> DB
+  LOOP --> WS[WebSocket broadcaster]
+  LOOP --> SSE[HUD stream]
+  WS --> U
+  SSE --> U
+```
+
+### 7.3 AI and retrieval dataflow
+
+```mermaid
+flowchart LR
+  U[Author action] --> AIAPI[/api/builder/ai/*]
+  AIAPI --> SVC[provider-registry]
+  SVC --> CACHE[(Knowledge index in Prisma)]
+  SVC --> OUT[Local / Ollama / OpenAI-compatible provider]
+  OUT --> SVC --> AIAPI
+  AIAPI --> U
+  CACHE --> SVC
+```
+
+## 8) Security and hardening checkpoints
+
+- No trust of client-provided state: all authoritative writes go through server domain methods.
+- Project creation and publish endpoints validate redirect and payload structure.
+- Game sessions are keyed by server-issued tokens and restore checks.
+- Static asset routes are path-normalized and mount-root constrained.
+- Upload workflows normalize file metadata and persist canonical paths.
+- Dependency drift and lint/typecheck are enforced in verification pipeline.
+
+## 9) Performance and reliability notes
+
+- Server-rendered bootstrap minimizes hydration cost for first paint.
+- HTMX partial updates reduce SPA complexity for builder controls.
+- Game loops favor short, explicit session commands rather than free-form socket payloads.
+- SSE/WebSocket streams are intentionally separated: HUD has low-cardinality events; WS carries richer state frames.
+
+## 10) Validation commands you should run
+
+- `bun run lint`
+- `bun run typecheck`
+- `bun run test` or `bun test`
+- `bun run verify`
+- `bun run docs:check`
+
+Use these before merging any route-level behavior changes, especially around publish gating and game transport.
+
+## 11) Frequently encountered failure modes
+
+| Symptom | Likely cause | Fix path |
 | --- | --- | --- |
-| Home and oracle SSR | `src/routes/page-routes.ts` | Uses `i18n-context` and auth session context |
-| Game SSR entry | `src/routes/game-routes.ts` | Hydrates or joins sessions through `game-loop` |
-| Builder SSR | `src/routes/builder-routes.ts` | Renders dashboard, editors, readiness, AI, and automation panels |
-| Builder API | `src/routes/builder-api.ts` | Owns mutations, publish flow, AI previews, and streaming updates |
-| Core JSON API | `src/routes/api-routes.ts` | Health and oracle envelopes |
-| AI API | `src/routes/ai-routes.ts` | Provider health, local runtime status, speech, and knowledge |
+| Play button remains disabled after publish | publish validation returned issues | open project diagnostics and rerun publish |
+| Session restore fails | stale token or wrong session id | create a new session and propagate resume token |
+| Command seems ignored | malformed command contract or unauthorized route context | validate payload contract and session/locale headers |
+| HUD stream disconnects repeatedly | token/channel mismatch or expired loop state | restart session and re-open `/api/game/session/:id/hud` |
+| Builder edits not reflected in playtest | unpublished draft used | ensure publish snapshot was generated and used by /game route |
 
-## Rendering and UX model
+## 12) If you are extending the platform
 
-- SSR is the default surface. The repository does not use a SPA shell.
-- HTMX owns targeted swaps, validation responses, and progressive enhancement.
-- Browser-only hydration is limited to the playable runtime and focused enhancement hooks.
-- DaisyUI and Tailwind supply shared shell primitives for alerts, drawers, cards, tables, and loading states.
-- Supported locales are `en-US` and `zh-CN` from `src/config/environment.ts`.
-- The shared UI state vocabulary is `idle -> loading -> success | empty | error(retryable | non-retryable) | unauthorized`.
+- Keep one owner per module: route parsing in routes, state transitions in domain services.
+- Add/modify contracts with explicit schema types.
+- Keep UI states aligned to success/failure envelope taxonomy.
+- Add observability around `requestContext` if adding new request boundaries.
 
-## Environment and operations
+## 13) Archive status
 
-Key configuration lives in `src/config/environment.ts` and covers:
-
-- network boot settings such as host, port, static asset paths, and Swagger docs path
-- auth and session settings such as cookie naming, resume token signing, and retention windows
-- playable runtime settings such as reconnect delay, restore timeouts, viewport sizing, and command TTL
-- AI runtime settings such as provider enablement, local model paths, ONNX configuration, and fallback policy
-- builder automation settings such as polling cadence and automation probe timeout
-
-The codebase is intentionally config-heavy. Defaults are typed, and most operational values can be overridden per environment.
-
-## Quick start
-
-```bash
-bun install
-bun run setup
-bun run dev
-```
-
-Fresh-machine bootstrap scripts:
-
-- `./scripts/install-macos.sh`
-- `./scripts/install-linux.sh`
-- `powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1`
-
-## Commands
-
-| Command | Purpose |
-| --- | --- |
-| `bun run dev` | Run the local app plus asset/watch workflows |
-| `bun run setup` | Bootstrap env, Prisma, assets, and readiness checks |
-| `bun run doctor` | Emit a structured readiness report |
-| `bun run build:assets` | Build CSS, HTMX extensions, game client, and editor bundles |
-| `bun run docs:check` | Validate the documentation surface |
-| `bun run lint` | Run Biome checks |
-| `bun run typecheck` | Run strict TypeScript checking |
-| `bun test` | Run the Bun test suite |
-| `bun run dependency:drift` | Enforce dependency pinning policy |
-| `bun run audit:security` | Run `bun audit` on demand |
-| `bun run verify` | Run assets, drift, docs, lint, typecheck, and tests in one pass |
-| `bun run start` | Start the built app locally |
-
-## Test and verification surface
-
-Current coverage in `tests/` and `src/**/*.test.ts` focuses on:
-
-- API contracts and error envelopes
-- auth session behavior
-- runtime bootstrap and configuration
-- game engine and scene behavior
-- AI providers and local runtime behavior
-- builder automation and authoring flows
-- shared contracts and async-result utilities
-
-Run this before shipping changes:
-
-```bash
-bun run verify
-```
-
-## Documentation map
-
-- [Chinese README](notes/doc-archive/README.zh-CN.txt)
-- [Architecture](notes/doc-archive/ARCHITECTURE.txt)
-- [Docs index](notes/doc-archive/docs__index.txt)
-- [API and transport contracts](notes/doc-archive/docs__api-contracts.txt)
-- [Builder domain](notes/doc-archive/docs__builder-domain.txt)
-- [HTMX extensions](notes/doc-archive/docs__htmx-extensions.txt)
-- [Playable runtime](notes/doc-archive/docs__playable-runtime.txt)
-- [Local AI runtime](notes/doc-archive/docs__local-ai-runtime.txt)
-- [Operator runbook](notes/doc-archive/docs__operator-runbook.txt)
-- [RMMZ companion pack](notes/doc-archive/docs__rmmz-pack.txt)
-
-## Contributor notes
-
-- Treat `src/shared/contracts/` as the contract layer for server, builder, and playable runtime boundaries.
-- Keep SSR as the default when adding new screens; use HTMX for progressive enhancement before reaching for client-side runtime work.
-- Route all AI capability work through `src/domain/ai/providers/provider-registry.ts` or the local model facade instead of bypassing the shared owner.
-- Publish flow changes should be validated against both builder docs and the runtime session seeding rules.
-- The repository may have active local changes; account for them rather than resetting the worktree.
+This document set lives under `notes/doc-archive` and replaces legacy `.md` readme/architecture artifacts for this repo slice.

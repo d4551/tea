@@ -1,125 +1,15 @@
-# API and transport contracts
-
-This document summarizes the current public transport surfaces and envelope conventions for the TEA app.
-
-## Envelope model
-
-JSON APIs use one envelope family:
-
-- success responses: `ok: true` with `data`
-- failure responses: `ok: false` with `error`
-
-Current failure fields:
-
-```ts
-{
-  ok: false,
-  error: {
-    code: string,
-    message: string,
-    retryable: boolean,
-    correlationId: string
-  }
-}
-```
-
-## Surface map
-
-```mermaid
-flowchart TB
-  Browser["Browser or operator client"]
-  Health["/api/health"]
-  Oracle["/api/oracle"]
-  Game["/api/game/session/*"]
-  AI["/api/ai/*"]
-  Builder["/api/builder/*"]
-
-  Browser --> Health
-  Browser --> Oracle
-  Browser --> Game
-  Browser --> AI
-  Browser --> Builder
-```
-
-## Game transport surfaces
-
-```mermaid
-flowchart LR
-  GamePage["GET /game"] --> Bootstrap["SSR document + bootstrap payload"]
-  Create["POST /api/game/session"] --> Session["authoritative session"]
-  Invite["POST /api/game/session/:id/invite"] --> Session
-  Join["POST /api/game/session/:id/join"] --> Session
-  State["GET /api/game/session/:id/state"] --> Session
-  Restore["POST /api/game/session/:id"] --> Session
-  Command["POST /api/game/session/:id/command"] --> Session
-  Hud["GET /api/game/session/:id/hud"] --> SSE["HUD SSE stream"]
-  Socket["WS /api/game/session/:id/ws"] --> Realtime["realtime state lane"]
-```
-
-### Game route contract notes
-
-- `GET /game` is the SSR entrypoint for the playable runtime.
-- The playable runtime consumes one canonical bootstrap JSON payload.
-- `POST /api/game/session/:id` is the restore surface.
-- `GET /api/game/session/:id/hud` is the only HUD stream surface.
-- `WS /api/game/session/:id/ws` is the realtime command/state transport.
-
-## Core application APIs
-
-| Endpoint | Purpose |
-| --- | --- |
-| `/api/health` | Typed health envelope for runtime readiness at the HTTP surface |
-| `/api/oracle` | Oracle question/answer workflow with locale-aware behavior |
-
-## AI APIs
-
-| Endpoint | Purpose |
-| --- | --- |
-| `/api/ai/status` | Aggregate provider/runtime status |
-| `/api/ai/health` | AI health snapshot |
-| `/api/ai/capabilities` | Available AI model capabilities |
-| `/api/ai/catalog` | Configurable AI targets |
-| `/api/ai/knowledge/documents` | Knowledge document CRUD/indexing |
-| `/api/ai/knowledge/search` | Knowledge retrieval search |
-| `/api/ai/assist/retrieval` | Retrieval-assisted help surface |
-| `/api/ai/plan/tools` | Structured tool planning |
-| `/api/ai/generate/dialogue` | Dialogue generation |
-| `/api/ai/generate/scene` | Scene generation |
-| `/api/ai/audio/transcribe` | Audio transcription |
-| `/api/ai/audio/synthesize` | Speech synthesis |
-
-## Builder APIs
-
-| Endpoint family | Purpose |
-| --- | --- |
-| `/api/builder/projects` | Builder project lifecycle |
-| `/api/builder/scenes` | Authored scene CRUD |
-| `/api/builder/scenes/:sceneId/nodes` | Scene-node editing |
-| `/api/builder/npcs` | NPC authoring |
-| `/api/builder/dialogue` | Dialogue authoring |
-| `/api/builder/assets` | Asset CRUD |
-| `/api/builder/assets/upload` | File upload / ingestion |
-| `/api/builder/animation-clips` | Animation clip authoring |
-| `/api/builder/dialogue-graphs` | Dialogue graph editing |
-| `/api/builder/quests` | Quest editing |
-| `/api/builder/triggers` | Trigger editing |
-| `/api/builder/generation-jobs` | AI generation jobs |
-| `/api/builder/automation-runs` | Automation runs |
-
-## Contract ownership
-
-| Concern | Owner |
-| --- | --- |
-| Route constants | `src/shared/constants/routes.ts` |
-| UI state vocabulary | `src/shared/contracts/ui-state.ts` |
-| Game transport contracts | `src/shared/contracts/game.ts` |
-| Game bootstrap contract | `src/shared/contracts/game-client-bootstrap.ts` |
-| External failure contract | `src/shared/contracts/external-boundary.ts` |
-| HTTP envelope helpers | `src/lib/error-envelope.ts` |
-
-## Error and retry semantics
-
-- Validation failures should map to deterministic validation/error states.
-- Unauthorized failures should map to explicit unauthorized states.
-- Retryable upstream/provider failures should preserve `retryable: true`.
-- Prisma/database failures should be translated once at the storage boundary, then surfaced through the shared error envelope.
+# API and transport contracts (expanded)\n
+This is the end-to-end contract map for all public surfaces: HTTP, SSE, and WebSocket.\n
+## 1) Single envelope contract\n
+Every JSON endpoint returns one of two shapes.\n
+```ts\ninterface SuccessEnvelope<T> {\n  ok: true;\n  data: T;\n}\n\ninterface ErrorEnvelope {\n  ok: false;\n  error: {\n    code: string;\n    message: string;\n    retryable: boolean;\n    correlationId: string;\n  };\n}\n```\n\n`correlationId` comes from request context and is used by logs and cross-surface incident tracing.\n
+## 2) Contract graph\n\n```mermaid\nflowchart LR\n  subgraph Inbound[Client ingress]\n    B1[Browser]\n    B2[Operator]\n    B3[Automation]\n  end\n\n  subgraph HTTP[HTTP APIs]\n    A1[/api/health]\n    A2[/api/oracle]\n    A3[/api/ai/*]\n    A4[/api/builder/*]\n    A5[/api/game/session/*]\n    A6[/api/game/session/:id/state]\n  end\n\n  subgraph Realtime\n    R1[WS /api/game/session/:id/ws]\n    R2[SSE /api/game/session/:id/hud]\n  end\n\n  B1 --> A1\n  B1 --> A2\n  B1 --> A3\n  B1 --> A4\n  B1 --> A5\n  B1 --> A6\n  B1 --> R1\n  B1 --> R2\n```\n
+## 3) Route lifecycle and envelope placement\n\n```mermaid\nsequenceDiagram\n  autonumber\n  participant C as Client\n  participant R as Route\n  participant S as Schema boundary\n  participant D as Domain service\n  participant E as Envelope mapper\n  participant W as WebSocket/SSE producer\n\n  C->>R: request\n  R->>S: validate params and body\n  alt schema valid\n    S->>D: typed payload\n    D-->>E: typed result\n    E-->>C: ok response\n  else schema invalid\n    S-->>E: validation failure\n    E-->>C: ok=false + validation code\n  else runtime failure\n    D-->>R: exception\n    R->>E: map to failure envelope\n    E-->>C: normalized failure\n  end\n  Note over W: WS/SSE are produced from domain-owned state transitions\n```\n\n## 4) Surface contracts\n
+### 4.1 Health and oracle\n\n- `GET /api/health`: readiness and base health check.\n- `POST /api/oracle`: local/remote question-answer surface with locale context.\n
+### 4.2 Game transport\n\n| Method | Endpoint | Contract |\n| --- | --- | --- |\n| `POST` | `/api/game/session` | create authoritative session |\n| `POST` | `/api/game/session/:id` | restore using `resumeToken` |\n| `POST` | `/api/game/session/:id/command` | command envelope + deterministic state transition |\n| `POST` | `/api/game/session/:id/invite` | create invite payload |\n| `POST` | `/api/game/session/:id/join` | apply invite token |\n| `GET` | `/api/game/session/:id/state` | polling fallback state |\n| `GET` | `/api/game/session/:id/hud` | SSE stream |\n| WS | `/api/game/session/:id/ws` | realtime state stream |\n
+### 4.3 Builder family\n
+- Draft lifecycle (`/api/builder/projects*`) handles mutable state only.\n- Scene/dialogue/asset mutation endpoints map to builder domain records.\n- `publish` endpoint gates transitions with validation.\n- Generation and automation endpoints remain inside builder context.\n
+### 4.4 AI family\n\n- `status`, `health`, `capabilities`, `catalog`: provider health and inventory.\n- `knowledge/documents`, `knowledge/search`, retrieval/generation endpoints: retrieval and generation operations with bounded timeouts.\n- `audio/transcribe`, `audio/synthesize`, `generate/*`: provider-mediated operations.\n
+## 5) Error code mapping\n\n```mermaid\nflowchart TB\n  EC[error code]\n  T1[retryable?]\n  T2[authorization?]\n  T3[validation?]\n  T4[session/context?]\n\n  EC --> T1\n  T1 -->|true| E1[retry + backoff]\n  T1 -->|false| T2\n  T2 -->|true| E2[re-login/reauth]\n  T2 -->|false| T3\n  T3 -->|true| E3[user correction]\n  T3 -->|false| T4\n  T4 -->|true| E4[restore flow]\n  T4 -->|false| E5[operational fix]\n```\n
+## 6) Data contract matrix by reliability\n\n- `auth/session`: hard fail, no retry.\n- `validation`: hard fail; user must correct input.\n- `provider transient`: retryable when provider indicates budget/timeouts.\n- `storage transient`: retryable if safe and cheap.\n- `publish` validation: explicit diagnostics required, not opaque message.\n
+## 7) Security considerations\n\n- Do not return raw internal codes without user-safe mapping.\n- Keep path and redirect params sanitized before use.\n- Session-scoped data access must include token validity checks.\n- WS and SSE channels must validate session/channel before broadcasting.\n\n## 8) 观测与合规（中文）\n\n- 所有异常都走统一 error envelope；UI 只做有限状态切换。\n- 运行接口与可恢复性逻辑统一由 `error.retryable` 决定。\n- 游戏指令走 server authoritative，不允许客户端自行决定成功/失败。\n- 建议变更后优先跑 `docs:check`、`lint`、`typecheck`、`test`、`verify`。\n

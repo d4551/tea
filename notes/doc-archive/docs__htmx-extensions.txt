@@ -1,146 +1,63 @@
-# HTMX extensions and lifecycle ownership
+# HTMX lifecycle and extension architecture\n
+This document defines ownership and contracts for HTMX enhancement behavior across TEA. It avoids page-local duplication and keeps UX behavior deterministic.\n
+## 1) Why centralized extensions exist\n
+The architecture keeps progressive enhancement logic in a small set of extensions so builder and game pages share a consistent shell, focus, and validation strategy.\n\n\n+Benefits:\n
+- Single implementation for shell busy state and focus restoration.\n+- One path for validation-surface swaps.\n+- Uniform error and toast patterns.\n+- Better accessibility consistency across route boundaries.\n
+## 2) Lifecycle ownership model\n
+```mermaid\nflowchart LR\n  subgraph Browser\n    H1[htmx request event stream]\n  end\n  subgraph Extension layer\n    E1[layout-controls]\n    E2[focus-panel]\n    E3[oracle-indicator]\n    E4[server-toast]\n    E5[game-hud]\n  end\n  subgraph Routes\n    R1[/page routes/]\n    R2[/builder routes/]\n    R3[/game routes/]\n  end\n\n  H1 --> E1\n  H1 --> E2\n  H1 --> E3\n  H1 --> E4\n  H1 --> E5\n  E1 --> R1\n  E1 --> R2\n  E1 --> R3\n  E2 --> R2\n  E2 --> R3\n  E3 --> R1\n  E4 --> R1\n  E5 --> R3\n```\n
+## 3) Event-to-owner table\n
+| Event | Primary owner | Action |\n| --- | --- | --- |\n| `htmx:configRequest` | `layout-controls` | attach request flags, optional CSRF/session context | \n| `htmx:beforeRequest` | `layout-controls` | busy state + request tracing |\n| `htmx:afterRequest` | `layout-controls` | clear busy, restore baseline shell state |\n| `htmx:beforeSwap` | `layout-controls` | allow only approved validation swaps |\n| `htmx:afterSwap` | `layout-controls`/`focus-panel` | rehydrate extension state and focus target |\n| `htmx:afterSettle` | `layout-controls` | final focus and a11y assertions |\n| `htmx:sendError`/`responseError` | `layout-controls`/`server-toast` | clear busy and emit structured feedback |\n| `htmx:load` | `focus-panel` | ensure keyboard focus for swapped panels |\n
+## 4) Extension contracts
 
-This document describes the HTMX lifecycle model used by TEA after the progressive-enhancement cleanup.
+### 4.1 `layout-controls`\n
+- Scope: global shell and route-wide UX state.\n
+- Contract:\n  - `busy` tracking per request target.\n  - deterministic `aria-expanded` toggling.\n  - focus restore path after swap.\n  - theme persistence and restore.\n  - `422` validation swap retention.\n
+### 4.2 `focus-panel`\n
+- Scope: focus ownership for swapped fragments.\n
+- Contract:\n  - fragment can declare `[data-focus-panel=\"true\"]`.\n  - focus target must exist before restoring.\n  - fallback target: `#main-content`.\n\n+### 4.3 `oracle-indicator`\n
+- Scope: oracle request intent UX only.\n
+- Contract:\n  - before request -> explicit loading indicator.\n  - completion -> clear indicator deterministically.\n  - no page-local duplicate indicators.\n
+### 4.4 `server-toast`\n
+- Scope: toast rendering from server envelope signals.\n
+- Contract:\n  - container root fixed by layout.\n  - message localized before UI render.\n  - one renderer, multiple producers.\n\n+### 4.5 `game-hud`\n
+- Scope: HUD streaming updates from `/api/game/session/:id/hud`.\n
+- Contract:\n  - slot family mapping (scene, dialogue, level, hp/mp/etc).\n  - unknown slots gracefully ignored with logging for diagnostics.\n  - stream data treated as partial overwrite, not merge across unrelated slots.\n\n+## 5) Progressive enhancement policy\n\n- Never add route-local event listeners for busy/focus/validation when shared extension already owns that concern.\n- Avoid duplicate fetch/submit scripts inside templates.\n- Use `hx-*` attributes as the first choice.\n- Route-level scripts should only implement behavior absent from shared extension contracts.\n
+## 6) Dataflow example: builder validation lifecycle
 
-## Why extensions exist here
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Form as builder form
+  participant Layout as layout-controls
+  participant API as /api/builder
+  participant Focus as focus-panel
 
-TEA keeps HTMX behavior centralized so route templates do not reimplement loading, focus, validation, and error handling on a per-page basis.
-
-The current design follows HTMX lifecycle guidance built around:
-
-- `htmx:configRequest`
-- `htmx:beforeRequest`
-- `htmx:afterRequest`
-- `htmx:beforeSwap`
-- `htmx:afterSwap`
-- `htmx:afterSettle`
-- `htmx:sendError`
-- `htmx:responseError`
-- `htmx:timeout`
-
-## Shared extension policy
-
-- Prefer native HTMX attributes first.
-- Use shared extensions only for cross-route UI contracts.
-- Do not add route-local scripts for focus, validation swap, drawer state, or toasts when the shared extension surface already owns those concerns.
-- Allow `422` validation responses to swap when the fragment is the intended validation surface.
-- Treat focus restoration as a platform concern, not a page concern.
-
-## Extension matrix
-
-| Extension | File | Primary responsibility |
-| --- | --- | --- |
-| `layout-controls` | `src/htmx-extensions/layout-controls.ts` | Shared shell state, request busy state, validation swap policy, focus restoration |
-| `focus-panel` | `src/htmx-extensions/focus-panel.ts` | Focus trapping and keyboard flow inside swapped panels |
-| `oracle-indicator` | `src/htmx-extensions/oracle-indicator.ts` | Oracle form loading feedback |
-| `server-toast` | `src/htmx-extensions/server-toast.ts` | Server-driven toast rendering |
-| `game-hud` | `src/htmx-extensions/game-hud.ts` | Game HUD SSE payload rendering |
-
-## `layout-controls`
-
-Global shell extension enabled from the SSR layout.
-
-### Owned behaviors
-
-- Drawer toggle state.
-- `aria-expanded` synchronization on controls.
-- Escape-to-close behavior for drawers.
-- Theme preference restore and persistence.
-- Request busy-state tracking.
-- Validation swap enablement on `422`.
-- Post-swap focus restoration.
-
-### Event ownership
-
-| Event | Behavior |
-| --- | --- |
-| `htmx:beforeRequest` | Mark target/shell busy state |
-| `htmx:afterRequest` | Clear busy state on successful completion |
-| `htmx:sendError` | Clear busy state on network failure |
-| `htmx:responseError` | Clear busy state on HTTP error responses |
-| `htmx:beforeSwap` | Permit intended validation swaps and retarget shared error surfaces when needed |
-| `htmx:afterSwap` | Rehydrate post-swap shell defaults |
-| `htmx:afterSettle` | Return focus to swapped focus panel or `#main-content` |
-
-## `focus-panel`
-
-This extension owns keyboard flow inside panel-like HTMX fragments.
-
-Rules:
-
-- Swapped panel content may declare `[data-focus-panel="true"]`.
-- Focus should move into the panel deterministically.
-- Focus should not be stranded on detached DOM nodes after a swap.
-
-## `oracle-indicator`
-
-This extension owns oracle-specific loading feedback only.
-
-Rules:
-
-- Show loading intent before request dispatch.
-- Clear loading state on the HTMX completion path.
-- Do not embed bespoke loading logic inside the oracle fragment markup.
-
-## `server-toast`
-
-This extension renders server-originated feedback using the shared DaisyUI toast surface.
-
-Presentation rules:
-
-- Toast container owns placement.
-- Alert semantics come from DaisyUI alert patterns.
-- Server payloads should already be localized before they reach the browser.
-
-## `game-hud`
-
-This extension converts game HUD SSE payloads into HTML fragments for HUD slots.
-
-Owned slot families:
-
-- scene title
-- dialogue
-- experience / level
-- participant state
-
-The HUD stream is the source of truth for HUD rendering. Retired partial endpoints should not be reintroduced.
-
-## Recommended markup patterns
-
-Use native HTMX attributes first:
-
-```html
-<form
-  hx-post="/example"
-  hx-target="#panel"
-  hx-swap="innerHTML"
-  hx-indicator="#panel-loading"
-  hx-ext="layout-controls"
-></form>
+  Form->>Layout: hx-post submit\n(target + indicator flags)
+  Layout->>Layout: set busy state
+  Layout->>API: request dispatch
+  API-->>Layout: 422 validation fragment
+  Layout->>Layout: allow validation swap
+  Layout->>Focus: afterSettle restore focus
+  Focus-->>Form: focus first field/action\nin error zone
+  Layout-->>Form: clear busy + preserve toast state
 ```
 
-Validation rerender pattern:
-
-```html
-<section id="panel" data-focus-panel="true"></section>
+## 7) Dataflow example: game HUD stream lifecycle\n
+```mermaid
+flowchart LR
+  H1["/api/game/session/:id/hud"] --> H2["SSE consumer"]
+  H2 --> H3["game-hud extension"]
+  H3 --> H4["HUD slots in page"]
+  H4 --> H5["layout-controls aria updates"]
 ```
 
-Toast container pattern:
-
-```html
-<div class="toast toast-end toast-top" id="server-toast-root"></div>
-```
-
-## Accessibility rules
-
-- Interactive shells must preserve keyboard flow after swaps.
-- Loading and failure surfaces should use live-region or alert semantics where appropriate.
-- Focus restoration targets must be visible and intentional.
-- Drawer and panel controls must keep ARIA state synchronized with DOM state.
-
-## What not to add
-
-- Page-local `htmx:*` listeners for concerns already owned here.
-- Silent error swallowing in extension code.
-- Hidden fallback behavior that bypasses the shared state machine.
-- Inline scripts that mutate shell state without going through the shared extension layer.
+## 8) Accessibility requirements\n
+- All interactive elements must preserve keyboard order after swaps.\n
+- Ensure `aria-live` and toast semantics for transient status.\n
+- Do not move focus to hidden/detached nodes.\n
+## 9) 中文说明（同步）\n
+页面公共行为（加载态、聚焦、验证反馈、Toast）集中在 HTMX 扩展层，避免每个页面重复写脚本。\n
+- `layout-controls` 统一处理请求忙态和验证片段。\n
+- `focus-panel` 统一处理片段 swap 后的聚焦。\n
+- `server-toast` 统一处理服务端消息到用户提示。\n
+- HUD 流只通过 `game-hud` 更新，不在业务页面临时重写。\n

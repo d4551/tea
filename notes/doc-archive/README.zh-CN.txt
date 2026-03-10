@@ -1,7 +1,7 @@
-# TEA
+# TEA — Bun-native SSR 游戏运行时 + 构建器 + AI 平台（中文版本）
 
 <p align="center">
-  <strong>基于 Bun 的 SSR 优先游戏运行时、构建器工作区与 AI 辅助工具集。</strong>
+  <strong>Bun + Elysia + HTMX + TypeScript strict 为核心的 SSR 优先游戏平台。</strong>
 </p>
 
 <p align="center">
@@ -14,249 +14,270 @@
   <a href="notes/doc-archive/docs__index.txt">文档索引</a>
 </p>
 
-<p align="center">
-  <a href="notes/doc-archive/README.txt"><img alt="English documentation available" src="https://img.shields.io/badge/docs-English-0f766e?style=flat-square"></a>
-  <a href="notes/doc-archive/README.zh-CN.txt"><img alt="中文文档" src="https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87-c2410c?style=flat-square"></a>
-  <img alt="Bun 1.3.10" src="https://img.shields.io/badge/Bun-1.3.10-111827?style=flat-square">
-  <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-2563eb?style=flat-square">
-  <img alt="Elysia 1.4.27" src="https://img.shields.io/badge/Elysia-1.4.27-059669?style=flat-square">
-  <img alt="Prisma 7.4.2" src="https://img.shields.io/badge/Prisma-7.4.2-1f2937?style=flat-square">
-  <img alt="HTMX 2.0.8" src="https://img.shields.io/badge/HTMX-2.0.8-1d4ed8?style=flat-square">
-  <img alt="SSR first" src="https://img.shields.io/badge/rendering-SSR--first-7c3aed?style=flat-square">
-  <img alt="Verify with bun run verify" src="https://img.shields.io/badge/verify-bun%20run%20verify-0f766e?style=flat-square">
-</p>
+> 本文档是仓库文档化表面的权威文本（无 `.md` 源文件依赖）。
 
-> 需要英文文档？请打开 [README.md](notes/doc-archive/README.txt)。
->
-> Need the English version? Open [README.md](notes/doc-archive/README.txt)。
+## 1) 系统目标与运行范式
 
-TEA 是一个以 SSR 为默认渲染策略的游戏运行时与构建平台，基于 Bun、Elysia、HTMX、Tailwind CSS、DaisyUI、Prisma、PixiJS 和 Three.js 构建。这个仓库同时包含服务端渲染 Web 应用、游戏构建器工作区、服务端权威多人运行时、AI 辅助工具，以及一个 RPG Maker MZ 配套包。
+TEA 的核心目标是把「编辑器创作」与「可玩的实时会话」解耦为两个稳定域：
 
-## 快速概览
+- 构建端（Builder）：可变草稿，支持编辑、试错和自动化辅助。
+- 运行端（Runtime）：不可变快照驱动，保证播放一致性和可恢复性。
 
-| 维度 | 当前实现 |
-| --- | --- |
-| 交付模型 | 默认 SSR，HTMX 负责渐进增强，仅在必要处使用浏览器运行时 |
-| 主要表面 | 首页/oracle SSR、构建器工作区、游戏会话运行时、AI API、知识检索 |
-| 后端 | 在 `src/app.ts` 中组装的 Elysia 应用，由 `src/server.ts` 启动 |
-| 状态与持久化 | Prisma + SQLite 持久化会话、知识分块、oracle 数据和构建器驱动的运行时状态 |
-| 渲染栈 | Tailwind CSS 4、DaisyUI 5、HTMX 2、PixiJS 8、Three.js 0.183 |
-| 语言环境 | `src/config/environment.ts` 中的 `en-US` 与 `zh-CN` |
-| 验证入口 | `bun run verify` |
+关键设计原则：**运行时不允许直接读取构建草稿**，仅使用发布后的快照创建会话。
 
-## 代码库包含的内容
-
-- 面向首页、构建器工作区、AI 页面和游戏路由的 SSR 文档渲染
-- 基于 HTMX 的表单、导航、校验反馈与面板局部刷新
-- 带有恢复、邀请、HUD、websocket 与持久化能力的服务端权威游戏循环
-- 一个负责草稿项目编辑、发布校验、不可变版本快照和运行时会话播种的构建器领域层
-- 面向本地 Transformers、Ollama 与 OpenAI-compatible 提供方的 AI 路由层
-- 使用 Prisma 持久化游戏会话、构建器产物和 AI 知识检索数据
-- 一个与主 TypeScript 应用并行维护的 `LOTFK_RMMZ_Agentic_Pack`
-
-## 技术栈与版本锁定
-
-| 层 | 包 | 版本 |
-| --- | --- | --- |
-| 运行时 | Bun | `1.3.10` |
-| 语言 | TypeScript | `5.9.3` |
-| 服务端 | Elysia | `1.4.27` |
-| ORM | Prisma / `@prisma/client` | `7.4.2` |
-| 渐进增强 | `htmx.org` | `2.0.8` |
-| UI Kit | DaisyUI | `5.5.19` |
-| CSS | Tailwind CSS | `4.2.1` |
-| 2D 渲染 | PixiJS | `8.17.0` |
-| 3D 渲染 | Three.js | `0.183.2` |
-| 浏览器自动化/测试 | Playwright | `1.58.2` |
-
-版本治理由 `scripts/dependency-drift-check.ts` 负责，并通过 `bun run dependency:drift` 执行。
-
-## 运行时架构
-
-应用入口位于 `src/app.ts`。`createApp()` 将共享请求插件、SSR 路由、类型化 API、AI 路由、可游玩游戏运行时和构建器工作区组装到同一个 Elysia 应用中。
+## 2) 高层架构图
 
 ```mermaid
-flowchart LR
-  subgraph Browser [Browser surfaces]
-    Home["SSR pages"]
-    Htmx["HTMX swaps"]
-    Playable["Playable client"]
-    Hud["SSE and websocket"]
+flowchart TB
+  subgraph 浏览器端["浏览器端入口"]
+    B1["首页 SSR"]
+    B2["构建器 SSR + HTMX"]
+    B3["可玩页 SSR"]
+    B4["WS + HUD SSE + 命令 POST"]
   end
 
-  subgraph Server [Elysia application]
-    Request["request-context"]
-    I18n["i18n-context"]
-    Error["global onError"]
-    Pages["page-routes"]
-    GameRoutes["game-routes"]
-    Api["api-routes"]
-    BuilderRoutes["builder-routes"]
-    BuilderApi["builder-api"]
-    AiRoutes["ai-routes"]
-    Views["SSR views"]
-    Plugins["static, auth, swagger, lifecycle plugins"]
+  subgraph 应用内核["src/app.ts"]
+    K1["requestContext 插件"]
+    K2["i18n + locale"]
+    K3["全局 onError"]
+    K4["静态资源插件"]
+    K5["auth/sessions/swagger/AI 等插件"]
   end
 
-  subgraph Domain [Domain owners]
-    Oracle["oracle-service"]
-    Game["game-loop"]
-    Builder["builder-service"]
-    Registry["provider-registry"]
-    Knowledge["knowledge-base-service"]
-    Worker["creator-worker"]
+  subgraph 路由层["Route 层"]
+    R1["page-routes.ts"]
+    R2["builder-routes.ts"]
+    R3["builder-api.ts"]
+    R4["game-routes.ts"]
+    R5["game-plugin.ts"]
+    R6["ai-routes.ts"]
+    R7["api-routes.ts"]
   end
 
-  subgraph Data [Persistence and assets]
-    Prisma["Prisma and SQLite"]
-    Public["public assets"]
-    Uploads["uploads and builder artifacts"]
+  subgraph 领域层["Domain 层"]
+    D1["builder-service.ts"]
+    D2["game-loop.ts"]
+    D3["builder-publish-validation.ts"]
+    D4["provider-registry.ts"]
+    D5["knowledge-base-service.ts"]
+    D6["oracle-service.ts"]
+    D7["creator-worker.ts"]
   end
 
-  Home --> Request
-  Htmx --> Request
-  Playable --> Request
-  Hud --> Request
-  Request --> I18n --> Error
-  Error --> Pages
-  Error --> GameRoutes
-  Error --> Api
-  Error --> BuilderRoutes
-  Error --> BuilderApi
-  Error --> AiRoutes
-  Pages --> Views
-  GameRoutes --> Game
-  GameRoutes --> Builder
-  Api --> Oracle
-  BuilderRoutes --> Builder
-  BuilderRoutes --> Registry
-  BuilderRoutes --> Knowledge
-  BuilderApi --> Builder
-  BuilderApi --> Worker
-  BuilderApi --> Registry
-  BuilderApi --> Knowledge
-  AiRoutes --> Registry
-  AiRoutes --> Knowledge
-  Pages --> Plugins
-  GameRoutes --> Plugins
-  BuilderRoutes --> Plugins
-  BuilderApi --> Plugins
-  Game --> Prisma
-  Builder --> Prisma
-  Knowledge --> Prisma
-  Views --> Public
-  Builder --> Uploads
+  subgraph 存储层["持久化与资产"]
+    S1["Prisma + SQLite"]
+    S2["uploads / builder artifacts"]
+    S3["public 静态产物"]
+  end
+
+  B1 --> K1
+  B2 --> K1
+  B3 --> K1
+  B4 --> K1
+  K1 --> K2 --> K3 --> K4 --> K5
+  K5 --> R1
+  K5 --> R2
+  K5 --> R3
+  K5 --> R4
+  K5 --> R5
+  K5 --> R6
+  K5 --> R7
+
+  R2 --> D1
+  R3 --> D1
+  R3 --> D4
+  R3 --> D5
+  R4 --> D1
+  R4 --> D2
+  R5 --> D2
+  R5 --> D1
+  R6 --> D4
+  R6 --> D5
+  R7 --> D6
+
+  D1 --> S1
+  D2 --> S1
+  D2 --> S2
+  D3 --> S1
+  D5 --> S1
+  D4 --> S3
+  R1 --> K5
 ```
 
-## 请求生命周期
-
-共享 HTTP 路径是确定性的：先注入请求上下文和语言解析，再由路由处理器调用类型化领域服务，最后由全局 Elysia `onError` 处理器把非预期异常收敛成统一错误信封。
+## 3) 从“创建到游玩”的完整链路（UI 端到端）
 
 ```mermaid
 sequenceDiagram
   autonumber
-  participant Browser
-  participant Request as request-context
-  participant Locale as i18n-context
-  participant Route as route handler
-  participant Domain as domain service
-  participant View as SSR view or API envelope
-  participant Error as global onError
+  actor 作者 as Author
+  participant 构建器界面 as /builder 页面
+  participant 构建器接口 as /api/builder
+  participant 构建服务 as builder-service
+  participant 发布校验 as publish 校验
+  participant 存储 as Prisma 草稿/发布存储
+  participant 游戏页 as /game 页面
+  participant 游戏接口 as game-plugin.ts
+  participant 游戏内核 as game-loop.ts
+  participant HUD as /api/game/session/:id/hud
 
-  Browser->>Request: HTTP request
-  Request->>Locale: correlation id and locale negotiation
-  Locale->>Route: typed request context
-  Route->>Domain: boundary call
-  alt success
-    Domain-->>Route: typed data
-    Route-->>View: document, fragment, or JSON body
-  else typed failure
-    Domain-->>Route: typed failure result
-    Route-->>View: deterministic state or envelope
-  else unexpected failure
-    Route->>Error: thrown framework or runtime error
-    Error-->>View: normalized error envelope
+  作者->>构建器界面: 打开 /builder?projectId=hero-fort
+  构建器界面->>构建器接口: GET /builder shell + 草稿加载
+  构建器接口->>构建服务: getProject(projectId)
+  构建服务->>存储: 加载可变草稿
+  存储-->>构建服务: scenes/npc/dialogue/automation/asset
+  构建服务-->>构建器接口: 类型化 draft 数据
+  构建器接口-->>构建器界面: SSR 页面 + HTMX 分片
+
+  作者->>构建器接口: POST /api/builder/projects
+  构建器接口-->>构建器接口: redirectPath 清洗 + 合同校验
+  构建器接口->>构建服务: createProject()
+  构建服务->>存储: 创建草稿主记录与默认值
+  存储-->>构建服务: projectId
+  构建服务-->>构建器接口: 新建成功
+  构建器接口-->>构建器界面: HX-Redirect 到 /builder?projectId=<id>
+
+  作者->>构建器界面: 编辑场景 / NPC / 对话 / 任务 / 资产
+  构建器界面->>构建器接口: HTMX patch 变更
+  构建器接口->>构建服务: updateProjectDraft()
+  构建服务->>存储: 有版本的可变写入
+
+  作者->>构建器界面: 点击 Publish
+  构建器界面->>构建器接口: PATCH /api/builder/projects/:id/publish {published:true}
+  构建器接口->>构建服务: publishProject(true)
+  构建服务->>发布校验: validateBuilderProjectForPublish()
+  发布校验-->>构建服务: OK 或 issues
+  alt 校验通过
+    构建服务->>存储: 物化不可变发布快照
+    存储-->>构建服务: snapshot + releaseVersion
+    构建服务-->>构建器接口: published=true
+    构建器接口-->>构建器界面: 启用 Play 按钮
+  else 校验失败
+    发布校验-->>构建服务: issue 列表
+    构建服务-->>构建器接口: failure
+    构建器接口-->>构建器界面: 局部错误片段
   end
-  View-->>Browser: final response
+
+  作者->>游戏页: 打开 /game?projectId=<id>
+  游戏页->>构建服务: getPublishedProject(id)
+  构建服务-->>游戏页: 发布快照 + 引导信息
+  游戏页->>游戏接口: POST /api/game/session {projectId, locale}
+  游戏接口->>游戏内核: createSession()
+  游戏内核->>存储: 创建权威会话
+  存储-->>游戏内核: sessionId / resumeToken
+  游戏内核-->>游戏页: bootstrap payload
+  游戏页-->>作者: SSR 可玩页 + 引导数据
+
+  作者->>游戏接口: POST /api/game/session/:id/command
+  游戏接口->>游戏内核: processCommand()
+  游戏内核->>存储: 持久化命令结果
+  游戏内核-->>游戏接口: deterministic outcome
+  游戏接口-->>作者: 命令执行结果
+
+  并行执行
+    作者->>游戏接口: GET /api/game/session/:id/hud
+    游戏接口->>游戏内核: 订阅 HUD 通道
+    游戏内核-->>作者: SSE 事件流
+  并行执行
+    作者->>游戏接口: WS /api/game/session/:id/ws
+    游戏接口->>游戏内核: 订阅 WS
+    游戏内核-->>作者: 增量状态帧
+  end
+
+  作者->>游戏接口: POST /api/game/session/:id {sessionId,resumeToken}
+  游戏接口->>游戏内核: restoreSession()
+  游戏内核-->>作者: 恢复成功或 unauthorized
 ```
 
-## 构建器发布流水线
-
-构建器页面编辑的是草稿项目状态。运行时会话不会直接读取可变草稿，而是先经过发布校验生成不可变版本快照，再由游戏循环基于该快照创建实时会话。
+## 4) 请求生命周期与错误信封
 
 ```mermaid
 flowchart LR
-  subgraph Authoring [Builder authoring]
-    Draft["Draft project state"]
-    Assets["Assets, scenes, dialogue, quests, automation specs"]
-    Audit["Readiness audit"]
-  end
+  请求[HTTP/WS/SSE 请求]
+  上下文[requestContext 插件]
+  本地化[i18n + locale]
+  守卫[鉴权与上下文守卫]
+  校验[类型化参数校验]
+  领域[领域服务]
+  成功[成功信封]
+  失败[error-envelope]
+  输出[SSR 文档/片段/JSON]
 
-  subgraph Publish [Publish boundary]
-    Validate["validateBuilderProjectForPublish()"]
-    Snapshot["Immutable release snapshot"]
-  end
-
-  subgraph Runtime [Runtime seeding]
-    Create["game-loop.createSession()"]
-    Session["Persisted game session"]
-    Client["Playable bootstrap contract"]
-  end
-
-  Draft --> Assets --> Audit --> Validate
-  Validate -->|pass| Snapshot
-  Validate -->|issues| Audit
-  Snapshot --> Create --> Session --> Client
+  请求 --> 上下文 --> 本地化 --> 守卫 --> 校验 --> 领域
+  领域 --> 成功 --> 输出
+  领域 --> 失败 --> 输出
+  校验 --> 失败 --> 输出
 ```
 
-## 持久化地图
+## 5) 路由与契约清单
 
-Prisma schema 将持久化职责拆分为几个清晰区域：
+- 页面：`page-routes.ts`、`builder-routes.ts`、`game-routes.ts`、`api-routes.ts`
+- 构建器 API：`/api/builder/*`（项目、场景、NPC、对话、任务、资产、AI 等）
+- 游戏 API：`/api/game/session/*`、`/api/game/session/*/hud`、`/api/game/session/*/ws`
+- AI API：`/api/builder/ai/*`
 
-- `OracleInteraction` 保存 oracle 的提问与返回结果。
-- `AiKnowledgeDocument`、`AiKnowledgeChunk`、`AiKnowledgeChunkTerm` 支撑检索与搜索。
-- `GameSession` 及其关联表保存权威运行时状态、角色、场景、背包、战斗和过场数据。
-- 构建器版本与产物通过 builder 领域层流入运行时会话快照。
+## 6) 数据模型与状态流
 
 ```mermaid
-flowchart TD
-  subgraph Knowledge [AI knowledge]
-    Doc["AiKnowledgeDocument"]
-    Chunk["AiKnowledgeChunk"]
-    Term["AiKnowledgeChunkTerm"]
-    Doc --> Chunk --> Term
-  end
+flowchart LR
+  编辑器交互["Builder UI 交互"] --> builderAPI["builder-api.ts"]
+  builderAPI --> builderSvc["builder-service.ts"]
+  builderSvc --> db1["Prisma: builder 草稿/发布表"]
+  db1 --> builderSvc --> builderAPI --> 编辑器交互
 
-  subgraph Runtime [Game runtime]
-    Session["GameSession"]
-    Scene["Scene state, nodes, collisions, assets"]
-    Actors["Participants, actors, NPCs"]
-    Play["Runtime state, inventory, combat, cutscenes"]
-    Session --> Scene
-    Session --> Actors
-    Session --> Play
-  end
-
-  subgraph Utility [Other persisted records]
-    Oracle["OracleInteraction"]
-  end
-
-  Doc --> DB["SQLite via Prisma"]
-  Session --> DB
-  Oracle --> DB
+  玩家交互["Player 交互"] --> gameAPI["game-plugin.ts"]
+  gameAPI --> gameLoop["game-loop.ts"]
+  gameLoop --> db2["Prisma: 会话表"]
+  gameLoop --> ws["WS/Broadcast"]
+  gameLoop --> sse["SSE HUD"]
+  ws --> 玩家交互
+  sse --> 玩家交互
 ```
 
-## 状态模型
+## 7) 持久化与权限边界
 
-这个仓库在 SSR 片段与兜底 UI 表面上使用统一而收敛的状态词汇表。
+- `GameSession` 与会话关联数据是权威运行源，命令必须通过服务端命令通道。
+- `publish` 快照是不可变引用；运行时不得回读草稿。
+- 资产上传与 AI 知识索引分别记录在不同表组，避免运行时污染。
+- 关键入口统一通过上下文/鉴权/签名逻辑，减少越权调用。
 
-```mermaid
-stateDiagram-v2
-  [*] --> idle
-  idle --> loading
-  loading --> success
-  loading --> empty
-  loading --> unauthorized
+## 8) 安全硬化要点
+
+- 拒绝路径注入：静态资源路径归一化与 mount 根目录前缀校验。
+- 参数边界：所有 API 入口基于严格 schema 做类型检查。
+- 会话恢复：token 一致性和会话状态有效性校验。
+- AI 工具调用：provider 读取通过注册表路由，不直接信任未授权模型结果。
+- 发布门禁：场景、NPC、对话、任务、资产完整性都必须通过校验。
+
+## 9) 性能与可维护性
+
+- SSR 优先可保证首屏可预测性和 SEO，减少初始化抖动。
+- HTMX 做局部刷新，把复杂前端状态机下沉到服务端片段。
+- WS 与 SSE 分离，HUD 与全量状态解耦。
+- 所有业务模块保持「单一所有者」：路由只编排，领域服务持有写逻辑。
+
+## 10) 常见故障排查
+
+| 表现 | 可能原因 | 排查路径 |
+| --- | --- | --- |
+| Play 按钮未激活 | 发布校验未通过 | 打开验证报错，补齐场景/NPC/对话依赖 |
+| 刷新后会话丢失 | 恢复令牌过期或 sessionId 错误 | 重新创建会话并更新 resumeToken |
+| 命令无效 | 命令结构与类型约束不符 | 检查 `command` 合约与 locale/session 上下文 |
+| HUD/SSE 断开 | 会话通道过期或 token 不匹配 | 重连会话，重新订阅 HUD endpoint |
+| 浏览器显示未发布内容 | /game 拉取到了草稿 | 确认 getPublishedProject 命中发布快照 |
+
+## 11) 你应持续运行的验证命令
+
+- `bun run lint`
+- `bun run typecheck`
+- `bun test`
+- `bun run verify`
+- `bun run docs:check`
+
+> 运行后再合并任何影响 `/api/builder/publish`、`/api/game/session/*` 的改动。
+
+## 12) 文档迁移说明
+
+本项目已将展示文档迁移至 `notes/doc-archive/*.txt`，当前文档是中文主说明文档，建议与 `ARCHITECTURE.txt` 配套阅读。
   loading --> retryable_error
   loading --> non_retryable_error
   retryable_error --> loading: retry

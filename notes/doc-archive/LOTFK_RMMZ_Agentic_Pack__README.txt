@@ -19,15 +19,15 @@ This pack is maintained as a companion artifact to the main TEA app. It is outsi
 - **LOTFK_BeastSummon.js** — Sacred Beast summon gauges and finisher skills
 
 ### Documentation
-- `PLUGIN_SPEC.md` — Full data model, commands, pricing formula, Wuxing cycle
-- `STATUS.md` — Current implementation and maintenance status
-- `EVENT_HOOKUPS.md` — Recommended MZ editor event wiring
+- `PLUGIN_SPEC.txt` — Full data model, commands, pricing formula, Wuxing cycle
+- `STATUS.txt` — Current implementation and maintenance status
+- `EVENT_HOOKUPS.txt` — Recommended MZ editor event wiring
 
 ## Install in RPG Maker MZ
 1. Copy all `.js` files from `plugins/` into your project's `js/plugins/` folder.
 2. Open **Plugin Manager** and enable them in order (see below).
 3. Configure plugin parameters (state IDs, variable IDs, market definitions).
-4. Wire plugin commands into events/common events per `EVENT_HOOKUPS.md`.
+4. Wire plugin commands into events/common events per `EVENT_HOOKUPS.txt`.
 
 ## Plugin Order (in Plugin Manager)
 ```
