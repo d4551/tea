@@ -95,7 +95,7 @@ const rewriteSourceLinks = (
   sourceText: string,
   archiveEntries: readonly ArchiveEntry[],
 ): string => {
-  const cwd = Bun.cwd.replace(/\\/gu, "/");
+  const cwd = process.cwd().replace(/\\/gu, "/");
   let rewritten = sourceText;
 
   for (const entry of archiveEntries) {

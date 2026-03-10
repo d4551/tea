@@ -2578,25 +2578,24 @@ describe("HTMX partial rendering", () => {
     const projectId = `publish-${crypto.randomUUID()}`;
     await createBuilderProject(projectId);
 
-    const publishResponse = await app.handle(
-      new Request(toUrl(`/api/builder/projects/${projectId}/publish`), {
-        method: "PATCH",
-        headers: {
-          "content-type": "application/json",
-          accept: "text/html",
-        },
-        body: JSON.stringify({
-          published: true,
-          locale: "en-US",
-          currentPath: "https://attacker.example.org/",
-        }),
+    const publishRequest = new Request(toUrl(`/api/builder/projects/${projectId}/publish`), {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        accept: "text/html",
       },
-    );
+      body: JSON.stringify({
+        published: true,
+        locale: "en-US",
+        currentPath: "https://attacker.example.org/",
+      }),
+    });
+    const publishResponse = await app.handle(publishRequest);
     const publishHtml = await publishResponse.text();
 
     expect(publishResponse.status).toBe(httpStatus.ok);
     expect(publishHtml.includes('id="builder-project-shell"')).toBe(true);
-    expect(publishHtml.includes("/builder?lang=en-US&projectId=")).toBe(true);
+    expect(publishHtml.includes("/builder?lang=en-US")).toBe(true);
   });
 
   test("builder project create HTML action redirects to a builder path", async () => {

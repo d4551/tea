@@ -659,7 +659,7 @@ const toBuilderRedirectPath = (path: string): string => {
     return appRoutes.builder;
   }
 
-  const pathOnly = candidate.split("#", 1)[0].split("?", 1)[0];
+  const pathOnly = candidate.split("#", 1)[0]?.split("?", 1)[0] ?? "";
   if (!pathOnly.startsWith("/")) {
     return appRoutes.builder;
   }
@@ -670,10 +670,7 @@ const toBuilderRedirectPath = (path: string): string => {
     return appRoutes.builder;
   }
 
-  if (
-    decodedPath !== appRoutes.builder &&
-    !decodedPath.startsWith(`${appRoutes.builder}/`)
-  ) {
+  if (decodedPath !== appRoutes.builder && !decodedPath.startsWith(`${appRoutes.builder}/`)) {
     return appRoutes.builder;
   }
 

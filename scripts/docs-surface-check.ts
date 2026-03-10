@@ -46,7 +46,10 @@ const DOCUMENT_PAIRS = [
   { en: "LOTFK_RMMZ_Agentic_Pack/STATUS.md", zh: "LOTFK_RMMZ_Agentic_Pack/STATUS.zh-CN.md" },
 ] as const;
 
-const REQUIRED_SOURCE_PATHS = DOCUMENT_PAIRS.flatMap((pair) => [pair.en, pair.zh]) as const;
+const REQUIRED_SOURCE_PATHS: readonly string[] = DOCUMENT_PAIRS.flatMap((pair) => [
+  pair.en,
+  pair.zh,
+]);
 
 const archiveRoot = "notes/doc-archive";
 const manifestPath = `${archiveRoot}/index.json`;
