@@ -1,119 +1,223 @@
 # TEA
 
-**SSR-first game runtime, builder workspace, and AI-assisted tooling for Bun + TypeScript**
+**SSR-first game runtime, builder workspace, and AI-assisted tooling on Bun + TypeScript.**
+**基于 Bun + TypeScript 的 SSR 优先游戏运行时、构建器和 AI 辅助工具平台。**
 
 ## Documentation
+## 文档
 
-- English overview: below (top section).
-- Chinese overview: below (immediately after English section).
-- Architecture archive: [`notes/doc-archive/ARCHITECTURE.txt`](./notes/doc-archive/ARCHITECTURE.txt)
-- Docs index archive: [`notes/doc-archive/docs__index.txt`](./notes/doc-archive/docs__index.txt)
-- API contracts archive: [`notes/doc-archive/docs__api-contracts.txt`](./notes/doc-archive/docs__api-contracts.txt)
-- Builder domain archive: [`notes/doc-archive/docs__builder-domain.txt`](./notes/doc-archive/docs__builder-domain.txt)
-- HTMX extensions archive: [`notes/doc-archive/docs__htmx-extensions.txt`](./notes/doc-archive/docs__htmx-extensions.txt)
-- Playable runtime archive: [`notes/doc-archive/docs__playable-runtime.txt`](./notes/doc-archive/docs__playable-runtime.txt)
-- Local AI runtime archive: [`notes/doc-archive/docs__local-ai-runtime.txt`](./notes/doc-archive/docs__local-ai-runtime.txt)
-- Operator runbook archive: [`notes/doc-archive/docs__operator-runbook.txt`](./notes/doc-archive/docs__operator-runbook.txt)
-- RMMZ pack archive: [`notes/doc-archive/docs__rmmz-pack.txt`](./notes/doc-archive/docs__rmmz-pack.txt)
-- Companion pack status archive: [`notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__STATUS.txt`](./notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__STATUS.txt)
+- English at top, Chinese below line-by-line.
+- 英文在上、中文紧随其后逐行对照。
+- Architecture archive: [notes/doc-archive/ARCHITECTURE.txt](./notes/doc-archive/ARCHITECTURE.txt)
+- 架构归档：[notes/doc-archive/ARCHITECTURE.txt](./notes/doc-archive/ARCHITECTURE.txt)
+- Docs index archive: [notes/doc-archive/docs__index.txt](./notes/doc-archive/docs__index.txt)
+- 文档索引归档：[notes/doc-archive/docs__index.txt](./notes/doc-archive/docs__index.txt)
+- API contracts archive: [notes/doc-archive/docs__api-contracts.txt](./notes/doc-archive/docs__api-contracts.txt)
+- API 契约归档：[notes/doc-archive/docs__api-contracts.txt](./notes/doc-archive/docs__api-contracts.txt)
+- Builder domain archive: [notes/doc-archive/docs__builder-domain.txt](./notes/doc-archive/docs__builder-domain.txt)
+- 构建器域归档：[notes/doc-archive/docs__builder-domain.txt](./notes/doc-archive/docs__builder-domain.txt)
+- HTMX extensions archive: [notes/doc-archive/docs__htmx-extensions.txt](./notes/doc-archive/docs__htmx-extensions.txt)
+- HTMX 扩展归档：[notes/doc-archive/docs__htmx-extensions.txt](./notes/doc-archive/docs__htmx-extensions.txt)
+- Playable runtime archive: [notes/doc-archive/docs__playable-runtime.txt](./notes/doc-archive/docs__playable-runtime.txt)
+- 可游玩运行时归档：[notes/doc-archive/docs__playable-runtime.txt](./notes/doc-archive/docs__playable-runtime.txt)
+- Local AI runtime archive: [notes/doc-archive/docs__local-ai-runtime.txt](./notes/doc-archive/docs__local-ai-runtime.txt)
+- 本地 AI 运行时归档：[notes/doc-archive/docs__local-ai-runtime.txt](./notes/doc-archive/docs__local-ai-runtime.txt)
+- Operator runbook archive: [notes/doc-archive/docs__operator-runbook.txt](./notes/doc-archive/docs__operator-runbook.txt)
+- 运维手册归档：[notes/doc-archive/docs__operator-runbook.txt](./notes/doc-archive/docs__operator-runbook.txt)
+- RMMZ pack archive: [notes/doc-archive/docs__rmmz-pack.txt](./notes/doc-archive/docs__rmmz-pack.txt)
+- RMMZ 包归档：[notes/doc-archive/docs__rmmz-pack.txt](./notes/doc-archive/docs__rmmz-pack.txt)
+- Companion pack status archive: [notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__STATUS.txt](./notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__STATUS.txt)
+- 陪伴包状态归档：[notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__STATUS.txt](./notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__STATUS.txt)
 
 ---
 
 ## Executive summary
+## 执行摘要
 
-TEA is a **full backend-driven game platform** that ships a builder and a server-authoritative runtime inside one Bun application.
-The primary design constraints are:
+TEA is a production-oriented platform that combines SSR pages, a web builder, a server-authoritative game loop, and AI tooling in one Bun stack.
+TEA 是一个面向生产环境的统一平台，将 SSR 页面、网页构建器、服务端权威游戏循环与 AI 工具链整合在同一套 Bun 栈中。
 
-- **SSR-first UX** with minimal client bootstrap.
-- **Contract-first boundaries** between route handlers and domain services.
-- **Immutable release artifacts** for playable sessions.
-- **Bun-native path handling and file access** in runtime and scripts.
-- **Bilingual, archive-backed documentation** with explicit migration of markdown content.
+The platform is optimized for predictable behavior and deterministic outputs under multi-surface usage (pages, fragments, APIs, and runtime transport).
+平台按多表面使用方式（页面、片段、API 和运行时通信）设计，优先保证可预测性与确定性输出。
+
+Current core value:
+当前核心价值如下：
+- **High reliability**: explicit boundaries and strict fallback behavior.
+- **高可靠性**：明确的边界和严格的回退行为。
+- **Composable runtime**: build releases that can be seeded into sessions.
+- **可组合运行时**：可将发布产物稳定注入会话。
+- **Archive-based docs**: every markdown-style source is mirrored to text artifacts.
+- **归档化文档**：所有文档类内容均镜像到文本归档。
 
 The platform currently supports:
+当前平台当前支持：
+- Home and oracle pages rendered on SSR with minimal client hydration.
+- 首页和 Oracle 页面以 SSR 渲染为主，仅在必要时进行最小化客户端 hydration。
+- Game sessions with join/rejoin, combat/cutscene progress, and resumable state.
+- 支持加入/重连、战斗与过场推进、可恢复状态的游戏会话。
+- Builder drafting, policy checks, and immutable release publishing.
+- 构建器草稿编辑、规则校验与不可变发布流程。
+- Multi-provider AI orchestration with retrieval and fallback handling.
+- 多供应商 AI 编排，包含检索增强与失败回退机制。
 
-- Home/oracle pages, a game runtime, builder workspace pages, and AI surfaces.
-- Game sessions with persistence, join/rejoin flow, combat/cutscene progression, and resumable state.
-- Builder drafting with policy checks and publish gating.
-- AI provider routing with retrieval-backed prompts and fallback behavior.
+## Architecture at a glance
+## 架构一览
 
-## Repository architecture
+`src/app.ts` wires the complete platform as a single Elysia composition:
+`src/app.ts` 将整个平台按单个 Elysia 应用组装：
+- request context and locale plugins.
+- 请求上下文和语言上下文插件。
+- SSR pages and HTMX fragment routes.
+- SSR 页面与 HTMX 片段路由。
+- Game, builder, oracle, and AI route clusters.
+- 游戏、构建器、Oracle 与 AI 路由分组。
+- Shared error envelope strategy.
+- 统一错误信封策略。
 
-`src/app.ts` creates a single Elysia composition that wires:
+Ownership is intentionally separated so each module has one clear accountability path.
+所有权被刻意分离，每个模块都拥有明确的责任边界与归属路径。
 
-- request/session/context plugins,
-- SSR pages and fragment routes,
-- JSON API routes,
-- AI routes,
-- playable runtime endpoints,
-- builder endpoints.
-
-Everything is designed so each call path has explicit ownership and predictable error semantics.
+<details>
+<summary>Architecture data flow (English)</summary>
 
 ```mermaid
 flowchart TB
   subgraph Browser["Browser surfaces"]
-    S1["Server-rendered pages"]
-    S2["HTMX partial updates"]
-    S3["Playable client"]
-    S4["Polling / live transport"]
+    B_Page["SSR pages"]
+    B_Frag["HTMX fragment updates"]
+    B_Game["Playable client"]
+    B_Transport["Polling + websocket"]
   end
 
   subgraph App["Elysia app"]
-    A1["request-context"]
-    A2["i18n-context"]
-    A3["route handlers"]
-    A4["validation / contracts"]
-    A5["global onError envelope"]
+    A_Ctx["request-context"]
+    A_I18n["i18n-context"]
+    A_Route["route handlers"]
+    A_Contract["contract checks"]
+    A_Error["global onError"]
   end
 
-  subgraph Domains["Domain services"]
-    D1["game-loop"]
-    D2["builder-service"]
-    D3["oracle-service"]
-    D4["provider-registry"]
-    D5["knowledge-base-service"]
-    D6["creator-worker"]
+  subgraph Domain["Domain services"]
+    D_Game["game-loop"]
+    D_Builder["builder-service"]
+    D_Oracle["oracle-service"]
+    D_AI["provider-registry"]
+    D_Knowledge["knowledge-base-service"]
+    D_Worker["creator-worker"]
   end
 
-  subgraph Data["Persistence and assets"]
-    DB["Prisma + SQLite"]
-    AS["static assets / uploads"]
-    AN["builder artifacts"]
-    PK["packed RMMZ companion data"]
+  subgraph Data["Persistence + assets"]
+    P_DB["Prisma + SQLite"]
+    P_Assets["public + uploads"]
+    P_Artifacts["builder artifacts"]
+    P_Pack["RMMZ pack data"]
   end
 
-  S1 --> A1
-  S2 --> A3
-  S3 --> A3
-  S4 --> A3
-  A1 --> A2 --> A3
-  A3 --> D1
-  A3 --> D2
-  A3 --> D3
-  A3 --> D4
-  A3 --> D5
-  A3 --> A6[aux services]
-  A3 --> A4
-  A3 --> A5
-  D1 --> DB
-  D2 --> DB
-  D2 --> AN
-  D4 --> DB
-  D5 --> DB
-  D6 --> AN
-  AS --> S3
-  PK --> D1
+  B_Page --> A_Ctx
+  B_Frag --> A_Route
+  B_Game --> A_Route
+  B_Transport --> A_Route
+  A_Ctx --> A_I18n --> A_Route
+  A_Route --> D_Game
+  A_Route --> D_Builder
+  A_Route --> D_Oracle
+  A_Route --> D_AI
+  A_Route --> D_Knowledge
+  A_Route --> D_Worker
+  A_Route --> A_Contract
+  A_Route --> A_Error
+
+  D_Game --> P_DB
+  D_Builder --> P_DB
+  D_Builder --> P_Artifacts
+  D_Oracle --> P_DB
+  D_AI --> P_DB
+  D_Knowledge --> P_DB
+  D_Worker --> P_Artifacts
+  P_Assets --> B_Game
+  P_Pack --> D_Game
 ```
 
-## End-to-end request and error flow
+</details>
 
-TEA enforces deterministic request behavior:
+<details>
+<summary>架构数据流（中文）</summary>
 
-- Context enrichment first (locale + correlation id + request metadata).
-- Contract-bound service call next.
-- Typed failures mapped to the same response envelope shape.
-- No unhandled branch leaks when possible; `onError` normalizes unexpected exceptions.
+```mermaid
+flowchart TB
+  subgraph 浏览器层["浏览器层"]
+    B_Page["SSR 页面"]
+    B_Frag["HTMX 片段更新"]
+    B_Game["可游玩客户端"]
+    B_Transport["轮询 + websocket"]
+  end
+
+  subgraph 应用层["Elysia 应用层"]
+    A_Ctx["request-context"]
+    A_I18n["i18n-context"]
+    A_Route["路由处理器"]
+    A_Contract["契约校验"]
+    A_Error["全局 onError"]
+  end
+
+  subgraph 领域层["领域服务"]
+    D_Game["game-loop"]
+    D_Builder["builder-service"]
+    D_Oracle["oracle-service"]
+    D_AI["provider-registry"]
+    D_Knowledge["knowledge-base-service"]
+    D_Worker["creator-worker"]
+  end
+
+  subgraph 持久化与文件["持久化与文件"]
+    P_DB["Prisma + SQLite"]
+    P_Assets["public + 上传资源"]
+    P_Artifacts["构建器产物"]
+    P_Pack["RMMZ 包数据"]
+  end
+
+  B_Page --> A_Ctx
+  B_Frag --> A_Route
+  B_Game --> A_Route
+  B_Transport --> A_Route
+  A_Ctx --> A_I18n --> A_Route
+  A_Route --> D_Game
+  A_Route --> D_Builder
+  A_Route --> D_Oracle
+  A_Route --> D_AI
+  A_Route --> D_Knowledge
+  A_Route --> D_Worker
+  A_Route --> A_Contract
+  A_Route --> A_Error
+
+  D_Game --> P_DB
+  D_Builder --> P_DB
+  D_Builder --> P_Artifacts
+  D_Oracle --> P_DB
+  D_AI --> P_DB
+  D_Knowledge --> P_DB
+  D_Worker --> P_Artifacts
+  P_Assets --> B_Game
+  P_Pack --> D_Game
+```
+
+</details>
+
+## Request and error flow
+## 请求与错误流
+
+Every request follows a deterministic lifecycle:
+每个请求都遵循确定性的生命周期：
+
+1. Request context and locale are resolved before route logic.
+2. 请求上下文与语言先于路由逻辑完成解析。
+3. Route logic calls domain contracts with explicit result models.
+3. 路由层以显式结果模型调用领域契约。
+4. Errors are converted into predictable envelopes through a global handler.
+4. 错误通过统一处理器转换为可预测的信封响应。
+
+<details>
+<summary>Request lifecycle sequence (English)</summary>
 
 ```mermaid
 sequenceDiagram
@@ -121,117 +225,223 @@ sequenceDiagram
   participant Browser
   participant Ctx as request-context
   participant I18n as i18n-context
-  participant Route as route layer
+  participant Route as route handler
   participant Service as domain service
-  participant Result as result model
+  participant Result as typed result model
   participant Error as global onError
-  participant Resp as SSR/API responder
+  participant Response as SSR / API response
 
   Browser->>Ctx: HTTP request
-  Ctx->>I18n: inject locale + trace id
-  I18n->>Route: typed route context
-  Route->>Service: call contract boundary
+  Ctx->>I18n: enrich locale + correlation id
+  I18n->>Route: typed context object
+  Route->>Service: call boundary function
   alt success
-    Service-->>Result: typed success payload
-    Result-->>Resp: fragment / html / json
-  else business failure
+    Service-->>Result: success payload
+    Result-->>Response: html/fragment/json
+  else typed failure
     Service-->>Route: typed domain failure
-    Route-->>Resp: explicit failure variant
-  else unexpected
-    Route->>Error: throw/raise
-    Error-->>Resp: normalized envelope
+    Route-->>Response: mapped failure state
+  else unexpected exception
+    Route->>Error: throw
+    Error-->>Response: normalized error envelope
   end
-  Resp-->>Browser: final output
+  Response-->>Browser: final output
 ```
 
-## Builder to playable runtime pipeline
+</details>
 
-The publish flow is designed so live runtime never reads mutable draft state.
+<details>
+<summary>请求生命周期时序（中文）</summary>
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Browser
+  participant Ctx as request-context
+  participant I18n as i18n-context
+  participant Route as 路由处理器
+  participant Service as 领域服务
+  participant Result as 类型化结果模型
+  participant Error as 全局 onError
+  participant Response as SSR / API 响应
+
+  Browser->>Ctx: HTTP 请求
+  Ctx->>I18n: 补齐语言与链路 ID
+  I18n->>Route: 结构化上下文
+  Route->>Service: 调用边界函数
+  alt 成功
+    Service-->>Result: 成功结果
+    Result-->>Response: html/片段/json
+  else 业务失败
+    Service-->>Route: 业务失败结果
+    Route-->>Response: 映射后的失败状态
+  else 未预期异常
+    Route->>Error: 抛错
+    Error-->>Response: 统一错误信封
+  end
+  Response-->>Browser: 最终返回
+```
+
+</details>
+
+## Builder to playable runtime pipeline
+## 构建器到运行时的发布链路
+
+The system only allows runtime sessions from immutable releases.
+系统只允许从不可变发布快照创建运行时会话。
+
+Build, validate, publish, then seed: this is the canonical flow.
+发布链路固定为：构建 -> 校验 -> 发布 -> 注入会话。
+
+<details>
+<summary>Builder publish pipeline (English)</summary>
 
 ```mermaid
 flowchart TD
-  subgraph Edit["Builder edit stage"]
-    B1["Draft content edits"]
-    B2["Asset uploads and references"]
-    B3["Automation and checklist validation"]
-    B4["Readiness report (errors, warnings, blockers)"]
+  subgraph Authoring["Authoring"]
+    A_Draft["Draft edits"]
+    A_Asset["Asset upload + references"]
+    A_Audit["Readiness checks"]
+    A_Report["Blocking report (errors/warnings)"]
   end
 
-  subgraph Gate["Publish gate"]
-    P1["validateBuilderProjectForPublish"]
-    P2["invariant enforcement"]
-    P3["release snapshot creation"]
-    P4["runtime contract output"]
+  subgraph Publish["Publish boundary"]
+    P_Validate["validateBuilderProjectForPublish"]
+    P_Contract["contract + invariant enforcement"]
+    P_Release["Immutable release snapshot"]
+    P_Output["runtime contract output"]
   end
 
-  subgraph Seed["Session seed stage"]
-    R1["creator-worker selects release artifact"]
-    R2["game-loop.createSession"]
-    R3["state hydration + first frame"]
-    R4["join/invite/reconnect path"]
+  subgraph Runtime["Runtime seed"]
+    R_Create["creator-worker selects release"]
+    R_Session["game-loop.createSession"]
+    R_Hydrate["session hydration"]
+    R_Join["join / invite / reconnect"]
   end
 
-  B1 --> B2 --> B3 --> P1
-  P1 -->|pass| P2 --> P3 --> P4 --> R1
-  P1 -->|fail| B4
-  R1 --> R2 --> R3 --> R4
+  A_Draft --> A_Asset --> A_Audit --> P_Validate
+  P_Validate -->|pass| P_Contract --> P_Release --> P_Output --> R_Create
+  P_Validate -->|fail| A_Report
+  R_Create --> R_Session --> R_Hydrate --> R_Join
 ```
 
-## Game runtime lifecycle
+</details>
+
+<details>
+<summary>构建器发布链路（中文）</summary>
+
+```mermaid
+flowchart TD
+  subgraph Authoring["编辑阶段"]
+    A_Draft["草稿编辑"]
+    A_Asset["资源上传与引用"]
+    A_Audit["可发布性校验"]
+    A_Report["阻断报告（错误/警告）"]
+  end
+
+  subgraph Publish["发布边界"]
+    P_Validate["validateBuilderProjectForPublish"]
+    P_Contract["契约 + 不变量校验"]
+    P_Release["不可变发布快照"]
+    P_Output["运行时契约输出"]
+  end
+
+  subgraph Runtime["运行时注入"]
+    R_Create["creator-worker 选择发布物"]
+    R_Session["game-loop.createSession"]
+    R_Hydrate["会话状态注入"]
+    R_Join["加入 / 邀请 / 重连"]
+  end
+
+  A_Draft --> A_Asset --> A_Audit --> P_Validate
+  P_Validate -->|通过| P_Contract --> P_Release --> P_Output --> R_Create
+  P_Validate -->|未通过| A_Report
+  R_Create --> R_Session --> R_Hydrate --> R_Join
+```
+
+</details>
+
+## Game session lifecycle
+## 游戏会话生命周期
+
+Session state is explicit and recoverable.
+会话状态是显式可恢复的。
+
+<details>
+<summary>Session lifecycle model (English)</summary>
 
 ```mermaid
 stateDiagram-v2
     [*] --> Created
-    Created --> Loading : session bootstrap
-    Loading --> Running : hydrate + ready
-    Running --> Suspended : client refresh / heartbeat miss
-    Running --> Ended : completion or teardown
+    Created --> Loading : session requested
+    Loading --> Running : hydrated state
+    Running --> Suspended : heartbeat miss
+    Running --> Ended : explicit stop or completion
     Suspended --> Running : reconnect within TTL
     Suspended --> Expired : TTL exceeded
     Expired --> [*]
-    Ended --> Archived : persist summary
+    Ended --> Archived : persist logs and summary
     Archived --> [*]
 ```
 
-## Security and hardening notes
+</details>
 
-- Asset serving uses mount-root checks and path normalization before read.
-- Query/path parameters for file access are normalized and denied unless canonical checks pass.
-- Builder publish payload parsing avoids permissive assumptions and weakly-typed fallthrough.
-- AI provider chain includes fallback and observability hooks for degraded paths.
-- Scripts now avoid Node-only assumptions where practical and prefer Bun file APIs.
-- Error envelopes keep user-visible failures deterministic and machine-parseable.
+<details>
+<summary>会话生命周期模型（中文）</summary>
 
-## Data model and ownership
+```mermaid
+stateDiagram-v2
+    [*] --> Created
+    Created --> Loading : 发起会话
+    Loading --> Running : 状态注入完成
+    Running --> Suspended : 心跳超时
+    Running --> Ended : 正常结束或手动关闭
+    Suspended --> Running : TTL 内重连成功
+    Suspended --> Expired : 超出 TTL
+    Expired --> [*]
+    Ended --> Archived : 落库日志与摘要
+    Archived --> [*]
+```
 
-The following table expresses ownership boundaries so there is no duplicate implementation across layers:
+</details>
 
-| Owner | Responsibility | Main tables / domains |
-| --- | --- | --- |
-| Route surface | Input validation, response mapping, navigation fragments | API envelopes, HTMX swap payloads |
-| Game domain | Session state, scene state, combat, inventory, progress | `GameSession`, runtime state tables |
-| Builder domain | Draft state transitions, publish policy, artifacts | builder project + release artifacts |
-| AI domain | Provider registry, generation + fallback, retrieval docs/chunks | `AiKnowledgeDocument`, `AiKnowledgeChunk`, `AiKnowledgeChunkTerm` |
-| Knowledge/Oracle domain | query/response storage and audit context | `OracleInteraction` |
-| Infrastructure | DB lifecycle, startup checks, static assets, docs archive checks | Prisma client, scripts |
+## Data ownership and state model
+## 数据所有权与状态模型
+
+Every major concern has a single owning layer to avoid cross-layer duplication.
+每个主要职责都由单一层负责，以防跨层职责重叠。
+
+- Route and response surface owns navigation shape and API envelope shapes.
+- 路由与响应表面对导航形态与 API 信封格式负责。
+- Game domain owns runtime state, combat, and player progression.
+- 游戏领域拥有运行时状态、战斗和玩家进度的所有权。
+- Builder domain owns validation, release snapshots, and artifact packaging.
+- 构建器领域拥有校验、发布快照和产物打包所有权。
+- AI domain owns provider orchestration, fallback, and knowledge retrieval.
+- AI 领域负责供应商编排、回退策略和知识检索。
+- Shared domain owns contracts, configuration, and cross-cutting utilities.
+- Shared 层负责契约、配置与跨域工具。
+
+<details>
+<summary>Ownership and core models (English)</summary>
 
 ```mermaid
 flowchart LR
-  subgraph CoreRuntime["Core runtime model"]
+  subgraph CoreModels["Core runtime models"]
     GS["GameSession"]
-    SN["Scene and collision"]
-    AC["Actors"]
-    IV["Inventory / status"]
-    CX["Combat + cutscene"]
+    SC["Scene state + collision"]
+    AC["Actors / NPCs"]
+    IV["Inventory + status"]
+    CB["Combat + cutscenes"]
   end
 
-  subgraph BuilderModel["Builder model"]
-    DR["Draft data"]
+  subgraph BuilderModels["Builder models"]
+    DR["Draft project state"]
     RL["Release snapshot"]
-    CH["Checks + artifacts"]
+    CH["Checks + automation outputs"]
   end
 
-  subgraph KnowledgeModel["Knowledge model"]
+  subgraph KnowledgeModels["Knowledge models"]
     KD["KnowledgeDocument"]
     KC["KnowledgeChunk"]
     KT["KnowledgeChunkTerm"]
@@ -239,284 +449,30 @@ flowchart LR
 
   DR --> RL --> GS
   CH --> RL
-  GS --> AC
-  AC --> IV
-  IV --> CX
-  SN --> GS
+  GS --> SC --> AC
+  AC --> IV --> CB
   KD --> KC --> KT
 ```
 
-## UI/UX model and state contract
+</details>
 
-TEA uses a shared state vocabulary across SSR and API surfaces:
-
-- `idle`
-- `loading`
-- `success`
-- `empty`
-- `retryable_error`
-- `non_retryable_error`
-- `unauthorized`
-
-### State intent
-
-| Surface | Success path | Error path | Retry behavior |
-| --- | --- | --- | --- |
-| SSR pages | full render or clean partial | typed envelope + fallback UI | user-triggered or automatic in loading contexts |
-| Fragments (HTMX) | precise region swap | status chip + explicit action | automatic retry for retryable case |
-| JSON APIs | structured envelope | structured reason + code | caller-level policy |
-| Game loop endpoints | session creation / hydration result | explicit termination | no silent fallback |
-
-## Local and runtime configuration
-
-- Environment defaults come from `src/config/environment.ts`.
-- Host/port, storage paths, cookie/session settings, auth settings, polling intervals, and AI behavior toggles are centralized in configuration.
-- All non-code settings are expected to flow through typed environment parsing where available.
-
-## Repository map
-
-| Path | Responsibility |
-| --- | --- |
-| `src/app.ts` | Elysia root composition |
-| `src/server.ts` | server bootstrap and lifecycle |
-| `src/routes/page-routes.ts` | SSR pages and fragment routes |
-| `src/routes/game-routes.ts` | session bootstrap, hydration, and invite flow |
-| `src/routes/builder-routes.ts` | SSR builder workspace |
-| `src/routes/builder-api.ts` | builder mutations, publish flow, SSE / automation |
-| `src/routes/api-routes.ts` | health + oracle API surface |
-| `src/routes/ai-routes.ts` | provider + knowledge endpoints |
-| `src/domain/game/` | authoritative runtime operations |
-| `src/domain/builder/` | builder lifecycle, release, readiness |
-| `src/domain/ai/` | provider registry and inference orchestration |
-| `src/shared/` | contracts, constants, config, shared helpers |
-| `src/playable-game/` | browser bootstrap and transport layer |
-| `src/views/` | SSR templates and partial rendering |
-| `src/htmx-extensions/` | HTMX helper fragments |
-| `prisma/` | schema, migrations, local seed data |
-| `scripts/` | build, docs checks, security and dependency verification |
-| `tests/` | contract tests, runtime tests, integration tests |
-| `notes/doc-archive/` | non-markdown documentation artifacts |
-| `LOTFK_RMMZ_Agentic_Pack/` | RPG Maker companion artifacts |
-
-## Recommended startup and quality commands
-
-```bash
-bun install
-bun run setup
-bun run dev
-bun run verify
-```
-
-Common command list:
-
-- `bun run setup` — initialize env, prisma, and checks.
-- `bun run dev` — start server and watch-based build.
-- `bun run build:assets` — build CSS / HTMX extensions / runtime bundles.
-- `bun run lint` — static + style checks.
-- `bun run typecheck` — strict TypeScript checks.
-- `bun test` — test suite.
-- `bun run docs:check` — archive surface completeness.
-- `bun run dependency:drift` — dependency policy audit.
-- `bun run verify` — all quality gates in one command.
-
-## Maintenance and document continuity
-
-- `notes/doc-archive/index.json` tracks source/target mapping and checksums for archival validation.
-- Markdown sources are retired in code while preserving searchable text-based artifacts.
-- README is bilingual in a single file, with Chinese content directly below the English section.
-- If any runtime or builder behavior changes, documentation should be updated and mirrored in archive artifacts.
-
-## Chinese / 中文说明
-
-# TEA
-
-**基于 Bun + TypeScript 的 SSR 优先游戏运行时、构建器与 AI 辅助工具平台**
-
-## 文档
-
-- 英文说明：本文档上方。
-- 中文说明：本文档下方。
-- 架构归档：[`notes/doc-archive/ARCHITECTURE.txt`](./notes/doc-archive/ARCHITECTURE.txt)
-- 文档索引归档：[`notes/doc-archive/docs__index.txt`](./notes/doc-archive/docs__index.txt)
-- API 契约归档：[`notes/doc-archive/docs__api-contracts.txt`](./notes/doc-archive/docs__api-contracts.txt)
-- 构建器域归档：[`notes/doc-archive/docs__builder-domain.txt`](./notes/doc-archive/docs__builder-domain.txt)
-- HTMX 扩展归档：[`notes/doc-archive/docs__htmx-extensions.txt`](./notes/doc-archive/docs__htmx-extensions.txt)
-- 可游玩运行时归档：[`notes/doc-archive/docs__playable-runtime.txt`](./notes/doc-archive/docs__playable-runtime.txt)
-- 本地 AI 运行时归档：[`notes/doc-archive/docs__local-ai-runtime.txt`](./notes/doc-archive/docs__local-ai-runtime.txt)
-- 运维手册归档：[`notes/doc-archive/docs__operator-runbook.txt`](./notes/doc-archive/docs__operator-runbook.txt)
-- RMMZ 包归档：[`notes/doc-archive/docs__rmmz-pack.txt`](./notes/doc-archive/docs__rmmz-pack.txt)
-- 伴随包状态归档：[`notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__STATUS.txt`](./notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__STATUS.txt)
-
-## 总体说明
-
-TEA 是一个把 **服务器渲染（SSR）游戏运行时 + 构建器 + AI 工具链** 集成在单体 Bun 应用中的平台。它的目标是：
-
-- 保持可预期的请求行为；
-- 让可发布内容始终来自不可变快照；
-- 用统一契约驱动路由与服务之间的数据交换；
-- 让中文文档与英文文档在同一文件中可读、可追踪、可归档。
-
-目前支持：
-
-- 首页/Oracle 页面、游戏页面、构建器页面、AI 接口。
-- 可恢复的会话运行时（创建、恢复、邀请、重新加入）。
-- 战斗、场景、背包、过场动画的服务器权威状态更新。
-- 构建器草稿编辑、校验、发布并转入运行时会话。
-- 本地模型/远端模型路由与降级链路。
-
-## 统一架构视图
-
-`src/app.ts` 将请求插件、SSR 路由、API 路由、AI 路由、游戏运行时与构建器工作区组装进一个 Elysia 应用，核心路径始终可追溯。
-
-```mermaid
-flowchart TB
-  subgraph 浏览器层["浏览器层"]
-    S1["SSR 页面"]
-    S2["HTMX 片段更新"]
-    S3["可游玩客户端"]
-    S4["轮询/实时通道"]
-  end
-
-  subgraph 应用层["Elysia 应用"]
-    A1["request-context 插件"]
-    A2["i18n-context 插件"]
-    A3["路由处理层"]
-    A4["校验与契约"]
-    A5["全局 onError 信封"]
-  end
-
-  subgraph 领域层["领域服务"]
-    D1["game-loop"]
-    D2["builder-service"]
-    D3["oracle-service"]
-    D4["provider-registry"]
-    D5["knowledge-base-service"]
-    D6["creator-worker"]
-  end
-
-  subgraph 存储层["持久化与文件"]
-    DB["Prisma + SQLite"]
-    AS["静态资源和上传文件"]
-    AN["构建器产物"]
-    PK["RMMZ 伴随包"]
-  end
-
-  S1 --> A1
-  S2 --> A3
-  S3 --> A3
-  S4 --> A3
-  A1 --> A2 --> A3
-  A3 --> D1
-  A3 --> D2
-  A3 --> D3
-  A3 --> D4
-  A3 --> D5
-  A3 --> D6
-  A3 --> A4
-  A3 --> A5
-  D1 --> DB
-  D2 --> DB
-  D2 --> AN
-  D4 --> DB
-  D5 --> DB
-  AS --> S3
-  PK --> D1
-```
-
-## 请求生命周期与错误处理
-
-```mermaid
-sequenceDiagram
-  autonumber
-  participant Browser
-  participant Ctx as request-context
-  participant I18n as i18n-context
-  participant Route as 路由层
-  participant Service as 领域服务
-  participant Envelope as 结果模型
-  participant Err as 全局错误处理
-  participant Resp as SSR/API 响应
-
-  Browser->>Ctx: HTTP 请求
-  Ctx->>I18n: 注入 locale 与 trace id
-  I18n->>Route: 类型化上下文
-  Route->>Service: 调用服务契约
-  alt 成功
-    Service-->>Envelope: 成功结果
-    Envelope-->>Resp: 页面 / 片段 / JSON
-  else 业务失败
-    Service-->>Route: 业务失败结果
-    Route-->>Resp: 显式失败状态
-  else 未预期异常
-    Route->>Err: 触发异常
-    Err-->>Resp: 统一错误信封
-  end
-  Resp-->>Browser: 返回结果
-```
-
-## 构建器到运行时发布链路
-
-```mermaid
-flowchart TD
-  subgraph 编辑阶段["构建器编辑"]
-    B1["草稿编辑"]
-    B2["资源上传与引用"]
-    B3["自动化检查"]
-    B4["可发布性报告"]
-  end
-
-  subgraph 发布阶段["发布边界"]
-    P1["validateBuilderProjectForPublish"]
-    P2["不变量校验"]
-    P3["创建发布快照"]
-    P4["运行时契约输出"]
-  end
-
-  subgraph 加载阶段["会话加载"]
-    R1["creator-worker 选择发布产物"]
-    R2["game-loop.createSession"]
-    R3["状态注入与首帧"]
-    R4["加入/邀请/重连"]
-  end
-
-  B1 --> B2 --> B3 --> P1
-  P1 -->|通过| P2 --> P3 --> P4 --> R1
-  P1 -->|不通过| B4
-  R1 --> R2 --> R3 --> R4
-```
-
-## 会话生命周期
-
-```mermaid
-stateDiagram-v2
-    [*] --> Created
-    Created --> Loading : 创建会话
-    Loading --> Running : 注入完成
-    Running --> Suspended : 页面失焦/离线/重连失败
-    Running --> Ended : 完成或结束
-    Suspended --> Running : 允许窗口内重连
-    Suspended --> Expired : 过期
-    Expired --> [*]
-    Ended --> Archived : 落库与审计
-    Archived --> [*]
-```
-
-## 数据模型和职责分离
+<details>
+<summary>核心模型与所有权（中文）</summary>
 
 ```mermaid
 flowchart LR
   subgraph 核心运行模型["核心运行模型"]
     GS["GameSession"]
-    SC["Scene / 碰撞"]
-    AC["Actors"]
-    IV["Inventory"]
-    BX["战斗 / 过场"]
+    SC["场景 + 碰撞"]
+    AC["角色与 NPC"]
+    IV["背包 + 状态"]
+    CB["战斗 + 过场动画"]
   end
 
-  subgraph 构建模型["构建器模型"]
-    DR["Draft 草稿"]
-    RL["Release 快照"]
-    CH["检查结果"]
+  subgraph 构建器模型["构建器模型"]
+    DR["草稿项目状态"]
+    RL["发布快照"]
+    CH["检查 + 自动化输出"]
   end
 
   subgraph 知识模型["知识模型"]
@@ -527,59 +483,139 @@ flowchart LR
 
   DR --> RL --> GS
   CH --> RL
-  GS --> SC
-  GS --> AC
-  AC --> IV
-  IV --> BX
+  GS --> SC --> AC
+  AC --> IV --> CB
   KD --> KC --> KT
 ```
 
-## 安全与稳定性
+</details>
 
-- 文件服务采用路径规范化与挂载根目录检查，避免越权读取。
-- 发布解析与自动化输入使用明确校验，避免格式漂移导致未定义行为。
-- AI 提供商调用带有回退策略和超时边界，降低单点失败风险。
-- 所有关键脚本优先采用 Bun API，减少运行时耦合和兼容性漂移。
+## AI reliability chain
+## AI 可靠性链路
 
-## 状态状态机与前端反馈
+AI behavior is controlled by provider order and timeout/fallback policies.
+AI 行为由供应商优先级及超时回退策略统一控制。
 
-统一状态用于 SSR 与 API：
+- Local provider is preferred for quick local inference when available.
+- 本地供应商可用时优先使用以降低延迟。
+- Secondary provider is used when local provider fails.
+- 本地供应商失败时切换到次级供应商。
+- Final provider is used as final fallback with guardrails.
+- 最终兜底供应商在必要时使用并带有防护规则。
+- Retrieval-enhanced responses are validated and returned with warning metadata.
+- 检索增强结果会经过校验并返回告警元数据。
 
-- `idle`
-- `loading`
-- `success`
-- `empty`
-- `error(retryable)`
-- `error(non-retryable)`
-- `unauthorized`
+<details>
+<summary>AI routing (English)</summary>
 
-### 应用映射
+```mermaid
+flowchart TD
+  U["User request"] --> P["provider-registry"]
+  P --> L["local provider"]
+  P --> O["Ollama provider"]
+  P --> R["remote OpenAI-compatible provider"]
+  L -->|ok| S["AI answer"]
+  L -->|fail| O
+  O -->|fail| R
+  R -->|fail| F["fail-safe response + warning"]
+  S --> K["knowledge enrichment"]
+  K --> V["validated response"]
+  F --> V
+```
 
-| 场景 | 成功态 | 失败态 | 重试策略 |
-| --- | --- | --- | --- |
-| 页面 | 全量/片段渲染 | 可读性错误页或空状态 | 页面动作可重试 |
-| HTMX 片段 | 精准刷新 | 告警块 + 文案动作 | 可自动可手动 |
-| API | 契约化 json | 标准化错误码与原因 | 由调用方策略决定 |
-| 游戏入口 | 会话创建/恢复成功 | 非静默错误关闭或提示 | 需要用户确认 |
+</details>
 
-## 配置与运维
+<details>
+<summary>AI 路由（中文）</summary>
 
-核心配置在 `src/config/environment.ts`，覆盖：
+```mermaid
+flowchart TD
+  U["用户请求"] --> P["provider-registry"]
+  P --> L["本地供应商"]
+  P --> O["Ollama 供应商"]
+  P --> R["远端 OpenAI 兼容供应商"]
+  L -->|可用| S["AI 回答"]
+  L -->|失败| O
+  O -->|失败| R
+  R -->|失败| F["降级响应 + 告警"]
+  S --> K["知识增强"]
+  K --> V["校验后的返回"]
+  F --> V
+```
 
-- 服务器地址与端口。
-- 存储路径、静态目录、会话 cookie、恢复窗口。
-- Websocket/polling 定时、重连与超时参数。
-- AI 启用开关、模型路径、回退策略参数。
-- 构建器自动化相关阈值与检测开关。
+</details>
 
-## 提交前建议
+## Security and hardening
+## 安全与加固
 
-- 修改逻辑后更新对应文档段落。
-- 变更接口时同时更新合约与测试。
-- 运行 `bun run docs:check` 与 `bun run verify`。
-- 使用 `notes/doc-archive/index.json` 跟踪归档文件一致性。
+Hardening controls are layered:
+加固控制分层实施：
+- Path normalization before file read.
+- 文件读取前进行路径规范化。
+- Canonical root checks for static assets.
+- 静态资源读取时强制做根目录规范校验。
+- Strict payload parsing for builder publish and AI input.
+- 构建器发布和 AI 输入进行严格解析。
+- Deterministic envelopes for all failures.
+- 所有失败返回遵循确定性信封。
+- Archive checks in scripts to prevent documentation drift.
+- 脚本内置文档归档检查防止文档漂移。
 
-## 常用命令
+## Repository map
+## 仓库结构
+
+- `src/app.ts` composes request plugins, routes, and shared middleware.
+- `src/app.ts` 负责组装请求插件、路由和共享中间件。
+- `src/server.ts` handles startup checks and lifecycle hooks.
+- `src/server.ts` 处理启动检查和生命周期钩子。
+- `src/routes/page-routes.ts` serves SSR and fragments.
+- `src/routes/page-routes.ts` 提供 SSR 与片段渲染。
+- `src/routes/game-routes.ts` seeds and hydrates game sessions.
+- `src/routes/game-routes.ts` 负责会话创建与注水。
+- `src/routes/builder-routes.ts` renders builder workspace pages.
+- `src/routes/builder-routes.ts` 渲染构建器工作区页面。
+- `src/routes/builder-api.ts` handles mutations, publish, and SSE.
+- `src/routes/builder-api.ts` 处理变更、发布与 SSE。
+- `src/routes/api-routes.ts` hosts typed JSON API envelope endpoints.
+- `src/routes/api-routes.ts` 提供类型化 JSON API 信封端点。
+- `src/routes/ai-routes.ts` handles AI and retrieval APIs.
+- `src/routes/ai-routes.ts` 负责 AI 与检索 API。
+- `src/domain/game/` contains authoritative runtime logic.
+- `src/domain/game/` 存放服务端权威运行时逻辑。
+- `src/domain/builder/` handles draft, publish, and automation flow.
+- `src/domain/builder/` 负责草稿、发布与自动化流程。
+- `src/domain/ai/` manages providers and provider fallback.
+- `src/domain/ai/` 管理供应商与回退策略。
+- `src/shared/` stores contracts, configuration, and utilities.
+- `src/shared/` 存放契约、配置与通用工具。
+- `src/playable-game/` boots browser game transport and canvas.
+- `src/playable-game/` 负责浏览器运行时传输与画面启动。
+- `prisma/` stores schema and migrations.
+- `prisma/` 存放数据库 schema 与迁移。
+- `scripts/` includes build, checks, archive, and security tools.
+- `scripts/` 包含构建、检查、归档与安全相关脚本。
+- `tests/` contains contract and runtime tests.
+- `tests/` 包含契约与运行时测试。
+- `notes/doc-archive/` stores text archives for retired docs.
+- `notes/doc-archive/` 保存已退役文档的文本归档。
+- `LOTFK_RMMZ_Agentic_Pack/` stores companion pack artifacts.
+- `LOTFK_RMMZ_Agentic_Pack/` 存放伴随包资源。
+
+## Quality gates and operations
+## 质量门禁与运维
+
+Run in local order after changes:
+修改后按以下顺序执行：
+- `bun install`
+- `bun run setup`
+- `bun run dev`
+- `bun run build:assets`
+- `bun run docs:check`
+- `bun run lint`
+- `bun run typecheck`
+- `bun test`
+- `bun run dependency:drift`
+- `bun run verify`
 
 ```bash
 bun install
@@ -588,15 +624,37 @@ bun run dev
 bun run verify
 ```
 
-常见命令：
+## State transitions exposed to UI
+## UI 暴露的状态流
 
-- `bun run setup`：初始化环境和数据库。
-- `bun run dev`：启动开发环境。
-- `bun run build:assets`：构建静态资源和可游玩脚本。
-- `bun run lint`：静态检查。
-- `bun run typecheck`：类型检查。
-- `bun test`：测试。
-- `bun run docs:check`：文档归档完整性检查。
-- `bun run dependency:drift`：依赖漂移检测。
-- `bun run verify`：一次性跑完整体检查。
+`idle -> loading -> success | empty | error(retryable|non-retryable) | unauthorized`
+`idle -> loading -> success | empty | error(retryable|non-retryable) | unauthorized`
 
+- This vocabulary drives pages, fragments, and APIs.
+- 该状态词汇驱动页面、片段与 API 的行为。
+- No implicit branches are allowed for failure.
+- 不允许失败路径出现隐式未定义分支。
+- Every response maps to one explicit state.
+- 每个响应都映射到一个明确状态。
+
+## Notes and contribution guidance
+## 说明与贡献规范
+
+When features change, update both code and documentation in the same change.
+功能变更时必须同步更新代码与文档。
+
+When runtime assumptions change, update archive entries with the next doc migration.
+运行时假设变化时，同步更新归档条目。
+
+This README intentionally includes both languages in one file for operational speed.
+该 README 有意采用同文件双语，以提升阅读和操作效率。
+
+---
+
+## Change log summary
+## 更新摘要
+
+- README is now one file with line-by-line English / Simplified Chinese pairing.
+- README 已改为单文件、英中文逐行对应的格式，使用简体中文。
+- Mermaid diagrams are now in collapsible `<details>` sections with bilingual variants.
+- Mermaid 图表现在改为 `<details>` 折叠区域，并提供中英版本。
