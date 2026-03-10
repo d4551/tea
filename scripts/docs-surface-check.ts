@@ -22,8 +22,13 @@ interface ArchiveManifest {
   readonly entries: readonly ArchiveEntry[];
 }
 
-const DOCUMENT_PAIRS = [
-  { en: "README.md", zh: "README.zh-CN.md" },
+type DocumentPair = {
+  readonly en: string;
+  readonly zh?: string;
+};
+
+const DOCUMENT_PAIRS: readonly DocumentPair[] = [
+  { en: "README.md" },
   { en: "ARCHITECTURE.md", zh: "ARCHITECTURE.zh-CN.md" },
   { en: "docs/index.md", zh: "docs/index.zh-CN.md" },
   { en: "docs/htmx-extensions.md", zh: "docs/htmx-extensions.zh-CN.md" },
@@ -46,10 +51,9 @@ const DOCUMENT_PAIRS = [
   { en: "LOTFK_RMMZ_Agentic_Pack/STATUS.md", zh: "LOTFK_RMMZ_Agentic_Pack/STATUS.zh-CN.md" },
 ] as const;
 
-const REQUIRED_SOURCE_PATHS: readonly string[] = DOCUMENT_PAIRS.flatMap((pair) => [
-  pair.en,
-  pair.zh,
-]);
+const REQUIRED_SOURCE_PATHS: readonly string[] = DOCUMENT_PAIRS.flatMap((pair) =>
+  pair.zh === undefined ? [pair.en] : [pair.en, pair.zh],
+);
 
 const archiveRoot = "notes/doc-archive";
 const manifestPath = `${archiveRoot}/index.json`;
@@ -148,13 +152,15 @@ const main = async (): Promise<void> => {
         errors.push(`Archive artifact missing: ${enEntry.archivePath}`);
       }
 
-      const zhEntry = entryBySource.get(pair.zh);
-      if (!zhEntry) {
-        errors.push(`Archive manifest missing source: ${pair.zh}`);
-        continue;
-      }
-      if (!(await Bun.file(zhEntry.archivePath).exists())) {
-        errors.push(`Archive artifact missing: ${zhEntry.archivePath}`);
+      if (pair.zh !== undefined) {
+        const zhEntry = entryBySource.get(pair.zh);
+        if (!zhEntry) {
+          errors.push(`Archive manifest missing source: ${pair.zh}`);
+          continue;
+        }
+        if (!(await Bun.file(zhEntry.archivePath).exists())) {
+          errors.push(`Archive artifact missing: ${zhEntry.archivePath}`);
+        }
       }
     }
   }

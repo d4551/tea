@@ -32,7 +32,6 @@ const logger = createLogger("script.archive-docs");
 
 const sourceMarkdownPaths = [
   "README.md",
-  "README.zh-CN.md",
   "ARCHITECTURE.md",
   "docs/index.md",
   "docs/htmx-extensions.md",
@@ -106,7 +105,7 @@ const rewriteSourceLinks = (
     rewritten = replaceAllLiteral(rewritten, relative, entry.archivePath);
   }
 
-  if (sourcePath === "README.md" || sourcePath === "README.zh-CN.md") {
+  if (sourcePath === "README.md") {
     rewritten = replaceAllLiteral(rewritten, "./docs/index.md", toArchivePath("docs/index.md"));
     rewritten = replaceAllLiteral(rewritten, "./ARCHITECTURE.md", toArchivePath("ARCHITECTURE.md"));
   }

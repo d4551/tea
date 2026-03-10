@@ -5,16 +5,9 @@
     {
       "sourcePath": "README.md",
       "archivePath": "notes/doc-archive/README.txt",
-      "sha256": "5f405318ed7f45951234bffbd11150f1b976a791bfd78fac9593acdaac254b8a",
-      "sizeBytes": 12792,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
-    },
-    {
-      "sourcePath": "README.zh-CN.md",
-      "archivePath": "notes/doc-archive/README.zh-CN.txt",
-      "sha256": "fff8a002908f888992a32685e5e6d3b95b6eea06d66fe32dd3158eb4b3f1eaa1",
-      "sizeBytes": 6259,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "sha256": "1c2defbd4dc99f9b290a9d97ae118ba3cb77c2447f900e42af456f138701988b",
+      "sizeBytes": 21280,
+      "archivedAt": "2026-03-10T06:00:10Z"
     },
     {
       "sourcePath": "ARCHITECTURE.md",
