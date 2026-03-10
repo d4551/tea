@@ -1,10 +1,30 @@
 import { createLogger } from "../src/lib/logger.ts";
 
-/**
- * Required current-state documentation files.
- */
-const requiredFiles = [
+interface ArchiveEntry {
+  /** Source markdown path in repo at archive time. */
+  readonly sourcePath: string;
+  /** Archive destination path for plain-text migration artifact. */
+  readonly archivePath: string;
+  /** SHA-256 digest of archived artifact text. */
+  readonly sha256: string;
+  /** Archive payload length in characters or bytes used by source process. */
+  readonly sizeBytes: number;
+  /** UTC timestamp for archive creation. */
+  readonly archivedAt: string;
+}
+
+interface ArchiveManifest {
+  /** Manifest schema marker for archive compatibility checks. */
+  readonly schemaVersion: number;
+  /** Manifest generation time. */
+  readonly generatedAt: string;
+  /** Archive entries representing prior markdown documents. */
+  readonly entries: readonly ArchiveEntry[];
+}
+
+const REQUIRED_SOURCE_PATHS = [
   "README.md",
+  "README.zh-CN.md",
   "ARCHITECTURE.md",
   "docs/index.md",
   "docs/htmx-extensions.md",
@@ -14,78 +34,116 @@ const requiredFiles = [
   "docs/api-contracts.md",
   "docs/builder-domain.md",
   "docs/rmmz-pack.md",
+  "docs/maintenance-audit-2026-03-10.md",
   "LOTFK_RMMZ_Agentic_Pack/README.md",
   "LOTFK_RMMZ_Agentic_Pack/PLUGIN_SPEC.md",
   "LOTFK_RMMZ_Agentic_Pack/EVENT_HOOKUPS.md",
   "LOTFK_RMMZ_Agentic_Pack/STATUS.md",
 ] as const;
 
-/**
- * Forbidden retired documentation artifacts.
- */
-const forbiddenPaths = [
-  "docs/plans",
-  "LOTFK_RMMZ_Agentic_Pack/MASTER_PROMPT.md",
-  "LOTFK_RMMZ_Agentic_Pack/IMPLEMENTATION_TICKETS.md",
-] as const;
+const archiveRoot = "notes/doc-archive";
+const manifestPath = `${archiveRoot}/index.json`;
 
-/**
- * Lightweight content check for current docs entrypoints.
- */
-interface LinkExpectation {
-  /** File to validate. */
-  readonly path: string;
-  /** Marker text that must be present. */
-  readonly includes: readonly string[];
-}
+const toArchivePath = (sourcePath: string): string => {
+  const normalized = sourcePath.replace(/\\/gu, "/").replace(/\.md$/u, ".txt");
+  return `${archiveRoot}/${normalized.replaceAll("/", "__")}`;
+};
 
-const requiredContentChecks: readonly LinkExpectation[] = [
-  {
-    path: "docs/index.md",
-    includes: ["api-contracts.md", "builder-domain.md", "rmmz-pack.md"],
-  },
-  {
-    path: "README.md",
-    includes: ["docs/index.md", "operator-runbook.md", "api-contracts.md"],
-  },
-  {
-    path: "ARCHITECTURE.md",
-    includes: ["builder-domain.md", "api-contracts.md", "rmmz-pack.md"],
-  },
-  {
-    path: "LOTFK_RMMZ_Agentic_Pack/README.md",
-    includes: ["STATUS.md", "PLUGIN_SPEC.md", "EVENT_HOOKUPS.md"],
-  },
-];
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object";
 
 const logger = createLogger("docs-surface-check");
 
-const pathExists = async (path: string): Promise<boolean> => Bun.file(path).exists();
+const readManifest = async (): Promise<ArchiveManifest | null> => {
+  const manifestFile = Bun.file(manifestPath);
+  if (!(await manifestFile.exists())) {
+    return null;
+  }
+
+  let parsed: unknown;
+  try {
+    const contents = await manifestFile.text();
+    parsed = JSON.parse(contents);
+  } catch {
+    return null;
+  }
+  if (!isRecord(parsed)) {
+    return null;
+  }
+  const entries = parsed.entries;
+  if (!Array.isArray(entries)) {
+    return null;
+  }
+
+  return {
+    schemaVersion: typeof parsed.schemaVersion === "number" ? parsed.schemaVersion : -1,
+    generatedAt: typeof parsed.generatedAt === "string" ? parsed.generatedAt : "",
+    entries: entries as ArchiveEntry[],
+  };
+};
 
 const main = async (): Promise<void> => {
   const errors: string[] = [];
+  const manifest = await readManifest();
 
-  for (const path of requiredFiles) {
-    if (!(await pathExists(path))) {
-      errors.push(`Missing required documentation file: ${path}`);
+  if (!manifest) {
+    errors.push(`Missing or unreadable archive manifest: ${manifestPath}`);
+  } else {
+    if (!Number.isFinite(manifest.schemaVersion) || manifest.schemaVersion <= 0) {
+      errors.push(`Invalid archive manifest schema version in ${manifestPath}`);
     }
-  }
-
-  for (const path of forbiddenPaths) {
-    if (await pathExists(path)) {
-      errors.push(`Retired documentation artifact still exists: ${path}`);
+    if (typeof manifest.generatedAt !== "string" || manifest.generatedAt.length === 0) {
+      errors.push(`Missing manifest generatedAt in ${manifestPath}`);
     }
-  }
-
-  for (const check of requiredContentChecks) {
-    if (!(await pathExists(check.path))) {
-      continue;
+    if (manifest.entries.length === 0) {
+      errors.push(`Archive manifest is empty: ${manifestPath}`);
     }
 
-    const content = await Bun.file(check.path).text();
-    for (const expected of check.includes) {
-      if (!content.includes(expected)) {
-        errors.push(`${check.path} is missing expected reference: ${expected}`);
+    const entryBySource = new Map<string, ArchiveEntry>();
+    for (const entry of manifest.entries) {
+      if (!entry || typeof entry.sourcePath !== "string" || typeof entry.archivePath !== "string") {
+        errors.push(`Invalid manifest entry in ${manifestPath}: ${JSON.stringify(entry)}`);
+        continue;
+      }
+      if (typeof entry.sha256 !== "string" || entry.sha256.length === 0) {
+        errors.push(`Archive entry missing sha256: ${entry.sourcePath}`);
+      }
+      if (
+        typeof entry.sizeBytes !== "number" ||
+        !Number.isFinite(entry.sizeBytes) ||
+        entry.sizeBytes < 0
+      ) {
+        errors.push(`Archive entry has invalid sizeBytes: ${entry.sourcePath}`);
+      }
+      if (typeof entry.archivedAt !== "string" || entry.archivedAt.length === 0) {
+        errors.push(`Archive entry missing archivedAt: ${entry.sourcePath}`);
+      }
+
+      const expectedArchivePath = toArchivePath(entry.sourcePath);
+      if (entry.archivePath !== expectedArchivePath) {
+        errors.push(
+          `Archive path mismatch for ${entry.sourcePath}: expected ${expectedArchivePath}, found ${entry.archivePath}`,
+        );
+      }
+      entryBySource.set(entry.sourcePath, entry);
+    }
+
+    for (const sourcePath of REQUIRED_SOURCE_PATHS) {
+      const entry = entryBySource.get(sourcePath);
+      if (!entry) {
+        errors.push(`Archive manifest missing source: ${sourcePath}`);
+        continue;
+      }
+
+      if (entry.sourcePath !== sourcePath) {
+        errors.push(
+          `Archive source path mismatch: manifest entry ${entry.sourcePath} vs ${sourcePath}`,
+        );
+        continue;
+      }
+
+      if (!(await Bun.file(entry.archivePath).exists())) {
+        errors.push(`Archive artifact missing: ${entry.archivePath}`);
       }
     }
   }
@@ -99,9 +157,9 @@ const main = async (): Promise<void> => {
   }
 
   logger.info("docs.surface.passed", {
-    requiredCount: requiredFiles.length,
-    forbiddenCount: forbiddenPaths.length,
-    contentChecks: requiredContentChecks.length,
+    requiredCount: REQUIRED_SOURCE_PATHS.length,
+    archiveRoot,
+    manifestPath,
   });
 };
 

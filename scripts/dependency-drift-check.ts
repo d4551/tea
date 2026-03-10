@@ -34,6 +34,12 @@ interface DriftCheckResult {
   readonly errors: readonly string[];
   /** Non-blocking warnings (for policy exceptions). */
   readonly warnings: readonly string[];
+  /** Number of manifest entries reviewed by the policy. */
+  readonly trackedCount: number;
+  /** Number of trackable entries with successful latest-version lookups. */
+  readonly resolvedCount: number;
+  /** Number of trackable entries that were not evaluated due to missing or invalid data. */
+  readonly skippedCount: number;
 }
 
 type DependencyKind = "dependencies" | "devDependencies";
@@ -213,6 +219,9 @@ const compareAgainstRegistry = (
 ): DriftCheckResult => {
   const errors: string[] = [];
   const warnings: string[] = [];
+  let trackedCount = 0;
+  let resolvedCount = 0;
+  let skippedCount = 0;
 
   for (const entry of entries) {
     const { name, spec, source } = entry;
@@ -226,10 +235,14 @@ const compareAgainstRegistry = (
       continue;
     }
 
+    trackedCount += 1;
+
     const latest = latestByPackage.get(name);
     if (!latest) {
+      skippedCount += 1;
       continue;
     }
+    resolvedCount += 1;
 
     const latestParsed = parseSemver(latest);
     const declaredParsed = parseSemver(normalizedSpec);
@@ -256,6 +269,14 @@ const compareAgainstRegistry = (
       continue;
     }
 
+    if (!declaredParsed) {
+      skippedCount += 1;
+      warnings.push(
+        `Unable to compare ${name} declared ${normalizedSpec}; latest ${latest} could not be parsed.`,
+      );
+      continue;
+    }
+
     if (!pinned && !allowedNonPinned.has(name)) {
       warnings.push(
         `${name} in ${source} uses ${normalizedSpec}; policy prefers exact semver pins.`,
@@ -263,7 +284,8 @@ const compareAgainstRegistry = (
       continue;
     }
 
-    if (!declaredParsed || !latestParsed) {
+    if (!latestParsed) {
+      skippedCount += 1;
       warnings.push(
         `Unable to compare ${name} declared ${normalizedSpec} with latest ${latest}; skipping.`,
       );
@@ -277,7 +299,14 @@ const compareAgainstRegistry = (
     }
   }
 
-  return { ok: errors.length === 0, errors, warnings };
+  return {
+    ok: errors.length === 0,
+    errors,
+    warnings,
+    trackedCount,
+    resolvedCount,
+    skippedCount,
+  };
 };
 
 /**
@@ -292,6 +321,9 @@ export const runDependencyDriftCheck = async (): Promise<DriftCheckResult> => {
 };
 
 const report = (result: DriftCheckResult): number => {
+  const effectiveCheckedCount =
+    result.trackedCount > 0 ? result.trackedCount - result.skippedCount : 0;
+
   for (const warning of result.warnings) {
     logger.warn("dependency.drift.warning", { message: warning });
   }
@@ -302,14 +334,20 @@ const report = (result: DriftCheckResult): number => {
     }
 
     logger.error("dependency.drift.failed", {
+      checkedCount: result.trackedCount,
       errorCount: result.errors.length,
       warningCount: result.warnings.length,
+      resolvedCount: result.resolvedCount,
+      skippedCount: result.skippedCount,
     });
     return 1;
   }
 
   logger.info("dependency.drift.passed", {
-    checked: result.errors.length + result.warnings.length,
+    checked: effectiveCheckedCount,
+    trackedCount: result.trackedCount,
+    resolvedCount: result.resolvedCount,
+    skippedCount: result.skippedCount,
     warningCount: result.warnings.length,
   });
   return 0;

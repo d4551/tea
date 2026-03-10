@@ -85,8 +85,6 @@ export interface ButtonConfig {
     readonly confirm?: string;
     readonly params?: Record<string, string>;
   };
-  /** Optional click handler name (for non-HTMX buttons). */
-  readonly onClick?: string;
   /** Optional leading icon SVG. */
   readonly leadingIcon?: string;
   /** Optional trailing icon SVG. */
@@ -353,6 +351,7 @@ export const renderButton = (config: ButtonConfig): string => {
   const size = config.size ?? "sm";
   const variant = config.variant ?? "primary";
   const ariaLabel = config.ariaLabel ?? config.label;
+  const typeAttr = ` type="${config.type ?? "button"}"`;
 
   const classes = [
     "btn",
@@ -364,14 +363,11 @@ export const renderButton = (config: ButtonConfig): string => {
     .filter(Boolean)
     .join(" ");
 
-  const typeAttr = config.type ? ` type="${config.type}"` : "";
   const disabledAttr = config.disabled ? " disabled" : "";
   const ariaLabelAttr = ariaLabel ? ` aria-label="${escapeHtml(ariaLabel)}"` : "";
   const idAttr = config.id ? ` id="${escapeHtml(config.id)}"` : "";
 
   const htmxAttrs = config.htmx ? renderHtmxAttrs(config.htmx) : "";
-
-  const onClickAttr = config.onClick ? ` onclick="${config.onClick}"` : "";
 
   const leadingIcon = config.leadingIcon ? `<span class="icon">${config.leadingIcon}</span>` : "";
   const trailingIcon = config.trailingIcon
@@ -384,7 +380,7 @@ export const renderButton = (config: ButtonConfig): string => {
     return `<a href="${escapeHtml(config.href)}" class="${classes}"${ariaLabelAttr}${idAttr}${htmxAttrs}>${content}</a>`;
   }
 
-  return `<button class="${classes}"${typeAttr}${disabledAttr}${ariaLabelAttr}${idAttr}${htmxAttrs}${onClickAttr}>${content}</button>`;
+  return `<button class="${classes}"${typeAttr}${disabledAttr}${ariaLabelAttr}${idAttr}${htmxAttrs}>${content}</button>`;
 };
 
 /**
@@ -405,9 +401,11 @@ const renderHtmxAttrs = (htmx: NonNullable<ButtonConfig["htmx"]>): string => {
   if (htmx.confirm) attrs.push(`hx-confirm="${escapeHtml(htmx.confirm)}"`);
 
   if (htmx.params) {
-    Object.entries(htmx.params).forEach(([key, value]) => {
-      attrs.push(`hx-params="${escapeHtml(key)}=${escapeHtml(value)}"`);
-    });
+    const keys = Object.keys(htmx.params);
+    if (keys.length > 0) {
+      attrs.push(`hx-params="${escapeHtml(keys.join(","))}"`);
+      attrs.push(`hx-vals="${escapeHtml(JSON.stringify(htmx.params))}"`);
+    }
   }
 
   return attrs.length > 0 ? ` ${attrs.join(" ")}` : "";
@@ -528,7 +526,7 @@ export const renderTabs = (config: TabsConfig): string => {
     colorToken = "primary",
     size = "md",
     boxed = false,
-    ariaLabel = "Tabs",
+    ariaLabel = tabs.find((tab) => tab.key === activeKey)?.label ?? tabs[0]?.label ?? "",
     className = "",
   } = config;
 
@@ -555,7 +553,7 @@ export const renderTabs = (config: TabsConfig): string => {
       const activeAttr = isActive ? ' aria-selected="true"' : ' aria-selected="false"';
 
       if (tab.href && !tab.htmx) {
-        return `<a href="${escapeHtml(tab.href)}" class="tab ${activeClass}" role="tab"${activeAttr}${disabledAttr}>${content}</a>`;
+        return `<a href="${escapeHtml(tab.href)}" class="tab ${activeClass}" role="tab"${activeAttr}${disabledAttr} aria-label="${escapeHtml(tab.label)}">${content}</a>`;
       }
 
       return `<button type="button" class="tab ${activeClass}" role="tab"${activeAttr}${disabledAttr} aria-label="${escapeHtml(tab.label)}"${htmxAttrs}>${content}</button>`;
@@ -646,9 +644,18 @@ export const renderField = (config: FieldConfig): string => {
     config.value !== undefined ? ` value="${escapeHtml(String(config.value))}"` : "";
   const requiredAttr = config.required ? ' required aria-required="true"' : "";
   const disabledAttr = config.disabled ? " disabled" : "";
-  const errorClass = config.error ? " input-error" : "";
+  const hasError = (config.error?.length ?? 0) > 0;
+  const hasHelpText = (config.helpText?.length ?? 0) > 0;
+  const errorClass = hasError ? " input-error" : "";
+  const ariaInvalidAttr = hasError ? ' aria-invalid="true"' : "";
   const helpId = `${id}-help`;
   const errorId = `${id}-error`;
+  const describedByIds = [hasHelpText ? helpId : "", hasError ? errorId : ""]
+    .filter(Boolean)
+    .join(" ");
+  const ariaDescribedByAttr = describedByIds
+    ? ` aria-describedby="${escapeHtml(describedByIds)}"`
+    : "";
 
   const inputClasses = [
     config.type === "textarea" ? "textarea" : config.type === "select" ? "select" : "input",
@@ -666,7 +673,7 @@ export const renderField = (config: FieldConfig): string => {
 
   let inputHtml: string;
   if (config.type === "textarea") {
-    inputHtml = `<textarea${idAttr}${nameAttr}${placeholderAttr}${rowsAttr}${requiredAttr}${disabledAttr} class="${inputClasses}">${config.value !== undefined ? escapeHtml(String(config.value)) : ""}</textarea>`;
+    inputHtml = `<textarea${idAttr}${nameAttr}${placeholderAttr}${rowsAttr}${requiredAttr}${disabledAttr}${ariaInvalidAttr}${ariaDescribedByAttr} class="${inputClasses}">${config.value !== undefined ? escapeHtml(String(config.value)) : ""}</textarea>`;
   } else if (config.type === "select") {
     const optionsHtml = (config.options ?? [])
       .map(
@@ -674,10 +681,10 @@ export const renderField = (config: FieldConfig): string => {
           `<option value="${escapeHtml(opt.value)}"${opt.selected ? " selected" : ""}>${escapeHtml(opt.label)}</option>`,
       )
       .join("");
-    inputHtml = `<select${idAttr}${nameAttr}${requiredAttr}${disabledAttr} class="${inputClasses}">${optionsHtml}</select>`;
+    inputHtml = `<select${idAttr}${nameAttr}${requiredAttr}${disabledAttr}${ariaInvalidAttr}${ariaDescribedByAttr} class="${inputClasses}">${optionsHtml}</select>`;
   } else {
     const typeAttr = ` type="${config.type ?? "text"}"`;
-    inputHtml = `<input${idAttr}${nameAttr}${typeAttr}${placeholderAttr}${valueAttr}${minAttr}${maxAttr}${stepAttr}${requiredAttr}${disabledAttr} class="${inputClasses}" />`;
+    inputHtml = `<input${idAttr}${nameAttr}${typeAttr}${placeholderAttr}${valueAttr}${minAttr}${maxAttr}${stepAttr}${requiredAttr}${disabledAttr}${ariaInvalidAttr}${ariaDescribedByAttr} class="${inputClasses}" />`;
   }
 
   const helpHtml = config.helpText
@@ -743,11 +750,13 @@ export const renderProgress = (
   },
 ): string => {
   const colorClass = options?.colorToken ? `progress-${options.colorToken}` : "";
-  const ariaLabelAttr = options?.ariaLabel
-    ? ` aria-label="${escapeHtml(options.ariaLabel)}"`
-    : ` aria-label="Progress"`;
+  const safeMax = Number.isFinite(max) && max > 0 ? max : 100;
+  const safeValue = Number.isFinite(value) ? Math.max(0, Math.min(safeMax, Math.round(value))) : 0;
+  const percentageLabel = `${Math.round((safeValue / safeMax) * 100)}%`;
+  const ariaLabelText = options?.ariaLabel ?? percentageLabel;
+  const ariaLabelAttr = ` aria-label="${escapeHtml(ariaLabelText)}"`;
 
-  return `<progress class="progress ${colorClass} ${options?.className ?? ""}" value="${value}" max="${max}"${ariaLabelAttr}></progress>`;
+  return `<progress class="progress ${colorClass} ${options?.className ?? ""}" value="${safeValue}" max="${safeMax}"${ariaLabelAttr}></progress>`;
 };
 
 /**
@@ -761,10 +770,14 @@ export const renderRadialProgress = (
     readonly ariaLabel?: string;
   },
 ): string => {
+  const safeValue = Number.isFinite(value) ? Math.max(0, Math.min(100, Math.round(value))) : 0;
   const colorClass = options?.colorToken ? `text-${options.colorToken}` : "";
+  const valueClass = `[--value:${safeValue}]`;
   const ariaLabelAttr = options?.ariaLabel ? ` aria-label="${escapeHtml(options.ariaLabel)}"` : "";
 
-  return `<div class="radial-progress ${colorClass} ${options?.className ?? ""}" style="--value:${value}"${ariaLabelAttr}>${value}%</div>`;
+  return `<div class="radial-progress ${valueClass} ${colorClass} ${
+    options?.className ?? ""
+  }" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${safeValue}"${ariaLabelAttr}>${safeValue}%</div>`;
 };
 
 /* ------------------------------------------------------------------ */

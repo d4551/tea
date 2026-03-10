@@ -11,6 +11,7 @@ import type {
   GenerationArtifact,
   GenerationJob,
 } from "../../shared/contracts/game.ts";
+import { settleAsync } from "../../shared/utils/async-result.ts";
 import { ProviderRegistry } from "../ai/providers/provider-registry.ts";
 import { AiAuthoringService } from "./ai-authoring.ts";
 import { persistBuilderFile } from "./asset-storage.ts";
@@ -77,11 +78,20 @@ const buildImageSvg = (
       <stop offset="100%" stop-color="${SVG_PALETTE.gradientEnd}"/>
     </linearGradient>
   </defs>
+  <style><![CDATA[
+    .placeholder-copy {
+      font-family: ui-sans-serif, system-ui;
+      font-size: 24px;
+      line-height: 1.5;
+      color: ${SVG_PALETTE.text};
+      white-space: pre-wrap;
+    }
+  ]]></style>
   <rect width="1024" height="576" rx="32" fill="url(#bg)" />
   <rect x="28" y="28" width="968" height="520" rx="24" fill="${SVG_PALETTE.overlayFill}" stroke="${SVG_PALETTE.overlayStroke}" />
   <text x="64" y="120" font-family="ui-monospace, monospace" font-size="28" font-weight="700" fill="${SVG_PALETTE.text}">${title}</text>
   <foreignObject x="64" y="156" width="896" height="320">
-    <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: ui-sans-serif, system-ui; font-size: 24px; line-height: 1.5; color: oklch(0.98 0.01 250); white-space: pre-wrap;">${body}</div>
+    <div xmlns="http://www.w3.org/1999/xhtml" class="placeholder-copy">${body}</div>
   </foreignObject>
 </svg>`;
 
@@ -182,9 +192,12 @@ const toWorkerFailure = (error: unknown): WorkerFailure => ({
 const runWorkerStep = async <TPayload>(
   step: () => Promise<TPayload>,
 ): Promise<WorkerResult<TPayload>> => {
-  return step()
-    .then((data) => ({ ok: true as const, data }))
-    .catch((error: unknown) => toWorkerFailure(error));
+  const result = await settleAsync(step());
+  if (!result.ok) {
+    return toWorkerFailure(result.error);
+  }
+
+  return { ok: true as const, data: result.value };
 };
 
 const probeAutomationOrigin = async (targetUrl: URL): Promise<boolean> => {

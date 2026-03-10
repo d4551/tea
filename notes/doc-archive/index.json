@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-03-10T04:39:56.876Z",
+  "entries": [
+    {
+      "sourcePath": "README.md",
+      "archivePath": "notes/doc-archive/README.txt",
+      "sha256": "ca9de2b5529ee92e5e2374d5d7d2d68cccf1feb488fe3570d56913f6ed8c079b",
+      "sizeBytes": 15840,
+      "archivedAt": "2026-03-10T04:39:56.862Z"
+    },
+    {
+      "sourcePath": "README.zh-CN.md",
+      "archivePath": "notes/doc-archive/README.zh-CN.txt",
+      "sha256": "73c7e6ad4806993f05df97d643dc6c0c59153f6baab4299998a17d244e00428c",
+      "sizeBytes": 11557,
+      "archivedAt": "2026-03-10T04:39:56.863Z"
+    },
+    {
+      "sourcePath": "ARCHITECTURE.md",
+      "archivePath": "notes/doc-archive/ARCHITECTURE.txt",
+      "sha256": "4db230fcb31278744873cce7bf2f4b846ce8f577ad886aeec7524a38fa6060b6",
+      "sizeBytes": 8745,
+      "archivedAt": "2026-03-10T04:39:56.864Z"
+    },
+    {
+      "sourcePath": "docs/index.md",
+      "archivePath": "notes/doc-archive/docs__index.txt",
+      "sha256": "1cf3ebcb8c1f972cf0e3e2ba8db7f079883209270e9971042a153b5447b257d5",
+      "sizeBytes": 2294,
+      "archivedAt": "2026-03-10T04:39:56.864Z"
+    },
+    {
+      "sourcePath": "docs/htmx-extensions.md",
+      "archivePath": "notes/doc-archive/docs__htmx-extensions.txt",
+      "sha256": "7a777b7d299d99c526f1930c785fc782fc125194558256540c1158f30c712811",
+      "sizeBytes": 4709,
+      "archivedAt": "2026-03-10T04:39:56.865Z"
+    },
+    {
+      "sourcePath": "docs/playable-runtime.md",
+      "archivePath": "notes/doc-archive/docs__playable-runtime.txt",
+      "sha256": "0f65c8d82b676cb96220fe9d6bf42720718aeaea6001a13b5a76baf607d16172",
+      "sizeBytes": 3599,
+      "archivedAt": "2026-03-10T04:39:56.866Z"
+    },
+    {
+      "sourcePath": "docs/local-ai-runtime.md",
+      "archivePath": "notes/doc-archive/docs__local-ai-runtime.txt",
+      "sha256": "b2cdc0abd137060cde3f6f7a1528c6d026cb311eabeb77e151d529a5c9ac9b74",
+      "sizeBytes": 3585,
+      "archivedAt": "2026-03-10T04:39:56.867Z"
+    },
+    {
+      "sourcePath": "docs/operator-runbook.md",
+      "archivePath": "notes/doc-archive/docs__operator-runbook.txt",
+      "sha256": "68f6a8176106db2b517df7016dd5081ae99d5ea960e1aa0d5ab87ca67e2e44f8",
+      "sizeBytes": 4671,
+      "archivedAt": "2026-03-10T04:39:56.868Z"
+    },
+    {
+      "sourcePath": "docs/api-contracts.md",
+      "archivePath": "notes/doc-archive/docs__api-contracts.txt",
+      "sha256": "6818344a494b1b4f1c95a8b33e9a093d43e562fee873a6d19d88e3f1b4628e85",
+      "sizeBytes": 4221,
+      "archivedAt": "2026-03-10T04:39:56.872Z"
+    },
+    {
+      "sourcePath": "docs/builder-domain.md",
+      "archivePath": "notes/doc-archive/docs__builder-domain.txt",
+      "sha256": "ea2c55c7a85eadea803b9cfcceb46b8b9d38fba4ae165035f8bcf2518044d4df",
+      "sizeBytes": 2492,
+      "archivedAt": "2026-03-10T04:39:56.872Z"
+    },
+    {
+      "sourcePath": "docs/rmmz-pack.md",
+      "archivePath": "notes/doc-archive/docs__rmmz-pack.txt",
+      "sha256": "0ed4751f1529b0dcab419bb134fe9d608bd75bde43ae2b26716b4f17754ef93b",
+      "sizeBytes": 2189,
+      "archivedAt": "2026-03-10T04:39:56.873Z"
+    },
+    {
+      "sourcePath": "docs/maintenance-audit-2026-03-10.md",
+      "archivePath": "notes/doc-archive/docs__maintenance-audit-2026-03-10.txt",
+      "sha256": "a00e5840561a96a74f14724a12b66987760802153462bccbdea0db98f2af6399",
+      "sizeBytes": 5902,
+      "archivedAt": "2026-03-10T04:39:56.874Z"
+    },
+    {
+      "sourcePath": "LOTFK_RMMZ_Agentic_Pack/README.md",
+      "archivePath": "notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__README.txt",
+      "sha256": "f7ae198bc6834e2939226bfc7ad3c6e8f2ab90361a10f3835328d586914722fb",
+      "sizeBytes": 4544,
+      "archivedAt": "2026-03-10T04:39:56.874Z"
+    },
+    {
+      "sourcePath": "LOTFK_RMMZ_Agentic_Pack/PLUGIN_SPEC.md",
+      "archivePath": "notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__PLUGIN_SPEC.txt",
+      "sha256": "d3ed866f7962f5efb4015644d62a0a20e3085ffd890ce2afe22ce617c990d8ee",
+      "sizeBytes": 6094,
+      "archivedAt": "2026-03-10T04:39:56.875Z"
+    },
+    {
+      "sourcePath": "LOTFK_RMMZ_Agentic_Pack/EVENT_HOOKUPS.md",
+      "archivePath": "notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__EVENT_HOOKUPS.txt",
+      "sha256": "f897f46b303f5994190cc4877fb487c2912adbc3ee37996f0d644859e794571b",
+      "sizeBytes": 4800,
+      "archivedAt": "2026-03-10T04:39:56.875Z"
+    },
+    {
+      "sourcePath": "LOTFK_RMMZ_Agentic_Pack/STATUS.md",
+      "archivePath": "notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__STATUS.txt",
+      "sha256": "dfd84b81fa21c00c62f9e5b703e5c43f4526477a6a47c486b1ef9761527f6204",
+      "sizeBytes": 1498,
+      "archivedAt": "2026-03-10T04:39:56.876Z"
+    }
+  ]
+}

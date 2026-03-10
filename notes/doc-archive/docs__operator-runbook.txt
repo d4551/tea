@@ -128,7 +128,7 @@ If local AI behaves unexpectedly:
 
 Reference:
 
-- [Local AI runtime](/Users/brandondonnelly/Downloads/tea/docs/local-ai-runtime.md)
+- [Local AI runtime](notes/doc-archive/docs__local-ai-runtime.txt)
 
 ## Playable runtime operations
 
@@ -141,7 +141,7 @@ If the game page loads but the playable runtime does not recover:
 
 Reference:
 
-- [Playable runtime](/Users/brandondonnelly/Downloads/tea/docs/playable-runtime.md)
+- [Playable runtime](notes/doc-archive/docs__playable-runtime.txt)
 
 ## HTMX and shell incidents
 
@@ -153,7 +153,7 @@ If loading states, validation swaps, or focus restoration regress:
 
 Reference:
 
-- [HTMX extensions](/Users/brandondonnelly/Downloads/tea/docs/htmx-extensions.md)
+- [HTMX extensions](notes/doc-archive/docs__htmx-extensions.txt)
 
 ## Documentation surface checks
 

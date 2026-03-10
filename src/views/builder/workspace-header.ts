@@ -87,7 +87,7 @@ export const renderWorkspaceHeader = (config: WorkspaceHeaderConfig): string => 
       const activeAttr = isActive ? ' aria-selected="true"' : ' aria-selected="false"';
 
       if (tab.href && !tab.htmx) {
-        return `<a href="${escapeHtml(tab.href)}" class="tab ${activeClass}" role="tab"${activeAttr}${disabledAttr}>${content}</a>`;
+        return `<a href="${escapeHtml(tab.href)}" class="tab ${activeClass}" role="tab"${activeAttr}${disabledAttr} aria-label="${escapeHtml(tab.label)}">${content}</a>`;
       }
 
       return `<button type="button" class="tab ${activeClass}" role="tab"${activeAttr}${disabledAttr} aria-label="${escapeHtml(tab.label)}"${htmxAttrs}>${content}</button>`;

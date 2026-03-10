@@ -1,4 +1,3 @@
-import { extname, resolve } from "node:path";
 import { Elysia } from "elysia";
 import { appConfig } from "../config/environment.ts";
 import { resolveStaticAssetMounts } from "../shared/constants/assets.ts";
@@ -45,14 +44,84 @@ const MIME_TYPES: Readonly<Record<string, string>> = {
   ".safetensors": "application/octet-stream",
 };
 
-/**
- * Resolves a MIME type from a file extension.
- *
- * @param filePath Absolute or relative file path.
- * @returns MIME content-type string.
- */
-const resolveMimeType = (filePath: string): string =>
-  MIME_TYPES[extname(filePath).toLowerCase()] ?? "application/octet-stream";
+const normalizeWildcardPath = (wildcardPath: string): string | null => {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(wildcardPath);
+  } catch {
+    return null;
+  }
+
+  const normalized = decoded.replace(/\\/gu, "/").replace(/^\/+/u, "");
+  if (normalized.includes("\0")) {
+    return null;
+  }
+
+  for (const segment of normalized.split("/")) {
+    if (segment === ".." || segment === ".") {
+      return null;
+    }
+  }
+
+  return normalized;
+};
+
+const getFileExtension = (filePath: string): string => {
+  const fileName = filePath.split("/").pop() ?? "";
+  const dotIndex = fileName.lastIndexOf(".");
+  return dotIndex >= 0 ? fileName.slice(dotIndex).toLowerCase() : "";
+};
+
+const resolveMimeTypeFromPath = (filePath: string): string =>
+  MIME_TYPES[getFileExtension(filePath)] ?? "application/octet-stream";
+
+const toDirectoryUrl = (path: string): URL => {
+  const normalized = path.replace(/\\+/gu, "/").replace(/\/+$/u, "");
+  return Bun.pathToFileURL(`${normalized}/`);
+};
+
+const resolveFromDirectory = (directory: string, relativePath: string): string =>
+  Bun.fileURLToPath(new URL(relativePath, toDirectoryUrl(directory)));
+
+const normalizeMountAssetRoot = (mountPrefix: string): string =>
+  mountPrefix.endsWith("/") ? mountPrefix.slice(0, -1) : mountPrefix;
+
+const isAbsolutePath = (path: string): boolean => {
+  if (path.startsWith("/")) {
+    return true;
+  }
+
+  return /^[a-zA-Z]:[\\/]/u.test(path);
+};
+
+const resolveAssetRoot = (mountAssetsRoot: string): string => {
+  const normalizedMountAssetsRoot = mountAssetsRoot.replace(/\\+/gu, "/").replace(/\/+$/u, "");
+  if (isAbsolutePath(normalizedMountAssetsRoot)) {
+    return normalizedMountAssetsRoot;
+  }
+
+  const projectRootUrl = Bun.pathToFileURL(`${Bun.cwd.replace(/\\+/gu, "/")}/`);
+  const resolvedUrl = new URL(`${normalizedMountAssetsRoot}/`, projectRootUrl);
+  return Bun.fileURLToPath(resolvedUrl);
+};
+
+const resolveAssetPath = (mountAssetsRoot: string, wildcardPath: string): string | null => {
+  const normalizedWildcard = normalizeWildcardPath(wildcardPath);
+  if (normalizedWildcard === null) {
+    return null;
+  }
+
+  const normalizedRoot = mountAssetsRoot.replace(/\\+/gu, "/").replace(/\/+$/u, "");
+  const assetPath = normalizedWildcard === "" ? "." : normalizedWildcard;
+  const resolvedPath = resolveFromDirectory(normalizedRoot, assetPath);
+
+  const rootPrefix = `${normalizedRoot}/`;
+  if (resolvedPath !== normalizedRoot && !resolvedPath.startsWith(rootPrefix)) {
+    return null;
+  }
+
+  return resolvedPath;
+};
 
 /**
  * Bun-native static asset serving plugin.
@@ -66,7 +135,8 @@ const resolveMimeType = (filePath: string): string =>
 export const staticAssetsPlugin = new Elysia({ name: "static-assets" });
 
 for (const mount of resolveStaticAssetMounts(appConfig)) {
-  const normalizedPrefix = mount.prefix.endsWith("/") ? mount.prefix.slice(0, -1) : mount.prefix;
+  const normalizedPrefix = normalizeMountAssetRoot(mount.prefix);
+  const normalizedAssetsRoot = resolveAssetRoot(mount.assets);
 
   staticAssetsPlugin.get(`${normalizedPrefix}/*`, async ({ params }) => {
     const wildcardPath = (params as Record<string, string>)["*"];
@@ -74,8 +144,10 @@ for (const mount of resolveStaticAssetMounts(appConfig)) {
       return new Response("Not Found", { status: 404 });
     }
 
-    const safePath = wildcardPath.replace(/\.\./gu, "");
-    const absolutePath = resolve(mount.assets, safePath);
+    const absolutePath = resolveAssetPath(normalizedAssetsRoot, wildcardPath);
+    if (absolutePath === null) {
+      return new Response("Not Found", { status: 404 });
+    }
 
     const file = Bun.file(absolutePath);
     const exists = await file.exists();
@@ -85,7 +157,7 @@ for (const mount of resolveStaticAssetMounts(appConfig)) {
 
     return new Response(file, {
       headers: {
-        "content-type": resolveMimeType(absolutePath),
+        "content-type": resolveMimeTypeFromPath(absolutePath),
         "cache-control": "public, max-age=3600",
       },
     });

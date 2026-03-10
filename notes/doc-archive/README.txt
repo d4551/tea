@@ -5,18 +5,18 @@
 </p>
 
 <p align="center">
-  <a href="./README.md">English</a>
+  <a href="notes/doc-archive/README.txt">English</a>
   ·
-  <a href="./README.zh-CN.md">中文</a>
+  <a href="notes/doc-archive/README.zh-CN.txt">中文</a>
   ·
-  <a href="./ARCHITECTURE.md">Architecture</a>
+  <a href="notes/doc-archive/ARCHITECTURE.txt">Architecture</a>
   ·
-  <a href="./docs/index.md">Docs Index</a>
+  <a href="notes/doc-archive/docs__index.txt">Docs Index</a>
 </p>
 
 <p align="center">
-  <a href="./README.md"><img alt="Docs in English" src="https://img.shields.io/badge/docs-English-0f766e?style=flat-square"></a>
-  <a href="./README.zh-CN.md"><img alt="Chinese documentation available" src="https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87-c2410c?style=flat-square"></a>
+  <a href="notes/doc-archive/README.txt"><img alt="Docs in English" src="https://img.shields.io/badge/docs-English-0f766e?style=flat-square"></a>
+  <a href="notes/doc-archive/README.zh-CN.txt"><img alt="Chinese documentation available" src="https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87-c2410c?style=flat-square"></a>
   <img alt="Bun 1.3.10" src="https://img.shields.io/badge/Bun-1.3.10-111827?style=flat-square">
   <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-2563eb?style=flat-square">
   <img alt="Elysia 1.4.27" src="https://img.shields.io/badge/Elysia-1.4.27-059669?style=flat-square">
@@ -26,9 +26,9 @@
   <img alt="Verify with bun run verify" src="https://img.shields.io/badge/verify-bun%20run%20verify-0f766e?style=flat-square">
 </p>
 
-> Need Chinese docs? Open [README.zh-CN.md](./README.zh-CN.md).
+> Need Chinese docs? Open [README.zh-CN.md](notes/doc-archive/README.zh-CN.txt).
 >
-> 需要中文文档？请直接打开 [README.zh-CN.md](./README.zh-CN.md)。
+> 需要中文文档？请直接打开 [README.zh-CN.md](notes/doc-archive/README.zh-CN.txt)。
 
 TEA is an SSR-first game runtime and builder platform built on Bun, Elysia, HTMX, Tailwind CSS, DaisyUI, Prisma, PixiJS, and Three.js. The repository combines a server-rendered web app, a game builder workspace, a server-authoritative multiplayer runtime, AI-assisted tooling, and an RPG Maker MZ companion pack in one Bun workspace.
 
@@ -374,16 +374,16 @@ bun run verify
 
 ## Documentation map
 
-- [Chinese README](./README.zh-CN.md)
-- [Architecture](./ARCHITECTURE.md)
-- [Docs index](./docs/index.md)
-- [API and transport contracts](./docs/api-contracts.md)
-- [Builder domain](./docs/builder-domain.md)
-- [HTMX extensions](./docs/htmx-extensions.md)
-- [Playable runtime](./docs/playable-runtime.md)
-- [Local AI runtime](./docs/local-ai-runtime.md)
-- [Operator runbook](./docs/operator-runbook.md)
-- [RMMZ companion pack](./docs/rmmz-pack.md)
+- [Chinese README](notes/doc-archive/README.zh-CN.txt)
+- [Architecture](notes/doc-archive/ARCHITECTURE.txt)
+- [Docs index](notes/doc-archive/docs__index.txt)
+- [API and transport contracts](notes/doc-archive/docs__api-contracts.txt)
+- [Builder domain](notes/doc-archive/docs__builder-domain.txt)
+- [HTMX extensions](notes/doc-archive/docs__htmx-extensions.txt)
+- [Playable runtime](notes/doc-archive/docs__playable-runtime.txt)
+- [Local AI runtime](notes/doc-archive/docs__local-ai-runtime.txt)
+- [Operator runbook](notes/doc-archive/docs__operator-runbook.txt)
+- [RMMZ companion pack](notes/doc-archive/docs__rmmz-pack.txt)
 
 ## Contributor notes
 

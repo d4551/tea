@@ -1,6 +1,3 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { appConfig } from "../src/config/environment.ts";
 import {
   assetRelativePaths,
@@ -11,20 +8,43 @@ import {
 type BunBuildOptions = Parameters<typeof Bun.build>[0];
 
 const resolvePackagePath = (specifier: string): string =>
-  fileURLToPath(import.meta.resolve(specifier));
+  Bun.fileURLToPath(import.meta.resolve(specifier));
 
-const findPackageRoot = (resolvedModulePath: string, packageName: string): string => {
-  let currentPath = resolvedModulePath;
+const normalizeSlashPath = (path: string): string => path.replace(/\\/gu, "/").replace(/\/+$/u, "");
+
+const toDirectoryUrl = (path: string): URL => Bun.pathToFileURL(`${normalizeSlashPath(path)}/`);
+
+const resolveFromDirectory = (directory: string, relativePath: string): string =>
+  Bun.fileURLToPath(new URL(relativePath, toDirectoryUrl(directory)));
+
+const normalizePath = (value: string): string => value.replace(/\\/gu, "/").replace(/\/+$/u, "");
+
+const hasPackageManifest = async (path: string): Promise<boolean> => Bun.file(path).exists();
+
+const readPackageName = async (packageJsonPath: string): Promise<string | null> => {
+  try {
+    const packageJson = JSON.parse(await Bun.file(packageJsonPath).text()) as {
+      readonly name?: string;
+    };
+    return packageJson.name ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const findPackageRoot = async (
+  resolvedModulePath: string,
+  packageName: string,
+): Promise<string> => {
+  let currentPath = normalizePath(resolvedModulePath);
 
   while (true) {
-    const nextPath = resolve(currentPath, "..");
-    const packageJsonPath = join(nextPath, "package.json");
+    const nextPath = resolveFromDirectory(currentPath, "..");
+    const packageJsonPath = resolveFromDirectory(nextPath, "package.json");
 
-    if (existsSync(packageJsonPath)) {
-      const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
-        readonly name?: string;
-      };
-      if (packageJson.name === packageName) {
+    if (await hasPackageManifest(packageJsonPath)) {
+      const name = await readPackageName(packageJsonPath);
+      if (name === packageName) {
         return nextPath;
       }
     }
@@ -38,16 +58,26 @@ const findPackageRoot = (resolvedModulePath: string, packageName: string): strin
 };
 
 const htmxBundlePath = resolvePackagePath("htmx.org/dist/htmx.min.js");
-const transformersPackageRoot = findPackageRoot(
+const transformersPackageRoot = await findPackageRoot(
   resolvePackagePath("@huggingface/transformers"),
   "@huggingface/transformers",
 );
+
+const projectRoot = resolveFromDirectory(import.meta.dir, "..");
+const resolveFromProjectRoot = (relativePath: string): string =>
+  resolveFromDirectory(projectRoot, relativePath);
+
+const resolveFromRoot = (relativeRoot: string, relativePath: string): string =>
+  resolveFromDirectory(relativeRoot, relativePath);
+
+const resolveInProject = (...parts: readonly string[]): string =>
+  resolveFromProjectRoot(parts.join("/"));
 
 /**
  * Canonical Bun asset-pipeline paths shared by build and watch scripts.
  */
 export const assetPipelinePaths = {
-  projectRoot: resolve(import.meta.dir, ".."),
+  projectRoot,
   outputStylesheetPath: joinLocalPath(
     appConfig.staticAssets.publicDirectory,
     assetRelativePaths.stylesheetOutputFile,
@@ -57,34 +87,22 @@ export const assetPipelinePaths = {
     appConfig.staticAssets.publicDirectory,
     assetRelativePaths.htmxExtensionsOutputDirectory,
   ),
-  gameClientEntryPath: resolve(
-    resolve(import.meta.dir, ".."),
-    assetRelativePaths.playableGameClientEntryFile,
-  ),
-  builderSceneEditorEntryPath: resolve(
-    resolve(import.meta.dir, ".."),
-    assetRelativePaths.builderSceneEditorEntryFile,
-  ),
-  gameClientOutdir: resolve(resolve(import.meta.dir, ".."), appConfig.playableGame.sourceDirectory),
-  builderSceneEditorOutdir: resolve(
-    resolve(import.meta.dir, ".."),
-    appConfig.staticAssets.publicDirectory,
-  ),
-  htmxExtensionsOutdir: resolve(
-    resolve(import.meta.dir, ".."),
+  gameClientEntryPath: resolveInProject(assetRelativePaths.playableGameClientEntryFile),
+  builderSceneEditorEntryPath: resolveInProject(assetRelativePaths.builderSceneEditorEntryFile),
+  gameClientOutdir: resolveFromProjectRoot(appConfig.playableGame.sourceDirectory),
+  builderSceneEditorOutdir: resolveFromProjectRoot(appConfig.staticAssets.publicDirectory),
+  htmxExtensionsOutdir: resolveFromProjectRoot(
     joinLocalPath(
       appConfig.staticAssets.publicDirectory,
       assetRelativePaths.htmxExtensionsOutputDirectory,
     ),
   ),
   htmxSourcePath: htmxBundlePath,
-  htmxDestinationPath: resolve(
-    resolve(import.meta.dir, ".."),
+  htmxDestinationPath: resolveInProject(
     joinLocalPath(appConfig.staticAssets.publicDirectory, assetRelativePaths.htmxPublicBundleFile),
   ),
-  onnxWasmSourceDirectory: join(transformersPackageRoot, "dist"),
-  onnxWasmDestinationDirectory: resolve(
-    resolve(import.meta.dir, ".."),
+  onnxWasmSourceDirectory: resolveFromRoot(transformersPackageRoot, "dist"),
+  onnxWasmDestinationDirectory: resolveFromProjectRoot(
     joinLocalPath(appConfig.staticAssets.publicDirectory, assetRelativePaths.onnxPublicDirectory),
   ),
 } as const;
@@ -93,7 +111,7 @@ export const assetPipelinePaths = {
  * Canonical HTMX extension entrypoint paths.
  */
 export const htmxExtensionEntryPaths = getHtmxExtensionEntryPaths().map((entryPath) =>
-  resolve(assetPipelinePaths.projectRoot, entryPath),
+  resolveInProject(entryPath),
 );
 
 /**
@@ -212,6 +230,6 @@ export const resolveOnnxWasmCopyPaths = (
   readonly sourcePath: string;
   readonly destinationPath: string;
 } => ({
-  sourcePath: join(assetPipelinePaths.onnxWasmSourceDirectory, fileName),
-  destinationPath: join(assetPipelinePaths.onnxWasmDestinationDirectory, fileName),
+  sourcePath: resolveFromRoot(assetPipelinePaths.onnxWasmSourceDirectory, fileName),
+  destinationPath: resolveFromRoot(assetPipelinePaths.onnxWasmDestinationDirectory, fileName),
 });

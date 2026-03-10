@@ -221,7 +221,7 @@ export const renderBuilderProjectShell = (
               <form hx-post="${escapeHtml(createAction)}" hx-indicator="#builder-project-create-spinner" hx-disabled-elt="button, input, select, textarea" class="space-y-2">
                 <fieldset class="fieldset">
                   <legend class="fieldset-legend text-xs">${escapeHtml(messages.builder.createProject)}</legend>
-                  <input name="projectId" type="text" class="input w-full input-sm" placeholder="${escapeHtml(messages.builder.projectIdPlaceholder)}" />
+                  <input name="projectId" type="text" class="input w-full input-sm" required minlength="1" maxlength="64" placeholder="${escapeHtml(messages.builder.projectIdPlaceholder)}" />
                   <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
                   <input type="hidden" name="redirectPath" value="${escapeHtml(currentPath)}" />
                   <div class="flex items-center gap-2">

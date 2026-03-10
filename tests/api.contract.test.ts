@@ -168,7 +168,11 @@ describe("API contracts", () => {
       app.handle(new Request(toUrl(appConfig.stylesheetPath))),
       app.handle(new Request(toUrl(appConfig.playableGame.clientScriptPath))),
       app.handle(new Request(toUrl("/assets/images/sprites/cha-jiang-sprite.png"))),
-      app.handle(new Request(toUrl(`${appConfig.staticAssets.rmmzPackPrefix}/README.md`))),
+      app.handle(
+        new Request(
+          toUrl(`${appConfig.staticAssets.rmmzPackPrefix}/plugins/LOTFK_TradeAndRoutes.js`),
+        ),
+      ),
     ]);
     await Promise.all(responses.map((response) => drainResponseBody(response)));
 
@@ -2568,6 +2572,77 @@ describe("HTMX partial rendering", () => {
     expect(publishHtml.includes('id="builder-project-shell"')).toBe(true);
     expect(publishHtml.includes(`/game?lang=en-US&amp;projectId=${projectId}`)).toBe(true);
     expect(publishHtml.includes("/api/builder/projects/")).toBe(true);
+  });
+
+  test("builder publish HTML action sanitizes unsafe currentPath values", async () => {
+    const projectId = `publish-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+
+    const publishResponse = await app.handle(
+      new Request(toUrl(`/api/builder/projects/${projectId}/publish`), {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          accept: "text/html",
+        },
+        body: JSON.stringify({
+          published: true,
+          locale: "en-US",
+          currentPath: "https://attacker.example.org/",
+        }),
+      },
+    );
+    const publishHtml = await publishResponse.text();
+
+    expect(publishResponse.status).toBe(httpStatus.ok);
+    expect(publishHtml.includes('id="builder-project-shell"')).toBe(true);
+    expect(publishHtml.includes("/builder?lang=en-US&projectId=")).toBe(true);
+  });
+
+  test("builder project create HTML action redirects to a builder path", async () => {
+    const projectId = `create-${crypto.randomUUID()}`;
+    const response = await app.handle(
+      new Request(toUrl("/api/builder/projects"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+        },
+        body: new URLSearchParams({
+          projectId,
+          locale: "en-US",
+          redirectPath: `${appRoutes.builderAssets}?lang=fr`,
+        }).toString(),
+      }),
+    );
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(response.headers.get("HX-Redirect")).toBe(
+      `/builder/assets?lang=en-US&projectId=${projectId}`,
+    );
+    expect((await response.text()).length).toBe(0);
+  });
+
+  test("builder project create HTML action falls back to builder when redirect path is unsafe", async () => {
+    const projectId = `create-${crypto.randomUUID()}`;
+    const response = await app.handle(
+      new Request(toUrl("/api/builder/projects"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+        },
+        body: new URLSearchParams({
+          projectId,
+          locale: "en-US",
+          redirectPath: "https://example.com/",
+        }).toString(),
+      }),
+    );
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(response.headers.get("HX-Redirect")).toBe(`/builder?lang=en-US&projectId=${projectId}`);
+    expect((await response.text()).length).toBe(0);
   });
 
   test("builder publish rejects invalid scene node asset references", async () => {

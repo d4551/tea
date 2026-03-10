@@ -27,6 +27,7 @@ import type {
   TriggerEventType,
 } from "../../shared/contracts/game.ts";
 import { validateGameCommandInput } from "../../shared/contracts/game.ts";
+import { settleAsync } from "../../shared/utils/async-result.ts";
 import { safeJsonParse } from "../../shared/utils/safe-json.ts";
 import { builderService } from "../builder/builder-service.ts";
 import { generateNpcDialogue } from "./ai/game-ai-service.ts";
@@ -940,9 +941,15 @@ export class GameLoopService {
       const callbacks = this.tickCallbacks.get(sessionId);
       callbacks?.delete(onSnapshot);
       if ((callbacks?.size ?? 0) === 0 && this.getCommandQueueDepth(sessionId) === 0) {
-        void this.flushSession(sessionId).catch((error: unknown) => {
-          logger.warn("game-loop.flush.teardown-failed", { sessionId, error: String(error) });
-        });
+        void (async (): Promise<void> => {
+          const result = await settleAsync(this.flushSession(sessionId));
+          if (!result.ok) {
+            logger.warn("game-loop.flush.teardown-failed", {
+              sessionId,
+              error: String(result.error),
+            });
+          }
+        })();
       }
     };
   }
@@ -1130,7 +1137,6 @@ export class GameLoopService {
       }
 
       this.tickInFlight.add(sessionId);
-      this.tickInFlight.add(sessionId);
 
       const runTick = async (): Promise<void> => {
         const snapshot = await this.tick(sessionId, defaultGameConfig.tickMs);
@@ -1152,22 +1158,34 @@ export class GameLoopService {
         this._clearTick(sessionId);
       };
 
-      await runTick().catch(async (error: unknown) => {
+      const tickRunResult = await settleAsync(runTick());
+      if (!tickRunResult.ok) {
         logger.error("tick.failed", {
           sessionId,
-          error: String(error),
+          error: String(tickRunResult.error),
         });
-        const restored = await this.stateStore.getSession(sessionId).catch(() => null);
-        if (restored?.ok) {
-          this.liveSessions.set(sessionId, restored.payload as Mutable<GameSession>);
+        const restored = await settleAsync(this.stateStore.getSession(sessionId));
+        if (!restored.ok) {
+          logger.warn("game-loop.tick.restore-failed", {
+            sessionId,
+            error: String(restored.error),
+          });
+        } else if (restored.value.ok) {
+          this.liveSessions.set(sessionId, restored.value.payload as Mutable<GameSession>);
+        } else {
+          logger.debug("game-loop.tick.restore-miss", {
+            sessionId,
+            reason: restored.value.error,
+          });
         }
+
         if (
           (this.tickCallbacks.get(sessionId)?.size ?? 0) > 0 ||
           this.getCommandQueueDepth(sessionId) > 0
         ) {
           this.scheduleTick(sessionId, defaultGameConfig.tickMs);
         }
-      });
+      }
 
       this.tickInFlight.delete(sessionId);
     }, delayMs);

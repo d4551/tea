@@ -5,18 +5,18 @@
 </p>
 
 <p align="center">
-  <a href="./README.md">English</a>
+  <a href="notes/doc-archive/README.txt">English</a>
   ·
-  <a href="./README.zh-CN.md">中文</a>
+  <a href="notes/doc-archive/README.zh-CN.txt">中文</a>
   ·
-  <a href="./ARCHITECTURE.md">架构文档</a>
+  <a href="notes/doc-archive/ARCHITECTURE.txt">架构文档</a>
   ·
-  <a href="./docs/index.md">文档索引</a>
+  <a href="notes/doc-archive/docs__index.txt">文档索引</a>
 </p>
 
 <p align="center">
-  <a href="./README.md"><img alt="English documentation available" src="https://img.shields.io/badge/docs-English-0f766e?style=flat-square"></a>
-  <a href="./README.zh-CN.md"><img alt="中文文档" src="https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87-c2410c?style=flat-square"></a>
+  <a href="notes/doc-archive/README.txt"><img alt="English documentation available" src="https://img.shields.io/badge/docs-English-0f766e?style=flat-square"></a>
+  <a href="notes/doc-archive/README.zh-CN.txt"><img alt="中文文档" src="https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87-c2410c?style=flat-square"></a>
   <img alt="Bun 1.3.10" src="https://img.shields.io/badge/Bun-1.3.10-111827?style=flat-square">
   <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-2563eb?style=flat-square">
   <img alt="Elysia 1.4.27" src="https://img.shields.io/badge/Elysia-1.4.27-059669?style=flat-square">
@@ -26,9 +26,9 @@
   <img alt="Verify with bun run verify" src="https://img.shields.io/badge/verify-bun%20run%20verify-0f766e?style=flat-square">
 </p>
 
-> 需要英文文档？请打开 [README.md](./README.md)。
+> 需要英文文档？请打开 [README.md](notes/doc-archive/README.txt)。
 >
-> Need the English version? Open [README.md](./README.md).
+> Need the English version? Open [README.md](notes/doc-archive/README.txt)。
 
 TEA 是一个以 SSR 为默认渲染策略的游戏运行时与构建平台，基于 Bun、Elysia、HTMX、Tailwind CSS、DaisyUI、Prisma、PixiJS 和 Three.js 构建。这个仓库同时包含服务端渲染 Web 应用、游戏构建器工作区、服务端权威多人运行时、AI 辅助工具，以及一个 RPG Maker MZ 配套包。
 
@@ -374,16 +374,16 @@ bun run verify
 
 ## 文档地图
 
-- [English README](./README.md)
-- [架构文档](./ARCHITECTURE.md)
-- [文档索引](./docs/index.md)
-- [API 与传输契约](./docs/api-contracts.md)
-- [构建器领域](./docs/builder-domain.md)
-- [HTMX 扩展](./docs/htmx-extensions.md)
-- [可游玩运行时](./docs/playable-runtime.md)
-- [本地 AI 运行时](./docs/local-ai-runtime.md)
-- [运维手册](./docs/operator-runbook.md)
-- [RMMZ 配套包](./docs/rmmz-pack.md)
+- [English README](notes/doc-archive/README.txt)
+- [架构文档](notes/doc-archive/ARCHITECTURE.txt)
+- [文档索引](notes/doc-archive/docs__index.txt)
+- [API 与传输契约](notes/doc-archive/docs__api-contracts.txt)
+- [构建器领域](notes/doc-archive/docs__builder-domain.txt)
+- [HTMX 扩展](notes/doc-archive/docs__htmx-extensions.txt)
+- [可游玩运行时](notes/doc-archive/docs__playable-runtime.txt)
+- [本地 AI 运行时](notes/doc-archive/docs__local-ai-runtime.txt)
+- [运维手册](notes/doc-archive/docs__operator-runbook.txt)
+- [RMMZ 配套包](notes/doc-archive/docs__rmmz-pack.txt)
 
 ## 贡献说明
 

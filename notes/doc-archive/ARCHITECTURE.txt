@@ -276,12 +276,12 @@ flowchart LR
 
 ## Documentation index
 
-- [Docs index](/Users/brandondonnelly/Downloads/tea/docs/index.md)
-- [README](/Users/brandondonnelly/Downloads/tea/README.md)
-- [API and transport contracts](/Users/brandondonnelly/Downloads/tea/docs/api-contracts.md)
-- [Builder domain](/Users/brandondonnelly/Downloads/tea/docs/builder-domain.md)
-- [HTMX extensions](/Users/brandondonnelly/Downloads/tea/docs/htmx-extensions.md)
-- [Playable runtime](/Users/brandondonnelly/Downloads/tea/docs/playable-runtime.md)
-- [Local AI runtime](/Users/brandondonnelly/Downloads/tea/docs/local-ai-runtime.md)
-- [Operator runbook](/Users/brandondonnelly/Downloads/tea/docs/operator-runbook.md)
-- [RMMZ companion pack](/Users/brandondonnelly/Downloads/tea/docs/rmmz-pack.md)
+- [Docs index](notes/doc-archive/docs__index.txt)
+- [README](notes/doc-archive/README.txt)
+- [API and transport contracts](notes/doc-archive/docs__api-contracts.txt)
+- [Builder domain](notes/doc-archive/docs__builder-domain.txt)
+- [HTMX extensions](notes/doc-archive/docs__htmx-extensions.txt)
+- [Playable runtime](notes/doc-archive/docs__playable-runtime.txt)
+- [Local AI runtime](notes/doc-archive/docs__local-ai-runtime.txt)
+- [Operator runbook](notes/doc-archive/docs__operator-runbook.txt)
+- [RMMZ companion pack](notes/doc-archive/docs__rmmz-pack.txt)

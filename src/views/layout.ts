@@ -137,6 +137,7 @@ export const renderLayout = (input: LayoutInput): string => {
     <a
       href="#main-content"
       class="sr-only z-[100] m-2 inline-flex items-center gap-2 rounded-lg border-2 border-primary bg-base-100 px-4 py-3 text-sm font-semibold text-primary shadow-lg transition-all duration-200 focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:ring-2 focus:ring-primary focus:ring-offset-2 hover:bg-primary hover:text-primary-content"
+      aria-label="${escapeHtml(messages.common.skipToContent)}"
     >
       <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
       ${escapeHtml(messages.common.skipToContent)}
@@ -364,7 +365,7 @@ const renderBreadcrumbs = (messages: Messages, items: readonly BreadcrumbItem[])
       if (isLast || !item.href) {
         return `<li><span aria-current="page">${escapeHtml(item.label)}</span></li>`;
       }
-      return `<li><a href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a></li>`;
+      return `<li><a href="${escapeHtml(item.href)}" aria-label="${escapeHtml(item.label)}">${escapeHtml(item.label)}</a></li>`;
     })
     .join("");
 
@@ -390,7 +391,7 @@ const renderFooter = (messages: Messages, locale: LocaleCode): string => {
   ]
     .map(
       (item) =>
-        `<a class="link link-hover" href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a>`,
+        `<a class="link link-hover" href="${escapeHtml(item.href)}" aria-label="${escapeHtml(item.label)}">${escapeHtml(item.label)}</a>`,
     )
     .join("");
   const socialLinks = [

@@ -653,6 +653,37 @@ const withProjectChromeRefresh = async (
   html: string,
 ): Promise<string> => `${await renderProjectChromeOob(locale, projectId, currentPath)}${html}`;
 
+const toBuilderRedirectPath = (path: string): string => {
+  const candidate = path.trim();
+  if (!candidate) {
+    return appRoutes.builder;
+  }
+
+  const pathOnly = candidate.split("#", 1)[0].split("?", 1)[0];
+  if (!pathOnly.startsWith("/")) {
+    return appRoutes.builder;
+  }
+
+  const decodedPath = safeDecodeUri(pathOnly);
+
+  if (decodedPath.includes("..")) {
+    return appRoutes.builder;
+  }
+
+  if (
+    decodedPath !== appRoutes.builder &&
+    !decodedPath.startsWith(`${appRoutes.builder}/`)
+  ) {
+    return appRoutes.builder;
+  }
+
+  if (decodedPath.includes("//")) {
+    return appRoutes.builder;
+  }
+
+  return candidate;
+};
+
 const renderErrorHtml = (message: string): string =>
   `<div class="alert alert-error" role="alert">${escapeHtml(message)}</div>`;
 
@@ -1627,7 +1658,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         );
       }
       if (wantsHtml(request.headers.get("accept"))) {
-        set.headers["HX-Redirect"] = withQueryParameters(actionCurrentPath, {
+        const redirectPath = toBuilderRedirectPath(actionCurrentPath);
+        set.headers["HX-Redirect"] = withQueryParameters(redirectPath, {
           lang: actionLocale,
           projectId: project.id,
         });
@@ -1769,11 +1801,12 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       const project = result.snapshot;
 
       if (wantsHtml(request.headers.get("accept"))) {
+        const redirectPath = toBuilderRedirectPath(actionCurrentPath);
         return renderBuilderProjectShell(
           getMessages(actionLocale),
           actionLocale,
           project.id,
-          actionCurrentPath,
+          redirectPath,
           await toChromeProject(project.id),
         );
       }

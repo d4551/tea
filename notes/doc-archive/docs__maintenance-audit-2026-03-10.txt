@@ -1,0 +1,120 @@
+# Maintenance Audit — 2026-03-10
+
+Date: 2026-03-10
+
+## Verification commands
+
+Executed from `/Users/brandondonnelly/Downloads/tea`:
+
+- `bun run dependency:drift`
+- `bun run lint`
+- `bun run typecheck`
+- `bun run test`
+- `bun run docs:check`
+
+Latest-version check command used:
+
+`bun run dependency:drift` (policy summary from 2026-03-10 run):
+
+- `trackedCount: 22`
+- `resolvedCount: 22`
+- `skippedCount: 0`
+- `checkedCount: 22`
+
+## Dependency matrix
+
+| Scope | Declared version | Latest checked | Status |
+| --- | --- | --- | --- |
+| `@elysiajs/static` | `1.4.7` | `1.4.7` | ✅ current |
+| `@elysiajs/swagger` | `1.3.1` | `1.3.1` | ✅ current |
+| `@huggingface/transformers` | `3.8.1` | `3.8.1` | ✅ current |
+| `@libsql/client` | `0.17.0` | `0.17.0` | ✅ current |
+| `@prisma/adapter-libsql` | `7.4.2` | `7.4.2` | ✅ current |
+| `@prisma/client` | `7.4.2` | `7.4.2` | ✅ current |
+| `elysia` | `1.4.27` | `1.4.27` | ✅ current |
+| `htmx.org` | `2.0.8` | `2.0.8` | ✅ current |
+| `pixi.js` | `8.17.0` | `8.17.0` | ✅ current (lockfile aligned) |
+| `playwright` | `1.58.2` | `1.58.2` | ✅ current |
+| `sharp` | `0.34.5` | `0.34.5` | ✅ current |
+| `sqlite-vec` | `0.1.7-alpha.2` | `0.1.7-alpha.2` | ✅ current |
+| `three` | `0.183.2` | `0.183.2` | ✅ current |
+| `@biomejs/biome` | `2.4.6` | `2.4.6` | ✅ current |
+| `@tailwindcss/cli` | `4.2.1` | `4.2.1` | ✅ current |
+| `@types/bun` | `1.3.10` | `1.3.10` | ✅ current |
+| `@types/three` | `0.183.1` | `0.183.1` | ✅ current |
+| `daisyui` | `5.5.19` | `5.5.19` | ✅ current |
+| `dotenv` | `17.3.1` | `17.3.1` | ✅ current |
+| `prisma` | `7.4.2` | `7.4.2` | ✅ current |
+| `tailwindcss` | `4.2.1` | `4.2.1` | ✅ current |
+| `workspace: lotfk-game-contracts` | `workspace:*` | n/a (local workspace package) | ✅ intentional |
+| `workspace: lotfk-seeded-prng` | `workspace:*` | n/a (local workspace package) | ✅ intentional |
+| `typescript` | `5.9.3` | `5.9.3` | ✅ current |
+
+## UI accessibility/a11y audit
+
+An interaction scan was run across `src` for `button`/`tab` elements missing explicit `aria-label`, and for visible status/action copy not sourced from locale messages.
+
+- `renderButton` in `src/views/shared/ui-components.ts` no longer emits inline event handlers and now defaults to `type="button"` to avoid form submit side effects.
+- `renderTabs` and `renderProgress` now derive `aria-label` from localized or value-based content instead of hardcoded English fallback strings.
+- `renderButton` and related interactive callers in game routes now use `Messages` keys for labels where they render user-facing copy.
+- `src/htmx-extensions/layout-controls.ts` and servered UI paths avoid hardcoded button text by relying on localized props for alert labels and command labels.
+- Updated radial/progress rendering now uses deterministic numeric constraints and accessibility attributes required for AT consumers.
+- `src/views/shared/ui-components.ts` now adds `aria-describedby` and `aria-invalid` to form fields when help/error metadata is present, and `tests/ui-components.test.ts` now covers both metadata-assisted and metadata-free render paths.
+
+All discovered interactive call-sites with unlabeled submit actions in builder and route render paths were updated to consume message keys from `Messages`, preserving i18n.
+
+## Structured logging migration
+
+- Replaced catch-and-log-aside patterns in server command paths with `settleAsync` envelopes where async failures must be surfaced to callers.
+- `src/lib/logger.ts` now emits structured JSON logs via Bun-native stream writes (`Bun.write` to stdout/stderr), with no ad-hoc console fallback.
+- Built browser bundles were re-generated from updated logging/source changes: `public/game/game-client.js`, `public/vendor/builder-scene-editor.js`, `public/vendor/htmx-ext/layout-controls.js`.
+
+## Compliance checks run
+
+- `bun run dependency:drift` (pass)
+- `bun run lint` (pass)
+- `bun run typecheck` (pass)
+- `bun run test` (pass)
+- `bun run docs:check` (pass)
+
+All checks completed without failures in this pass.
+
+## Post-pass: inline-style elimination and UI parity sweep (2026-03-10)
+
+Ran a focused legacy-style cleanup pass and verified against updated contracts.
+
+- Removed remaining inline `style` usage in source renderers:
+  - `src/views/shared/ui-components.ts`:
+    - Replaced radial progress `style="--value:X"` with arbitrary class `[--value:X]` and retained ARIA progress semantics.
+  - `src/htmx-extensions/server-toast.ts`:
+    - Removed `el.style.opacity = "0"` and used Tailwind `opacity-0` class transition instead.
+  - `src/playable-game/game-client-renderer.ts`:
+    - Removed direct canvas `style.*` mutations and replaced with class-based layout classes (`absolute inset-0 w-full h-full`).
+- Updated `tests/ui-components.test.ts` to assert the new radial progress class binding.
+- Rebuilt browser assets so compiled outputs reflect source changes:
+  - `public/game/game-client.js`
+  - `public/vendor/builder-scene-editor.js`
+  - `public/vendor/htmx-ext/layout-controls.js`
+  - `public/vendor/htmx-ext/server-toast.js`
+- Re-ran verification commands:
+  - `bun run dependency:drift` (pass)
+  - `bun run lint` (pass)
+  - `bun run typecheck` (pass)
+  - `bun run test` (pass, 237 tests)
+  - `bun run docs:check` (pass)
+
+## Framework/source verification references
+
+- context7 checks were used to confirm current API guidance for:
+  - Bun (`/oven-sh/bun`) — server setup patterns, `Bun.serve`, and `Bun.write` usage.
+  - Elysia (`/elysiajs/elysia`) — error-handling and middleware conventions.
+  - HTMX (`/bigskysoftware/htmx`) — extension lifecycle events and event-driven UX hooks.
+- Current declared versions remain aligned with the resolved latest checks performed in `package.json` via `bun pm view`:
+  - `bun 1.3.10` runtime
+  - `elysia 1.4.27`
+  - `@elysiajs/static 1.4.7`
+  - `@elysiajs/swagger 1.3.1`
+  - `@prisma/client 7.4.2`
+  - `daisyui 5.5.19`
+  - `htmx.org 2.0.8`
+  - `tailwindcss 4.2.1`

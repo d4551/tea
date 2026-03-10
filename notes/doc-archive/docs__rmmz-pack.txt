@@ -47,7 +47,7 @@ flowchart LR
 
 | Document | Purpose |
 | --- | --- |
-| [/Users/brandondonnelly/Downloads/tea/LOTFK_RMMZ_Agentic_Pack/README.md](/Users/brandondonnelly/Downloads/tea/LOTFK_RMMZ_Agentic_Pack/README.md) | Pack overview, plugin inventory, install flow |
-| [/Users/brandondonnelly/Downloads/tea/LOTFK_RMMZ_Agentic_Pack/STATUS.md](/Users/brandondonnelly/Downloads/tea/LOTFK_RMMZ_Agentic_Pack/STATUS.md) | Current implementation and maintenance status |
-| [/Users/brandondonnelly/Downloads/tea/LOTFK_RMMZ_Agentic_Pack/PLUGIN_SPEC.md](/Users/brandondonnelly/Downloads/tea/LOTFK_RMMZ_Agentic_Pack/PLUGIN_SPEC.md) | Current plugin contract |
-| [/Users/brandondonnelly/Downloads/tea/LOTFK_RMMZ_Agentic_Pack/EVENT_HOOKUPS.md](/Users/brandondonnelly/Downloads/tea/LOTFK_RMMZ_Agentic_Pack/EVENT_HOOKUPS.md) | Recommended MZ editor event wiring |
+| [LOTFK_RMMZ_Agentic_Pack/README](notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__README.txt) | Pack overview, plugin inventory, install flow |
+| [LOTFK_RMMZ_Agentic_Pack/STATUS](notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__STATUS.txt) | Current implementation and maintenance status |
+| [LOTFK_RMMZ_Agentic_Pack/PLUGIN_SPEC](notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__PLUGIN_SPEC.txt) | Current plugin contract |
+| [LOTFK_RMMZ_Agentic_Pack/EVENT_HOOKUPS](notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__EVENT_HOOKUPS.txt) | Recommended MZ editor event wiring |

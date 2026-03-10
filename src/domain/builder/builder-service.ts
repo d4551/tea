@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { appConfig, type LocaleCode } from "../../config/environment.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type {
@@ -2335,6 +2334,27 @@ class PrismaBuilderService implements BuilderService {
     jobId: string,
     approved: boolean,
   ): Promise<BuilderMutation<GenerationJob> | null> {
+    const currentEntry = await this.readProjectEntry(projectId);
+    let preParsedAnimationPlan: SuggestedAnimationPlanPayload | null = null;
+    if (approved && currentEntry) {
+      const currentState = currentEntry.state;
+      const currentJob = currentState.generationJobs[jobId];
+      if (currentJob?.kind === "animation-plan") {
+        const currentPrimaryArtifact = currentJob.artifactIds
+          .map((artifactId) => currentState.artifacts[artifactId])
+          .find((artifact): artifact is GenerationArtifact => artifact !== undefined);
+        const currentArtifactFilePath =
+          currentPrimaryArtifact?.previewSource === undefined
+            ? null
+            : resolvePublicAssetFilePath(currentPrimaryArtifact.previewSource);
+        if (currentArtifactFilePath !== null) {
+          preParsedAnimationPlan = parseSuggestedAnimationPlanPayload(
+            await Bun.file(currentArtifactFilePath).text(),
+          );
+        }
+      }
+    }
+
     const mutation = await this.mutateProject<GenerationJob>(projectId, "builder-ai", (state) => {
       const job = state.generationJobs[jobId];
       if (!job) {
@@ -2358,21 +2378,16 @@ class PrismaBuilderService implements BuilderService {
           }
         }
         if (job.kind === "animation-plan" && primaryArtifact?.previewSource) {
-          const artifactFilePath = resolvePublicAssetFilePath(primaryArtifact.previewSource);
-          const animationPlan =
-            artifactFilePath === null
-              ? null
-              : parseSuggestedAnimationPlanPayload(readFileSync(artifactFilePath, "utf8"));
           const targetAssetId =
-            trimOptionalField(job.targetId) ?? trimOptionalField(animationPlan?.targetId);
+            trimOptionalField(job.targetId) ?? trimOptionalField(preParsedAnimationPlan?.targetId);
           const targetAsset = targetAssetId ? state.assets[targetAssetId] : undefined;
 
-          if (!animationPlan || !targetAssetId || !targetAsset) {
+          if (!preParsedAnimationPlan || !targetAssetId || !targetAsset) {
             nextStatus = "failed";
             nextStatusMessage = "job.animation-plan-target-missing";
           } else {
             const now = Date.now();
-            for (const clip of animationPlan.suggestedClips) {
+            for (const clip of preParsedAnimationPlan.suggestedClips) {
               if (state.animationClips[clip.id]) {
                 continue;
               }

@@ -83,21 +83,68 @@ export const createLogger = (
 };
 
 const writeToStream = (level: LogLevel, payload: JsonObject): void => {
-  const serialized = JSON.stringify(payload);
+  const serialized = `${JSON.stringify(payload)}\n`;
+  const bytes = new TextEncoder().encode(serialized);
   if (level === "ERROR") {
-    console.error(serialized);
+    writeToBunStderr(bytes);
     return;
   }
 
-  if (level === "WARN") {
-    console.warn(serialized);
-    return;
-  }
-
-  if (level === "DEBUG") {
-    console.debug(serialized);
-    return;
-  }
-
-  console.info(serialized);
+  writeToBunStdout(bytes);
 };
+
+const writeToBunStdout = (bytes: Uint8Array): boolean => {
+  return writeToBunStream("stdout", bytes);
+};
+
+const writeToBunStderr = (bytes: Uint8Array): boolean => {
+  return writeToBunStream("stderr", bytes);
+};
+
+type LoggerWriteFailure = {
+  readonly stream: "stderr" | "stdout";
+  readonly name: string;
+  readonly message: string;
+  readonly timestamp: string;
+};
+
+const maxLoggerWriteFailures = 5;
+const loggerWriteFailures: LoggerWriteFailure[] = [];
+
+const recordLoggerWriteFailure = (stream: "stderr" | "stdout", error: unknown): void => {
+  const normalized = normalizeError(error);
+  loggerWriteFailures.unshift({
+    stream,
+    name: normalized.name,
+    message: normalized.message,
+    timestamp: new Date().toISOString(),
+  });
+  loggerWriteFailures.length = Math.min(loggerWriteFailures.length, maxLoggerWriteFailures);
+};
+
+const normalizeError = (error: unknown): Error =>
+  error instanceof Error ? error : new Error(String(error));
+
+const writeToBunStream = (stream: "stderr" | "stdout", bytes: Uint8Array): boolean => {
+  if (typeof Bun === "undefined" || typeof Bun.write !== "function") {
+    return false;
+  }
+
+  const target = stream === "stdout" ? Bun.stdout : Bun.stderr;
+
+  void Bun.write(target as never, bytes).then(
+    () => true,
+    (error: unknown) => {
+      recordLoggerWriteFailure(stream, error);
+      return false;
+    },
+  );
+  return true;
+};
+
+/**
+ * Returns recent logger sink errors for diagnostics.
+ *
+ * @returns A bounded list of recent sink failures.
+ */
+export const getLoggerWriteFailures = (): readonly LoggerWriteFailure[] => [...loggerWriteFailures];

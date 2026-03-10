@@ -112,7 +112,7 @@ const renderInactiveState = (
             : ""
         }
         <div class="card-actions justify-end">
-          <a href="${escapeHtml(builderHref)}" class="btn btn-primary">${escapeHtml(messages.game.returnToBuilder)}</a>
+          <a href="${escapeHtml(builderHref)}" class="btn btn-primary" aria-label="${escapeHtml(messages.game.returnToBuilder)}">${escapeHtml(messages.game.returnToBuilder)}</a>
         </div>
       </div>
     </article>
@@ -227,7 +227,7 @@ export function GamePage(props: GamePageProps) {
             </div>
           </div>
           <div class="flex flex-wrap items-center gap-2">
-            <a href="${escapeHtml(builderHref)}" class="btn btn-ghost btn-sm gap-2">
+            <a href="${escapeHtml(builderHref)}" class="btn btn-ghost btn-sm gap-2" aria-label="${escapeHtml(messages.game.builderReturn)}">
               <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
               ${escapeHtml(messages.game.builderReturn)}
             </a>
@@ -316,8 +316,7 @@ export function GamePage(props: GamePageProps) {
             ></div>
 
             <div
-              class="pointer-events-none absolute inset-0 flex flex-col justify-between p-6"
-              style="backdrop-filter:blur(1px)"
+              class="pointer-events-none absolute inset-0 flex flex-col justify-between p-6 backdrop-blur-sm"
             >
               <div class="flex justify-between items-start pt-2">
                 <div id="hud-scene" sse-swap="scene-badge" hx-swap="outerHTML" aria-live="polite" role="status" class="pointer-events-auto rounded-full border border-base-content/10 bg-base-100/80 px-6 py-2 text-lg font-bold shadow backdrop-blur">

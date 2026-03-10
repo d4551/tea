@@ -54,7 +54,7 @@ const showToast = (payload: ToastPayload): void => {
 
   const type = payload.type ?? "info";
   const el = document.createElement("div");
-  el.className = `alert ${alertClass(type)} alert-soft shadow-lg transition-opacity duration-300`;
+  el.className = `alert ${alertClass(type)} alert-soft shadow-lg transition-opacity duration-300 opacity-100`;
   el.setAttribute("role", "alert");
   el.setAttribute("aria-live", "assertive");
   el.innerHTML = `${alertIcon(type)}<span>${escapeHtml(payload.message)}</span>`;
@@ -62,7 +62,7 @@ const showToast = (payload: ToastPayload): void => {
   container.appendChild(el);
 
   setTimeout(() => {
-    el.style.opacity = "0";
+    el.classList.add("opacity-0");
     setTimeout(() => {
       el.remove();
     }, FADE_MS);

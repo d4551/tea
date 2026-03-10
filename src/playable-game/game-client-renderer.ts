@@ -232,10 +232,7 @@ export const createGameClientRenderRuntime = async ({
   let pixiRenderer: Renderer;
   if (useWebGpuMode) {
     const threeCanvas = threeLayer.renderer.domElement;
-    threeCanvas.style.position = "absolute";
-    threeCanvas.style.inset = "0";
-    threeCanvas.style.width = "100%";
-    threeCanvas.style.height = "100%";
+    threeCanvas.classList.add("absolute", "inset-0", "w-full", "h-full");
     wrapper.appendChild(threeCanvas);
 
     pixiRenderer = await autoDetectRenderer({
@@ -248,13 +245,12 @@ export const createGameClientRenderRuntime = async ({
     });
 
     const pixiCanvas = pixiRenderer.canvas as HTMLCanvasElement;
-    pixiCanvas.style.position = "absolute";
-    pixiCanvas.style.inset = "0";
-    pixiCanvas.style.width = "100%";
-    pixiCanvas.style.height = "100%";
+    pixiCanvas.classList.add("absolute", "inset-0", "w-full", "h-full");
     wrapper.appendChild(pixiCanvas);
   } else {
-    wrapper.appendChild(threeLayer.renderer.domElement);
+    const threeCanvas = threeLayer.renderer.domElement;
+    threeCanvas.classList.add("absolute", "inset-0", "w-full", "h-full");
+    wrapper.appendChild(threeCanvas);
 
     pixiRenderer = await autoDetectRenderer({
       preference: "webgl",

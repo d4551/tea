@@ -6,6 +6,7 @@
   ],
   "scripts": {
     "audit:security": "bun audit",
+    "docs:archive": "bun run scripts/archive-docs.ts",
     "docs:check": "bun run scripts/docs-surface-check.ts",
     "format": "biome format . --write",
     "format:check": "biome format .",
@@ -36,7 +37,7 @@
     "pixi.js": "8.17.0",
     "playwright": "1.58.2",
     "sharp": "0.34.5",
-    "sqlite-vec": "^0.1.7-alpha.2",
+    "sqlite-vec": "0.1.7-alpha.2",
     "three": "0.183.2"
   },
   "trustedDependencies": [
