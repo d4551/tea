@@ -149,7 +149,10 @@ Composition layers are request context, locale context, route groups, domain ser
 Ownership is separated so each module has one explicit behavioral and failure contract source.
 
 <details>
-<summary>English architecture flowchart</summary>
+<summary>Architecture Charts / 架构图表</summary>
+
+<details>
+<summary>English</summary>
 
 ```mermaid
 flowchart TB
@@ -206,14 +209,8 @@ flowchart TB
 
 </details>
 
-### 中文
-
-`src/app.ts` 将整个平台作为单一 Elysia 应用组装。
-组成层包含请求上下文、语言上下文、路由分组、领域服务、契约与全局错误处理。
-所有权被分离，确保每个模块仅承担一组行为和失败语义。
-
 <details>
-<summary>中文架构流程图</summary>
+<summary>中文</summary>
 
 ```mermaid
 flowchart TB
@@ -270,6 +267,14 @@ flowchart TB
 
 </details>
 
+</details>
+
+### 中文
+
+`src/app.ts` 将整个平台作为单一 Elysia 应用组装。
+组成层包含请求上下文、语言上下文、路由分组、领域服务、契约与全局错误处理。
+所有权被分离，确保每个模块仅承担一组行为和失败语义。
+
 ---
 
 ## Request and error lifecycle / 请求与错误流
@@ -281,7 +286,10 @@ context resolution, route boundary, contract validation, domain execution, error
 The same state vocabulary is applied to SSR pages, HTMX fragments, and JSON endpoints.
 
 <details>
-<summary>Request lifecycle sequence</summary>
+<summary>Request Lifecycle Charts / 请求生命周期图表</summary>
+
+<details>
+<summary>English</summary>
 
 ```mermaid
 sequenceDiagram
@@ -316,14 +324,8 @@ sequenceDiagram
 
 </details>
 
-### 中文
-
-每个请求都经过确定性链路：
-上下文解析 → 路由边界 → 契约校验 → 领域执行 → 错误标准化 → 类型化最终输出。
-页面、HTMX 片段和 JSON 接口共享同一状态词汇。
-
 <details>
-<summary>请求生命周期时序图</summary>
+<summary>中文</summary>
 
 ```mermaid
 sequenceDiagram
@@ -358,6 +360,14 @@ sequenceDiagram
 
 </details>
 
+</details>
+
+### 中文
+
+每个请求都经过确定性链路：
+上下文解析 → 路由边界 → 契约校验 → 领域执行 → 错误标准化 → 类型化最终输出。
+页面、HTMX 片段和 JSON 接口共享同一状态词汇。
+
 ---
 
 ## Builder to playable runtime pipeline / 构建器到运行时发布链路
@@ -368,7 +378,10 @@ Runtime sessions are created only from immutable release snapshots.
 The workflow keeps authoring and publish boundaries distinct for reproducibility and auditability.
 
 <details>
-<summary>Builder publish pipeline</summary>
+<summary>Builder Publish Charts / 构建器发布图表</summary>
+
+<details>
+<summary>English</summary>
 
 ```mermaid
 flowchart TD
@@ -404,13 +417,8 @@ flowchart TD
 
 </details>
 
-### 中文
-
-运行时会话只允许基于不可变发布快照创建。
-工作流将创作与发布边界分离，便于复现和审计。
-
 <details>
-<summary>构建器发布链路</summary>
+<summary>中文</summary>
 
 ```mermaid
 flowchart TD
@@ -446,6 +454,13 @@ flowchart TD
 
 </details>
 
+</details>
+
+### 中文
+
+运行时会话只允许基于不可变发布快照创建。
+工作流将创作与发布边界分离，便于复现和审计。
+
 ---
 
 ## End-to-end game creation (UI → runtime) / 游戏创建端到端流程
@@ -457,7 +472,10 @@ This section maps the full path from Builder UI interactions to a playable, pers
 The flow is validation-first: session hydration is the last step and must succeed before gameplay is exposed.
 
 <details>
-<summary>UI to runtime path</summary>
+<summary>UI To Runtime Charts / UI 到运行时图表</summary>
+
+<details>
+<summary>English</summary>
 
 ```mermaid
 flowchart TD
@@ -482,14 +500,8 @@ flowchart TD
 
 </details>
 
-### 中文
-
-本节给出从构建器界面到可游玩的持久会话完整链路。
-
-链路是以校验优先为原则：仅在会话注水成功后才暴露游戏操作。
-
 <details>
-<summary>UI 到运行时链路</summary>
+<summary>中文</summary>
 
 ```mermaid
 flowchart TD
@@ -514,6 +526,14 @@ flowchart TD
 
 </details>
 
+</details>
+
+### 中文
+
+本节给出从构建器界面到可游玩的持久会话完整链路。
+
+链路是以校验优先为原则：仅在会话注水成功后才暴露游戏操作。
+
 ---
 
 ## Game session lifecycle / 游戏会话生命周期
@@ -523,7 +543,10 @@ flowchart TD
 Session state is explicit, persisted, and resumable by design.
 
 <details>
-<summary>Session lifecycle model</summary>
+<summary>Session Lifecycle Charts / 会话生命周期图表</summary>
+
+<details>
+<summary>English</summary>
 
 ```mermaid
 stateDiagram-v2
@@ -541,12 +564,8 @@ stateDiagram-v2
 
 </details>
 
-### 中文
-
-会话状态被设计为显式、可落库并可恢复。
-
 <details>
-<summary>会话生命周期模型</summary>
+<summary>中文</summary>
 
 ```mermaid
 stateDiagram-v2
@@ -564,6 +583,12 @@ stateDiagram-v2
 
 </details>
 
+</details>
+
+### 中文
+
+会话状态被设计为显式、可落库并可恢复。
+
 ---
 
 ## Data ownership and state model / 数据所有权与状态模型
@@ -579,7 +604,10 @@ Responsibility ownership is single-sourced to avoid mixed concerns:
 - Shared layer owns configuration, contracts, and cross-cutting utilities.
 
 <details>
-<summary>Ownership and core models</summary>
+<summary>Ownership Charts / 所有权图表</summary>
+
+<details>
+<summary>English</summary>
 
 ```mermaid
 flowchart LR
@@ -612,18 +640,8 @@ flowchart LR
 
 </details>
 
-### 中文
-
-为避免职责混杂，采用单一责任归属：
-
-- 路由层负责传输形态、错误信封和页面/片段选择。
-- 游戏域负责会话状态、角色状态迁移与场景推进。
-- 构建器域负责校验、发布快照和产物打包。
-- AI 域负责供应商编排和回退策略。
-- 共享层负责配置、契约和跨领域工具。
-
 <details>
-<summary>核心模型与所有权</summary>
+<summary>中文</summary>
 
 ```mermaid
 flowchart LR
@@ -656,6 +674,18 @@ flowchart LR
 
 </details>
 
+</details>
+
+### 中文
+
+为避免职责混杂，采用单一责任归属：
+
+- 路由层负责传输形态、错误信封和页面/片段选择。
+- 游戏域负责会话状态、角色状态迁移与场景推进。
+- 构建器域负责校验、发布快照和产物打包。
+- AI 域负责供应商编排和回退策略。
+- 共享层负责配置、契约和跨领域工具。
+
 ---
 
 ## AI reliability chain / AI 可靠性链路
@@ -665,7 +695,10 @@ flowchart LR
 Provider orchestration is preference-based with explicit failover and validation gating.
 
 <details>
-<summary>AI routing</summary>
+<summary>AI Routing Charts / AI 路由图表</summary>
+
+<details>
+<summary>English</summary>
 
 ```mermaid
 flowchart TD
@@ -684,12 +717,8 @@ flowchart TD
 
 </details>
 
-### 中文
-
-供应商链路按优先级编排，具备显式回退与校验门禁。
-
 <details>
-<summary>AI 路由</summary>
+<summary>中文</summary>
 
 ```mermaid
 flowchart TD
@@ -708,6 +737,12 @@ flowchart TD
 
 </details>
 
+</details>
+
+### 中文
+
+供应商链路按优先级编排，具备显式回退与校验门禁。
+
 ---
 
 ## Security and hardening / 安全与加固
@@ -718,7 +753,10 @@ Hardening is layered:
 request normalization, contract checks, static-asset validation, and deterministic failure outputs.
 
 <details>
-<summary>Security and hardening pipeline</summary>
+<summary>Security Charts / 安全图表</summary>
+
+<details>
+<summary>English</summary>
 
 ```mermaid
 flowchart TD
@@ -737,13 +775,8 @@ flowchart TD
 
 </details>
 
-### 中文
-
-安全加固采用分层设计：
-请求规范化、契约校验、静态资源校验、确定性失败输出。
-
 <details>
-<summary>安全与加固链路</summary>
+<summary>中文</summary>
 
 ```mermaid
 flowchart TD
@@ -761,6 +794,13 @@ flowchart TD
 ```
 
 </details>
+
+</details>
+
+### 中文
+
+安全加固采用分层设计：
+请求规范化、契约校验、静态资源校验、确定性失败输出。
 
 ---
 
