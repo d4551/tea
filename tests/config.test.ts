@@ -65,6 +65,7 @@ describe("environment parsing", () => {
     expect(appConfig.staticAssets.publicDirectory.length).toBeGreaterThan(0);
     expect(appConfig.staticAssets.assetsDirectory.length).toBeGreaterThan(0);
     expect(appConfig.staticAssets.rmmzPackDirectory.length).toBeGreaterThan(0);
+    expect(appConfig.staticAssets.cacheMaxAgeSeconds).toBeGreaterThanOrEqual(0);
     expect(appConfig.builder.workerPollIntervalMs).toBeGreaterThanOrEqual(100);
     const configuredAutomationOrigin = Bun.env.BUILDER_LOCAL_AUTOMATION_ORIGIN;
     expect(typeof configuredAutomationOrigin).toBe("string");

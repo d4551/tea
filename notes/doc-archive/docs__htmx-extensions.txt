@@ -27,7 +27,6 @@ flowchart LR
     L2["focus-panel"]
     L3["oracle-indicator"]
     L4["server-toast"]
-    L5["game-hud"]
   end
 
   subgraph Routes["Route surfaces"]
@@ -51,7 +50,6 @@ flowchart LR
   L2 --> R3
   L3 --> R1
   L4 --> R1
-  L5 --> R3
 ```
 
 ## 3) Event to owner map
@@ -91,9 +89,9 @@ flowchart LR
 
 - Scope: Oracle request loading UX.
 - Contracts:
-  - show loading before request,
+  - clone the server-rendered loading-panel template before request,
   - clear indicator on completion,
-  - avoid duplicate local indicators.
+  - keep panel markup owned by `renderOraclePanel`.
 
 ### 4.4 `server-toast`
 
@@ -102,14 +100,6 @@ flowchart LR
   - single container owner in shared layout,
   - localized messages before render,
   - stable renderer with multiple producers.
-
-### 4.5 `game-hud`
-
-- Scope: live HUD patches from `/api/game/session/:id/hud`.
-- Contracts:
-  - slot mapping for scene/dialog/hp/mp/status,
-  - unknown slots ignored with diagnostics,
-  - data treated as partial overwrite.
 
 ## 5) Progressive enhancement policy
 
@@ -143,8 +133,7 @@ sequenceDiagram
 ```mermaid
 flowchart LR
   S["/api/game/session/:id/hud"] --> C["SSE consumer"]
-  C --> H["game-hud"]
-  H --> P["HUD slots"]
+  C --> P["server-rendered HUD fragments"]
   P --> A["layout-controls aria + status updates"]
 ```
 

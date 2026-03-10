@@ -118,6 +118,7 @@ export const renderOracleSection = (
           data-loading-description="${escapeHtml(messages.aiPlayground.loadingDescription)}"
           data-send-error-message="${escapeHtml(messages.aiPlayground.networkErrorDescription)}"
           data-response-error-message="${escapeHtml(messages.aiPlayground.retryableErrorDescription)}"
+          data-oracle-loading-template-id="oracle-loading-template"
           class="grid gap-3"
           aria-label="${escapeHtml(messages.aiPlayground.cardTitle)}"
         >
@@ -146,6 +147,11 @@ export const renderOracleSection = (
             )}"></span>
           </button>
         </form>
+        <template id="oracle-loading-template">${renderOraclePanel(messages, {
+          state: "loading",
+          mode: panelState.mode,
+          question: "",
+        })}</template>
       </div>
     </article>
     ${renderOraclePanel(messages, panelState)}
@@ -165,7 +171,7 @@ export const renderOraclePanel = (messages: Messages, panelState: OraclePanelSta
       <div class="card-body gap-3">
         <h3 class="card-title text-info text-sm">${escapeHtml(messages.aiPlayground.loadingTitle)}</h3>
         <div class="chat chat-start">
-          <div class="chat-bubble chat-bubble-info opacity-60">${escapeHtml(panelState.question)}</div>
+          <div class="chat-bubble chat-bubble-info opacity-60" data-oracle-loading-question="true">${escapeHtml(panelState.question)}</div>
         </div>
         <div class="chat chat-end">
           <div class="chat-bubble space-y-2 w-full max-w-xs">

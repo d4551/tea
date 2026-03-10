@@ -45,7 +45,7 @@ flowchart TB
     K2["i18n + locale plugin"]
     K3["error-handler"]
     K4["staticAssets plugin"]
-    K5["swagger + session/creator/ai plugins"]
+    K5["openapi + session/creator/ai plugins"]
   end
 
   subgraph RouteSurfaces["Route layer"]

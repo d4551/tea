@@ -7,7 +7,7 @@
 import type { LocaleCode } from "../../config/environment.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
-import { escapeHtml } from "../layout.ts";
+import { escapeHtml, renderDrawerToggleControl } from "../layout.ts";
 import {
   iconAi,
   iconAssets,
@@ -276,15 +276,13 @@ export const renderBuilderSidebar = (props: BuilderLayoutProps): string => {
           <svg xmlns="http://www.w3.org/2000/svg" class="size-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
           <span class="text-xl font-bold tracking-tight">${escapeHtml(messages.metadata.appName)}</span>
         </div>
-        <button
-          type="button"
-          class="btn btn-ghost btn-sm lg:hidden"
-          aria-label="${escapeHtml(messages.common.closeSidebar)}"
-          data-drawer-toggle-target="main-nav-drawer"
-          data-drawer-toggle-mode="close"
-        >
-          ${escapeHtml(messages.common.closeSidebar)}
-        </button>
+        ${renderDrawerToggleControl({
+          targetId: "main-nav-drawer",
+          label: messages.common.closeSidebar,
+          className: "btn btn-ghost btn-sm lg:hidden",
+          mode: "close",
+          content: escapeHtml(messages.common.closeSidebar),
+        })}
       </div>
       
       <div class="p-4 border-b border-base-300 bg-base-200/50">
@@ -326,17 +324,12 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
       <div class="flex flex-col flex-1 w-full max-w-[100vw]">
         <nav class="navbar border-b border-base-300/50 glass-header lg:hidden" role="navigation" aria-label="${escapeHtml(messages.builder.title)}">
           <div class="flex-none">
-            <button
-              type="button"
-              class="btn btn-square btn-ghost"
-              aria-controls="main-nav-drawer"
-              aria-expanded="false"
-              aria-label="${escapeHtml(messages.common.openMenu)}"
-              data-drawer-toggle-target="main-nav-drawer"
-              data-drawer-toggle-mode="toggle"
-            >
-              ${iconMenu()}
-            </button>
+            ${renderDrawerToggleControl({
+              targetId: "main-nav-drawer",
+              label: messages.common.openMenu,
+              className: "btn btn-square btn-ghost",
+              content: iconMenu(),
+            })}
           </div>
           <div class="flex-1">
             <span class="text-lg font-semibold">${escapeHtml(messages.builder.title)}</span>

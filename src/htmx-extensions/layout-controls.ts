@@ -298,6 +298,24 @@ document.addEventListener("change", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  const drawerControl = (
+    event.target instanceof Element
+      ? event.target.closest<DrawerToggleControl>(drawerToggleSelector)
+      : null
+  ) as DrawerToggleControl | null;
+
+  if (
+    drawerControl &&
+    (event.key === "Enter" || event.key === " ") &&
+    !(drawerControl instanceof HTMLButtonElement) &&
+    !(drawerControl instanceof HTMLAnchorElement) &&
+    !(drawerControl instanceof HTMLInputElement)
+  ) {
+    event.preventDefault();
+    drawerControl.click();
+    return;
+  }
+
   if (event.key !== "Escape") {
     return;
   }

@@ -1,6 +1,7 @@
 import { Elysia } from "elysia";
 import { appConfig } from "../config/environment.ts";
 import { resolveStaticAssetMounts } from "../shared/constants/assets.ts";
+import { httpStatus } from "../shared/constants/http.ts";
 
 /**
  * MIME type lookup for common static file extensions.
@@ -141,24 +142,24 @@ for (const mount of resolveStaticAssetMounts(appConfig)) {
   staticAssetsPlugin.get(`${normalizedPrefix}/*`, async ({ params }) => {
     const wildcardPath = (params as Record<string, string>)["*"];
     if (!wildcardPath) {
-      return new Response("Not Found", { status: 404 });
+      return new Response(null, { status: httpStatus.notFound });
     }
 
     const absolutePath = resolveAssetPath(normalizedAssetsRoot, wildcardPath);
     if (absolutePath === null) {
-      return new Response("Not Found", { status: 404 });
+      return new Response(null, { status: httpStatus.notFound });
     }
 
     const file = Bun.file(absolutePath);
     const exists = await file.exists();
     if (!exists) {
-      return new Response("Not Found", { status: 404 });
+      return new Response(null, { status: httpStatus.notFound });
     }
 
     return new Response(file, {
       headers: {
         "content-type": resolveMimeTypeFromPath(absolutePath),
-        "cache-control": "public, max-age=3600",
+        "cache-control": `public, max-age=${appConfig.staticAssets.cacheMaxAgeSeconds}`,
       },
     });
   });

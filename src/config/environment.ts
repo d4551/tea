@@ -28,6 +28,7 @@ export interface AppConfig {
     readonly publicDirectory: string;
     readonly assetsDirectory: string;
     readonly rmmzPackDirectory: string;
+    readonly cacheMaxAgeSeconds: number;
   };
   readonly api: {
     readonly docsPath: string;
@@ -272,6 +273,7 @@ const DEFAULT_RMMZ_PACK_PREFIX = "/rmmz-pack";
 const DEFAULT_PUBLIC_DIRECTORY = "public";
 const DEFAULT_ASSETS_DIRECTORY = "assets";
 const DEFAULT_RMMZ_PACK_DIRECTORY = "LOTFK_RMMZ_Agentic_Pack";
+const DEFAULT_STATIC_ASSET_CACHE_MAX_AGE_SECONDS = 3600;
 const DEFAULT_DOCS_PATH = "/docs";
 const DEFAULT_BUILDER_WORKER_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_BUILDER_AUTOMATION_PROBE_TIMEOUT_MS = 500;
@@ -633,6 +635,12 @@ export const appConfig: AppConfig = {
     publicDirectory: resolvedPublicDirectory,
     assetsDirectory: resolvedAssetsDirectory,
     rmmzPackDirectory: resolvedRmmzPackDirectory,
+    cacheMaxAgeSeconds: parseInteger(
+      Bun.env.STATIC_ASSET_CACHE_MAX_AGE_SECONDS,
+      DEFAULT_STATIC_ASSET_CACHE_MAX_AGE_SECONDS,
+      0,
+      "STATIC_ASSET_CACHE_MAX_AGE_SECONDS",
+    ),
   },
   api: {
     docsPath: Bun.env.API_DOCS_PATH ?? DEFAULT_DOCS_PATH,

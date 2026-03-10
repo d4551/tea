@@ -1,11 +1,11 @@
-import { swagger } from "@elysiajs/swagger";
+import { openapi } from "@elysiajs/openapi";
 import { appConfig } from "../config/environment.ts";
 
 /**
  * Framework-native API documentation plugin.
- * Uses Elysia Swagger UI with deterministic route path and metadata.
+ * Uses Elysia OpenAPI with a Scalar UI and deterministic route metadata.
  */
-export const swaggerDocsPlugin = swagger({
+export const openApiDocsPlugin = openapi({
   path: appConfig.api.docsPath,
   documentation: {
     info: {

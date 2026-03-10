@@ -1,7 +1,13 @@
 import { appConfig } from "../config/environment.ts";
 import { assetRelativePaths, toPublicAssetUrl } from "../shared/constants/assets.ts";
 import { appRoutes, withLocaleQuery } from "../shared/constants/routes.ts";
-import { escapeHtml, type LayoutContext, renderDocument } from "./layout.ts";
+import {
+  escapeHtml,
+  type LayoutContext,
+  renderDocument,
+  renderDrawerToggleControl,
+} from "./layout.ts";
+import { renderEmptyState } from "./shared/ui-components.ts";
 
 const homePageScripts = [
   {
@@ -24,6 +30,12 @@ const homePageScripts = [
 export interface PageRenderInput {
   readonly layout: LayoutContext;
 }
+
+const workspaceStatusIcon =
+  '<svg xmlns="http://www.w3.org/2000/svg" class="size-10 text-primary/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 4l9 6.5"/><path d="M5 10v9h14v-9"/><path d="M9 19v-5h6v5"/></svg>';
+
+const activityEmptyIcon =
+  '<svg xmlns="http://www.w3.org/2000/svg" class="size-10 text-accent/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6v6l4 2"/><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>';
 
 /**
  * Renders the Game Forge home page.
@@ -52,31 +64,16 @@ export const renderHomePage = (input: PageRenderInput): string => {
         </div>
       </div>
       
-      <div class="stats stats-vertical sm:stats-horizontal shadow-md bg-base-100/80 backdrop-blur-sm border border-base-300/50 shrink-0 rounded-box" role="region" aria-label="${escapeHtml(messages.builder.dashboard)}">
-        <div class="stat px-6 py-4">
-          <div class="stat-figure text-primary">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block h-6 w-6 stroke-current" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-          </div>
-          <div class="stat-title">${escapeHtml(messages.pages.home.statsScenes)}</div>
-          <div class="stat-value text-primary">0</div>
+      <article class="card border border-base-300/50 bg-base-100/80 shadow-md backdrop-blur-sm shrink-0 xl:max-w-md" role="status" aria-label="${escapeHtml(messages.common.noProjectBound)}">
+        <div class="card-body">
+          ${renderEmptyState(
+            workspaceStatusIcon,
+            messages.common.noProjectBound,
+            messages.builder.workspaceJumpBack,
+            `<a href="${withLocaleQuery(appRoutes.builder, locale)}" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.pages.home.openUnifiedBuilder)}">${escapeHtml(messages.pages.home.openUnifiedBuilder)}</a>`,
+          )}
         </div>
-        
-        <div class="stat px-6 py-4 border-t sm:border-t-0 sm:border-l border-base-300/50">
-          <div class="stat-figure text-secondary">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block h-6 w-6 stroke-current" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-          </div>
-          <div class="stat-title">${escapeHtml(messages.pages.home.statsNpcs)}</div>
-          <div class="stat-value text-secondary">0</div>
-        </div>
-        
-        <div class="stat px-6 py-4 border-t sm:border-t-0 sm:border-l border-base-300/50">
-          <div class="stat-figure text-accent">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block h-6 w-6 stroke-current" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-          </div>
-          <div class="stat-title">${escapeHtml(messages.pages.home.statsGenerations)}</div>
-          <div class="stat-value text-accent">0</div>
-        </div>
-      </div>
+      </article>
     </section>
 
     <!-- Bento Grid Structure -->
@@ -100,10 +97,13 @@ export const renderHomePage = (input: PageRenderInput): string => {
               ${escapeHtml(messages.pages.home.openUnifiedBuilder)}
               <svg xmlns="http://www.w3.org/2000/svg" class="size-4 transition-transform group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
             </a>
-            <button type="button" class="btn btn-outline btn-block gap-2" aria-controls="ai-chat-drawer" aria-expanded="false" aria-label="${escapeHtml(messages.pages.home.talkToAiOracle)}" data-drawer-toggle-target="ai-chat-drawer" data-drawer-toggle-mode="toggle">
-              <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
-              ${escapeHtml(messages.pages.home.talkToAiOracle)}
-            </button>
+            ${renderDrawerToggleControl({
+              targetId: "ai-chat-drawer",
+              label: messages.pages.home.talkToAiOracle,
+              className: "btn btn-outline btn-block gap-2",
+              hasPopup: "dialog",
+              content: `<svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>${escapeHtml(messages.pages.home.talkToAiOracle)}`,
+            })}
           </div>
         </div>
       </article>
@@ -122,9 +122,9 @@ export const renderHomePage = (input: PageRenderInput): string => {
             <p class="text-base-content/65 text-sm leading-relaxed">${escapeHtml(messages.pages.home.playtestBuildDescription)}</p>
           </div>
           
-          <div class="bg-base-200/60 rounded-box p-5 flex-1 flex flex-col items-center justify-center text-center gap-2 border border-base-300/40" role="status">
+          <div class="bg-base-200/60 rounded-box p-5 flex-1 flex flex-col items-center justify-center text-center gap-2 border border-base-300/40" role="status" aria-label="${escapeHtml(messages.common.noProjectBound)}">
             <svg xmlns="http://www.w3.org/2000/svg" class="size-10 text-base-content/25" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M3 7h4"/><path d="M3 11h4"/><path d="M3 15h4"/><path d="M3 19h4"/><path d="M13 11l4 2-4 2v-4z"/></svg>
-            <span class="text-xs font-semibold uppercase tracking-wider text-base-content/50">${escapeHtml(messages.pages.home.statusUnpublishedDraft)}</span>
+            <span class="text-xs font-semibold uppercase tracking-wider text-base-content/50">${escapeHtml(messages.common.noProjectBound)}</span>
           </div>
           
           <div class="card-actions justify-stretch mt-auto pt-3">
@@ -145,31 +145,14 @@ export const renderHomePage = (input: PageRenderInput): string => {
             </div>
             <h2 class="card-title text-lg">${escapeHtml(messages.pages.home.projectActivity)}</h2>
           </div>
-          
-          <ul class="timeline timeline-vertical timeline-compact max-md:timeline-snap-icon w-full gap-1 overflow-hidden mt-2" role="list" aria-label="${escapeHtml(messages.pages.home.projectActivity)}">
-            <li>
-              <div class="timeline-middle">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="size-4 text-primary" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" /></svg>
-              </div>
-              <div class="timeline-end timeline-box bg-primary/10 border-primary/20 shadow-sm pb-1 text-sm font-medium">${escapeHtml(messages.pages.home.projectCreatedInWorkspace)}</div>
-              <hr class="bg-primary/20" />
-            </li>
-            <li>
-              <hr class="bg-primary/20" />
-              <div class="timeline-middle text-base-content/40">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="size-4" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" /></svg>
-              </div>
-              <div class="timeline-end timeline-box bg-base-200/60 text-sm border-none pb-1 w-full max-w-[200px] whitespace-normal truncate">${escapeHtml(messages.pages.home.waitingForInitialSceneDraft)}</div>
-              <hr class="bg-base-300" />
-            </li>
-            <li>
-              <hr class="bg-base-300" />
-              <div class="timeline-middle text-base-content/40">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="size-4" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clip-rule="evenodd" /></svg>
-              </div>
-              <div class="timeline-end timeline-box bg-base-200/60 border-none text-sm pb-1">${escapeHtml(messages.pages.home.awaitingPublication)}</div>
-            </li>
-          </ul>
+          <div class="rounded-box border border-dashed border-base-300 bg-base-200/40 p-6" role="status" aria-label="${escapeHtml(messages.pages.home.activityEmptyTitle)}">
+            ${renderEmptyState(
+              activityEmptyIcon,
+              messages.pages.home.activityEmptyTitle,
+              messages.pages.home.activityEmptyDescription,
+              `<a href="${withLocaleQuery(appRoutes.builder, locale)}" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.pages.home.openUnifiedBuilder)}">${escapeHtml(messages.pages.home.openUnifiedBuilder)}</a>`,
+            )}
+          </div>
         </div>
       </article>
       

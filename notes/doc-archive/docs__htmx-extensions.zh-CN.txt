@@ -24,7 +24,6 @@ flowchart LR
     L2["focus-panel"]
     L3["oracle-indicator"]
     L4["server-toast"]
-    L5["game-hud"]
   end
 
   subgraph Routes["路由面"]
@@ -48,7 +47,6 @@ flowchart LR
   L2 --> R3
   L3 --> R1
   L4 --> R1
-  L5 --> R3
 ```
 
 ## 3) 事件到所有者映射
@@ -88,9 +86,9 @@ flowchart LR
 
 - 范围：Oracle 提交状态提示。
 - 契约：
-  - 发起前显示 loading；
+  - 发起前克隆服务端渲染的 loading 面板模板；
   - 完成后清理；
-  - 避免页面级重复 indicator。
+  - 面板结构仍由 `renderOraclePanel` 统一负责。
 
 ### 4.4 `server-toast`
 
@@ -99,14 +97,6 @@ flowchart LR
   - 统一容器；
   - 文案先本地化；
   - 一个渲染器、多个生产者。
-
-### 4.5 `game-hud`
-
-- 范围：`/api/game/session/:id/hud` 实时更新。
-- 契约：
-  - 场景/对话/HP/MP 槽位映射；
-  - 未知槽位记录诊断并跳过；
-  - 仅当前槽位局部覆盖。
 
 ## 5) 渐进增强规则
 
@@ -140,8 +130,7 @@ sequenceDiagram
 ```mermaid
 flowchart LR
   S["/api/game/session/:id/hud"] --> C["SSE 消费者"]
-  C --> H["game-hud"]
-  H --> P["HUD slots"]
+  C --> P["服务端渲染 HUD 片段"]
   P --> A["layout-controls 无障碍同步"]
 ```
 

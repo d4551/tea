@@ -27,6 +27,54 @@ export interface LayoutScript {
 }
 
 /**
+ * Progressive-enhancement drawer toggle control rendered as a native label.
+ *
+ * The associated checkbox keeps DaisyUI drawers usable before the HTMX
+ * enhancement layer loads, while `layout-controls` upgrades keyboard and
+ * aria-expanded handling once JavaScript is available.
+ */
+export interface DrawerToggleControlInput {
+  readonly targetId: string;
+  readonly label: string;
+  readonly className: string;
+  readonly content: string;
+  readonly mode?: "toggle" | "close";
+  readonly controls?: string;
+  readonly expanded?: boolean;
+  readonly hasPopup?: "dialog" | "menu";
+}
+
+/**
+ * Renders a shared drawer toggle control for DaisyUI drawer shells.
+ *
+ * @param input Drawer toggle metadata and inner markup.
+ * @returns Progressive-enhancement drawer toggle markup.
+ */
+export const renderDrawerToggleControl = (input: DrawerToggleControlInput): string => {
+  const mode = input.mode ?? "toggle";
+  const attributes = [
+    `for="${escapeHtml(input.targetId)}"`,
+    `class="${escapeHtml(input.className)}"`,
+    'role="button"',
+    'tabindex="0"',
+    `aria-controls="${escapeHtml(input.controls ?? input.targetId)}"`,
+    `aria-label="${escapeHtml(input.label)}"`,
+    `data-drawer-toggle-target="${escapeHtml(input.targetId)}"`,
+    `data-drawer-toggle-mode="${mode}"`,
+  ];
+
+  if (mode === "toggle") {
+    attributes.push(`aria-expanded="${String(input.expanded ?? false)}"`);
+  }
+
+  if (input.hasPopup) {
+    attributes.push(`aria-haspopup="${escapeHtml(input.hasPopup)}"`);
+  }
+
+  return `<label ${attributes.join(" ")}>${input.content}</label>`;
+};
+
+/**
  * Shared route-derived layout context for SSR views.
  */
 /**
@@ -176,18 +224,14 @@ export const renderLayout = (input: LayoutInput): string => {
 
         <!-- Global FAB for AI Chat -->
         <div class="fab fixed bottom-6 right-6 z-50">
-          <button
-            type="button"
-            class="btn btn-circle btn-primary h-16 w-16 shrink-0 shadow-2xl"
-            aria-controls="ai-chat-drawer"
-            aria-expanded="false"
-            aria-haspopup="dialog"
-            aria-label="${escapeHtml(messages.common.openAiAssistant)}"
-            data-drawer-toggle-target="ai-chat-drawer"
-            data-drawer-toggle-mode="toggle"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
-          </button>
+          ${renderDrawerToggleControl({
+            targetId: "ai-chat-drawer",
+            label: messages.common.openAiAssistant,
+            className: "btn btn-circle btn-primary h-16 w-16 shrink-0 shadow-2xl",
+            hasPopup: "dialog",
+            content:
+              '<svg xmlns="http://www.w3.org/2000/svg" class="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>',
+          })}
         </div>
       </div>
       
@@ -196,15 +240,13 @@ export const renderLayout = (input: LayoutInput): string => {
         <label for="ai-chat-drawer" aria-label="${escapeHtml(messages.common.closeAiChat)}" class="drawer-overlay"></label>
         <div class="menu min-h-full w-80 border-l border-base-300 bg-base-100 p-0 text-base-content sm:w-96" role="dialog" aria-modal="false" aria-label="${escapeHtml(messages.common.openAiAssistant)}">
           <div class="flex items-center justify-end border-b border-base-300 px-4 py-3">
-            <button
-              type="button"
-              class="btn btn-ghost btn-sm"
-              aria-label="${escapeHtml(messages.common.closeAiChat)}"
-              data-drawer-toggle-target="ai-chat-drawer"
-              data-drawer-toggle-mode="close"
-            >
-              ${escapeHtml(messages.common.closeAiChat)}
-            </button>
+            ${renderDrawerToggleControl({
+              targetId: "ai-chat-drawer",
+              label: messages.common.closeAiChat,
+              className: "btn btn-ghost btn-sm",
+              mode: "close",
+              content: escapeHtml(messages.common.closeAiChat),
+            })}
           </div>
           ${renderOracleSection(
             messages,
@@ -241,17 +283,13 @@ const renderTopBar = (
 
   return `<nav aria-label="${escapeHtml(messages.common.mobileNavigation)}" class="navbar sticky top-0 z-30 w-full border-b border-base-300 bg-base-100/80 backdrop-blur-md px-4">
     <div class="flex-none lg:hidden mr-2">
-      <button
-        type="button"
-        class="btn btn-square btn-ghost btn-sm"
-        aria-controls="main-nav-drawer"
-        aria-expanded="false"
-        aria-label="${escapeHtml(messages.common.openMenu)}"
-        data-drawer-toggle-target="main-nav-drawer"
-        data-drawer-toggle-mode="toggle"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-5 h-5 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-      </button>
+      ${renderDrawerToggleControl({
+        targetId: "main-nav-drawer",
+        label: messages.common.openMenu,
+        className: "btn btn-square btn-ghost btn-sm",
+        content:
+          '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-5 h-5 stroke-current" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>',
+      })}
     </div>
     <div class="flex-1">
       ${breadcrumbs && breadcrumbs.length > 0 ? renderBreadcrumbs(messages, breadcrumbs) : `<span class="font-bold text-lg lg:hidden">${escapeHtml(messages.metadata.appName)}</span>`}

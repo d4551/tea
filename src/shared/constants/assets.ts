@@ -25,7 +25,6 @@ export const htmxExtensionEntryFiles = [
   "focus-panel.ts",
   "server-toast.ts",
   "layout-controls.ts",
-  "game-hud.ts",
 ] as const;
 
 /**

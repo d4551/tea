@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { getMessages } from "../shared/i18n/translator.ts";
-import { renderOraclePanel, toOraclePanelState } from "./oracle.ts";
+import { renderOraclePanel, renderOracleSection, toOraclePanelState } from "./oracle.ts";
 
 describe("oracle view contract", () => {
   test("maps retryable outcomes into the retryable UI state", () => {
@@ -29,5 +29,38 @@ describe("oracle view contract", () => {
     expect(html).toContain(messages.aiPlayground.idleHint);
     expect(html).toContain('data-focus-panel="true"');
     expect(html).toContain('hx-ext="focus-panel"');
+  });
+
+  test("renders loading state from the canonical panel contract", () => {
+    const messages = getMessages("en-US");
+
+    const html = renderOraclePanel(messages, {
+      state: "loading",
+      mode: "auto",
+      question: "How should the river market sound?",
+    });
+
+    expect(html).toContain('role="status"');
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toContain('data-oracle-loading-question="true"');
+    expect(html).toContain("How should the river market sound?");
+  });
+
+  test("embeds a server-rendered loading template for client-side request feedback", () => {
+    const messages = getMessages("en-US");
+
+    const html = renderOracleSection(
+      messages,
+      {
+        state: "idle",
+        mode: "auto",
+        question: "",
+      },
+      "en-US",
+    );
+
+    expect(html).toContain('data-oracle-loading-template-id="oracle-loading-template"');
+    expect(html).toContain('<template id="oracle-loading-template">');
+    expect(html).toContain('data-oracle-loading-question="true"');
   });
 });

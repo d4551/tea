@@ -3,6 +3,7 @@ import { type Prisma, PrismaClient } from "@prisma/client";
 import type { LocaleCode } from "../../config/environment.ts";
 import { appConfig } from "../../config/environment.ts";
 import { getLevel } from "../../domain/game/progression.ts";
+import { createLogger } from "../../lib/logger.ts";
 import type {
   AnimationClip,
   AnimationTimeline,
@@ -796,9 +797,42 @@ export type BuilderProjectAutomationRunArtifactRow =
 
 // ── Base client ───────────────────────────────────────────────────────────────
 
+const prismaLogger = createLogger("database.prisma");
+const prismaLogDefinitions: Prisma.LogDefinition[] = [
+  { emit: "event", level: "warn" },
+  { emit: "event", level: "error" },
+] as const;
+
+const attachPrismaStructuredLogging = (client: PrismaClient): PrismaClient => {
+  const subscribeToLog = client.$on.bind(client) as (
+    level: "warn" | "error",
+    callback: (event: Prisma.LogEvent) => void,
+  ) => void;
+
+  subscribeToLog("warn", (event) => {
+    prismaLogger.warn("prisma.client", {
+      level: "warn",
+      target: event.target,
+      message: event.message,
+      timestamp: event.timestamp.toISOString(),
+    });
+  });
+
+  subscribeToLog("error", (event) => {
+    prismaLogger.error("prisma.client", {
+      level: "error",
+      target: event.target,
+      message: event.message,
+      timestamp: event.timestamp.toISOString(),
+    });
+  });
+
+  return client;
+};
+
 const createBaseClient = (): PrismaClient => {
   const adapter = new PrismaLibSql({ url: appConfig.database.url });
-  return new PrismaClient({ adapter, log: ["warn", "error"] });
+  return attachPrismaStructuredLogging(new PrismaClient({ adapter, log: prismaLogDefinitions }));
 };
 
 const toSceneCreateManyInput = (

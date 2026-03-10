@@ -7,10 +7,10 @@ import { creatorWorkerPlugin } from "./plugins/creator-worker-plugin.ts";
 import { createErrorResponse } from "./plugins/error-handler.ts";
 // Game
 import { gamePlugin } from "./plugins/game-plugin.ts";
+import { openApiDocsPlugin } from "./plugins/openapi-docs.ts";
 import { requestContextPlugin } from "./plugins/request-context.ts";
 import { sessionPurgePlugin } from "./plugins/session-purge-plugin.ts";
 import { staticAssetsPlugin } from "./plugins/static-assets.ts";
-import { swaggerDocsPlugin } from "./plugins/swagger-docs.ts";
 import { aiRoutes } from "./routes/ai-routes.ts";
 import { createApiRoutes } from "./routes/api-routes.ts";
 import { builderApiRoutes } from "./routes/builder-api.ts";
@@ -62,7 +62,7 @@ export const createApp = async () => {
       })
 
       // API Documentation
-      .use(swaggerDocsPlugin)
+      .use(openApiDocsPlugin)
 
       // Static file serving (public bundle output, mounted media assets, plugin pack)
       .use(staticAssetsPlugin)

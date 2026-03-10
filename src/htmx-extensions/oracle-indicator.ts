@@ -1,6 +1,38 @@
-import { escapeHtml, getHtmx, resolveExtensionElement } from "./shared.ts";
+import { getHtmx, resolveExtensionElement } from "./shared.ts";
 
 const htmx = getHtmx();
+
+const resolveOracleForm = (root: Element | null): HTMLFormElement | null => {
+  if (root instanceof HTMLFormElement) {
+    return root;
+  }
+
+  return root?.closest("form") ?? null;
+};
+
+const resolveLoadingPanel = (templateId: string, question: string): HTMLElement | null => {
+  const template = document.getElementById(templateId);
+  if (!(template instanceof HTMLTemplateElement)) {
+    return null;
+  }
+
+  const fragment = template.content.cloneNode(true);
+  if (!(fragment instanceof DocumentFragment)) {
+    return null;
+  }
+
+  const panel = fragment.firstElementChild;
+  if (!(panel instanceof HTMLElement)) {
+    return null;
+  }
+
+  const questionTarget = panel.querySelector<HTMLElement>('[data-oracle-loading-question="true"]');
+  if (questionTarget) {
+    questionTarget.textContent = question;
+  }
+
+  return panel;
+};
 
 if (htmx) {
   htmx.defineExtension("oracle-indicator", {
@@ -16,14 +48,18 @@ if (htmx) {
       const indicatorId =
         dataset.oracleIndicatorId ?? rootDataset.oracleIndicatorId ?? "oracle-loading";
       const panelId = dataset.oraclePanelId ?? rootDataset.oraclePanelId ?? "oracle-panel";
+      const loadingTemplateId =
+        dataset.oracleLoadingTemplateId ??
+        rootDataset.oracleLoadingTemplateId ??
+        "oracle-loading-template";
       const loadingTitle = dataset.loadingTitle ?? rootDataset.loadingTitle ?? "";
-      const loadingDescription = dataset.loadingDescription ?? rootDataset.loadingDescription ?? "";
       const sendErrorMessage = dataset.sendErrorMessage ?? rootDataset.sendErrorMessage ?? "";
       const responseErrorMessage =
         dataset.responseErrorMessage ?? rootDataset.responseErrorMessage ?? "";
       const indicator =
         root?.querySelector(`#${indicatorId}`) ?? document.getElementById(indicatorId);
       const panel = document.getElementById(panelId);
+      const form = resolveOracleForm(root);
 
       if (!(indicator instanceof HTMLElement)) {
         return;
@@ -32,16 +68,18 @@ if (htmx) {
       if (name === "htmx:beforeRequest") {
         indicator.textContent = loadingTitle;
         indicator.setAttribute("aria-busy", "true");
-        if (element instanceof HTMLElement) {
-          element.setAttribute("aria-busy", "true");
+        if (form instanceof HTMLElement) {
+          form.setAttribute("aria-busy", "true");
         }
         if (panel instanceof HTMLElement) {
-          panel.setAttribute("aria-busy", "true");
-          panel.innerHTML = `<div class="card-body">
-  <h3 class="card-title text-info">${escapeHtml(loadingTitle)}</h3>
-  <p>${escapeHtml(loadingDescription)}</p>
-</div>`;
-          panel.className = "card border border-info/30 bg-info/10";
+          const question =
+            form?.querySelector<HTMLInputElement>('input[name="question"]')?.value.trim() ?? "";
+          const loadingPanel = resolveLoadingPanel(loadingTemplateId, question);
+          if (loadingPanel instanceof HTMLElement) {
+            panel.replaceWith(loadingPanel);
+          } else {
+            panel.setAttribute("aria-busy", "true");
+          }
         }
         return;
       }
@@ -64,10 +102,10 @@ if (htmx) {
       }
 
       indicator.removeAttribute("aria-busy");
-      if (element instanceof HTMLElement) {
-        element.removeAttribute("aria-busy");
+      if (form instanceof HTMLElement) {
+        form.removeAttribute("aria-busy");
       }
-      panel?.removeAttribute("aria-busy");
+      document.getElementById(panelId)?.removeAttribute("aria-busy");
     },
   });
 }

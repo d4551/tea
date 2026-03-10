@@ -63,6 +63,8 @@ export interface Messages {
       readonly statusUnpublishedDraft: string;
       readonly launchPlayerSurface: string;
       readonly projectActivity: string;
+      readonly activityEmptyTitle: string;
+      readonly activityEmptyDescription: string;
       readonly projectCreatedInWorkspace: string;
       readonly waitingForInitialSceneDraft: string;
       readonly awaitingPublication: string;
@@ -815,6 +817,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         statusUnpublishedDraft: "Status: Unpublished Draft",
         launchPlayerSurface: "Launch Player Surface",
         projectActivity: "Project Activity",
+        activityEmptyTitle: "No project activity yet",
+        activityEmptyDescription:
+          "Create or import a project in the unified builder to unlock scene metrics, review history, and publish events.",
         projectCreatedInWorkspace: "Project created in workspace",
         waitingForInitialSceneDraft: "Waiting for initial scene draft",
         awaitingPublication: "Awaiting publication",
@@ -1576,6 +1581,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         statusUnpublishedDraft: "状态：未发布草稿",
         launchPlayerSurface: "启动玩家界面",
         projectActivity: "项目动态",
+        activityEmptyTitle: "暂无项目动态",
+        activityEmptyDescription:
+          "在统一构建器中创建或导入项目后，这里会显示场景指标、审阅历史和发布事件。",
         projectCreatedInWorkspace: "项目已在工作区创建",
         waitingForInitialSceneDraft: "等待初始场景草稿",
         awaitingPublication: "等待发布",

@@ -154,7 +154,7 @@ afterEach(async () => {
 });
 
 describe("API contracts", () => {
-  test("swagger docs endpoint is mounted", async () => {
+  test("openapi docs endpoint is mounted", async () => {
     const response = await app.handle(new Request(toUrl(appConfig.api.docsPath)));
     const body = await response.text();
 
@@ -2213,7 +2213,20 @@ describe("HTMX partial rendering", () => {
     expect(html.includes('hx-params="*"')).toBe(true);
     expect(html.includes('aria-label="Switch language to Chinese"')).toBe(true);
     expect(html.includes('data-drawer-toggle-target="main-nav-drawer"')).toBe(true);
+    expect(html.includes('for="main-nav-drawer"')).toBe(true);
+    expect(html.includes('for="ai-chat-drawer"')).toBe(true);
     expect(html.includes("/public/vendor/htmx-ext/layout-controls.js")).toBe(true);
+  });
+
+  test("home page renders explicit empty states instead of placeholder project metrics", async () => {
+    const response = await app.handle(new Request(toUrl(appRoutes.home)));
+    const html = await response.text();
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(html.includes("No project activity yet")).toBe(true);
+    expect(html.includes("Project created in workspace")).toBe(false);
+    expect(html.includes("Waiting for initial scene draft")).toBe(false);
+    expect(html.includes("Awaiting publication")).toBe(false);
   });
 
   test("oracle form preserves locale in progressive-enhancement flow", async () => {

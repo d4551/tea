@@ -7,6 +7,7 @@
 仓库文档已完成 Markdown 退役，当前文档体系统一读取 `notes/doc-archive/` 下的纯文本档案。
 
 - `bun run docs:check` 已改为以 manifest 为核心，不再依赖 `.md` 文件存在。
+- 通过对全部声明依赖执行 `bun pm view` 注册表审计，确认截至 2026-03-10 当前 manifest 仍锁定在各包的最新稳定版本。
 - 核心链路文档已覆盖：
   - 产品入口与架构
   - API 与传输契约
@@ -17,6 +18,7 @@
   - 运维手册
   - RMMZ 陪伴包与状态文档
 - 已完成的关键加固点（static-assets、builder-service、asset-pipeline）已迁移到 Bun 安全实践并有 typed 契约支撑。
+- API 文档已从废弃的 Swagger 插件切换到 `@elysiajs/openapi`，Prisma 日志改为结构化事件输出，Ollama 请求超时改为原生 `AbortSignal.timeout`。
 
 ```mermaid
 sequenceDiagram

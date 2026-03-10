@@ -9,6 +9,7 @@ Scope: documentation migration completeness, create→publish→play wire-up, an
 The repository has completed markdown retirement and now operates from plain-text documentation artifacts in `notes/doc-archive/`.
 
 - `bun run docs:check` validates a schema-controlled manifest (`notes/doc-archive/index.json`) and does not require any `.md` files to exist.
+- A direct registry audit (`bun pm view` across every declared dependency) confirms the pinned manifest is on the latest stable release for each tracked package as of 2026-03-10.
 - End-to-end documentation coverage is complete for:
   - product entrypoint
   - architecture and ownership map
@@ -20,6 +21,7 @@ The repository has completed markdown retirement and now operates from plain-tex
   - operator runbook
   - RMMZ companion pack and maintenance status
 - The most important runtime hardening checks (`static-assets.ts`, `builder-service.ts`, `asset-pipeline.ts`) are structurally migrated to Bun-native or Bun-safe patterns and are now coupled through typed contracts.
+- API documentation now uses `@elysiajs/openapi` instead of the deprecated Swagger plugin, Prisma logging is event-based and structured, and Ollama requests use native timeout signals instead of manual timer orchestration.
 
 Key outcome: the game authoring and playable flow is now wired in a single SSR-first ownership path and is verifiable from one sequence diagram onward.
 
@@ -171,6 +173,7 @@ Executed command set recorded for this pass:
 Observed results:
 
 - Dependency drift: aligned set (tracked `22`, resolved `22`, skipped `0`, checked `22`).
+- Registry version audit: all direct runtime and dev dependencies resolved to their latest stable published versions on 2026-03-10.
 - Docs surface: manifest present and complete.
 - Runtime hardening: no markdown dependency required for the docs surface gate.
 

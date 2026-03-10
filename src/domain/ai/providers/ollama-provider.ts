@@ -296,6 +296,14 @@ const logBoundaryFailure = (event: string, failure: ExternalFailure): void => {
   });
 };
 
+const withTimeoutSignal = (
+  signal: AbortSignal | null | undefined,
+  timeoutMs: number,
+): AbortSignal =>
+  signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)])
+    : AbortSignal.timeout(timeoutMs);
+
 /**
  * Ollama provider implementation using the local REST API.
  */
@@ -323,21 +331,14 @@ export class OllamaProvider implements AiProvider {
    */
   private async ollamaFetch(path: string, options: RequestInit = {}): Promise<Response> {
     const url = `${appConfig.ai.ollamaBaseUrl}${path}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), appConfig.ai.ollamaTimeoutMs);
-
-    try {
-      return await this.fetchImpl(url, {
-        ...options,
-        signal: controller.signal,
-        headers: {
-          "Content-Type": "application/json",
-          ...options.headers,
-        },
-      });
-    } finally {
-      clearTimeout(timeoutId);
-    }
+    return this.fetchImpl(url, {
+      ...options,
+      signal: withTimeoutSignal(options.signal, appConfig.ai.ollamaTimeoutMs),
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+    });
   }
 
   /**
@@ -437,19 +438,12 @@ export class OllamaProvider implements AiProvider {
       return false;
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(
-      () => controller.abort(),
-      appConfig.ai.ollamaAvailabilityTimeoutMs,
-    );
-
     const response = await settleAsync(
       this.fetchImpl(appConfig.ai.ollamaBaseUrl, {
-        signal: controller.signal,
+        signal: AbortSignal.timeout(appConfig.ai.ollamaAvailabilityTimeoutMs),
       }),
     );
 
-    clearTimeout(timeoutId);
     const available = response.ok && response.value.ok;
     if (!available) {
       this._lastFailureMs = Date.now();
