@@ -22,24 +22,31 @@ interface ArchiveManifest {
   readonly entries: readonly ArchiveEntry[];
 }
 
-const REQUIRED_SOURCE_PATHS = [
-  "README.md",
-  "README.zh-CN.md",
-  "ARCHITECTURE.md",
-  "docs/index.md",
-  "docs/htmx-extensions.md",
-  "docs/playable-runtime.md",
-  "docs/local-ai-runtime.md",
-  "docs/operator-runbook.md",
-  "docs/api-contracts.md",
-  "docs/builder-domain.md",
-  "docs/rmmz-pack.md",
-  "docs/maintenance-audit-2026-03-10.md",
-  "LOTFK_RMMZ_Agentic_Pack/README.md",
-  "LOTFK_RMMZ_Agentic_Pack/PLUGIN_SPEC.md",
-  "LOTFK_RMMZ_Agentic_Pack/EVENT_HOOKUPS.md",
-  "LOTFK_RMMZ_Agentic_Pack/STATUS.md",
+const DOCUMENT_PAIRS = [
+  { en: "README.md", zh: "README.zh-CN.md" },
+  { en: "ARCHITECTURE.md", zh: "ARCHITECTURE.zh-CN.md" },
+  { en: "docs/index.md", zh: "docs/index.zh-CN.md" },
+  { en: "docs/htmx-extensions.md", zh: "docs/htmx-extensions.zh-CN.md" },
+  { en: "docs/playable-runtime.md", zh: "docs/playable-runtime.zh-CN.md" },
+  { en: "docs/local-ai-runtime.md", zh: "docs/local-ai-runtime.zh-CN.md" },
+  { en: "docs/operator-runbook.md", zh: "docs/operator-runbook.zh-CN.md" },
+  { en: "docs/api-contracts.md", zh: "docs/api-contracts.zh-CN.md" },
+  { en: "docs/builder-domain.md", zh: "docs/builder-domain.zh-CN.md" },
+  { en: "docs/rmmz-pack.md", zh: "docs/rmmz-pack.zh-CN.md" },
+  { en: "docs/maintenance-audit-2026-03-10.md", zh: "docs/maintenance-audit-2026-03-10.zh-CN.md" },
+  { en: "LOTFK_RMMZ_Agentic_Pack/README.md", zh: "LOTFK_RMMZ_Agentic_Pack/README.zh-CN.md" },
+  {
+    en: "LOTFK_RMMZ_Agentic_Pack/PLUGIN_SPEC.md",
+    zh: "LOTFK_RMMZ_Agentic_Pack/PLUGIN_SPEC.zh-CN.md",
+  },
+  {
+    en: "LOTFK_RMMZ_Agentic_Pack/EVENT_HOOKUPS.md",
+    zh: "LOTFK_RMMZ_Agentic_Pack/EVENT_HOOKUPS.zh-CN.md",
+  },
+  { en: "LOTFK_RMMZ_Agentic_Pack/STATUS.md", zh: "LOTFK_RMMZ_Agentic_Pack/STATUS.zh-CN.md" },
 ] as const;
+
+const REQUIRED_SOURCE_PATHS = DOCUMENT_PAIRS.flatMap((pair) => [pair.en, pair.zh]) as const;
 
 const archiveRoot = "notes/doc-archive";
 const manifestPath = `${archiveRoot}/index.json`;
@@ -128,22 +135,23 @@ const main = async (): Promise<void> => {
       entryBySource.set(entry.sourcePath, entry);
     }
 
-    for (const sourcePath of REQUIRED_SOURCE_PATHS) {
-      const entry = entryBySource.get(sourcePath);
-      if (!entry) {
-        errors.push(`Archive manifest missing source: ${sourcePath}`);
+    for (const pair of DOCUMENT_PAIRS) {
+      const enEntry = entryBySource.get(pair.en);
+      if (!enEntry) {
+        errors.push(`Archive manifest missing source: ${pair.en}`);
         continue;
       }
-
-      if (entry.sourcePath !== sourcePath) {
-        errors.push(
-          `Archive source path mismatch: manifest entry ${entry.sourcePath} vs ${sourcePath}`,
-        );
-        continue;
+      if (!(await Bun.file(enEntry.archivePath).exists())) {
+        errors.push(`Archive artifact missing: ${enEntry.archivePath}`);
       }
 
-      if (!(await Bun.file(entry.archivePath).exists())) {
-        errors.push(`Archive artifact missing: ${entry.archivePath}`);
+      const zhEntry = entryBySource.get(pair.zh);
+      if (!zhEntry) {
+        errors.push(`Archive manifest missing source: ${pair.zh}`);
+        continue;
+      }
+      if (!(await Bun.file(zhEntry.archivePath).exists())) {
+        errors.push(`Archive artifact missing: ${zhEntry.archivePath}`);
       }
     }
   }

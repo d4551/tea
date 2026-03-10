@@ -1,27 +1,27 @@
 # Playable runtime (authoritative runtime client stack)
 
-This is the contract and behavior map for the browser runtime that consumes `/game` bootstrap and game-session transports.
+This document defines the browser runtime contract that consumes `/game` bootstrap and all game transport streams.
 
 ## 1) Runtime decomposition and ownership
 
 ```mermaid
 flowchart TB
-  subgraph Browser entry
+  subgraph BrowserEntry["Browser entry"]
     BE["game-client.ts"]
   end
 
-  subgraph Session orchestration
+  subgraph Session["Session orchestration"]
     BS["game-client-bootstrap-session.ts"]
     IN["game-client-input.ts"]
     TP["game-client-transport.ts"]
   end
 
-  subgraph Render pipeline
+  subgraph Render["Render pipeline"]
     RN["game-client-renderer.ts"]
     TY["game-client-types.ts"]
   end
 
-  subgraph Shared contracts
+  subgraph Shared["Shared contracts"]
     C1["shared/contracts/game-client-bootstrap.ts"]
     C2["shared/contracts/game.ts"]
   end
@@ -29,113 +29,138 @@ flowchart TB
   BE --> BS --> C1
   BE --> IN --> C2
   BE --> TP --> C2
-  BE --> RN
-  RN --> TY
+  BE --> RN --> TY
 ```
 
-## 2) Authoritative sequence from page render to live state
+## 2) From page bootstrap to live state
 
 ```mermaid
 sequenceDiagram
   autonumber
-  participant GamePage as /game SSR
+  participant Page as /game SSR page
   participant API as /api/game/session
-  participant BS as game-client-bootstrap-session
-  participant TP as game-client-transport
-  participant RT as game-client-renderer
-  participant LP as local persistence (session metadata)
+  participant Bootstrap as game-client-bootstrap-session
+  participant Transport as game-client-transport
+  participant Renderer as game-client-renderer
+  participant Persist as local persistence
 
-  GamePage->>BS: inject bootstrap payload
-  BS->>BS: parse + validate bootstrap schema
-  BS->>LP: persist session metadata
-  BS-->>TP: start session info
-  TP->>TP: open WS /api/game/session/:id/ws
-  TP->>GamePage: initial state + render contract
-  RT->>GamePage: painter + camera + scene bootstrap
-  GamePage->>IN: input intent
-  IN->>TP: command POST /api/game/session/:id/command
-  TP->>TP: apply response outcome\n(update state model)
-  TP-->>RT: interpolated state frame / HUD update\n(optional)
+  Page->>Bootstrap: inject bootstrap payload
+  Bootstrap->>Bootstrap: parse + validate contract
+  Bootstrap->>Persist: persist session metadata
+  Bootstrap-->>Transport: start session context
+  Transport->>Transport: open WS /api/game/session/:id/ws
+  Transport-->>Renderer: initial state + frame contract
+  Renderer->>Page: render scene/camera/hud shell
+  Page->>IN: user intent + input events
+  IN->>Transport: POST /api/game/session/:id/command
+  Transport->>Transport: apply response outcome
+  Transport-->>Renderer: interpolated frame + HUD hint
 ```
 
 ## 3) Transport contract details
 
-### 3.1 Session bootstrap
+### 3.1 Session bootstrap contract
 
-- Bootstrap JSON is created by game routes and validated in `game-client-bootstrap-session.ts`.
+- Created by game routes and validated in `game-client-bootstrap-session.ts`.
 - Required values:
   - `sessionId`, `resumeToken`, `projectId`
-  - snapshot build metadata (version + flags)
-  - render config (viewport, frame budget, reconnect budget)
+  - snapshot metadata (`version`, `flags`)
+  - render config (`viewport`, frame/reconnect budgets)
   - command defaults (`commandCooldownMs`, `commandTimeoutMs`)
 
 ### 3.2 Command loop
 
-- Input layer posts command envelopes to `POST /api/game/session/:id/command`.
-- Command responses should be treated as **authoritative outcomes**, not hints.
-- Local client may optimistically show “pending” but must not confirm before server response.
+- The UI posts command envelopes to `POST /api/game/session/:id/command`.
+- Response is authoritative; rendering confirms after server result.
+- Local optimistic hints are optional and must never commit without server confirmation.
 - Replay safety:
-  - if no response before timeout, switch into reconnect/restore path
-  - preserve unsent input queue per frame
+  - on timeout, transition to restore path,
+  - preserve unsent input queue per tick.
 
-### 3.3 Restore and reconnect
+### 3.3 Restore and reconnect path
 
 ```mermaid
 flowchart LR
   C1["disconnect"] --> C2["restore attempt with resumeToken"]
-  C2 -->|ok| C3["resume state\nre-enter streams"]
-  C2 -->|missing token| C4["expired state"]
-  C2 -->|failure limit exceeded| C5["need new session"]
+  C2 -->|ok| C3["resume streams"]
+  C2 -->|missing| C4["expired/invalid"]
+  C2 -->|retry-exceeded| C5["new session required"]
   C3 --> C6["UI recovers"]
-  C4 --> C7["recreate session CTA"]
+  C4 --> C7["recreate flow CTA"]
   C5 --> C7
 ```
 
-## 4) Renderer and scene update rules\n
-- Renderer owns canvas lifecycle and scene interpolation only.\n
-- Renderer reads normalized frame data from transport and updates scene objects deterministically.\n
-- Any expensive parsing or schema validation should stay outside the render loop.\n
-- Window resize and focus transitions are part of renderer state, not transport state.\n
-## 5) State machine for the playable page
+## 4) Renderer and scene update rules
+
+- Renderer owns canvas lifecycle, interpolation, and scene object updates.
+- Transport always provides normalized frame data.
+- Heavy parsing and schema checks stay outside the frame loop.
+- Resize and visibility transitions are renderer state, not transport state.
+
+## 5) Playable page state machine
 
 ```mermaid
 stateDiagram-v2
   [*] --> bootstrapMissing
-  bootstrapMissing --> bootstrapParseError: parse fails
-  bootstrapMissing --> connecting: valid bootstrap\n
-  connecting --> connected: WS open + first authoritative frame\n
-  connecting --> reconnecting: retryable ws fail\n
-  connected --> reconnecting: network drop\n
-  connected --> commandPending: user command accepted\n
-  commandPending --> connected: command result arrived\n
-  reconnecting --> connected: restore success\n
-  reconnecting --> restoreExpired: restore failure\n+  reconnecting --> terminalError: repeated non-retryable error\n+  restoreExpired --> terminalError: requires new session\n+  terminalError --> [*]\n+```\n
-### State meaning\n
-- `bootstrapMissing`: route did not inject payload or script order failed.\n
-- `bootstrapParseError`: contract mismatch between server and client.\n
-- `reconnecting`: transport-level recovery in progress.\n
-- `restoreExpired`: resume token/session pair no longer valid.\n
-- `terminalError`: explicit user-facing error; requires action.\n
-## 6) Security and anti-cheat boundary\n
-- Runtime client never writes authoritative state directly.\n
-- Viewer-only participants are filtered by session role before command send.\n
-- Session restoration requires server-issued tokens and strict route ownership checks.\n
-- Replay or stale frames must be resolved by server envelope + session version, not client clock.\n
-## 7) Performance and reliability model\n
-- Render loop should stay frame-latency bounded by transport pace.
-- Commands are intentionally small and typed to reduce payload and avoid full diff floods.
-- Separate channels:
-  - WS: full state frames for gameplay continuity
-  - HUD SSE: low-cardinality status stream for overlays\n
-## 8) Test and verification targets\n
-- Command idempotency and schema contract tests under `tests/`.
-- WebSocket reconnect + restore tests where transport boundaries are mocked.
-- Bootstrap parse tests for locale/render/runtime config changes.
-- Replay and spectator restrictions.\n
-## 9) 中文说明（同步）\n
-可玩运行时强调“服务端权威”，客户端只做命令提交和状态渲染。\n
-- 页面加载后先执行 bootstrap 校验，再建立 WS 连接。\n
-- `command` 按钮动作以服务端回包为准，不以客户端预测为最终状态。\n
-- 恢复流程只在会话/恢复码仍有效时执行，失效后需新建会话。\n
-- HUD 与 WS 分离：HUD 用于低频状态，WS 用于主状态流。\n
-- 画面恢复、重连、会话过期都映射到单一状态机，避免每页自行处理。\n
+  bootstrapMissing --> bootstrapParseError: parse/validate fail
+  bootstrapMissing --> connecting: valid bootstrap
+  connecting --> connected: WS open + first frame
+  connecting --> reconnecting: retryable WS fail
+  connected --> reconnecting: network drop
+  connected --> commandPending: command accepted
+  commandPending --> connected: command response
+  reconnecting --> connected: restore success
+  reconnecting --> restoreExpired: restore failure
+  restoreExpired --> terminalError: requires new session
+  terminalError --> [*]
+```
+
+## 6) Security and anti-cheat
+
+- Client rendering never mutates authoritative state.
+- Viewer-only roles are filtered before any command dispatch.
+- Restore checks both session and `resumeToken` validity.
+- Replay/restart resolution uses envelope + session version, not client clock heuristics.
+
+## 7) Reliability and performance
+
+- Render loop aligns to transport cadence; avoid unbounded animation drift.
+- Command envelopes stay compact and typed to reduce bandwidth.
+- WS stream carries authoritative state.
+- HUD SSE stream carries low-cardinality overlay updates.
+
+## 8) Verification targets
+
+- Contract tests for bootstrap parse and command transitions in `tests/`.
+- WS reconnect and restore tests for transport failures.
+- Locale/render config change coverage for bootstrap parser.
+- Replay restrictions and spectator role restrictions.
+
+## 9) Failure matrix
+
+```mermaid
+flowchart TB
+  F1["command timeout"] -->|retryable| F2["restore attempt"]
+  F1 -->|non-retryable| F3["terminal"]
+  F2 -->|token valid| F4["resumed"]
+  F2 -->|token missing| F3
+  F3 --> F5["recreate session required"]
+```
+
+## 10) Runtime sequence map (full flow)
+
+```mermaid
+flowchart LR
+  subgraph "Client"
+    A["Page"]
+    B["Transport"]
+    C["Renderer"]
+  end
+  subgraph "Server"
+    D["game-plugin.ts"]
+    E["game-loop.ts"]
+    F["Prisma sessions"]
+  end
+  A --> B --> D --> E --> F --> E --> C
+  B -->|SSE| C
+```

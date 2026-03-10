@@ -1,0 +1,111 @@
+# 维护审计 — 2026-03-10
+
+范围：文档迁移完整性、创建→发布→试玩链路、以及安全/运行时加固状态。
+
+## 1) 执行摘要
+
+仓库文档已完成 Markdown 退役，当前文档体系统一读取 `notes/doc-archive/` 下的纯文本档案。
+
+- `bun run docs:check` 已改为以 manifest 为核心，不再依赖 `.md` 文件存在。
+- 核心链路文档已覆盖：
+  - 产品入口与架构
+  - API 与传输契约
+  - Builder 领域
+  - 可玩运行时
+  - HTMX 扩展
+  - 本地 AI 运行时
+  - 运维手册
+  - RMMZ 陪伴包与状态文档
+- 已完成的关键加固点（static-assets、builder-service、asset-pipeline）已迁移到 Bun 安全实践并有 typed 契约支撑。
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Creator
+  participant Builder as /builder UI
+  participant BuilderAPI as /api/builder
+  participant BuilderService as builderService
+  participant PublishVal as publish validation
+  participant Store as Prisma / snapshots
+  participant GameRoutes as /game
+  participant GameAPI as /api/game
+  participant GameLoop as gameLoop
+
+  Creator->>Builder: open /builder?projectId=hero-fort
+  Builder->>BuilderAPI: GET draft shell + context
+  BuilderAPI->>BuilderService: getProject(projectId)
+  BuilderService->>Store: load draft + relations
+  Store-->>BuilderService: scenes/npcs/dialogue/automation
+  BuilderService-->>BuilderAPI: typed BuilderProjectSnapshot
+  BuilderAPI-->>Builder: SSR shell
+
+  Creator->>Builder: edit and publish
+  Builder->>BuilderAPI: PATCH /api/builder/projects/:id/publish
+  BuilderAPI->>BuilderService: publishProject(id, true)
+  BuilderService->>PublishVal: validateBuilderProjectForPublish()
+  PublishVal-->>BuilderService: pass / issue[]
+  alt publish fails
+    BuilderService-->>BuilderAPI: validation issues
+    BuilderAPI-->>Builder: error fragment
+  else publish passes
+    BuilderService->>Store: materialize immutable release snapshot
+    Store-->>BuilderService: publishedReleaseVersion
+    BuilderService-->>BuilderAPI: publish ok
+    BuilderAPI-->>Builder: play enabled
+  end
+
+  Creator->>GameRoutes: open /game?projectId=hero-fort
+  GameRoutes->>BuilderService: getPublishedProject(projectId)
+  BuilderService-->>GameRoutes: published snapshot metadata
+  GameRoutes->>GameLoop: createSession(locale, defaultScene, projectId)
+  GameLoop->>Store: create session + resume token
+  GameLoop-->>GameRoutes: bootstrap session
+  GameRoutes-->>Creator: /game SSR + token
+```
+
+## 2) 发现的脆弱点与修复
+
+### A) UI 与游戏创建链路
+
+- Builder path 已以 SSR+HTMX 完成项目创建与跳转。
+- Publish 使用 `/api/builder/projects/:projectId/publish` 并返回可见校验详情。
+- Play 按钮由 `publishedReleaseVersion` 绑定，避免直接运行 draft。
+- `/game` 页面由服务端注入 bootstrapped session，再进入 runtime。
+
+### B) 静态资源安全
+
+- 解码后做路径遍历检查。
+- 拒绝 `.`/`..` 片段。
+- 读文件前先检查挂载目录前缀。
+- Bun API 读取并进行存在性短路判断。
+
+### C) 运行契约隔离
+
+- 会话生命周期集中于 `game-loop` 与其 helper。
+- 运行态读取仅来自发布快照。
+- 所有失败通过信封化，保证 UI 具备确定性状态映射。
+
+### D) 文档完整性
+
+- 每个归档条目含 sourcePath、archivePath、sha256、sizeBytes、archivedAt。
+- `docs:check` 校验 required keys，避免依赖真实 `.md` 文件。
+
+```mermaid
+flowchart TD
+  A["docs:check"] --> B{"manifest exists"}
+  B -- no --> C["fail fast"]
+  B --> D{"all required sourcePath in entries"}
+  D -- no --> C
+  D --> E{"artifact path exists"}
+  E -- no --> C
+  E --> F["validate sha256 + sizeBytes + archivedAt"]
+  F --> G["validate schemaVersion + generatedAt"]
+  G --> H["passed"]
+```
+
+## 3) 建议与后续风险
+
+1. 保持 builder→publish→play 流程的端到端自动化测试。
+2. 扩展恢复重连边界用例（token 过期、session 断开后的立即恢复）。
+3. 强化 UI create→publish→play 的双语文档检查。
+4. 周期化校验 archive 清单和大小/哈希一致性。

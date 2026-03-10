@@ -1,15 +1,205 @@
-# API and transport contracts (expanded)\n
-This is the end-to-end contract map for all public surfaces: HTTP, SSE, and WebSocket.\n
-## 1) Single envelope contract\n
-Every JSON endpoint returns one of two shapes.\n
-```ts\ninterface SuccessEnvelope<T> {\n  ok: true;\n  data: T;\n}\n\ninterface ErrorEnvelope {\n  ok: false;\n  error: {\n    code: string;\n    message: string;\n    retryable: boolean;\n    correlationId: string;\n  };\n}\n```\n\n`correlationId` comes from request context and is used by logs and cross-surface incident tracing.\n
-## 2) Contract graph\n\n```mermaid\nflowchart LR\n  subgraph Inbound[Client ingress]\n    B1[Browser]\n    B2[Operator]\n    B3[Automation]\n  end\n\n  subgraph HTTP[HTTP APIs]\n    A1[/api/health]\n    A2[/api/oracle]\n    A3[/api/ai/*]\n    A4[/api/builder/*]\n    A5[/api/game/session/*]\n    A6[/api/game/session/:id/state]\n  end\n\n  subgraph Realtime\n    R1[WS /api/game/session/:id/ws]\n    R2[SSE /api/game/session/:id/hud]\n  end\n\n  B1 --> A1\n  B1 --> A2\n  B1 --> A3\n  B1 --> A4\n  B1 --> A5\n  B1 --> A6\n  B1 --> R1\n  B1 --> R2\n```\n
-## 3) Route lifecycle and envelope placement\n\n```mermaid\nsequenceDiagram\n  autonumber\n  participant C as Client\n  participant R as Route\n  participant S as Schema boundary\n  participant D as Domain service\n  participant E as Envelope mapper\n  participant W as WebSocket/SSE producer\n\n  C->>R: request\n  R->>S: validate params and body\n  alt schema valid\n    S->>D: typed payload\n    D-->>E: typed result\n    E-->>C: ok response\n  else schema invalid\n    S-->>E: validation failure\n    E-->>C: ok=false + validation code\n  else runtime failure\n    D-->>R: exception\n    R->>E: map to failure envelope\n    E-->>C: normalized failure\n  end\n  Note over W: WS/SSE are produced from domain-owned state transitions\n```\n\n## 4) Surface contracts\n
-### 4.1 Health and oracle\n\n- `GET /api/health`: readiness and base health check.\n- `POST /api/oracle`: local/remote question-answer surface with locale context.\n
-### 4.2 Game transport\n\n| Method | Endpoint | Contract |\n| --- | --- | --- |\n| `POST` | `/api/game/session` | create authoritative session |\n| `POST` | `/api/game/session/:id` | restore using `resumeToken` |\n| `POST` | `/api/game/session/:id/command` | command envelope + deterministic state transition |\n| `POST` | `/api/game/session/:id/invite` | create invite payload |\n| `POST` | `/api/game/session/:id/join` | apply invite token |\n| `GET` | `/api/game/session/:id/state` | polling fallback state |\n| `GET` | `/api/game/session/:id/hud` | SSE stream |\n| WS | `/api/game/session/:id/ws` | realtime state stream |\n
-### 4.3 Builder family\n
-- Draft lifecycle (`/api/builder/projects*`) handles mutable state only.\n- Scene/dialogue/asset mutation endpoints map to builder domain records.\n- `publish` endpoint gates transitions with validation.\n- Generation and automation endpoints remain inside builder context.\n
-### 4.4 AI family\n\n- `status`, `health`, `capabilities`, `catalog`: provider health and inventory.\n- `knowledge/documents`, `knowledge/search`, retrieval/generation endpoints: retrieval and generation operations with bounded timeouts.\n- `audio/transcribe`, `audio/synthesize`, `generate/*`: provider-mediated operations.\n
-## 5) Error code mapping\n\n```mermaid\nflowchart TB\n  EC[error code]\n  T1[retryable?]\n  T2[authorization?]\n  T3[validation?]\n  T4[session/context?]\n\n  EC --> T1\n  T1 -->|true| E1[retry + backoff]\n  T1 -->|false| T2\n  T2 -->|true| E2[re-login/reauth]\n  T2 -->|false| T3\n  T3 -->|true| E3[user correction]\n  T3 -->|false| T4\n  T4 -->|true| E4[restore flow]\n  T4 -->|false| E5[operational fix]\n```\n
-## 6) Data contract matrix by reliability\n\n- `auth/session`: hard fail, no retry.\n- `validation`: hard fail; user must correct input.\n- `provider transient`: retryable when provider indicates budget/timeouts.\n- `storage transient`: retryable if safe and cheap.\n- `publish` validation: explicit diagnostics required, not opaque message.\n
-## 7) Security considerations\n\n- Do not return raw internal codes without user-safe mapping.\n- Keep path and redirect params sanitized before use.\n- Session-scoped data access must include token validity checks.\n- WS and SSE channels must validate session/channel before broadcasting.\n\n## 8) 观测与合规（中文）\n\n- 所有异常都走统一 error envelope；UI 只做有限状态切换。\n- 运行接口与可恢复性逻辑统一由 `error.retryable` 决定。\n- 游戏指令走 server authoritative，不允许客户端自行决定成功/失败。\n- 建议变更后优先跑 `docs:check`、`lint`、`typecheck`、`test`、`verify`。\n
+# API and transport contracts (expanded)
+
+This document is the canonical end-to-end contract map for all HTTP, SSE, and WebSocket surfaces.
+
+## 1) Single envelope contract
+
+All JSON responses use one of two shapes.
+
+```ts
+interface SuccessEnvelope<T> {
+  ok: true;
+  data: T;
+}
+
+interface ErrorEnvelope {
+  ok: false;
+  error: {
+    code: string;
+    message: string;
+    retryable: boolean;
+    correlationId: string;
+  };
+}
+```
+
+`correlationId` is produced by `requestContext` and is required on major failures for observability and replay diagnostics.
+
+## 2) Contract graph
+
+```mermaid
+flowchart TB
+  subgraph Inbound["Client ingress"]
+    B1["Browser"]
+    B2["Operator tooling"]
+    B3["Automation"]
+  end
+
+  subgraph HTTP["HTTP APIs"]
+    A1["GET /api/health"]
+    A2["POST /api/oracle"]
+    A3["/api/ai/*"]
+    A4["/api/builder/*"]
+    A5["/api/game/session/*"]
+    A6["GET /api/game/session/:id/state"]
+  end
+
+  subgraph Realtime["Realtime APIs"]
+    R1["WS /api/game/session/:id/ws"]
+    R2["SSE /api/game/session/:id/hud"]
+  end
+
+  B1 --> A1
+  B1 --> A2
+  B1 --> A3
+  B1 --> A4
+  B1 --> A5
+  B1 --> A6
+  B1 --> R1
+  B1 --> R2
+  B2 --> A1
+  B2 --> A3
+  B2 --> A4
+  B2 --> A5
+  B2 --> R1
+  B3 --> A3
+  B3 --> A4
+  B3 --> A6
+```
+
+## 3) Route lifecycle and envelope placement
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant C as Client
+  participant R as Route
+  participant S as Schema boundary
+  participant D as Domain service
+  participant E as Envelope mapper
+  participant P as Producer
+
+  C->>R: request
+  R->>S: validate params and body
+  alt schema valid
+    S->>D: typed payload
+    D-->>E: typed result
+    E-->>C: ok response
+  else schema invalid
+    S-->>E: validation failure
+    E-->>C: ok=false + validation code
+  else runtime failure
+    D-->>R: exception
+    R->>E: map to failure envelope
+    E-->>C: normalized failure
+  end
+  Note over P: WS/SSE are emitted from domain state transitions
+```
+
+## 4) Surface contracts
+
+### 4.1 Health and oracle
+
+- `GET /api/health`: readiness signal.
+- `POST /api/oracle`: locale-aware oracle query.
+
+### 4.2 Game transport
+
+| Method | Endpoint | Contract |
+| --- | --- | --- |
+| `POST` | `/api/game/session` | create authoritative session |
+| `POST` | `/api/game/session/:id` | restore using `resumeToken` |
+| `POST` | `/api/game/session/:id/command` | command envelope + deterministic transition |
+| `POST` | `/api/game/session/:id/invite` | issue invite token |
+| `POST` | `/api/game/session/:id/join` | apply invite token |
+| `GET` | `/api/game/session/:id/state` | polling fallback state |
+| `GET` | `/api/game/session/:id/hud` | SSE events |
+| `WS` | `/api/game/session/:id/ws` | streaming authoritative state |
+
+### 4.3 Builder family
+
+- Draft lifecycle endpoints under `/api/builder/projects*` mutate builder-domain records only.
+- `publish` endpoint is a guarded transition.
+- AI/generation helpers remain in builder context and cannot write game session records.
+
+### 4.4 AI family
+
+- `status`, `health`, `capabilities`, `catalog`: provider surface health.
+- `knowledge/*` endpoints: retrieval/search with bounded timeout behavior.
+- `audio/*` and `generate/*`: provider-mediated operations with standardized failure envelopes.
+
+## 5) Error routing
+
+```mermaid
+flowchart TD
+  EC["error.code"] --> R1{"retryable?"}
+  R1 -->|true| M1["Retry with bounded backoff"]
+  R1 -->|false| R2{"authorization?"}
+  R2 -->|true| M2["Re-auth / refresh"]
+  R2 -->|false| R3{"validation?"}
+  R3 -->|true| M3["Operator/user correction"]
+  R3 -->|false| R4{"session context?"}
+  R4 -->|true| M4["Restore flow"]
+  R4 -->|false| M5["Operational support / fix"]
+```
+
+## 6) Data contract reliability matrix
+
+- `auth/session`: hard fail, no retry.
+- `validation`: hard fail; caller must correct payload.
+- `provider transient`: retryable when provider budget supports.
+- `storage transient`: retryable only when idempotent.
+- `publish` validation: returns explicit issue list, never opaque message.
+
+## 7) Security and integrity
+
+- Path and redirect payloads are validated before use.
+- All session reads/writes include token ownership checks.
+- WS/SSE producers validate requested channel, session ID, and user/project scope.
+- Client-facing messages never expose provider internals.
+
+## 8) Browser-facing behavior matrix
+
+```mermaid
+stateDiagram-v2
+  [*] --> idle
+  idle --> loading: open page / send request
+  loading --> success: ok envelope
+  loading --> retryable_error: temporary transport failure
+  loading --> non_retryable_error: validation/auth
+  retryable_error --> loading: retry
+  success --> loading: mutation or refresh
+  success --> restore: `resumeToken` flow
+  restore --> success: restored
+  restore --> non_retryable_error: invalid token/expired session
+  non_retryable_error --> [*]
+```
+
+## 9) End-to-end dataflow for a command round trip
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor User
+  participant UI as /game page
+  participant API as /api/game/session/:id/command
+  participant Loop as game-loop
+  participant Session as session store
+  participant HUD as SSE endpoint
+  participant WS as WS endpoint
+
+  User->>UI: send command
+  UI->>API: POST envelope
+  API->>Loop: processCommand()
+  Loop->>Session: persist outcome
+  Loop-->>API: command envelope + state version
+  API-->>UI: apply state updates
+  Loop->>WS: publish frame stream
+  Loop->>HUD: publish HUD delta
+```
+
+## 10) Recommended verification
+
+- Add/modify an API surface: run `bun run docs:check` then `bun run lint`, `bun run typecheck`.
+- For contract-changing edits, add/update contract tests under `tests/`.
+- For transport edits, run smoke for `/api/game/session/:id/ws` and `/api/game/session/:id/hud`.

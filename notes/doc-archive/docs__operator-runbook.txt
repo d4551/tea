@@ -1,61 +1,139 @@
-# Operator runbook (daily operations + incident response)\n
-Runbook for bootstrapping, verification, and production-like debugging in this repository.\n
-## 1) Environment baseline\n
-Required runtime assumptions:\n
-- Bun installed and matching policy range.\n
-- SQLite database reachable via configured URL.\n
-- Asset build tools available and writable output directories.\n
-- Optional local AI artifacts available if local providers are enabled.\n
-## 2) Golden startup path\n
-```mermaid\nflowchart LR\n  S1[bun install]\n  S2[bun run setup]\n  S3[bun run doctor]\n  S4[bun run build:assets]\n  S5[bun run verify]\n  S6[bun run dev]\n\n  S1 --> S2 --> S3 --> S4 --> S5 --> S6\n```\n
-## 3) Operational command matrix\n
-| Command | Purpose | Expected output |\n| --- | --- | --- |\n| `bun run setup` | first-run bootstrap | env, prisma, assets, readiness checks |\n| `bun run doctor` | structural readiness check | health and filesystem diagnostics |\n| `bun run dev` | local development loop | hot routes, build watchers, realtime |\n| `bun run build:assets` | rebuild CSS/HTMX/client assets | updated public bundles |\n| `bun run docs:check` | docs/manifest validation | no missing archive keys |\n| `bun run lint` | static/type-style checks | no style/type rule failures |\n| `bun run typecheck` | TypeScript compile contract checks | strict boundary checks pass |\n| `bun run verify` | full pre-merge gate | all required gates pass |\n| `bun run dependency:drift` | dependency policy verification | no unexpected version drift |\n| `bun run audit:security` | security audit | dependency risk findings only if present |\n| `bun run start` | production-like boot | startup and route availability |\n
-## 4) Verify gate and decision logic\n
-```mermaid\nflowchart TD\n  A[bun run verify]\n  A --> B[build:assets]\n  B --> C[dependency:drift]\n  C --> D[docs:check]\n  D --> E[lint]\n  E --> F[typecheck]\n  F --> G[test]\n  G --> H{all pass?}\n  H -->|yes| I[merge allowed]\n  H -->|no| J[fix at source owner]\n  J --> K[re-run verify]\n  K --> A\n```\n
-## 5) Incident playbooks\n
-### 5.1 Builder publish blocked\n
-1. open builder project diagnostics.\n
-2. check publish validation output details.\n
-3. resolve missing scene/dialogue/asset references.\n
-4. re-run publish and confirm snapshot release increments.\n
-5. open /game and confirm bootstrap now consumes published snapshot.\n
-### 5.2 Game session does not start\n
-1. confirm `/game` returned valid bootstrap payload.\n
-2. validate project is published and release pointer exists.\n
-3. inspect `/api/game/session` call for session + token issuance.\n
-4. confirm WS and HUD endpoints can establish with same session id.\n
-5. test restore flow with resume token immediately after reconnect.\n
-### 5.3 UI state regressions in builder (loading/focus/validation)\n
-1. verify `layout-controls.ts` and `focus-panel.ts` extensions are attached.\n
-2. check route responses still return envelopes + proper status on 422.\n
-3. verify no page-local event listeners duplicate shared extension behavior.\n
-4. reproduce with `hx-target` + `hx-swap` path and inspect focus target IDs.\n
-### 5.4 AI failures\n
-1. check provider registry status via `/api/ai/status` and `/api/ai/health`.\n
-2. verify `bun run doctor` and model file availability.\n
-3. confirm local model health and circuit state logs.\n
-4. if local provider unavailable, switch fallback path by config and retest.\n
-### 5.5 dependency or manifest drift\n
-1. run `bun run dependency:drift`.\n
-2. inspect `bun pm` lockfile mismatch details.\n
-3. align package versions with policy and rerun `bun run verify`.\n
-## 6) Logging and correlation discipline\n
-- correlationId from request context must be present in log lines for major failures.\n
-- command, restore, and publish transitions should always log outcome + owner.\n
-- avoid ad hoc prints; rely on structured logging helper.\n
-## 7) Chinese operator checklist（中文）\n
-### 每日流程\n\n
-1. `bun run doctor` 检查基础就绪。\n
-2. `bun run dev` 做日常开发。\n
-3. 每次关键改动后执行 `bun run verify`。\n
-4. 发现问题先回到 owning 逻辑（routes/domain/extension）修复，不在前端临时兜底。\n\n
-### 关键指标\n\n
-- 只允许在可恢复错误（`retryable`）下重试。\n
-- 发布前必须通过 docs、lint、typecheck、test。\n
-- RMMZ 包文档、主文档索引与档案映射保持一致。\n
-5. `bun run start` 进行本地预发自测（可选，发布前).\n
-## 8) 一页式排障清单\n
-- 先确认文档与契约未漂移（`bun run docs:check`）。\n
-- 再确认会话/构建数据一致（`/api/builder/*` 与 `/api/game/*`）。\n
-- 再确认构建器发布态和运行态快照关系。\n
-- 最后再看容器/依赖层面。\n
+# Operator runbook (operations, verification, and incident response)
+
+Use this runbook for bootstrap, verification, and production-like debugging.
+
+## 1) Environment baseline
+
+Required assumptions:
+
+- Bun is installed in supported policy band.
+- Database URL resolves to reachable SQLite or local DB.
+- Asset build pipeline is available and output directories are writable.
+- Local AI runtime artifacts exist when local providers are enabled.
+
+## 2) Golden startup path
+
+```mermaid
+flowchart LR
+  S1["bun install"]
+  S2["bun run setup"]
+  S3["bun run doctor"]
+  S4["bun run build:assets"]
+  S5["bun run verify"]
+  S6["bun run dev"]
+  S1 --> S2 --> S3 --> S4 --> S5 --> S6
+```
+
+## 3) Operational command matrix
+
+| Command | Purpose | Expected outcome |
+| --- | --- | --- |
+| `bun run setup` | First-run bootstrap | env + prisma + assets + readiness checks |
+| `bun run doctor` | Structural readiness | dependency, file, and filesystem diagnostics |
+| `bun run build:assets` | Rebuild client/static assets | updated output under `public/` |
+| `bun run docs:check` | Archive integrity gate | all required archive keys present |
+| `bun run lint` | Style/type quality | lint and boundary checks pass |
+| `bun run typecheck` | TS compile contract checks | strict types pass |
+| `bun test` | behavioral suite | contract and route tests pass |
+| `bun run verify` | full pre-merge gate | all required checks pass |
+| `bun run dependency:drift` | dependency policy | no unexpected drift |
+| `bun run start` | production-like boot | server binds and routes respond |
+
+## 4) Verify flow
+
+```mermaid
+stateDiagram-v2
+  [*] --> docs
+  docs --> assets: optional
+  docs --> lint: run after docs
+  assets --> lint
+  lint --> typecheck
+  typecheck --> test
+  test --> drift: if green
+  drift --> ok: all checks pass
+  ok --> [*]
+  docs --> blocked: missing archive key
+  lint --> blocked: lint failures
+  typecheck --> blocked: typing failures
+  test --> blocked: regression
+  drift --> blocked: version mismatch
+  blocked --> recover: fix owner
+  recover --> docs
+```
+
+## 5) Incident playbooks
+
+### 5.1 Builder publish blocked
+
+1. Open the project diagnostics in Builder.
+2. Inspect publish validation output.
+3. Fix missing scene/dialogue/asset references.
+4. Re-run publish.
+5. Verify `publishedReleaseVersion` increments and `/game` bootstrap uses published snapshot.
+
+### 5.2 Game session fails to start
+
+1. Confirm `/game` received a valid bootstrap payload.
+2. Confirm project is published and release snapshot exists.
+3. Confirm `/api/game/session` returns session ID + token.
+4. Verify WS and HUD can subscribe with same session ID.
+5. Test restore flow with resume token immediately after reconnect.
+
+### 5.3 UI regressions (loading/focus/validation)
+
+1. Confirm shared extensions are initialized (`layout-controls`, `focus-panel`).
+2. Confirm route responses continue returning envelopes and status contracts.
+3. Ensure no page-local duplicate listeners for `htmx:*`.
+4. Replay `hx-target` + `hx-swap` path and verify focus order.
+
+### 5.4 AI failures
+
+1. Check `/api/ai/status` and `/api/ai/health`.
+2. Inspect provider readiness and model files.
+3. Confirm local model runtime warmup/circuit state logs.
+4. Switch fallback provider by config and re-run.
+
+### 5.5 Docs/manifest drift
+
+1. Run `bun run docs:check`.
+2. Inspect `notes/doc-archive/index.json` for missing or stale keys.
+3. Re-run archive migration step when docs move.
+
+## 6) Logging and correlation
+
+- `correlationId` should exist on major failures.
+- Command/publish/session transitions should log owner and outcome.
+- Prefer structured logs over ad-hoc prints.
+
+## 7) Recovery paths by failure class
+
+```mermaid
+flowchart LR
+  F["Failure"] --> D1{"retryable?"}
+  D1 -->|yes| R1["Apply bounded backoff and retry"]
+  D1 -->|no| D2{"session context?"}
+  D2 -->|yes| R2["Restore flow"]
+  D2 -->|no| D3{"operator action?"}
+  D3 -->|config| R3["Fix config + redeploy"]
+  D3 -->|code| R4["Patch owning module and re-run verify"]
+```
+
+## 8) Daily/weekly checkpoints
+
+- Daily:
+  - `bun run doctor`
+  - `bun run dev` (if active development)
+  - `bun run verify` on critical changes
+- Weekly:
+  - `bun run dependency:drift`
+  - `bun run docs:check`
+  - full command baseline sweep
+- Before publish-affecting changes:
+  - run security and restore-flow checks at least once.
+
+## 9) One-click troubleshooting checklist
+
+- Validate docs and contract drift first.
+- Confirm builder draft vs publish snapshot consistency.
+- Validate runtime session graph and resume token validity.
+- Reproduce with local session restart before changing infra.

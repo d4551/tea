@@ -1,14 +1,14 @@
 # Builder domain (complete authoring model and invariants)
 
-The builder domain is the authoritative source of mutable game world data for authoring, and it is intentionally isolated from runtime consumption.
+The builder domain owns mutable authoring data and is intentionally separated from runtime consumption.
 
-## 1) Primary invariant set
+## 1) Core invariants
 
 1. **Draft is mutable, published is immutable.**
-2. **All builder writes pass through `builder-service`.**
-3. **Publish is a gated state transition with validation.**
-4. **Runtime seeding consumes only published snapshots.**
-5. **Automation and AI patch tools operate within project edit context, never session context.**
+2. **All builder writes are routed through `builder-service`.**
+3. **Publish is a validated transition, not a direct persistence write.**
+4. **Runtime seeding uses only published snapshots.**
+5. **AI generation and automation operate only inside project scope.**
 
 ## 2) State and ownership map
 
@@ -17,34 +17,35 @@ flowchart LR
   subgraph UI["Builder surfaces"]
     U1["/builder SSR pages"]
     U2["builder-api endpoints"]
-    U3["AI generation + tool plans"]
+    U3["AI + automation helpers"]
   end
 
   subgraph Domain["Domain services"]
-    S1["builder-service.ts"]
-    S2["builder-project-state-store.ts"]
-    S3["builder-publish-validation.ts"]
-    S4["creator-worker.ts"]
-    S5["provider-registry.ts"]
+    D1["builder-service.ts"]
+    D2["builder-project-state-store.ts"]
+    D3["builder-publish-validation.ts"]
+    D4["creator-worker.ts"]
+    D5["provider-registry.ts"]
   end
 
   subgraph Storage["Persistence"]
-    D1["ProjectDraft"]
-    D2["ProjectPublished"]
-    D3["Assets/Scenes/NPC/Dialogues/Quests/Triggers"]
-    D4["Automation/Generation artifacts"]
+    S1["ProjectDraft"]
+    S2["ProjectPublished"]
+    S3["Assets"]
+    S4["Automation artifacts"]
+    S5["Scenes / NPC / Dialogue / Quests"]
   end
 
   U1 --> U2
-  U2 --> S1
+  U2 --> D1
   U2 --> U3
-  U3 --> S5 --> S1
-  S1 --> S2 --> D1
-  S1 --> S3 --> D2
-  S2 --> D3
-  S2 --> D4
-  S4 --> D4
-  S3 --> S2
+  U3 --> D5 --> D1
+  D1 --> D2 --> S1
+  D1 --> D3 --> S2
+  D2 --> S3
+  D2 --> S4
+  D2 --> S5
+  D4 --> S4
 ```
 
 ## 3) Authoring lifecycle
@@ -62,39 +63,43 @@ sequenceDiagram
   participant Worker as creator-worker
 
   Author->>UI: open project
-  UI->>API: fetch project draft
+  UI->>API: load draft
   API->>Svc: getProject(projectId)
-  Svc->>Store: read draft + relations
-  Store-->>Svc: draft graph
+  Svc->>Store: read draft and relations
+  Store-->>Svc: graph of scenes/dialogue/npcs/assets/quests
   Svc-->>API: validated draft model
-  API-->>UI: SSR + HTMX fragment state
+  API-->>UI: SSR shell + HTMX tabs
 
-  Author->>UI: mutate scenes/dialogue/quests/automation
-  UI->>API: patch endpoint
-  API->>Svc: updateProjectDraft()\n(update route + contract)
-  Svc->>Store: persist draft mutation
-  Store-->>Svc: saved version\n(optional release counters)
-  Svc-->>API: draft update contract
+  Author->>UI: patch scene / dialogue / quest / asset
+  UI->>API: mutation endpoint
+  API->>Svc: updateProjectDraft()
+  Svc->>Store: versioned mutable persistence
+  Store-->>Svc: saved version
+  Svc-->>API: typed write contract
+  API-->>UI: fragment with latest state
 
-  Author->>API: trigger AI generation/patch
-  API->>AI: request plan/generation
-  AI->>Worker: run generation job\n(safe, bounded)
-  Worker->>Store: persist patch artifact or diagnostics
-  Worker-->>Svc: result + risk tags
-  Svc-->>API: artifact/patch contract\nfor review or apply
+  Author->>UI: trigger generation
+  UI->>API: generator request
+  API->>AI: request generation plan
+  AI->>Worker: execute bounded generation
+  Worker->>Store: persist artifacts
+  Worker-->>Svc: result + risk metadata
+  Svc-->>API: patch contract with review state
+  API-->>UI: generated patch review fragment
 
   Author->>UI: click Publish
   UI->>API: PATCH /api/builder/projects/:id/publish
   API->>Svc: publishProject(true)
   Svc->>Val: validateBuilderProjectForPublish()
-  Val-->>Svc: pass or issue list
+  Val-->>Svc: pass / issue list
   alt pass
-    Svc->>Store: create immutable published release\n(snapshot + metadata)
+    Svc->>Store: materialize immutable snapshot
     Store-->>Svc: releaseVersion
-    Svc-->>API: publish ok + release pointer
-    API-->>UI: enable Play + publish flags\n+  else issues
-    Svc-->>API: validation issues
-    API-->>UI: validation fragment + diagnostics
+    Svc-->>API: published release pointer
+    API-->>UI: play-enabled state
+  else fail
+    Svc-->>API: issues list
+    API-->>UI: localized validation fragment
   end
 ```
 
@@ -102,18 +107,86 @@ sequenceDiagram
 
 | Area | Owner | Responsibility |
 | --- | --- | --- |
-| Core domain orchestration | `src/domain/builder/builder-service.ts` | create/read/publish/update semantics |
-| Draft persistence | `src/domain/builder/builder-project-state-store.ts` | normalize and persist authoring entities |
-| Publish gates | `src/domain/builder/builder-publish-validation.ts` | required assets, scene connectivity, NPC/dialogue consistency |
-| Automation execution | `src/domain/builder/creator-worker.ts` | scheduled generation job execution |
-| Provider selection | `src/domain/ai/provider-registry.ts` | tool generation + retrieval routing |
-| Route translation | `src/routes/builder-api.ts` | schema + envelope + view transitions |
-\n
-## 5) Publish transition details\n\n```mermaid\nstateDiagram-v2\n  [*] --> Draft\n  Draft --> Validating: /publish attempt\n  Validating --> ValidationFailed: missing dependency\n  Validating --> Snapshotting: all checks pass\n  Snapshotting --> Published: immutable release created\n  Snapshotting --> Draft: rollback on persistence error\n  Published --> Unpublished: unpublish request\n  Unpublished --> Published: republish\n  ValidationFailed --> Draft: fix issues in draft\n```\n\nPublish gate checks should enforce, at minimum:\n\n- Project metadata and locale consistency.\n- Scene graph integrity and start scene presence.\n- NPC references and dialogue references resolve.\n- At least one playable entry route/state for runtime bootstrap.\n- Asset registry and media paths normalize and exist.\n- Trigger/action definitions remain schema-valid.\n\n## 6) Data surfaces in one graph\n\n```mermaid\nflowchart TD\n  subgraph Draft data\n    PD["ProjectDraft record"]\n    SC["Scene + Nodes"]\n    NPC["NPC + Actor template"]\n    DLG["Dialogue graph"]\n    QT["Quests + Rewards"]\n    TR["Triggers + Events"]\n    AS["Assets + uploads"]\n    AU["Automation + plan artifacts"]\n  end\n\n  subgraph Release data\n    PR["ProjectPublished record"]\n    SNAP["Snapshot blob + version"]\n  end\n\n  subgraph Game consume\n    RT["game-loop runtime seed"]\n    SESS["session state"]\n  end\n\n  PD --> SC --> PR --> SNAP --> RT --> SESS\n  NPC --> PR\n  DLG --> PR\n  QT --> PR\n  TR --> PR\n  AS --> PR\n  AU --> PR\n```\n\n## 7) Contract and resilience notes\n\n- Builder endpoints should keep responses envelope-consistent.\n- Draft mutation errors are classified as:
-  - `validation` for contract mismatches
-  - `storage` for persistence issues
-  - `authorization` for session-boundary issues
-- Publish operations should be safe to retry and idempotent by logical input set.
-- All generated patch artifacts should include provenance metadata (`source`, `timestamp`, `traceId`) so failures can be reviewed.
+| Core orchestration | `builder-service.ts` | create/read/update/publish core rules |
+| Draft persistence | `builder-project-state-store.ts` | relational writes and normalization |
+| Publish gates | `builder-publish-validation.ts` | required scene/npc/dialogue/assets checks |
+| Automation execution | `creator-worker.ts` | generation jobs + diagnostics |
+| Provider selection | `provider-registry.ts` | AI/knowledge tool routing |
+| Route adaptation | `builder-api.ts` | schema, envelope, and HTMX transitions |
 
-## 8) 中文说明（同步）\n\n构建器域约束：草稿可变、发布不可变。可发布内容必须通过校验器，不能直接从草稿进入运行时。\n\n关键规则：\n\n- 所有构建变更只能走 `builder-service`。\n- 发布是状态机，失败会回到 Draft 并保留问题清单。\n- AI 生成/自动化结果必须经过项目级上下文和人工确认通道。\n- 运行时会话只从发布快照创建，任何未发布草稿只影响编辑视图。\n- 重要失败码分离为验证失败、存储失败、权限失败，避免“静默回退”。\nEOF"}]}"}}
+## 5) Publish transition machine
+
+```mermaid
+stateDiagram-v2
+  [*] --> Draft
+  Draft --> Validating: publish request
+  Validating --> ValidationFailed: checks fail
+  Validating --> Snapshotting: checks pass
+  Snapshotting --> Published: immutable snapshot committed
+  Snapshotting --> Draft: persistence failure
+  Published --> Unpublished: unpublish request
+  Unpublished --> Published: republish
+  ValidationFailed --> Draft: issues fixed in editor
+```
+
+Publish must enforce at least:
+
+- Metadata and locale consistency.
+- Scene graph start and connectivity integrity.
+- Dialogue and NPC references resolved.
+- At least one playable bootstrap entry route.
+- Valid/normalized asset paths and existence checks.
+- Trigger/action schema validity.
+
+## 6) Data model map
+
+```mermaid
+flowchart TD
+  subgraph Draft
+    PD["ProjectDraft record"]
+    SC["Scenes + Nodes"]
+    NPC["NPC + Dialogue"]
+    Q["Quests + Automation"]
+    AS["Assets + Upload metadata"]
+  end
+
+  subgraph Release
+    PP["ProjectPublished record"]
+    SNAP["Snapshot blob + version"]
+    IDX["Snapshot indexes"]
+  end
+
+  subgraph Runtime
+    RTS["game-loop seed"]
+    SE["GameSession state"]
+  end
+
+  PD --> SC --> PP --> SNAP --> IDX
+  NPC --> PP
+  Q --> PP
+  AS --> PP
+  SNAP --> RTS --> SE
+  IDX --> RTS
+```
+
+Note: `IDX` is the internal bootstrap index used for deterministic runtime injection.
+
+## 7) Contract and resilience
+
+- Builder endpoints must remain envelope consistent even for partial HTMX responses.
+- Mutation failures are emitted as classified errors: `validation`, `storage`, `authorization`, `transient`.
+- Publish should be safe to retry on duplicate logical inputs.
+- Generated artifacts must include provenance (`source`, `timestamp`, `traceId`) for review.
+
+## 8) One owner per layer
+
+- Route handlers shape request/response boundaries only.
+- Domain services own write semantics and validation.
+- Store modules own persistence durability and relation traversal.
+- AI/automation modules own execution boundaries and provide typed results only.
+
+## 9) Chinese quick map
+
+- 任何构建编辑都在可变 `ProjectDraft` 内完成。
+- 发布是“验证 -> 快照化 -> 不可变发布版本”流程。
+- 游戏运行时只允许消费已发布快照，不允许直接消费草稿。

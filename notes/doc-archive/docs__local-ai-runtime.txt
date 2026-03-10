@@ -1,25 +1,137 @@
-# Local AI runtime (providers, health, and failure contracts)\n
-This document describes the local inference and provider path that backs AI APIs and keeps model execution isolated from route handlers.\n
-## 1) Layered owner model\n
-```mermaid\nflowchart TB\n  subgraph Entry\n    A1["/api/ai/* routes"]\n  end\n  subgraph AI domain\n    D1["provider-registry.ts"]\n    D2["creator-worker.ts"]\n    D3["knowledge-base-service.ts"]\n  end\n  subgraph Local runtime\n    L1["model-manager.ts"]\n    L2["local-model-runtime.ts"]\n    L3["model-runtime-health.ts"]\n    L4["model-pipeline-loader.ts"]\n    L5["model-pipeline-cache.ts"]\n    L6["model-operation-runner.ts"]\n    L7["local-model-contract.ts"]\n    L8["providers/transformers-provider.ts"]\n  end\n  subgraph Contracts\n    C1["provider-boundary contracts"]\n    C2["local-result contracts"]\n    C3["knowledge chunk/search contracts"]\n  end\n\n  A1 --> D1\n  D1 --> D2\n  D1 --> D3\n  D1 --> L1\n  D2 --> L1\n  L1 --> L2 --> L3 --> L4 --> L5 --> L6 --> L7 --> L8\n  L1 --> C1 --> D1\n  D3 --> C3\n```\n
-## 2) Execution sequence\n
-```mermaid\nsequenceDiagram\n  autonumber\n  participant Route as /api/builder/ai or /api/oracle\n  participant Registry as provider-registry\n  participant Worker as creator-worker / generator\n  participant Manager as model-manager\n  participant Health as model-runtime-health\n  participant Loader as pipeline-loader\n  participant Runner as operation-runner\n  participant Provider as transformers-provider\n  participant DB as knowledge tables\n\n  Route->>Registry: resolve provider\n  Registry->>Manager: execute operation\n  Manager->>Health: gate by circuit/health budget\n  Health-->>Manager: open or openWithWarnings\n  Manager->>Loader: load pipeline lazily\n  Loader->>Runner: execute wrapped operation\n  Runner->>Provider: typed operation run\n  Provider-->>Runner: typed operation result\n  Runner-->>Manager: Result<T>/Failure\n  alt success\n    Manager->>Route: normalized provider result\n  else failure\n    Manager->>Route: failure envelope (retryable + code)\n    Route->>Route: return error envelope\n  end\n  Route->>DB: optionally enrich knowledge context\n```\n
-## 3) Failure taxonomy\n\n| Failure code | Semantics | Recovery |\n| --- | --- | --- |\n| `timeout` | budget exceeded before operation completes | retry with backoff if upstream transient |\n| `circuit-open` | repeated failures caused model gate open | wait for cooldown + reset |\n| `cache-corruption-recovered` | pipeline cache mismatch repaired | single auto-recovery then retry |\n| `unavailable` | model/provider disabled or missing config | surface non-retryable unless operator reconfigures |\n| `invalid-output` | malformed provider response | retry once, then report non-retryable with diagnostics |\n| `unexpected` | unknown internal failure | operator triage + optional retry |\n
-## 4) Contract guarantees\n
-- All local outputs are normalized into internal typed result contracts before route return.\n
-- Route handlers never inspect raw transformer output.\n
-- Provider health and warmup state are tracked independently from pipeline loading.\n
-- Pipeline cache is reused within process with explicit recovery boundaries.\n
-## 5) Local knowledge integration\n
-- Documents/chunks/terms live under persistent AI tables and are reused by retrieval flows.\n
-- Retrieval-assisted generation must include a deterministic context window and explicit truncation strategy.\n
-- Search + generation failures stay independent; a retrieval miss should not hard fail generation unless business config requests hard context.\n
-## 6) Latency and observability\n
-- Each local operation emits timing + model/pipeline identifiers.\n
-- Failures are wrapped in a single typed envelope shape and logged with correlation ids.\n
-- Health endpoint should expose warmup state, circuit status, and recent failure counts.\n
-## 7) 组件演进建议（中文）\n
-- 本地模型能力建议保持“单一路径、单一 owner”：\n+  - 路由 -> provider-registry -> model-manager。\n
-- 避免在路由里直接拼 prompt 或直接解析模型返回。\n
-- 缓存错误应可自恢复：检测到损坏后清理并重建 pipeline。\n
-- 健康检查失败与用户可见的生成失败要分离，避免把系统健康问题误报给业务流程。\n*** End Patch
+# Local AI runtime (providers, health, and failure contracts)
+
+This document describes the local AI runtime path that isolates model operations from request routes.
+
+## 1) Layer model
+
+```mermaid
+flowchart TB
+  subgraph Entry["Request entry"]
+    R1["/api/ai/* routes"]
+  end
+
+  subgraph AI["Domain"]
+    D1["provider-registry.ts"]
+    D2["creator-worker.ts"]
+    D3["knowledge-base-service.ts"]
+  end
+
+  subgraph Local["Local runtime"]
+    L1["model-manager.ts"]
+    L2["local-model-runtime.ts"]
+    L3["model-runtime-health.ts"]
+    L4["model-pipeline-loader.ts"]
+    L5["model-pipeline-cache.ts"]
+    L6["model-operation-runner.ts"]
+    L7["local-model-contract.ts"]
+    L8["providers/transformers-provider.ts"]
+  end
+
+  subgraph Contracts["Contract surfaces"]
+    C1["provider contracts"]
+    C2["local result contracts"]
+    C3["knowledge contracts"]
+  end
+
+  R1 --> D1 --> D2 --> L1
+  D1 --> D3
+  L1 --> L2 --> L3 --> L4 --> L5 --> L6 --> L7 --> L8
+  L1 --> C1 --> D1
+  D3 --> C3
+```
+
+## 2) Execution sequence
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Route as /api/ai/*
+  participant Registry as provider-registry
+  participant Worker as creator-worker
+  participant Manager as model-manager
+  participant Health as model-runtime-health
+  participant Loader as pipeline-loader
+  participant Runner as operation-runner
+  participant Provider as transformers-provider
+  participant DB as knowledge tables
+
+  Route->>Registry: resolve provider
+  Registry->>Manager: execute operation
+  Manager->>Health: check gate + health budget
+  Health-->>Manager: ok / warnings
+  Manager->>Loader: lazy load pipeline
+  Loader->>Runner: run wrapped operation
+  Runner->>Provider: run typed op
+  Provider-->>Runner: typed provider result
+  Runner-->>Manager: Result / Failure
+  alt success
+    Manager->>Route: normalized provider result
+    Route->>Route: include in success envelope
+  else failure
+    Manager->>Route: typed failure with retryable flag
+    Route->>Route: emit error envelope
+  end
+  Route->>DB: optionally enrich with retrieval context
+```
+
+## 3) Failure taxonomy
+
+| Code | Meaning | Recovery |
+| --- | --- | --- |
+| `timeout` | operation exceeded budget | retry with backoff if transient |
+| `circuit-open` | failure threshold reached | wait cooldown + reset |
+| `cache-corruption-recovered` | pipeline cache repaired | one controlled retry |
+| `unavailable` | provider disabled / config missing | operator reconfigure required |
+| `invalid-output` | malformed provider output | retry once then fail with diagnostics |
+| `unexpected` | unknown runtime failure | operator triage required |
+
+## 4) Contract guarantees
+
+- Routes receive only normalized typed contracts.
+- Routes never consume raw provider responses.
+- Health state and warmup are tracked separately from pipeline lifecycle.
+- Pipeline cache is reused in process with explicit corruption recovery boundaries.
+
+## 5) Knowledge integration
+
+- Documents/chunks are stored in AI tables and reused across retrieval flow.
+- Retrieval-assisted generation includes deterministic truncation strategy and context windows.
+- Search miss is not fatal unless business config marks it hard-required.
+
+## 6) Latency, observability, and hardening
+
+- Each operation emits timing and model/pipeline identifiers.
+- Failures are mapped into one typed error envelope with `correlationId`.
+- Health endpoint exposes warmup state, circuit state, and recent failure counters.
+- Timeouts are bounded and logged for operator action.
+
+## 7) Dataflow map
+
+```mermaid
+flowchart LR
+  subgraph "AI APIs"
+    A["/api/ai/..."]
+  end
+  subgraph "Route guard"
+    G["schema + auth + timeout"]
+  end
+  subgraph "Domain"
+    R["provider registry"]
+    W["creator worker"]
+  end
+  subgraph "Runtime"
+    M["model-manager + pipeline"]
+  end
+  subgraph "Store"
+    K["knowledge + request traces"]
+  end
+  A --> G --> R --> W --> M
+  M --> K
+```
+
+## 8) Recommended tests
+
+- Failure-mode tests for each typed failure code.
+- Circuit-open and recovery tests.
+- Cache corruption recovery path smoke.
+- Timeout and unknown provider fallback tests.

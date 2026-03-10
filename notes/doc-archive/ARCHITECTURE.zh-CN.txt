@@ -1,0 +1,314 @@
+# TEA 架构（综合版）
+
+本文件是 Markdown 退役后的主架构参考。
+
+## 1) 设计不变式
+
+1. **作者态可变，运行态不可变**：Builder 是草稿态，运行态会话只来自已发布快照。
+2. **单一职责所有者**：每个主要行为家族有单一服务/模块负责。
+3. **边界契约必须类型化**：请求、命令、输入输出均有 schema 验证。
+4. **SSR-first**：主页面优先服务端渲染，然后渐进增强。
+5. **传输契约明确**：Session 命令、WS、HUD SSE 分离并有专用契约。
+
+## 2) 拓扑与职责地图
+
+```mermaid
+flowchart TB
+  subgraph Browser["浏览器层"]
+    B1["Home SSR"]
+    B2["Builder SSR + HTMX"]
+    B3["Game SSR"]
+    B4["WS /game 会话通道"]
+    B5["HUD SSE"]
+    B6["Command POST"]
+  end
+
+  subgraph Kernel["src/app.ts"]
+    K1["requestContext 插件"]
+    K2["i18n + locale 插件"]
+    K3["onError + onAfterHandle"]
+    K4["staticAssetsPlugin"]
+    K5["authSessionGuard"]
+    K6["creatorWorkerPlugin"]
+    K7["aiProviderPlugin"]
+  end
+
+  subgraph Routes["路由层"]
+    R1["page-routes.ts"]
+    R2["builder-routes.ts"]
+    R3["builder-api.ts"]
+    R4["game-routes.ts"]
+    R5["game-plugin.ts"]
+    R6["ai-routes.ts"]
+    R7["api-routes.ts"]
+  end
+
+  subgraph Domain["领域层"]
+    D1["builder-service.ts"]
+    D2["builder-project-state-store.ts"]
+    D3["builder-publish-validation.ts"]
+    D4["game-loop.ts"]
+    D5["provider-registry.ts"]
+    D6["knowledge-base-service.ts"]
+    D7["creator-worker.ts"]
+    D8["oracle-service.ts"]
+  end
+
+  subgraph Contracts["契约层"]
+    C1["game-client-bootstrap"]
+    C2["error-envelope"]
+    C3["command schema"]
+    C4["AI registration contract"]
+  end
+
+  subgraph Storage["持久化"]
+    S1["Prisma / SQLite"]
+    S2["uploads + public assets"]
+    S3["AI retrieval tables"]
+  end
+
+  B1 --> K1
+  B2 --> K1
+  B3 --> K1
+  B4 --> K1
+  B5 --> K1
+  B6 --> K1
+
+  K1 --> K2 --> K3 --> K4 --> K5 --> K6 --> K7
+  K7 --> R1
+  K7 --> R2
+  K7 --> R3
+  K7 --> R4
+  K7 --> R5
+  K7 --> R6
+  K7 --> R7
+
+  R2 --> D1
+  R3 --> D1
+  R3 --> D5
+  R3 --> D6
+  R4 --> D1
+  R4 --> D4
+  R5 --> D4
+  R5 --> D2
+  R6 --> D5
+  R6 --> D6
+  R7 --> D8
+  R7 --> D7
+
+  D1 --> S1
+  D2 --> S1
+  D3 --> S1
+  D4 --> S1
+  D5 --> S2
+  D6 --> S3
+  C1 --> R4
+  C2 --> K3
+```
+
+## 3) 请求生命周期
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Browser
+  participant Ctx as requestContext 插件
+  participant Locale as i18n 插件
+  participant Guard as auth/session 守卫
+  participant Route as 路由处理器
+  participant Domain as 领域服务
+  participant Envelope as 成功/失败信封
+  participant Response as SSR or JSON
+
+  Browser->>Ctx: 请求到达
+  Ctx->>Locale: 构建上下文
+  Locale->>Guard: locale 与鉴权透传
+  Guard->>Route: 受保护上下文
+  Route->>Domain: 调用领域服务
+  alt 调用成功
+    Domain-->>Envelope: 类型化结果
+    Envelope-->>Response: 文档/片段/JSON
+  else 领域校验失败
+    Domain-->>Route: 失败信息
+    Route-->>Envelope: 统一失败契约
+  else 异常
+    Route->>K3: 抛出
+    K3-->>Envelope: 全局错误映射
+  end
+  Response-->>Browser: 返回响应
+```
+
+## 4) Create → Publish → Play 全链路
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Author
+  participant BuilderUI as /builder
+  participant BuilderAPI as /api/builder
+  participant BuilderSvc as builder-service
+  participant Validate as publish validation
+  participant Store as Prisma store
+  participant GamePage as /game
+  participant GameAPI as game-plugin.ts
+  participant GameLoop as game-loop.ts
+
+  Author->>BuilderUI: open /builder?projectId=hero-fort
+  BuilderUI->>BuilderAPI: 获取项目草稿
+  BuilderAPI->>BuilderSvc: getProject(projectId)
+  BuilderSvc->>Store: 读取草稿与关系
+  Store-->>BuilderSvc: scenes/npcs/dialogue/automation
+  BuilderSvc-->>BuilderAPI: 类型化 Draft
+  BuilderAPI-->>BuilderUI: SSR shell + HTMX tabs
+
+  Author->>BuilderUI: 编辑并保存
+  BuilderUI->>BuilderAPI: PATCH /api/builder/projects/:id/publish
+  BuilderAPI->>BuilderSvc: publishProject(id, true)
+  BuilderSvc->>Validate: validateBuilderProjectForPublish()
+  Validate-->>BuilderSvc: pass / issues
+  alt 发布失败
+    BuilderSvc-->>BuilderAPI: 验证错误
+    BuilderAPI-->>BuilderUI: 带校验摘要的 HTML 片段
+  else 发布成功
+    BuilderSvc->>Store: 物化不可变发布快照
+    Store-->>BuilderSvc: publishedReleaseVersion
+    BuilderSvc-->>BuilderAPI: publish 成功
+    BuilderAPI-->>BuilderUI: 更新 UI Play 入口
+  end
+
+  Author->>GamePage: open /game?projectId=hero-fort
+  GamePage->>BuilderSvc: getPublishedProject(projectId)
+  BuilderSvc-->>GamePage: 发布快照元数据
+  GamePage->>GameLoop: createSession(locale, defaultScene, projectId)
+  GameLoop->>Store: 创建会话 + resumeToken
+  GameLoop-->>GamePage: bootstrap 结果
+  GamePage-->>Author: SSR 页面渲染 session 与 token
+
+  Author->>GameAPI: POST /api/game/session/:id/command
+  GameAPI->>GameLoop: processCommand()
+  GameLoop->>Store: 持久化命令和状态转移
+  GameLoop-->>GameAPI: 命令信封
+  GameAPI-->>Author: 更新渲染提示
+
+  par
+    Author->>GameAPI: GET /api/game/session/:id/hud
+    GameAPI->>GameLoop: 订阅 HUD
+    GameLoop-->>Author: SSE HUD patches
+  and
+    Author->>GameAPI: WS /api/game/session/:id/ws
+    GameAPI->>GameLoop: 订阅 WS
+    GameLoop-->>Author: 增量状态帧
+  end
+
+  Author->>GameAPI: POST /api/game/session/:id 恢复
+  GameAPI->>GameLoop: restoreSession(resumeToken)
+  GameLoop-->>Author: 恢复状态或 unauthorized
+```
+
+## 5) 游戏传输微观图
+
+```mermaid
+flowchart LR
+  subgraph Input["输入接口"]
+    I1["/api/game/session/:id/command"]
+    I2["/api/game/session/:id/hud"]
+    I3["/api/game/session/:id/ws"]
+    I4["/api/game/session/:id restore"]
+  end
+
+  subgraph Simulation["game-loop"]
+    P1[validate command]
+    P2[apply deterministic transition]
+    P3[persist session state]
+    P4[produce event envelopes]
+  end
+
+  subgraph Output["输出"]
+    O1[command outcome envelope]
+    O2[incremental WS]
+    O3[SSE HUD 更新]
+    O4[restore payload]
+  end
+
+  I1 --> P1 --> P2 --> P3 --> O1
+  I3 --> P4 --> O2
+  I2 --> P4 --> O3
+  I4 --> P3 --> O4
+```
+
+## 6) Builder 与 AI 数据模型图
+
+```mermaid
+flowchart TD
+  subgraph Builder["构建层"]
+    B1["ProjectDraft / mutable"]
+    B2["Scenes + Nodes"]
+    B3["NPC + Dialogue"]
+    B4["Quests + Automation"]
+    B5["ProjectPublished（不可变）"]
+    B1 --> B2
+    B1 --> B3
+    B1 --> B4
+  end
+
+  subgraph Runtime["运行层"]
+    R1["game-loop seed"]
+    R2["SessionState"]
+    R3["Participants"]
+    R4["Inventory"]
+  end
+
+  subgraph Knowledge["AI 知识"]
+    K1["AiKnowledgeDocument"]
+    K2["AiKnowledgeChunk"]
+    K3["AiKnowledgeChunkTerm"]
+    K1 --> K2 --> K3
+  end
+
+  B5 --> R1
+  K1 --> K2 --> K3
+```
+
+## 7) 安全加固检查点
+
+- 静态路径加固：decode 后 normalize，再校验挂载根目录前缀。
+- URL/重定向和变更：发布和创建路径受严格 schema 约束。
+- 运行一致性：运行时不得直接读取 draft 表。
+- 会话加固：恢复与命令需要有效 session 上下文。
+- 错误加固：所有异常收敛到信封形态。
+
+## 8) 失败与恢复状态图
+
+```mermaid
+stateDiagram-v2
+  [*] --> Idle
+  Idle --> Loading: start request
+  Loading --> Success: ok result
+  Loading --> Empty: optional no-data
+  Loading --> RetryableError: transient issue
+  Loading --> NonRetryableError: auth / validation
+  Success --> Running
+  Running --> CommandQueued
+  CommandQueued --> Persisted: valid command
+  CommandQueued --> Rejected: invalid command
+  Persisted --> Broadcasted
+  Rejected --> Success: user fix
+  Broadcasted --> Running
+  RetryableError --> Loading
+  NonRetryableError --> Idle
+```
+
+## 9) 验收与质量联动
+
+- `bun run verify`：高层策略与项目检查。
+- `bun run lint` / `bun run typecheck`：静态正确性。
+- `bun test`：路由和领域转换测试。
+- `bun run docs:check`：文档档案完整性与映射。
+- `bun run dependency:drift`：版本政策一致性。
+
+## 10) 后续稳定性 Gate
+
+- 清理 UI 流程里的零散 TODO，统一成正式状态枚举。
+- 扩展 AI 请求可观测性，覆盖 provider 延迟和重试行为。
+- 增加 `resumeToken` 过期与 `redirectPath` 边界测试。
+- 确保文档地图随路由契约变化同步更新。
