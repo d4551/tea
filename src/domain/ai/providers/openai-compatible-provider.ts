@@ -39,6 +39,12 @@ import type {
 } from "./provider-types.ts";
 
 const logger = createLogger("ai.provider.openai-compatible");
+type ChatImagePayload = {
+  readonly type: "image_url";
+  readonly image_url: {
+    readonly url: string;
+  };
+};
 
 /**
  * Configuration for one OpenAI-compatible provider lane.
@@ -159,10 +165,12 @@ const toChatMessagePayload = (
     role: message.role,
     content: [
       { type: "text", text: message.content },
-      ...message.images.map((image) => ({
-        type: "image_url" as const,
-        image_url: { url: `data:image/png;base64,${image}` },
-      })),
+      ...message.images.map(
+        (image): ChatImagePayload => ({
+          type: "image_url",
+          image_url: { url: `data:image/png;base64,${image}` },
+        }),
+      ),
     ],
   };
 };
@@ -348,7 +356,7 @@ const normalizeModerationLabel = (value: string): string =>
     .toUpperCase();
 
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer =>
-  bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 
 const buildAuthHeaders = (apiKey: string): HeadersInit => ({
   ...(apiKey.length > 0 ? { authorization: `Bearer ${apiKey}` } : {}),
@@ -605,6 +613,11 @@ export class OpenAiCompatibleProvider implements AiProvider {
    */
   public async chat(params: AiChatParams): Promise<AiGenerationResult> {
     const startedAt = performance.now();
+    const systemMessageRole: "system" = "system";
+    const systemMessage = params.systemPrompt
+      ? { role: systemMessageRole, content: params.systemPrompt }
+      : undefined;
+
     const response = await fetchProviderResponse(
       this.fetchImpl,
       this.name,
@@ -616,9 +629,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
         body: JSON.stringify({
           model: params.model ?? this.config.chatModel,
           messages: [
-            ...(params.systemPrompt
-              ? [{ role: "system" as const, content: params.systemPrompt }]
-              : []),
+            ...(systemMessage ? [systemMessage] : []),
             ...params.messages.map(toChatMessagePayload),
           ],
           temperature: params.temperature,
@@ -658,6 +669,11 @@ export class OpenAiCompatibleProvider implements AiProvider {
    * @yields Text chunks.
    */
   public async *chatStream(params: AiChatParams): AsyncGenerator<string> {
+    const systemMessageRole: "system" = "system";
+    const systemMessage = params.systemPrompt
+      ? { role: systemMessageRole, content: params.systemPrompt }
+      : undefined;
+
     const response = await fetchProviderResponse(
       this.fetchImpl,
       this.name,
@@ -669,9 +685,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
         body: JSON.stringify({
           model: params.model ?? this.config.chatModel,
           messages: [
-            ...(params.systemPrompt
-              ? [{ role: "system" as const, content: params.systemPrompt }]
-              : []),
+            ...(systemMessage ? [systemMessage] : []),
             ...params.messages.map(toChatMessagePayload),
           ],
           temperature: params.temperature,

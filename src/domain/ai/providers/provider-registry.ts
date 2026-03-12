@@ -467,9 +467,7 @@ export class ProviderRegistry {
 
     for (const provider of this._providers) {
       const readinessResult = await settleAsync(provider.readiness());
-      const readiness = readinessResult.ok
-        ? readinessResult.value
-        : ("offline" as ProviderReadiness);
+      const readiness = readinessResult.ok ? readinessResult.value : "offline";
       const available = readiness !== "offline";
       this._providerAvailability.set(provider.name, available);
       this._providerReadiness.set(provider.name, readiness);

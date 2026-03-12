@@ -1,4 +1,6 @@
+import { settleAsync } from "../src/shared/utils/async-result.ts";
 import { createLogger } from "../src/lib/logger.ts";
+import { safeJsonParse } from "../src/shared/utils/safe-json.ts";
 
 interface ArchiveEntry {
   /** Source markdown path in repo at archive time. */
@@ -49,7 +51,7 @@ const DOCUMENT_PAIRS: readonly DocumentPair[] = [
     zh: "LOTFK_RMMZ_Agentic_Pack/EVENT_HOOKUPS.zh-CN.md",
   },
   { en: "LOTFK_RMMZ_Agentic_Pack/STATUS.md", zh: "LOTFK_RMMZ_Agentic_Pack/STATUS.zh-CN.md" },
-] as const;
+];
 
 const REQUIRED_SOURCE_PATHS: readonly string[] = DOCUMENT_PAIRS.flatMap((pair) =>
   pair.zh === undefined ? [pair.en] : [pair.en, pair.zh],
@@ -66,6 +68,20 @@ const toArchivePath = (sourcePath: string): string => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object";
 
+const isArchiveEntry = (value: unknown): value is ArchiveEntry => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.sourcePath === "string" &&
+    typeof value.archivePath === "string" &&
+    typeof value.sha256 === "string" &&
+    typeof value.sizeBytes === "number" &&
+    typeof value.archivedAt === "string"
+  );
+};
+
 const logger = createLogger("docs-surface-check");
 
 const readManifest = async (): Promise<ArchiveManifest | null> => {
@@ -74,13 +90,12 @@ const readManifest = async (): Promise<ArchiveManifest | null> => {
     return null;
   }
 
-  let parsed: unknown;
-  try {
-    const contents = await manifestFile.text();
-    parsed = JSON.parse(contents);
-  } catch {
+  const manifestText = await settleAsync(manifestFile.text());
+  if (!manifestText.ok) {
     return null;
   }
+
+  const parsed = safeJsonParse<unknown>(manifestText.value, null);
   if (!isRecord(parsed)) {
     return null;
   }
@@ -89,10 +104,18 @@ const readManifest = async (): Promise<ArchiveManifest | null> => {
     return null;
   }
 
+  const validEntries: ArchiveEntry[] = [];
+  for (const entry of entries) {
+    if (!isArchiveEntry(entry)) {
+      return null;
+    }
+    validEntries.push(entry);
+  }
+
   return {
     schemaVersion: typeof parsed.schemaVersion === "number" ? parsed.schemaVersion : -1,
     generatedAt: typeof parsed.generatedAt === "string" ? parsed.generatedAt : "",
-    entries: entries as ArchiveEntry[],
+    entries: validEntries,
   };
 };
 

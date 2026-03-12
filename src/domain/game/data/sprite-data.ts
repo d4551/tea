@@ -89,7 +89,7 @@ export const gameSpriteManifests: Record<string, SpriteManifest> = {
       "walk-up": { row: 3, frames: 3, startCol: 6, speed: 10 },
     },
   },
-} as const;
+};
 
 const teaHouseCollisions: readonly CollisionMask[] = [
   { x: 0, y: 0, width: 640, height: 120 },
@@ -239,7 +239,10 @@ export const gameScenes: Record<string, SceneDefinition> = {
 /**
  * Localized text keys used by the owned engine.
  */
-export const gameTextKeys = {
+export const gameTextKeys: {
+  scenes: Record<string, string>;
+  npcs: Record<string, string>;
+} = {
   scenes: {
     "scene.teaHouse.title": "scene.teaHouse.title",
     "scene.crystalCavern.title": "scene.crystalCavern.title",
@@ -259,4 +262,4 @@ export const gameTextKeys = {
     "npc.riverPilot.lines.oracle-quote": "npc.riverPilot.lines.oracle-quote",
     "npc.riverPilot.greet": "npc.riverPilot.greet",
   },
-} as const;
+};

@@ -30,7 +30,7 @@ interface ArchiveManifest {
 
 const logger = createLogger("script.archive-docs");
 
-const sourceMarkdownPaths = [
+const sourceMarkdownPaths: readonly string[] = [
   "README.md",
   "ARCHITECTURE.md",
   "docs/index.md",
@@ -46,7 +46,7 @@ const sourceMarkdownPaths = [
   "LOTFK_RMMZ_Agentic_Pack/PLUGIN_SPEC.md",
   "LOTFK_RMMZ_Agentic_Pack/EVENT_HOOKUPS.md",
   "LOTFK_RMMZ_Agentic_Pack/STATUS.md",
-] as const;
+];
 
 const archiveRoot = "notes/doc-archive";
 const manifestPath = `${archiveRoot}/index.json`;

@@ -1,7 +1,7 @@
 /**
  * Canonical relative asset paths used by runtime and build scripts.
  */
-export const assetRelativePaths = {
+export const assetRelativePaths: Record<string, string> = {
   sourceStylesheet: "src/styles/app.css",
   stylesheetOutputFile: "app.css",
   htmxPublicBundleFile: "vendor/htmx.min.js",
@@ -15,17 +15,17 @@ export const assetRelativePaths = {
   htmxExtensionsSourceDirectory: "src/htmx-extensions",
   playableGameClientEntryFile: "src/playable-game/game-client.ts",
   gameClientBundleFile: "game-client.js",
-} as const;
+};
 
 /**
  * Canonical HTMX extension entrypoints bundled into the public asset tree.
  */
-export const htmxExtensionEntryFiles = [
+export const htmxExtensionEntryFiles: readonly string[] = [
   "oracle-indicator.ts",
   "focus-panel.ts",
   "server-toast.ts",
   "layout-controls.ts",
-] as const;
+];
 
 /**
  * Minimal config shape required to derive static mount definitions.
@@ -56,11 +56,11 @@ export interface StaticAssetMount {
 /**
  * Canonical relative asset paths used by the browser game runtime.
  */
-export const gameAssetRelativePaths = {
+export const gameAssetRelativePaths: Record<string, string> = {
   chaJiangSprite: "images/sprites/cha-jiang-sprite.png",
   npcSpriteSheet: "images/sprites/npc-sprites.png",
   teaHouseBackground: "images/sprites/tea-house-scene-bg.png",
-} as const;
+};
 
 /**
  * Joins a URL prefix and relative path into a normalized public URL.

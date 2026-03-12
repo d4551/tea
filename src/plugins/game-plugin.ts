@@ -324,12 +324,11 @@ const commandResponse = t.Object({
   }),
 });
 
-type SupportedLocale = "en-US" | "zh-CN";
 const getGameMessages = (locale: string) => getMessages(normalizeLocale(locale));
-const wsCloseCode = {
+const wsCloseCode: Record<string, number> = {
   sessionNotFound: WS_CLOSE_SESSION_MISSING,
   sessionExpired: WS_CLOSE_TOKEN_EXPIRED,
-} as const;
+};
 
 const buildCloseFrame = (
   reason: GameSseCloseReason,
@@ -491,9 +490,9 @@ const createHudStream = async function* ({
 }): AsyncGenerator<string> {
   const sessionId = session.sessionId;
   const commandPath = interpolateRoutePath(appRoutes.gameApiSessionCommand, { id: sessionId });
-  const catalog =
-    gameTextByLocale[session.locale as keyof typeof gameTextByLocale] ?? gameTextByLocale["en-US"];
-  const messages = getMessages(session.locale as "en-US" | "zh-CN");
+  const normalizedLocale = normalizeLocale(session.locale);
+  const catalog = gameTextByLocale[normalizedLocale] ?? gameTextByLocale["en-US"];
+  const messages = getMessages(normalizedLocale);
   const retryMs = defaultGameConfig.hudRetryDelayMs;
   let sequence = 0;
   const renderSceneBadge = (sceneTitle: string): string =>
@@ -1067,11 +1066,11 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
                   resumeTokenVersion: 1,
                   stateVersion: 1,
                   version: 1,
-                  participantRole: "owner" as const,
+                  participantRole: "owner",
                   participants: [
                     {
                       sessionId: ownerSessionId,
-                      role: "owner" as const,
+                      role: "owner",
                       joinedAtMs: Date.now(),
                       updatedAtMs: Date.now(),
                     },
@@ -1542,7 +1541,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
 
           const connKey = `${sessionId}:${crypto.randomUUID()}`;
           wsConnKeys.set(ws, connKey);
-          const locale = sessionResult.payload.locale as SupportedLocale;
+          const locale = normalizeLocale(sessionResult.payload.locale);
 
           const cleanup = gameLoop.startTick(sessionId, () => {
             void asLifecycleState(sessionId, participantSessionId).then((state) => {

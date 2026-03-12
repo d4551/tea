@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { appConfig } from "../src/config/environment.ts";
+import { settleAsync } from "../src/shared/utils/async-result.ts";
 import { TransformersProvider } from "../src/domain/ai/providers/transformers-provider.ts";
-
-type MutableAiConfig = {
-  -readonly [Key in keyof typeof appConfig.ai]: (typeof appConfig.ai)[Key];
-};
 
 describe("transformers provider adapter", () => {
   test("maps typed local text-generation results back to AiGenerationResult", async () => {
@@ -131,9 +128,9 @@ describe("transformers provider adapter", () => {
   });
 
   test("unwraps typed local embeddings back to the provider embedding contract", async () => {
-    const aiConfig = appConfig.ai as MutableAiConfig;
+    const aiConfig = appConfig.ai;
     const originalEmbeddingsEnabled = aiConfig.localEmbeddingsEnabled;
-    aiConfig.localEmbeddingsEnabled = true;
+    Reflect.set(aiConfig, "localEmbeddingsEnabled", true);
 
     const provider = new TransformersProvider(async () => ({
       isReady: true,
@@ -183,12 +180,12 @@ describe("transformers provider adapter", () => {
       dispose: async () => {},
     }));
 
-    try {
-      const result = await provider.generateEmbedding("tea");
+    const result = await settleAsync(provider.generateEmbedding("tea"));
+    Reflect.set(aiConfig, "localEmbeddingsEnabled", originalEmbeddingsEnabled);
 
-      expect(result).toEqual(new Float32Array([0.25, 0.5, 0.75]));
-    } finally {
-      aiConfig.localEmbeddingsEnabled = originalEmbeddingsEnabled;
+    if (!result.ok) {
+      throw result.error;
     }
+    expect(result.value).toEqual(new Float32Array([0.25, 0.5, 0.75]));
   });
 });

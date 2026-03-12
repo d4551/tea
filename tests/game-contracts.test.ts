@@ -33,12 +33,13 @@ describe("game shared contracts", () => {
 
   test("scene-state validator accepts projected multiplayer presence", () => {
     const state = createBaselineSceneState();
+    const participantRole: "controller" = "controller";
     const projectedState = {
       ...state,
       coPlayers: [
         {
           sessionId: "participant-1",
-          role: "controller" as const,
+          role: participantRole,
           entity: {
             ...state.player,
             id: "participant-participant-1",

@@ -13,8 +13,8 @@ export const toGameAssetUrl = (relativePath: string): string =>
 /**
  * Canonical public URLs for server-rendered game media.
  */
-export const gameAssetUrls = {
+export const gameAssetUrls: Record<string, string> = {
   chaJiangSprite: toGameAssetUrl(gameAssetRelativePaths.chaJiangSprite),
   npcSpriteSheet: toGameAssetUrl(gameAssetRelativePaths.npcSpriteSheet),
   teaHouseBackground: toGameAssetUrl(gameAssetRelativePaths.teaHouseBackground),
-} as const;
+};

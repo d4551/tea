@@ -1322,12 +1322,17 @@ const toSessionFlagsFromRows = (
     return undefined;
   }
 
-  return Object.fromEntries(
-    flagRows.flatMap((row) => {
-      const value = fromPersistedSessionFlagValue(row);
-      return value === undefined ? [] : [[row.key, value] as const];
-    }),
-  );
+  const output: Record<string, string | number | boolean> = {};
+  for (const row of flagRows) {
+    const value = fromPersistedSessionFlagValue(row);
+    if (value === undefined) {
+      continue;
+    }
+
+    output[row.key] = value;
+  }
+
+  return output;
 };
 
 const toPersistedQuestRows = (

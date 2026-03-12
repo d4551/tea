@@ -1,7 +1,7 @@
 /**
  * Canonical HTTP status codes used by API routes and tests.
  */
-export const httpStatus = {
+export const httpStatus: Record<string, number> = {
   ok: 200,
   badRequest: 400,
   unauthorized: 401,
@@ -12,11 +12,11 @@ export const httpStatus = {
   unprocessableEntity: 422,
   serviceUnavailable: 503,
   internalServerError: 500,
-} as const;
+};
 
 /**
  * Canonical response content-type values.
  */
-export const contentType = {
+export const contentType: Record<string, string> = {
   htmlUtf8: "text/html; charset=utf-8",
-} as const;
+};

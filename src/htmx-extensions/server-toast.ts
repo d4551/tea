@@ -13,11 +13,8 @@ const CONTAINER_ID = "toast-container";
 const DISMISS_MS = 4000;
 const FADE_MS = 300;
 
-/** Toast payload shape received from HX-Trigger. */
-interface ToastPayload {
-  readonly message: string;
-  readonly type?: "success" | "error" | "warning" | "info";
-}
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
 
 /** Maps toast type to DaisyUI alert class. */
 const alertClass = (type: string): string => {
@@ -48,16 +45,29 @@ const alertIcon = (type: string): string => {
 };
 
 /** Renders and auto-dismisses a toast notification. */
-const showToast = (payload: ToastPayload): void => {
+const showToast = (payload: unknown): void => {
+  if (!isRecord(payload)) {
+    return;
+  }
+
+  const message = payload["message"];
+  if (typeof message !== "string") {
+    return;
+  }
+
+  const typedType = payload["type"];
+
   const container = document.getElementById(CONTAINER_ID);
   if (!container) return;
 
-  const type = payload.type ?? "info";
+  const type = typedType === "success" || typedType === "error" || typedType === "warning"
+    ? typedType
+    : "info";
   const el = document.createElement("div");
   el.className = `alert ${alertClass(type)} alert-soft shadow-lg transition-opacity duration-300 opacity-100`;
   el.setAttribute("role", "alert");
   el.setAttribute("aria-live", "assertive");
-  el.innerHTML = `${alertIcon(type)}<span>${escapeHtml(payload.message)}</span>`;
+  el.innerHTML = `${alertIcon(type)}<span>${escapeHtml(message)}</span>`;
 
   container.appendChild(el);
 
@@ -69,8 +79,8 @@ const showToast = (payload: ToastPayload): void => {
   }, DISMISS_MS);
 };
 
-document.body.addEventListener("showToast", ((evt: CustomEvent<ToastPayload>) => {
-  if (evt.detail && typeof evt.detail === "object" && evt.detail.message) {
+document.body.addEventListener("showToast", (evt: Event) => {
+  if (evt instanceof CustomEvent) {
     showToast(evt.detail);
   }
-}) as EventListener);
+});

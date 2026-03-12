@@ -43,6 +43,17 @@ type ShutdownReason =
       readonly exitCode: number;
     };
 
+type WatcherProcess = ReturnType<typeof Bun.spawn>;
+type WatcherExitResult =
+  | {
+      readonly ok: true;
+      readonly exitCode: number;
+    }
+  | {
+      readonly ok: false;
+      readonly error: string;
+    };
+
 const runWatchers = async (): Promise<void> => {
   const cssWatcher = Bun.spawn({
     cmd: [...createTailwindCommand(true)],
@@ -73,12 +84,17 @@ const runWatchers = async (): Promise<void> => {
     stderr: "inherit",
   });
 
-  const watcherProcesses = {
+  const watcherProcesses: {
+    readonly cssWatcher: WatcherProcess;
+    readonly htmxExtensionWatcher: WatcherProcess;
+    readonly gameClientWatcher: WatcherProcess;
+    readonly serverWatcher: WatcherProcess;
+  } = {
     cssWatcher,
     htmxExtensionWatcher,
     gameClientWatcher,
     serverWatcher,
-  } as const;
+  };
 
   let shutdownReasonType: ShutdownReason["type"] | null = null;
   let shutdownSignal: ShutdownSignal | null = null;
@@ -117,13 +133,13 @@ const runWatchers = async (): Promise<void> => {
   const observeWatcherExit = async (
     watcherName: keyof typeof watcherProcesses,
   ): Promise<number> => {
-    const exitResult = await watcherProcesses[watcherName].exited.then(
+    const exitResult = await watcherProcesses[watcherName].exited.then<WatcherExitResult>(
       (exitCode) => ({
-        ok: true as const,
+        ok: true,
         exitCode,
       }),
       (error: unknown) => ({
-        ok: false as const,
+        ok: false,
         error: error instanceof Error ? error.message : String(error),
       }),
     );

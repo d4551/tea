@@ -12,7 +12,13 @@ const htmx = getHtmx();
 const FORM_SYNC_DEFAULT = "this:abort";
 
 /** Standard interactive form submission methods handled by HTMX. */
-const FORM_METHOD_ATTRS = ["hx-get", "hx-post", "hx-put", "hx-delete", "hx-patch"] as const;
+const FORM_METHOD_ATTRS: readonly string[] = [
+  "hx-get",
+  "hx-post",
+  "hx-put",
+  "hx-delete",
+  "hx-patch",
+];
 
 interface DrawerToggleControl extends HTMLElement {
   readonly dataset: DOMStringMap & {
@@ -187,7 +193,7 @@ const applyFormDefaults = (root: ParentNode): void => {
   }
 };
 
-const resolveRequestForm = (event: Event): HTMLFormElement | null => {
+const resolveRequestForm = (event: HtmxLifecycleEvent): HTMLFormElement | null => {
   const detailElement =
     event instanceof CustomEvent
       ? event.detail?.elt instanceof Element
@@ -195,9 +201,9 @@ const resolveRequestForm = (event: Event): HTMLFormElement | null => {
         : null
       : null;
   const extensionElement =
-    resolveExtensionElement(event as HtmxLifecycleEvent) ??
+    resolveExtensionElement(event) ??
     detailElement ??
-    (event.target as Element | null);
+    (event.target instanceof Element ? event.target : null);
 
   if (!extensionElement) {
     return null;
@@ -229,7 +235,7 @@ const wireHtmxLifecycle = (): void => {
 
   htmx.defineExtension("layout-controls", {
     onEvent(name, event) {
-      const requestForm = resolveRequestForm(event as Event);
+      const requestForm = resolveRequestForm(event);
 
       if (name === "htmx:beforeRequest") {
         setRequestBusyState(requestForm, true);
@@ -256,25 +262,26 @@ const wireHtmxLifecycle = (): void => {
       }
 
       if (name === "htmx:afterSwap") {
-        const target = resolveExtensionElement(event as HtmxLifecycleEvent);
+        const target = resolveExtensionElement(event);
         const scope = target instanceof Element ? target : document;
         applyFormDefaults(scope);
       }
 
       if (name === "htmx:afterSettle") {
-        const target = resolveExtensionElement(event as HtmxLifecycleEvent);
+        const target = resolveExtensionElement(event);
         focusAfterSwap(target instanceof Element ? target : document);
       }
     },
   });
 };
 
+const resolveDrawerControl = (target: EventTarget | null): DrawerToggleControl | null =>
+  target instanceof Element
+    ? target.closest<DrawerToggleControl>(drawerToggleSelector)
+    : null;
+
 document.addEventListener("click", (event) => {
-  const control = (
-    event.target instanceof Element
-      ? event.target.closest<DrawerToggleControl>(drawerToggleSelector)
-      : null
-  ) as DrawerToggleControl | null;
+  const control = resolveDrawerControl(event.target);
   if (!control) {
     return;
   }
@@ -298,11 +305,7 @@ document.addEventListener("change", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
-  const drawerControl = (
-    event.target instanceof Element
-      ? event.target.closest<DrawerToggleControl>(drawerToggleSelector)
-      : null
-  ) as DrawerToggleControl | null;
+  const drawerControl = resolveDrawerControl(event.target);
 
   if (
     drawerControl &&

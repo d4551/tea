@@ -8,10 +8,10 @@ export const defaultOracleMode: OracleMode = "auto";
 /**
  * Supported oracle mode values.
  */
-export const oracleModes = [
+export const oracleModes: readonly OracleMode[] = [
   "auto",
   "force-empty",
   "force-retryable-error",
   "force-fatal-error",
   "force-unauthorized",
-] as const satisfies readonly OracleMode[];
+];

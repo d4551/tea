@@ -88,7 +88,17 @@ export interface LocalModelCatalogEntry {
 /**
  * Typed catalogue of local Hugging Face / ONNX model targets.
  */
-export const MODEL_REGISTRY = {
+type ModelRegistryKey =
+  | "sentiment"
+  | "oracle"
+  | "npcDialogue"
+  | "embeddings"
+  | "speechToText"
+  | "textToSpeech";
+
+type ModelRegistry = Readonly<Record<ModelRegistryKey, ModelEntry>>;
+
+export const MODEL_REGISTRY: ModelRegistry = {
   sentiment: {
     key: "sentiment",
     label: "Sentiment classifier",
@@ -185,7 +195,7 @@ export const MODEL_REGISTRY = {
     warmup: false,
     maxContextLength: 600,
   },
-} as const satisfies Record<string, ModelEntry>;
+};
 
 /**
  * Registry key union derived from {@link MODEL_REGISTRY}.
@@ -205,7 +215,7 @@ export const getLocalModelCatalog = (): readonly LocalModelCatalogEntry[] =>
     task: entry.task,
     model: entry.model,
     capabilities: entry.capabilities,
-    runtime: `onnx-${entry.device}` as const,
+    runtime: `onnx-${entry.device}`,
     dtype: entry.dtype,
     integration: "huggingface",
     configKey: entry.configKey,

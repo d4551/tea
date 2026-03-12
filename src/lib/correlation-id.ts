@@ -1,7 +1,7 @@
 /**
  * Header name used for request correlation across logs and envelopes.
  */
-export const correlationIdHeader = "x-correlation-id" as const;
+export const correlationIdHeader = "x-correlation-id";
 
 /**
  * Minimal writable response header map contract.

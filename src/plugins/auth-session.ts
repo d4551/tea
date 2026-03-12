@@ -92,7 +92,10 @@ export const resolveAuthRequestContext = (cookie: AuthCookieBag): AuthRequestCon
 /**
  * Shared auth-session guard used by page and API route trees.
  */
-export const authSessionGuard = {
+export const authSessionGuard: {
+  cookie: typeof authSessionCookieSchema;
+  beforeHandle: ({ cookie }: { cookie: AuthCookieBag }) => void;
+} = {
   cookie: authSessionCookieSchema,
   beforeHandle: ({ cookie }: { cookie: AuthCookieBag }) => {
     const authSession = resolveAuthSession(cookie);
@@ -102,7 +105,7 @@ export const authSessionGuard = {
       ...sessionCookieOptions,
     });
   },
-} as const;
+};
 
 /**
  * Elysia plugin that derives canonical auth-session state for downstream handlers.

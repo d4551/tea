@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 import { appConfig } from "../config/environment.ts";
 import { resolveStaticAssetMounts } from "../shared/constants/assets.ts";
 import { httpStatus } from "../shared/constants/http.ts";
+import { safeDecodeUri } from "../shared/utils/safe-json.ts";
 
 /**
  * MIME type lookup for common static file extensions.
@@ -46,12 +47,7 @@ const MIME_TYPES: Readonly<Record<string, string>> = {
 };
 
 const normalizeWildcardPath = (wildcardPath: string): string | null => {
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(wildcardPath);
-  } catch {
-    return null;
-  }
+  const decoded = safeDecodeUri(wildcardPath);
 
   const normalized = decoded.replace(/\\/gu, "/").replace(/^\/+/u, "");
   if (normalized.includes("\0")) {
@@ -139,8 +135,8 @@ for (const mount of resolveStaticAssetMounts(appConfig)) {
   const normalizedPrefix = normalizeMountAssetRoot(mount.prefix);
   const normalizedAssetsRoot = resolveAssetRoot(mount.assets);
 
-  staticAssetsPlugin.get(`${normalizedPrefix}/*`, async ({ params }) => {
-    const wildcardPath = (params as Record<string, string>)["*"];
+  staticAssetsPlugin.get(`${normalizedPrefix}/*`, async ({ params }: { params: { "*": string | undefined } }) => {
+    const wildcardPath = params["*"];
     if (!wildcardPath) {
       return new Response(null, { status: httpStatus.notFound });
     }

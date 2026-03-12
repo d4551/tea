@@ -1,4 +1,5 @@
 import { appConfig } from "../src/config/environment.ts";
+import { safeJsonParse } from "../src/shared/utils/safe-json.ts";
 import {
   assetRelativePaths,
   getHtmxExtensionEntryPaths,
@@ -6,6 +7,9 @@ import {
 } from "../src/shared/constants/assets.ts";
 
 type BunBuildOptions = Parameters<typeof Bun.build>[0];
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+const emptyRecord: Record<string, unknown> = {};
 
 const resolvePackagePath = (specifier: string): string =>
   Bun.fileURLToPath(import.meta.resolve(specifier));
@@ -22,14 +26,12 @@ const normalizePath = (value: string): string => value.replace(/\\/gu, "/").repl
 const hasPackageManifest = async (path: string): Promise<boolean> => Bun.file(path).exists();
 
 const readPackageName = async (packageJsonPath: string): Promise<string | null> => {
-  try {
-    const packageJson = JSON.parse(await Bun.file(packageJsonPath).text()) as {
-      readonly name?: string;
-    };
-    return packageJson.name ?? null;
-  } catch {
+  const packageJson = safeJsonParse(await Bun.file(packageJsonPath).text(), emptyRecord);
+  if (!isRecord(packageJson) || typeof packageJson.name !== "string") {
     return null;
   }
+
+  return packageJson.name;
 };
 
 const findPackageRoot = async (
@@ -76,7 +78,7 @@ const resolveInProject = (...parts: readonly string[]): string =>
 /**
  * Canonical Bun asset-pipeline paths shared by build and watch scripts.
  */
-export const assetPipelinePaths = {
+export const assetPipelinePaths: Readonly<Record<string, string>> = {
   projectRoot,
   outputStylesheetPath: joinLocalPath(
     appConfig.staticAssets.publicDirectory,
@@ -105,7 +107,7 @@ export const assetPipelinePaths = {
   onnxWasmDestinationDirectory: resolveFromProjectRoot(
     joinLocalPath(appConfig.staticAssets.publicDirectory, assetRelativePaths.onnxPublicDirectory),
   ),
-} as const;
+};
 
 /**
  * Canonical HTMX extension entrypoint paths.

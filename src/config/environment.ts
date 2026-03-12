@@ -3,7 +3,8 @@ import { assetRelativePaths, joinUrlPath, toPublicAssetUrl } from "../shared/con
 /**
  * Supported locale codes for server rendering and API responses.
  */
-export const supportedLocales = ["en-US", "zh-CN"] as const;
+type LocaleCodeLiteral = "en-US" | "zh-CN";
+export const supportedLocales: readonly LocaleCodeLiteral[] = ["en-US", "zh-CN"];
 
 /**
  * Locale code union for i18n-aware routes and components.

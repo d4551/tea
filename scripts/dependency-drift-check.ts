@@ -1,16 +1,6 @@
 import { createLogger } from "../src/lib/logger.ts";
 
 /**
- * Minimal package manifest schema used by dependency drift check.
- */
-interface PackageManifest {
-  /** Runtime dependency declarations. */
-  readonly dependencies?: Record<string, string>;
-  /** Development dependency declarations. */
-  readonly devDependencies?: Record<string, string>;
-}
-
-/**
  * Parsed semantic version components.
  */
 interface ParsedSemver {
@@ -62,6 +52,11 @@ const logger = createLogger("dependency-drift-check");
 const exactSemverRegex =
   /^v?(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)(?:-(?<prerelease>[\w.-]+))?$/u;
 const normalizedPrefixRegex = /^[~^<>]=?\s*/u;
+const isDependencyMap = (value: unknown): value is Record<string, string> =>
+  value !== null &&
+  typeof value === "object" &&
+  !Array.isArray(value) &&
+  Object.values(value).every((entry): entry is string => typeof entry === "string");
 const knownPolicy: Readonly<Record<string, { readonly allowPatchDriftWith: string | null }>> = {
   "@types/three": { allowPatchDriftWith: "three" },
 };
@@ -107,12 +102,20 @@ const collectDependencyEntries = async (): Promise<readonly DependencyEntry[]> =
   const entries: DependencyEntry[] = [];
 
   for (const manifestPath of manifestPaths) {
-    const manifest = JSON.parse(await Bun.file(manifestPath).text()) as PackageManifest;
+    const manifestSource = JSON.parse(await Bun.file(manifestPath).text());
+    const manifestDependencies = isDependencyMap(manifestSource?.dependencies)
+      ? manifestSource.dependencies
+      : {};
+    const manifestDevDependencies = isDependencyMap(manifestSource?.devDependencies)
+      ? manifestSource.devDependencies
+      : {};
 
-    for (const [kind, deps] of [
-      ["dependencies", manifest.dependencies ?? {}],
-      ["devDependencies", manifest.devDependencies ?? {}],
-    ] as const) {
+    const dependencySections: readonly [DependencyKind, Record<string, string>][] = [
+      ["dependencies", manifestDependencies],
+      ["devDependencies", manifestDevDependencies],
+    ];
+
+    for (const [kind, deps] of dependencySections) {
       for (const [name, spec] of Object.entries(deps)) {
         entries.push({
           name,
@@ -188,7 +191,7 @@ const buildLatestMap = async (
   const attempts = await Promise.allSettled(
     uniquePackages.map(async (packageName) => {
       const latest = await fetchLatestVersion(packageName);
-      return [packageName, latest] as const;
+      return { packageName, latest };
     }),
   );
 
@@ -201,7 +204,7 @@ const buildLatestMap = async (
       continue;
     }
 
-    latestByPackage.set(attempt.value[0], attempt.value[1]);
+    latestByPackage.set(attempt.value.packageName, attempt.value.latest);
   }
 
   if (warnings.length > 0) {

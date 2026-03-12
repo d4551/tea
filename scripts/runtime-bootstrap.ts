@@ -36,7 +36,7 @@ const readCurrentBunVersion = (): string => Bun.version;
 const isSupportedBunVersion = (version: string): boolean =>
   version.startsWith(`${appConfig.bootstrap.supportedBunRange.replace(/\.x$/u, ".")}`);
 
-const setupSteps = [
+const setupSteps: readonly SetupWorkflowCommandStep[] = [
   {
     command: ["bun", "install"],
     description: "bun install",
@@ -53,7 +53,7 @@ const setupSteps = [
     command: ["bun", "run", "build:assets"],
     description: "bun run build:assets",
   },
-] as const satisfies readonly SetupWorkflowCommandStep[];
+];
 
 const createEnvFileEnsurer = (cwd: string) => async (): Promise<"created" | "preserved"> => {
   const envFile = Bun.file(`${cwd}/.env`);

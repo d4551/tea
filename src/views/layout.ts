@@ -339,7 +339,12 @@ const renderNavigation = (
 ): string => {
   const projectScopedRoutes = new Set([appRoutes.builder, appRoutes.game]);
 
-  const items = [
+  const items: readonly {
+    key: string;
+    label: string;
+    href: string;
+    icon: string;
+  }[] = [
     {
       key: "home",
       label: messages.navigation.home,
@@ -358,7 +363,7 @@ const renderNavigation = (
       href: appRoutes.game,
       icon: '<svg xmlns="http://www.w3.org/2000/svg" class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>',
     },
-  ] as const;
+  ];
 
   const renderItem = (item: (typeof items)[number]): string => {
     const isActive = item.key === activeRoute;

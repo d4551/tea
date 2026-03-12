@@ -23,11 +23,12 @@ export interface LocalStorageWriteResult {
  * @returns Read result.
  */
 export const readLocalStorageResult = (key: string): LocalStorageReadResult => {
-  try {
-    return { ok: true, value: localStorage.getItem(key) ?? undefined };
-  } catch {
-    return { ok: false };
+  const value = globalThis.localStorage?.getItem?.(key);
+  if (value === null || value === undefined) {
+    return { ok: true, value: undefined };
   }
+
+  return { ok: true, value };
 };
 
 /**
@@ -38,12 +39,15 @@ export const readLocalStorageResult = (key: string): LocalStorageReadResult => {
  * @returns Write result.
  */
 export const writeLocalStorageResult = (key: string, value: string): LocalStorageWriteResult => {
-  try {
-    localStorage.setItem(key, value);
-    return { ok: true };
-  } catch {
+  if (!globalThis.localStorage) {
     return { ok: false };
   }
+
+  if (globalThis.localStorage.setItem instanceof Function) {
+    globalThis.localStorage.setItem(key, value);
+  }
+
+  return { ok: true };
 };
 
 /**

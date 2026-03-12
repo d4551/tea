@@ -370,7 +370,7 @@ export const renderBuilderDashboard = (
   const docsHref = withLocaleQuery(appConfig.api.docsPath, locale);
   const providerSummary =
     stats.providers.length > 0 ? stats.providers.join(", ") : messages.ai.noProviderAvailable;
-  const capabilityCards = [
+  const capabilityCards: readonly BuilderCapabilityKey[] = [
     "releaseFlow",
     "runtime2d",
     "runtime3d",
@@ -386,7 +386,7 @@ export const renderBuilderDashboard = (
       messages,
       locale,
       projectId,
-      findCapability(stats.readiness, key as BuilderCapabilityKey),
+      findCapability(stats.readiness, key),
       stats,
     ),
   );

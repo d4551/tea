@@ -32,10 +32,11 @@ export interface GameWebSocketContext {
 
 type WebSocketTransportObject = Record<string, unknown>;
 
+const isWebSocketTransportObject = (value: unknown): value is WebSocketTransportObject =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
 const toWebSocketTransportObject = (value: unknown): WebSocketTransportObject =>
-  value && typeof value === "object" && !Array.isArray(value)
-    ? (value as WebSocketTransportObject)
-    : {};
+  isWebSocketTransportObject(value) ? value : {};
 
 const isAuthCookieBag = (value: unknown): value is AuthCookieBag =>
   value !== null && typeof value === "object" && !Array.isArray(value);

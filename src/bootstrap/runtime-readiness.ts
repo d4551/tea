@@ -42,7 +42,7 @@ export interface SetupWorkflowResult {
   readonly readiness: RuntimeReadinessReport;
 }
 
-const requiredPublicAssetPaths = [
+const requiredPublicAssetPaths: readonly string[] = [
   joinLocalPath(appConfig.staticAssets.publicDirectory, assetRelativePaths.stylesheetOutputFile),
   joinLocalPath(appConfig.staticAssets.publicDirectory, assetRelativePaths.htmxPublicBundleFile),
   joinLocalPath(
@@ -103,7 +103,7 @@ const verifyDatabaseReachable = async (): Promise<RuntimeReadinessCheck> => {
   };
 };
 
-const requiredDatabaseTables = [
+const requiredDatabaseTables: readonly string[] = [
   "BuilderProject",
   "GameSession",
   "OracleInteraction",
@@ -166,14 +166,14 @@ export const collectRuntimeReadinessReport = async (): Promise<RuntimeReadinessR
     ok: true,
     detail: new URL(appConfig.builder.localAutomationOrigin).toString(),
   };
-  const checks = [
+  const checks: readonly RuntimeReadinessCheck[] = [
     ...directoryChecks,
     ...assetChecks,
     databaseCheck,
     databaseSchemaCheck,
     aiRoutingCheck,
     automationOriginCheck,
-  ] as const;
+  ];
 
   return {
     ok: checks.every((check) => check.ok),

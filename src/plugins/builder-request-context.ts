@@ -10,6 +10,9 @@ import { resolveRequestLocale } from "../shared/i18n/translator.ts";
 
 type ContextSource = Record<string, unknown>;
 
+const isContextSource = (value: unknown): value is ContextSource =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
 /**
  * Derived builder request context available to builder page and API handlers.
  */
@@ -25,7 +28,7 @@ export interface BuilderRequestContext {
 }
 
 const toContextSource = (value: unknown): ContextSource =>
-  value && typeof value === "object" && !Array.isArray(value) ? (value as ContextSource) : {};
+  isContextSource(value) ? value : {};
 
 const toSearchParamSource = (request: Request | undefined): ContextSource => {
   if (!request) {

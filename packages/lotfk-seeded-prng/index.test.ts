@@ -35,7 +35,7 @@ describe("SeededPrng", () => {
 
   test("pick returns a valid array element", () => {
     const prng = createPrng(21);
-    const arr = ["north", "south", "east", "west"] as const;
+    const arr: readonly string[] = ["north", "south", "east", "west"];
     for (let t = 0; t < 2_000; t += 100) {
       const v = prng.pick(t, arr);
       expect(arr).toContain(v);

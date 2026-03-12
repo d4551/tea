@@ -1,2 +1,3 @@
 import { WebGPURenderer } from "three/webgpu";
-console.log(typeof WebGPURenderer);
+
+export const isWebGpuRendererAvailable = typeof WebGPURenderer === "function";

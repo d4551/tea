@@ -5,18 +5,18 @@ import { safeJsonParse } from "../utils/safe-json.ts";
  * Application-defined WebSocket close code: session not found.
  * Signals the client to stop reconnecting and show a session-missing error.
  */
-export const WS_CLOSE_SESSION_MISSING = 4404 as const;
+export const WS_CLOSE_SESSION_MISSING = 4404;
 
 /**
  * Application-defined WebSocket close code: resume token expired or invalid.
  * Signals the client to clear stored session metadata and redirect.
  */
-export const WS_CLOSE_TOKEN_EXPIRED = 4408 as const;
+export const WS_CLOSE_TOKEN_EXPIRED = 4408;
 
 /**
  * localStorage key for persisting game session metadata across reconnects.
  */
-export const GAME_SESSION_STORAGE_KEY = "lotfk:game:session-meta" as const;
+export const GAME_SESSION_STORAGE_KEY = "lotfk:game:session-meta";
 
 /**
  * Supported locales for game engine behavior and UI copy.
@@ -2071,25 +2071,43 @@ export const validateGameRealtimeFrame = (
   }
 
   const commandQueueDepth =
-    payload.commandQueueDepth === undefined ? undefined : (payload.commandQueueDepth as number);
+    payload.commandQueueDepth === undefined
+      ? undefined
+      : isFiniteNumber(payload.commandQueueDepth)
+        ? payload.commandQueueDepth
+        : undefined;
   const resumeToken =
-    payload.resumeToken === undefined ? undefined : (payload.resumeToken as string);
+    payload.resumeToken === undefined
+      ? undefined
+      : typeof payload.resumeToken === "string"
+        ? payload.resumeToken
+        : undefined;
   const resumeTokenExpiresAtMs =
     payload.resumeTokenExpiresAtMs === undefined
       ? undefined
-      : (payload.resumeTokenExpiresAtMs as number);
+      : isFiniteNumber(payload.resumeTokenExpiresAtMs)
+        ? payload.resumeTokenExpiresAtMs
+        : undefined;
   const participants =
     payload.participants === undefined
       ? undefined
-      : (payload.participants as readonly GameSessionParticipant[]);
+      : Array.isArray(payload.participants)
+        ? payload.participants.filter(
+            (value): value is GameSessionParticipant => isGameSessionParticipant(value),
+          )
+        : undefined;
   const participantRole =
     payload.participantRole === undefined
       ? undefined
-      : (payload.participantRole as GameSessionParticipantRole);
+      : isGameSessionParticipantRole(payload.participantRole)
+        ? payload.participantRole
+        : undefined;
   const coPlayers =
     payload.coPlayers === undefined
       ? undefined
-      : (payload.coPlayers as readonly GameParticipantPresence[]);
+      : Array.isArray(payload.coPlayers)
+        ? payload.coPlayers.filter((value): value is GameParticipantPresence => isGameParticipantPresence(value))
+        : undefined;
 
   return {
     ok: true,
@@ -2868,11 +2886,14 @@ export const parsePlayerProgressV2 = (
   interactionsValue: unknown,
   updatedAt: string,
 ): PlayerProgressV2 => {
+  const emptyVisitedScenes: readonly string[] = [];
+  const emptyInteractions: Readonly<Record<string, boolean>> = {};
+
   const parsedVisitedScenes = Array.isArray(visitedScenesValue)
     ? visitedScenesValue
     : parseJson(
         typeof visitedScenesValue === "string" ? visitedScenesValue : "[]",
-        [] as readonly string[],
+        emptyVisitedScenes,
       );
 
   const parsedInteractions =
@@ -2880,10 +2901,7 @@ export const parsePlayerProgressV2 = (
     interactionsValue !== null &&
     !Array.isArray(interactionsValue)
       ? interactionsValue
-      : parseJson(
-          typeof interactionsValue === "string" ? interactionsValue : "{}",
-          {} as Record<string, boolean>,
-        );
+      : parseJson(typeof interactionsValue === "string" ? interactionsValue : "{}", emptyInteractions);
 
   return {
     xp: typeof xp === "number" && Number.isFinite(xp) ? Math.max(0, Math.trunc(xp)) : 0,

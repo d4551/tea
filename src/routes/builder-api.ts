@@ -29,6 +29,7 @@ import {
 import {
   detectAvailableFeatures,
   generateNpcDialogue,
+  type AvailableAiFeatures,
   suggestUserFlowStep,
 } from "../domain/game/ai/game-ai-service.ts";
 import { gameScenes, gameSpriteManifests } from "../domain/game/data/sprite-data.ts";
@@ -465,7 +466,7 @@ const toBuilderNpc = (npc: SceneNpcDefinition) => ({
   ai: {
     wanderRadius: npc.ai.wanderRadius,
     wanderSpeed: npc.ai.wanderSpeed,
-    idlePauseMs: [npc.ai.idlePauseMs[0], npc.ai.idlePauseMs[1]] as [number, number],
+    idlePauseMs: npc.ai.idlePauseMs,
     greetOnApproach: npc.ai.greetOnApproach,
     greetLineKey: npc.ai.greetLineKey,
   },
@@ -537,7 +538,7 @@ const toChromeProject = async (projectId: string) => {
   };
 };
 
-const baselineReadinessFeatures = {
+const baselineReadinessFeatures: AvailableAiFeatures = {
   richDialogue: false,
   visionAnalysis: false,
   sentimentAnalysis: false,
@@ -546,7 +547,18 @@ const baselineReadinessFeatures = {
   speechSynthesis: false,
   localInference: false,
   providers: [],
-} as const;
+};
+
+const createBuilderPatch = (
+  operation: "add" | "replace" | "remove" | "move" | "copy" | "test",
+  value: string,
+  confidence: number,
+): BuilderArtifactPatch => ({
+  op: operation,
+  path: "/dialogue/test",
+  value,
+  confidence,
+});
 
 const renderSceneWorkspace = async (locale: LocaleCode, projectId: string): Promise<string> => {
   const project = await builderService.getProject(projectId);
@@ -812,6 +824,8 @@ const describePublishValidationIssues = (
 };
 
 const parseOperation = (rawText: string): BuilderArtifactPatch[] => {
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === "object" && !Array.isArray(value);
   const fallback: BuilderArtifactPatch = {
     op: "replace",
     path: "/dialogues/default/lastLine",
@@ -829,27 +843,26 @@ const parseOperation = (rawText: string): BuilderArtifactPatch[] => {
 
   return parsed
     .map((item): BuilderArtifactPatch | null => {
-      if (item === null || typeof item !== "object") {
+      if (!isRecord(item)) {
         return null;
       }
 
-      const raw = item as Record<string, unknown>;
-      if (typeof raw.op !== "string") {
+      if (typeof item.op !== "string") {
         return null;
       }
-      if (typeof raw.path !== "string" || raw.path.length === 0) {
+      if (typeof item.path !== "string" || item.path.length === 0) {
         return null;
       }
 
-      const op = raw.op === "add" || raw.op === "remove" ? raw.op : "replace";
+      const op = item.op === "add" || item.op === "remove" ? item.op : "replace";
       return {
         op,
-        path: raw.path,
-        value: typeof raw.value === "string" ? raw.value : JSON.stringify(raw.value ?? ""),
-        checksum: typeof raw.checksum === "string" ? raw.checksum : undefined,
+        path: item.path,
+        value: typeof item.value === "string" ? item.value : JSON.stringify(item.value ?? ""),
+        checksum: typeof item.checksum === "string" ? item.checksum : undefined,
         confidence:
-          typeof raw.confidence === "number" && Number.isFinite(raw.confidence)
-            ? Math.max(0, Math.min(1, raw.confidence))
+          typeof item.confidence === "number" && Number.isFinite(item.confidence)
+            ? Math.max(0, Math.min(1, item.confidence))
             : undefined,
       };
     })
@@ -883,21 +896,9 @@ const makeAiResult = async (request: BuilderAIRequest): Promise<BuilderAIRespons
 
   const payload = generated.ok
     ? [
-        {
-          op: "replace",
-          path: "/dialogue/test",
-          value: generated.text,
-          confidence: 0.62,
-        } as const,
+        createBuilderPatch("replace", generated.text, 0.62),
       ]
-    : [
-        {
-          op: "replace",
-          path: "/dialogue/test",
-          value: generated.error,
-          confidence: 0,
-        } as const,
-      ];
+    : [createBuilderPatch("replace", generated.error, 0)];
 
   return {
     intent: "test",
@@ -1896,11 +1897,11 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         { body },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
-      const scenePayload = {
+      const scenePayload: BuilderScenePayload = {
         id: body.scene.id,
         scene: body.scene,
         checksum: body.checksum,
-      } as BuilderScenePayload;
+      };
 
       const result = await builderService.saveScene(projectId, scenePayload);
       if (!result) {
@@ -2064,11 +2065,11 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
-      const payload = {
+      const payload: BuilderScenePayload = {
         id: params.sceneId,
         scene: { ...body.scene, id: params.sceneId },
         checksum: body.checksum,
-      } as BuilderScenePayload;
+      };
 
       const result = await builderService.saveScene(projectId, payload);
       if (!result) {
@@ -2369,10 +2370,10 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
-      const payload = {
+      const payload: BuilderNpcPayload = {
         sceneId: body.sceneId,
         npc: body.npc,
-      } as BuilderNpcPayload;
+      };
 
       const mutation = await builderService.saveNpc(projectId, payload);
       if (!mutation) {
@@ -2744,12 +2745,12 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         { body },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
-      const payload = {
+      const payload: BuilderDialoguePayload = {
         key: body.key,
         text: body.text,
         locale: body.locale,
         checksum: body.checksum,
-      } as BuilderDialoguePayload;
+      };
 
       const mutation = await builderService.saveDialogue(projectId, payload);
       if (!mutation) {

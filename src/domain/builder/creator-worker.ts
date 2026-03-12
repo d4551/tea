@@ -64,7 +64,7 @@ const SVG_PALETTE = {
   overlayFill: "rgba(15,23,42,0.18)",
   overlayStroke: "rgba(255,255,255,0.26)",
   text: "oklch(0.98 0.01 250)",
-} as const;
+};
 
 const buildImageSvg = (
   title: string,
@@ -197,7 +197,7 @@ const runWorkerStep = async <TPayload>(
     return toWorkerFailure(result.error);
   }
 
-  return { ok: true as const, data: result.value };
+  return { ok: true, data: result.value };
 };
 
 const probeAutomationOrigin = async (targetUrl: URL): Promise<boolean> => {
@@ -642,7 +642,7 @@ const executeAttachArtifactStep = async (
 
   return {
     ...step,
-    status: "completed" as const,
+    status: "completed",
     evidenceSource: artifact.previewSource,
   };
 };

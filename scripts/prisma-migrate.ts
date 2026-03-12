@@ -1,6 +1,7 @@
 import { extractKnowledgeSearchTerms } from "../src/domain/ai/knowledge-search-text.ts";
 import { createLogger } from "../src/lib/logger.ts";
 import { prismaBase } from "../src/shared/services/db.ts";
+import { settleAsync } from "../src/shared/utils/async-result.ts";
 
 const logger = createLogger("prisma.migrate");
 
@@ -64,12 +65,19 @@ const rebuildKnowledgeChunkTerms = async (): Promise<void> => {
   });
 };
 
-try {
-  await runCommand(
-    ["bunx", "--bun", "prisma", "migrate", "deploy"],
-    "bunx --bun prisma migrate deploy",
-  );
-  await rebuildKnowledgeChunkTerms();
-} finally {
-  await prismaBase.$disconnect();
+const migrationResult = await settleAsync(
+  runCommand(["bunx", "--bun", "prisma", "migrate", "deploy"], "bunx --bun prisma migrate deploy").then(
+    () => rebuildKnowledgeChunkTerms(),
+  ),
+);
+
+const disconnectResult = await settleAsync(prismaBase.$disconnect());
+if (!disconnectResult.ok) {
+  logger.warn("prisma.disconnect.failed", {
+    error: disconnectResult.error.message,
+  });
+}
+
+if (!migrationResult.ok) {
+  throw migrationResult.error;
 }

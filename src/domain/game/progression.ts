@@ -5,7 +5,7 @@ export const XP_CONFIG = {
   interaction: 10,
   sceneDiscovery: 15,
   dialogue: 5,
-  levelsXp: [0, 50, 120, 220, 350, 520, 740, 1000] as const,
+  levelsXp: [0, 50, 120, 220, 350, 520, 740, 1000],
 };
 
 /**
@@ -34,7 +34,7 @@ export function getLevelProgress(xp: number): number {
 
   if (lvl >= XP_CONFIG.levelsXp.length - 1) return 100;
 
-  const next = XP_CONFIG.levelsXp[lvl + 1] as number;
+  const next = XP_CONFIG.levelsXp[lvl + 1] ?? cur;
   const progress = ((xp - cur) / (next - cur)) * 100;
   return Math.max(0, Math.min(progress, 100));
 }

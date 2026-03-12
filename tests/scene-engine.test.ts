@@ -20,10 +20,33 @@ const makeNpc = (
 ): NpcState =>
   ({
     id,
+    label: `NPC ${id}`,
+    characterKey: "",
     position: { x, y },
+    facing: "down",
+    animation: "idle",
+    frame: 0,
+    velocity: { x: 0, y: 0 },
     bounds,
+    aiEnabled: false,
+    dialogueIndex: 0,
+    dialogueLineKeys: [],
+    dialogueEntries: [],
     interactRadius: 48,
-  }) as unknown as NpcState;
+    homePosition: { x, y },
+    aiProfile: {
+      wanderRadius: 0,
+      wanderSpeed: 0,
+      idlePauseMs: [0, 0],
+      greetOnApproach: false,
+      greetLineKey: "",
+    },
+    active: false,
+    state: "idle",
+  });
+
+const downDirection: Direction = "down";
+const rightDirection: Direction = "right";
 
 describe("SceneEngine", () => {
   describe("checkStaticCollision", () => {
@@ -82,7 +105,7 @@ describe("SceneEngine", () => {
     it("moves entity in open space", () => {
       const result = engine.moveEntity(
         { x: 100, y: 100 },
-        "down" as Direction,
+        downDirection,
         bounds,
         { x: 1, y: 0 },
         5,
@@ -98,7 +121,7 @@ describe("SceneEngine", () => {
     it("returns unmoved when vector is zero", () => {
       const result = engine.moveEntity(
         { x: 100, y: 100 },
-        "down" as Direction,
+        downDirection,
         bounds,
         { x: 0, y: 0 },
         5,
@@ -114,7 +137,7 @@ describe("SceneEngine", () => {
       const collisions = [makeCollision(132, 0, 100, 200)];
       const result = engine.moveEntity(
         { x: 100, y: 100 },
-        "right" as Direction,
+        rightDirection,
         bounds,
         { x: 1, y: 0 },
         5,
@@ -131,7 +154,7 @@ describe("SceneEngine", () => {
       const collisions = [makeCollision(132, 0, 100, 200)];
       const result = engine.moveEntity(
         { x: 100, y: 100 },
-        "right" as Direction,
+        rightDirection,
         bounds,
         { x: 1, y: 1 },
         5,
@@ -146,7 +169,7 @@ describe("SceneEngine", () => {
     it("updates facing based on dominant axis", () => {
       const result = engine.moveEntity(
         { x: 100, y: 100 },
-        "right" as Direction,
+        rightDirection,
         bounds,
         { x: 0, y: -1 },
         5,

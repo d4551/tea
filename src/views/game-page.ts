@@ -1,3 +1,8 @@
+type PageScript = {
+  src: string;
+  type: "module";
+};
+
 import { appConfig, type LocaleCode } from "../config/environment.ts";
 import {
   appRoutes,
@@ -194,12 +199,12 @@ export function GamePage(props: GamePageProps) {
       rendererPreference: appConfig.playableGame.rendererPreference,
     },
   };
-  const pageScripts = [
+  const pageScripts: readonly PageScript[] = [
     {
       src: appConfig.playableGame.clientScriptPath,
-      type: "module" as const,
+      type: "module",
     },
-  ] as const;
+  ];
 
   const content = `
     <script id="game-client-bootstrap" type="application/json">${serializeGameClientBootstrap(clientBootstrap)}</script>

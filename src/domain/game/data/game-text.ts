@@ -5,7 +5,7 @@ import type { GameLocale } from "../../../shared/contracts/game.ts";
  */
 export interface GameTextCatalog {
   readonly scenes: {
-    readonly "scene.teaHouse.title": string;
+    readonly [key: string]: string;
   };
   readonly npcs: {
     readonly [key: string]: string;
@@ -90,7 +90,7 @@ export const gameTextByLocale: Record<GameLocale, GameTextCatalog> = {
       ],
     },
   },
-} as const;
+};
 
 /**
  * Resolves a localized game string key.
@@ -102,7 +102,5 @@ export const gameTextByLocale: Record<GameLocale, GameTextCatalog> = {
  */
 export const resolveGameText = (locale: GameLocale, key: string): string => {
   const localeCatalog = gameTextByLocale[locale] ?? gameTextByLocale["en-US"];
-  return (
-    localeCatalog.npcs[key] ?? localeCatalog.scenes[key as keyof typeof localeCatalog.scenes] ?? key
-  );
+  return localeCatalog.npcs[key] ?? localeCatalog.scenes[key] ?? key;
 };

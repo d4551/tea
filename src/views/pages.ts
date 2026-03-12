@@ -9,7 +9,9 @@ import {
 } from "./layout.ts";
 import { renderEmptyState } from "./shared/ui-components.ts";
 
-const homePageScripts = [
+const homePageScripts: readonly {
+  readonly src: string;
+}[] = [
   {
     src: toPublicAssetUrl(
       appConfig.staticAssets.publicPrefix,
@@ -22,7 +24,7 @@ const homePageScripts = [
       assetRelativePaths.htmxExtensionFocusPanelFile,
     ),
   },
-] as const;
+];
 
 /**
  * Parameters for rendering a full page shell.

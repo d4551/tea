@@ -42,21 +42,19 @@ export const toError = (error: unknown): Error =>
  * @param operation Promise-producing operation.
  * @returns Structured async result without leaking rejections into feature code.
  */
-export const settleAsync = async <TValue>(
+export const settleAsync = <TValue>(
   operation: Promise<TValue>,
-): Promise<AsyncResult<TValue>> => {
-  try {
-    return {
+): Promise<AsyncResult<TValue>> =>
+  operation.then(
+    (value: TValue) => ({
       ok: true,
-      value: await operation,
-    };
-  } catch (error: unknown) {
-    return {
+      value,
+    }),
+    (error: unknown) => ({
       ok: false,
       error: toError(error),
-    };
-  }
-};
+    }),
+  );
 
 /**
  * Reads a JSON response body into a typed result envelope.
@@ -65,5 +63,7 @@ export const settleAsync = async <TValue>(
  * @param response HTTP response.
  * @returns Parsed JSON result.
  */
-export const readJsonResponse = async <TValue>(response: Response): Promise<AsyncResult<TValue>> =>
-  settleAsync(response.json() as Promise<TValue>);
+export const readJsonResponse = <TValue>(response: Response): Promise<AsyncResult<TValue>> =>
+  settleAsync(
+    response.json().then((value): TValue => value),
+  );

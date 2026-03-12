@@ -14,6 +14,8 @@ import type { AiCapability, AiGenerationResult } from "../../ai/providers/provid
 import { gameTextByLocale, resolveGameText } from "../data/game-text.ts";
 
 const logger = createLogger("game.ai-service");
+const assistantRole: "assistant" = "assistant";
+const userRole: "user" = "user";
 
 const toNpcCatalogKey = (npcId: string, suffix: "label" | "greet"): string =>
   npcId.startsWith("npc.") ? `${npcId}.${suffix}` : `npc.${npcId}.${suffix}`;
@@ -69,7 +71,7 @@ const buildNpcSystemPrompt = (npcId: string, locale: GameLocale, sceneId: string
   const npcLabel = resolveGameText(locale, toNpcCatalogKey(npcId, "label"));
   const catalog = gameTextByLocale[locale] ?? gameTextByLocale["en-US"];
   const sceneTitle =
-    catalog.scenes[toSceneCatalogKey(sceneId) as keyof typeof catalog.scenes] ?? sceneId;
+    catalog.scenes[toSceneCatalogKey(sceneId)] ?? sceneId;
 
   const languageInstruction =
     locale === "zh-CN"
@@ -146,10 +148,10 @@ export const generateNpcDialogue = async (
     systemPrompt,
     messages: [
       ...(context.history ?? []).map((line) => ({
-        role: "assistant" as const,
+        role: assistantRole,
         content: line,
       })),
-      { role: "user" as const, content: userContent },
+      { role: userRole, content: userContent },
     ],
     maxTokens: 120,
     temperature: 0.8,
@@ -257,9 +259,9 @@ export const suggestUserFlowStep = async (
 
   const messages = [
     ...(gameContext
-      ? [{ role: "user" as const, content: `Current game state: ${gameContext}` }]
+      ? [{ role: userRole, content: `Current game state: ${gameContext}` }]
       : []),
-    { role: "user" as const, content: userPrompt },
+    { role: userRole, content: userPrompt },
   ];
 
   return registry.chat({
