@@ -6,7 +6,12 @@ import {
 } from "../../config/environment.ts";
 import { resolveRequestQueryParam } from "../constants/routes.ts";
 import type { LocaleConfig } from "../contracts/ui-state.ts";
-import { type Messages, messagesByLocale, type TranslatedMessageKey } from "./messages.ts";
+import {
+  type Messages,
+  messagesByLocale,
+  readMessageValue,
+  type TranslatedMessageKey,
+} from "./messages.ts";
 
 type LocaleSource = "override" | "query" | "accept-language" | "default";
 
@@ -249,22 +254,7 @@ export const getTranslatedText = (
   key: TranslatedMessageKey,
   fallbackValue?: string,
 ): string => {
-  const value = messages;
   const keyPath = String(key);
-  const parts = keyPath.split(".");
-  let current: unknown = value;
-
-  for (const part of parts) {
-    if (typeof current !== "object" || current === null) {
-      return fallbackValue ?? keyPath;
-    }
-
-    if (!(part in current)) {
-      return fallbackValue ?? keyPath;
-    }
-
-    current = (current as Record<string, unknown>)[part];
-  }
-
-  return typeof current === "string" ? current : (fallbackValue ?? keyPath);
+  const value = readMessageValue(messages, keyPath);
+  return typeof value === "string" ? value : (fallbackValue ?? keyPath);
 };

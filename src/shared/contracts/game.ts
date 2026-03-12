@@ -2154,7 +2154,7 @@ export const validateGameCommand = (
     } => {
   const msg = validationMessages[locale] ?? validationMessages["en-US"];
 
-  if (typeof payload !== "object" || payload === null) {
+  if (!isRecord(payload)) {
     return {
       ok: false,
       errorCode: "INVALID_COMMAND",
@@ -2162,13 +2162,13 @@ export const validateGameCommand = (
     };
   }
 
-  const record = payload as Record<string, unknown>;
+  const record = payload;
   const rawType = typeof record.type === "string" ? record.type : "";
 
   if (rawType === "move") {
     const requestedDirection = typeof record.direction === "string" ? record.direction : "";
-    const direction = ["up", "down", "left", "right"].includes(requestedDirection)
-      ? (requestedDirection as Direction)
+    const direction = isDirectionValue(requestedDirection)
+      ? requestedDirection
       : null;
 
     if (direction === null) {
@@ -2191,7 +2191,7 @@ export const validateGameCommand = (
         type: "move",
         direction,
         durationMs,
-      } as GameCommand,
+      },
     };
   }
 
@@ -2209,27 +2209,21 @@ export const validateGameCommand = (
   if (rawType === "confirmDialogue") {
     return {
       ok: true,
-      data: {
-        type: "confirmDialogue",
-      } as GameCommand,
+      data: { type: "confirmDialogue" },
     };
   }
 
   if (rawType === "closeDialogue") {
     return {
       ok: true,
-      data: {
-        type: "closeDialogue",
-      } as GameCommand,
+      data: { type: "closeDialogue" },
     };
   }
 
   if (rawType === "retryAction") {
     return {
       ok: true,
-      data: {
-        type: "retryAction",
-      } as GameCommand,
+      data: { type: "retryAction" },
     };
   }
 
@@ -2251,7 +2245,7 @@ export const validateGameCommand = (
         type: "chat",
         npcId,
         message,
-      } as GameCommand,
+      },
     };
   }
 
@@ -2278,16 +2272,18 @@ export const validateGameCommandInput = (
     payload &&
     typeof payload === "object" &&
     "command" in payload &&
-    typeof (payload as Record<string, unknown>).command === "object"
+    isRecord(payload) &&
+    typeof payload.command === "object" &&
+    payload.command !== null
   ) {
-    const candidate = payload as Record<string, unknown>;
+    const candidate = payload;
     const locale = candidate.locale;
     const source = candidate.source;
     const commandPayload = candidate.command;
 
     const commandValidation = validateGameCommand(
       commandPayload,
-      isSupportedLocale(locale) ? (locale as LocaleCode) : sessionLocale,
+      isSupportedLocale(locale) ? locale : sessionLocale,
     );
     if (commandValidation.ok === false) {
       return {
@@ -2308,7 +2304,7 @@ export const validateGameCommandInput = (
             ? candidate.commandId
             : crypto.randomUUID(),
         source: source === "ws" || source === "http" ? source : "http",
-        locale: isSupportedLocale(locale) ? (locale as LocaleCode) : sessionLocale,
+        locale: isSupportedLocale(locale) ? locale : sessionLocale,
         sequenceId:
           typeof sequenceValue === "number" && Number.isInteger(sequenceValue) && sequenceValue >= 0
             ? sequenceValue

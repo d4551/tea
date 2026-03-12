@@ -17,6 +17,7 @@ import type {
   SceneDefinition,
   TriggerDefinition,
 } from "../contracts/game.ts";
+import { safeJsonParse } from "../utils/safe-json.ts";
 
 declare global {
   // biome-lint: globalThis.prisma intentionally re-assigned in dev for HMR
@@ -801,15 +802,10 @@ const prismaLogger = createLogger("database.prisma");
 const prismaLogDefinitions: Prisma.LogDefinition[] = [
   { emit: "event", level: "warn" },
   { emit: "event", level: "error" },
-] as const;
+];
 
 const attachPrismaStructuredLogging = (client: PrismaClient): PrismaClient => {
-  const subscribeToLog = client.$on.bind(client) as (
-    level: "warn" | "error",
-    callback: (event: Prisma.LogEvent) => void,
-  ) => void;
-
-  subscribeToLog("warn", (event) => {
+  client.$on("warn", (event) => {
     prismaLogger.warn("prisma.client", {
       level: "warn",
       target: event.target,
@@ -818,7 +814,7 @@ const attachPrismaStructuredLogging = (client: PrismaClient): PrismaClient => {
     });
   });
 
-  subscribeToLog("error", (event) => {
+  client.$on("error", (event) => {
     prismaLogger.error("prisma.client", {
       level: "error",
       target: event.target,
@@ -1906,7 +1902,7 @@ const withBuilderCoreExtensions = (base: PrismaClient) =>
                   checksum: snapshot?.checksum ?? row.checksum,
                   state:
                     snapshot?.state ??
-                    (JSON.parse(JSON.stringify(row.state ?? {})) as Prisma.InputJsonValue),
+                    safeJsonParse<Prisma.InputJsonValue>(JSON.stringify(row.state ?? {}), {}),
                 },
               });
 

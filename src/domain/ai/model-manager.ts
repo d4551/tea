@@ -43,6 +43,54 @@ interface TtsOutput {
   readonly sampling_rate: number;
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0;
+
+const isFloat32Array = (value: unknown): value is Float32Array => value instanceof Float32Array;
+
+const isFloat64Array = (value: unknown): value is Float64Array => value instanceof Float64Array;
+
+const isNumericArray = (value: readonly unknown[]): value is readonly number[] =>
+  value.every((entry) => typeof entry === "number");
+
+const isSentimentResult = (value: unknown): value is SentimentResult =>
+  isRecord(value) &&
+  (value.label === "POSITIVE" || value.label === "NEGATIVE") &&
+  typeof value.score === "number" &&
+  Number.isFinite(value.score);
+
+const isSentimentResultArray = (value: unknown): value is SentimentResult[] =>
+  Array.isArray(value) && value.every(isSentimentResult);
+
+const isGenerationOutput = (
+  value: unknown,
+): value is readonly { readonly generated_text: string }[] =>
+  Array.isArray(value) &&
+  value.every((entry) => isRecord(entry) && isNonEmptyString(entry.generated_text));
+
+const isTensorLike = (value: unknown): value is TensorLike =>
+  isRecord(value) &&
+  ("data" in value) &&
+  (isFloat32Array(value.data) ||
+    isFloat64Array(value.data) ||
+    (Array.isArray(value.data) && isNumericArray(value.data)));
+
+const isAsrOutput = (value: unknown): value is AsrOutput =>
+  isRecord(value) && typeof value.text === "string";
+
+const isTranscriptionOutput = (value: unknown): value is AsrOutput | string =>
+  isRecord(value)
+    ? isNonEmptyString(value.text)
+    : isNonEmptyString(value);
+
+const isTtsOutput = (value: unknown): value is TtsOutput =>
+  isRecord(value) &&
+  isFloat32Array(value.audio) &&
+  value.sampling_rate > 0;
+
 /**
  * Singleton local AI model manager with lazy warmup and circuit-breaker backoff.
  */
@@ -138,8 +186,8 @@ export class ModelManager implements LocalModelRuntime {
       operation: "sentiment.classify",
       modelKey: "sentiment",
       timeoutMs: appConfig.ai.pipelineTimeoutMs,
-      execute: () => (pipe.value as (input: string) => Promise<SentimentResult[]>)(text),
-      validate: (value) => Array.isArray(value) && value.length > 0,
+      execute: () => pipe.value(text, {}),
+      validate: isSentimentResultArray,
       invalidMessage: "Sentiment model returned an invalid payload.",
     });
     if (!result.ok) {
@@ -147,7 +195,7 @@ export class ModelManager implements LocalModelRuntime {
     }
 
     this._health.markSuccess();
-    return localModelSuccess(result.value[0] as SentimentResult);
+    return localModelSuccess(result.value[0]);
   }
 
   /**
@@ -196,16 +244,8 @@ export class ModelManager implements LocalModelRuntime {
       modelKey,
       timeoutMs: appConfig.ai.pipelineTimeoutMs,
       execute: () =>
-        (
-          pipe.value as (
-            text: string,
-            options: Record<string, unknown>,
-          ) => Promise<Array<{ readonly generated_text: string }>>
-        )(prompt, entry.generationConfig ?? {}),
-      validate: (value) =>
-        Array.isArray(value) &&
-        typeof value[0]?.generated_text === "string" &&
-        value[0].generated_text.trim().length > 0,
+        pipe.value(prompt, entry.generationConfig ?? {}),
+      validate: isGenerationOutput,
       invalidMessage: `${modelKey} generation returned an invalid payload.`,
     });
     if (!result.ok) {
@@ -277,14 +317,11 @@ export class ModelManager implements LocalModelRuntime {
       modelKey: "embeddings",
       timeoutMs: appConfig.ai.pipelineTimeoutMs,
       execute: () =>
-        (pipe.value as (input: string, options: Record<string, unknown>) => Promise<TensorLike>)(
-          text,
-          {
-            pooling: "mean",
-            normalize: true,
-          },
-        ),
-      validate: (value) => value.data.length > 0,
+        pipe.value(text, {
+          pooling: "mean",
+          normalize: true,
+        }),
+      validate: (value): value is TensorLike => isTensorLike(value) && value.data.length > 0,
       invalidMessage: "Embedding model returned an invalid payload.",
     });
     if (!result.ok) {
@@ -330,15 +367,8 @@ export class ModelManager implements LocalModelRuntime {
       modelKey: "speechToText",
       timeoutMs: appConfig.ai.pipelineTimeoutMs * 4,
       execute: () =>
-        (
-          pipe.value as (
-            input: Float32Array,
-            options: Record<string, unknown>,
-          ) => Promise<AsrOutput | string>
-        )(audio, {}),
-      validate: (value) =>
-        (typeof value === "string" && value.trim().length > 0) ||
-        (typeof value === "object" && value !== null && typeof value.text === "string"),
+        pipe.value(audio, {}),
+      validate: isTranscriptionOutput,
       invalidMessage: "Speech-to-text model returned an invalid payload.",
     });
     if (!result.ok) {
@@ -388,13 +418,10 @@ export class ModelManager implements LocalModelRuntime {
       modelKey: "textToSpeech",
       timeoutMs: appConfig.ai.pipelineTimeoutMs * 4,
       execute: () =>
-        (pipe.value as (input: string, options: Record<string, unknown>) => Promise<TtsOutput>)(
-          text,
-          {
-            speaker_embeddings: appConfig.ai.textToSpeechSpeakerEmbeddings,
-          },
-        ),
-      validate: (value) => value.audio.length > 0 && value.sampling_rate > 0,
+        pipe.value(text, {
+          speaker_embeddings: appConfig.ai.textToSpeechSpeakerEmbeddings,
+        }),
+      validate: isTtsOutput,
       invalidMessage: "Text-to-speech model returned an invalid payload.",
     });
     if (!result.ok) {

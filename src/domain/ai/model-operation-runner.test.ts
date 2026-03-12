@@ -19,7 +19,7 @@ describe("local model operation runner", () => {
       modelKey: "oracle",
       timeoutMs: 100,
       execute: async () => "",
-      validate: (value) => value.length > 0,
+      validate: (value): value is string => typeof value === "string" && value.length > 0,
       invalidMessage: "invalid",
     });
 

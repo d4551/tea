@@ -48,7 +48,7 @@ import { gameScenes, gameSpriteManifests } from "../game/data/sprite-data.ts";
  */
 export const defaultBuilderProjectId = "default";
 
-const supportedLocales = ["en-US", "zh-CN"] as const satisfies readonly LocaleCode[];
+const supportedLocales: readonly LocaleCode[] = ["en-US", "zh-CN"];
 const baselineCreatedAtMs = 0;
 
 /**
@@ -167,10 +167,25 @@ type BuilderProjectStateMutationDecision<T> =
       readonly ok: false;
     };
 
-const asRecord = (value: unknown): Record<string, unknown> =>
-  value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+const asRecord = (value: unknown): Record<string, unknown> => {
+  const record: Record<string, unknown> = {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return record;
+  }
+
+  for (const key of Object.keys(value)) {
+    const entry = Reflect.get(value, key);
+    if (entry !== undefined) {
+      record[key] = entry;
+    }
+  }
+
+  return record;
+};
+
+const toRecordFromEntries = <T>(
+  entries: Iterable<readonly [string, T]>,
+): Record<string, T> => Object.fromEntries(entries);
 
 const toStringValue = (value: unknown): string | null => (typeof value === "string" ? value : null);
 
@@ -325,7 +340,7 @@ const checksumOf = (value: unknown): string => {
 const buildBaselineAssets = (): Record<string, BuilderAsset> => {
   const backgroundAssets = Object.values(gameScenes).map((scene) => ({
     id: `asset.background.${scene.id}`,
-    kind: "background" as const,
+    kind: "background",
     label: scene.id,
     sceneMode: scene.sceneMode,
     source: scene.background,
@@ -343,13 +358,13 @@ const buildBaselineAssets = (): Record<string, BuilderAsset> => {
     approved: true,
     createdAtMs: baselineCreatedAtMs,
     updatedAtMs: baselineCreatedAtMs,
-  }));
+  } satisfies BuilderAsset));
 
   const spriteAssets = Object.entries(gameSpriteManifests).map(([characterKey, manifest]) => ({
     id: `asset.sprite.${characterKey}`,
-    kind: "sprite-sheet" as const,
+    kind: "sprite-sheet",
     label: characterKey,
-    sceneMode: "2d" as const,
+    sceneMode: "2d",
     source: manifest.sheet,
     sourceFormat: "png",
     tags: ["baseline", "sprite", characterKey],
@@ -365,7 +380,7 @@ const buildBaselineAssets = (): Record<string, BuilderAsset> => {
     approved: true,
     createdAtMs: baselineCreatedAtMs,
     updatedAtMs: baselineCreatedAtMs,
-  }));
+  } satisfies BuilderAsset));
 
   const modelAssets: BuilderAsset[] = [
     {
@@ -412,13 +427,13 @@ const buildBaselineAssets = (): Record<string, BuilderAsset> => {
     },
   ];
 
-  return Object.fromEntries(
+  return toRecordFromEntries(
     [...backgroundAssets, ...spriteAssets, ...modelAssets].map((asset) => [asset.id, asset]),
-  ) as Record<string, BuilderAsset>;
+  );
 };
 
 const buildBaselineAnimationClips = (): Record<string, AnimationClip> =>
-  Object.fromEntries(
+  toRecordFromEntries(
     Object.entries(gameSpriteManifests).flatMap(([characterKey, manifest]) =>
       Object.entries(manifest.animations).map(([animationKey, animation]) => {
         const clip: AnimationClip = {
@@ -446,7 +461,7 @@ const buildBaselineAnimationClips = (): Record<string, AnimationClip> =>
         return [clip.id, clip];
       }),
     ),
-  ) as Record<string, AnimationClip>;
+  );
 
 const buildBaselineDialogueGraphs = (): Record<string, DialogueGraph> => ({
   "graph.teaMonk.intro": {
@@ -530,9 +545,9 @@ const buildBaselineQuests = (): Record<string, QuestDefinition> => ({
 });
 
 const createBaselineState = (): BuilderProjectState => {
-  const scenes = Object.fromEntries(
+  const scenes = toRecordFromEntries(
     Object.entries(gameScenes).map(([sceneId, scene]) => [sceneId, structuredClone(scene)]),
-  ) as Record<string, SceneDefinition>;
+  );
   const dialogues: BuilderProjectState["dialogues"] = {
     "en-US": Object.fromEntries(Object.entries(gameTextByLocale["en-US"].npcs)),
     "zh-CN": Object.fromEntries(Object.entries(gameTextByLocale["zh-CN"].npcs)),
@@ -570,7 +585,7 @@ const toDraftStateInput = (state: BuilderProjectState): Prisma.InputJsonValue =>
     automationRuns: _automationRuns,
     ...draftState
   } = state;
-  return JSON.parse(JSON.stringify(draftState)) as Prisma.InputJsonValue;
+  return safeJsonParse<Prisma.InputJsonValue>(JSON.stringify(draftState), {});
 };
 
 const toNumberValue = (value: unknown): number | null =>
@@ -787,7 +802,7 @@ const toCollisionMasks = (value: unknown): SceneDefinition["collisions"] =>
 const toScenesFromRows = (
   rows: readonly BuilderProjectSceneRow[],
 ): Record<string, SceneDefinition> =>
-  Object.fromEntries(
+  toRecordFromEntries(
     rows.flatMap((row) => {
       const sceneMode =
         row.sceneMode === "2d" || row.sceneMode === "3d" ? row.sceneMode : undefined;
@@ -904,7 +919,7 @@ const toScenesFromRows = (
         ],
       ];
     }),
-  ) as Record<string, SceneDefinition>;
+  );
 
 const toDialoguesFromRows = (
   rows: readonly BuilderProjectDialogueEntryRow[],
@@ -960,7 +975,7 @@ const toAssetVariantArray = (value: unknown): readonly AssetVariant[] =>
 const toBuilderAssetsFromRows = (
   rows: readonly BuilderProjectAssetRow[],
 ): Record<string, BuilderAsset> =>
-  Object.fromEntries(
+  toRecordFromEntries(
     rows.flatMap((row) => {
       const kind = toBuilderAssetKind(row.kind);
       const sceneMode = toSceneMode(row.sceneMode);
@@ -988,12 +1003,12 @@ const toBuilderAssetsFromRows = (
         ],
       ];
     }),
-  ) as Record<string, BuilderAsset>;
+  );
 
 const toAnimationClipsFromRows = (
   rows: readonly BuilderProjectAnimationClipRow[],
 ): Record<string, AnimationClip> =>
-  Object.fromEntries(
+  toRecordFromEntries(
     rows.flatMap((row) => {
       const sceneMode = toSceneMode(row.sceneMode);
       if (!sceneMode) {
@@ -1026,7 +1041,7 @@ const toAnimationClipsFromRows = (
         ],
       ];
     }),
-  ) as Record<string, AnimationClip>;
+  );
 
 /**
  * Converts animation timeline rows (with nested track rows) into domain-level AnimationTimeline records.
@@ -1035,7 +1050,7 @@ const toAnimationClipsFromRows = (
 const toAnimationTimelinesFromRows = (
   rows: readonly BuilderProjectAnimationTimelineRow[],
 ): Record<string, AnimationTimeline> =>
-  Object.fromEntries(
+  toRecordFromEntries(
     rows.map((row) => [
       row.id,
       {
@@ -1055,7 +1070,7 @@ const toAnimationTimelinesFromRows = (
         updatedAtMs: row.updatedAt.getTime(),
       } satisfies AnimationTimeline,
     ]),
-  ) as Record<string, AnimationTimeline>;
+  );
 
 /**
  * Converts sprite-atlas rows into domain-level SpriteAtlasManifest records.
@@ -1064,7 +1079,7 @@ const toAnimationTimelinesFromRows = (
 const toSpriteAtlasFromRows = (
   rows: readonly BuilderProjectSpriteAtlasRow[],
 ): Record<string, SpriteAtlasManifest> =>
-  Object.fromEntries(
+  toRecordFromEntries(
     rows.map((row) => [
       row.id,
       {
@@ -1076,7 +1091,7 @@ const toSpriteAtlasFromRows = (
         createdAtMs: row.createdAt.getTime(),
       } satisfies SpriteAtlasManifest,
     ]),
-  ) as Record<string, SpriteAtlasManifest>;
+  );
 
 /**
  * Parses a JSON-serialized sprite atlas frame array string into typed SpriteAtlasFrame[].
@@ -1086,7 +1101,7 @@ const parseSpriteAtlasFrames = (raw: string): SpriteAtlasManifest["frames"] => {
   const parsed = safeJsonParse<unknown[]>(raw, []);
   return parsed.filter((f): f is SpriteAtlasManifest["frames"][number] => {
     if (typeof f !== "object" || f === null) return false;
-    const r = f as Record<string, unknown>;
+    const r = asRecord(f);
     return (
       typeof r.name === "string" &&
       typeof r.x === "number" &&
@@ -1096,6 +1111,9 @@ const parseSpriteAtlasFrames = (raw: string): SpriteAtlasManifest["frames"] => {
     );
   });
 };
+
+const isAnimationEasing = (value: string): value is AnimationKeyframe["easing"] =>
+  value === "linear" || value === "easeIn" || value === "easeOut" || value === "easeInOut";
 
 /**
  * Parses a JSON-serialized keyframe array string into typed AnimationKeyframe[].
@@ -1108,34 +1126,39 @@ const parseTrackKeyframes = (raw: string): AnimationTimeline["tracks"][number]["
     return [];
   }
   return parsed.flatMap((item: unknown) => {
-    if (
-      item !== null &&
-      typeof item === "object" &&
-      "id" in item &&
-      "timeMs" in item &&
-      "value" in item &&
-      "easing" in item &&
-      typeof (item as Record<string, unknown>).id === "string" &&
-      typeof (item as Record<string, unknown>).timeMs === "number" &&
-      typeof (item as Record<string, unknown>).value === "number" &&
-      typeof (item as Record<string, unknown>).easing === "string"
-    ) {
-      const kf = item as {
-        id: string;
-        timeMs: number;
-        value: number;
-        easing: AnimationKeyframe["easing"];
-      };
-      return [
-        {
-          id: kf.id,
-          timeMs: kf.timeMs,
-          value: kf.value,
-          easing: kf.easing,
-        } satisfies AnimationKeyframe,
-      ];
+    if (item === null || typeof item !== "object") {
+      return [];
     }
-    return [];
+
+    const itemRecord = asRecord(item);
+    if (
+      typeof itemRecord.id !== "string" ||
+      typeof itemRecord.timeMs !== "number" ||
+      typeof itemRecord.value !== "number" ||
+      typeof itemRecord.easing !== "string"
+    ) {
+      return [];
+    }
+
+    const kf = {
+      id: itemRecord.id,
+      timeMs: itemRecord.timeMs,
+      value: itemRecord.value,
+      easing: itemRecord.easing,
+    };
+
+    if (!isAnimationEasing(kf.easing)) {
+      return [];
+    }
+
+    return [
+      {
+        id: kf.id,
+        timeMs: kf.timeMs,
+        value: kf.value,
+        easing: kf.easing,
+      } satisfies AnimationKeyframe,
+    ];
   });
 };
 const withDraftMedia = (
@@ -1164,11 +1187,8 @@ const toDialogueGraphNodes = (value: unknown): DialogueGraph["nodes"] =>
             {
               id: item.id,
               line: item.line,
-              edges: (item.edges as readonly unknown[]).flatMap((edge) => {
-                const edgeRecord =
-                  edge && typeof edge === "object" && !Array.isArray(edge)
-                    ? (edge as Record<string, unknown>)
-                    : null;
+              edges: item.edges.flatMap((edge) => {
+                const edgeRecord = edge && typeof edge === "object" ? asRecord(edge) : null;
 
                 if (!edgeRecord) {
                   return [];
@@ -1206,7 +1226,7 @@ const toDialogueGraphNodes = (value: unknown): DialogueGraph["nodes"] =>
 const toDialogueGraphsFromRows = (
   rows: readonly BuilderProjectDialogueGraphRow[],
 ): Record<string, DialogueGraph> =>
-  Object.fromEntries(
+  toRecordFromEntries(
     rows.map((row) => [
       row.id,
       {
@@ -1219,7 +1239,7 @@ const toDialogueGraphsFromRows = (
         updatedAtMs: row.updatedAt.getTime(),
       } satisfies DialogueGraph,
     ]),
-  ) as Record<string, DialogueGraph>;
+  );
 
 const toQuestSteps = (value: unknown): QuestDefinition["steps"] =>
   Array.isArray(value)
@@ -1249,7 +1269,7 @@ const toQuestSteps = (value: unknown): QuestDefinition["steps"] =>
 const toQuestsFromRows = (
   rows: readonly BuilderProjectQuestRow[],
 ): Record<string, QuestDefinition> =>
-  Object.fromEntries(
+  toRecordFromEntries(
     rows.map((row) => [
       row.id,
       {
@@ -1259,7 +1279,7 @@ const toQuestsFromRows = (
         steps: toQuestSteps(row.steps),
       } satisfies QuestDefinition,
     ]),
-  ) as Record<string, QuestDefinition>;
+  );
 
 const toFlagValueRecord = (
   value: unknown,
@@ -1278,11 +1298,13 @@ const toFlagValueRecord = (
           typeof item.valueType === "string",
       )
       .map((item) => {
-        let val: string | number | boolean = "";
-        if (item.valueType === "boolean") val = Boolean(item.boolValue);
-        else if (item.valueType === "number") val = Number(item.numberValue);
-        else if (item.valueType === "string") val = String(item.stringValue ?? "");
-        return [item.key, val] as [string, string | number | boolean];
+        const val =
+          item.valueType === "boolean"
+            ? Boolean(item.boolValue)
+            : item.valueType === "number"
+              ? Number(item.numberValue)
+              : String(item.stringValue ?? "");
+        return [item.key, val];
       });
     return record.length > 0 ? Object.fromEntries(record) : undefined;
   }
@@ -1305,7 +1327,7 @@ const toFlagValueRecord = (
 const toTriggersFromRows = (
   rows: readonly BuilderProjectTriggerRow[],
 ): Record<string, TriggerDefinition> =>
-  Object.fromEntries(
+  toRecordFromEntries(
     rows.flatMap((row) => {
       const event = row.event;
       if (
@@ -1335,12 +1357,12 @@ const toTriggersFromRows = (
         ],
       ];
     }),
-  ) as Record<string, TriggerDefinition>;
+  );
 
 const toFlagsFromRows = (
   rows: readonly BuilderProjectFlagRow[],
 ): Record<string, GameFlagDefinition> =>
-  Object.fromEntries(
+  toRecordFromEntries(
     rows.flatMap((row) => {
       const initialValue =
         row.valueType === "boolean"
@@ -1367,7 +1389,7 @@ const toFlagsFromRows = (
         ],
       ];
     }),
-  ) as Record<string, GameFlagDefinition>;
+  );
 
 const withDraftMechanics = (
   state: BuilderProjectState,
@@ -1386,7 +1408,7 @@ const withDraftMechanics = (
 const toGenerationJobsFromRows = (
   rows: readonly BuilderProjectGenerationJobRow[],
 ): Record<string, GenerationJob> =>
-  Object.fromEntries(
+  toRecordFromEntries(
     rows.flatMap((row) => {
       const kind = toGenerationJobKind(row.kind);
       const status = toGenerationJobStatus(row.status);
@@ -1411,12 +1433,12 @@ const toGenerationJobsFromRows = (
         ],
       ];
     }),
-  ) as Record<string, GenerationJob>;
+  );
 
 const toGenerationArtifactsFromRows = (
   rows: readonly BuilderProjectArtifactRow[],
 ): Record<string, GenerationArtifact> =>
-  Object.fromEntries(
+  toRecordFromEntries(
     rows.flatMap((row) => {
       const kind = toGenerationArtifactKind(row.kind);
       if (!kind) {
@@ -1440,7 +1462,7 @@ const toGenerationArtifactsFromRows = (
         ],
       ];
     }),
-  ) as Record<string, GenerationArtifact>;
+  );
 
 const toStringRecord = (value: unknown): Readonly<Record<string, string>> | null => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -1452,7 +1474,7 @@ const toStringRecord = (value: unknown): Readonly<Record<string, string>> | null
     return null;
   }
 
-  return Object.fromEntries(entries) as Readonly<Record<string, string>>;
+  return toRecordFromEntries(entries);
 };
 
 const parseAutomationStepSpecValue = (value: unknown): AutomationStepSpec | undefined => {
@@ -1648,7 +1670,7 @@ const parseAutomationStepSpec = (raw: string | null): AutomationStepSpec | undef
 const toAutomationRunsFromRows = (
   rows: readonly BuilderProjectAutomationRunRow[],
 ): Record<string, AutomationRun> =>
-  Object.fromEntries(
+  toRecordFromEntries(
     rows.flatMap((row) => {
       const status = toAutomationRunStatus(row.status);
       if (!status) {
@@ -1690,7 +1712,7 @@ const toAutomationRunsFromRows = (
         ],
       ];
     }),
-  ) as Record<string, AutomationRun>;
+  );
 
 const withDraftWorkerState = (
   state: BuilderProjectState,
@@ -2081,15 +2103,15 @@ const parseProjectState = (state: Prisma.JsonValue): BuilderProjectState => {
   const artifactsRecord = asRecord(record.artifacts);
   const automationRunsRecord = asRecord(record.automationRuns);
 
-  const scenes = Object.fromEntries(
+  const scenes = toRecordFromEntries(
     Object.entries(scenesRecord).flatMap(([sceneId, scene]) => {
       if (sceneId.length === 0) {
         return [];
       }
       const parsedScene = parseSceneDefinitionRecord(sceneId, scene);
-      return parsedScene ? [[sceneId, parsedScene] as const] : [];
+      return parsedScene ? [[sceneId, parsedScene]] : [];
     }),
-  ) as Record<string, SceneDefinition>;
+  );
 
   const dialogues: BuilderProjectState["dialogues"] = {
     "en-US": {},
@@ -2107,89 +2129,89 @@ const parseProjectState = (state: Prisma.JsonValue): BuilderProjectState => {
   return {
     scenes,
     dialogues,
-    assets: Object.fromEntries(
+    assets: toRecordFromEntries(
       Object.entries(assetsRecord).flatMap(([assetId, asset]) => {
         if (assetId.length === 0) {
           return [];
         }
         const parsedAsset = parseBuilderAssetRecord(assetId, asset);
-        return parsedAsset ? [[assetId, parsedAsset] as const] : [];
+        return parsedAsset ? [[assetId, parsedAsset]] : [];
       }),
-    ) as Record<string, BuilderAsset>,
-    animationClips: Object.fromEntries(
+    ),
+    animationClips: toRecordFromEntries(
       Object.entries(animationClipsRecord).flatMap(([clipId, clip]) => {
         if (clipId.length === 0) {
           return [];
         }
         const parsedClip = parseAnimationClipRecord(clipId, clip);
-        return parsedClip ? [[clipId, parsedClip] as const] : [];
+        return parsedClip ? [[clipId, parsedClip]] : [];
       }),
-    ) as Record<string, AnimationClip>,
+    ),
     animationTimelines: {},
     spriteAtlases: {},
-    dialogueGraphs: Object.fromEntries(
+    dialogueGraphs: toRecordFromEntries(
       Object.entries(dialogueGraphsRecord).flatMap(([graphId, graph]) => {
         if (graphId.length === 0) {
           return [];
         }
         const parsedGraph = parseDialogueGraphRecord(graphId, graph);
-        return parsedGraph ? [[graphId, parsedGraph] as const] : [];
+        return parsedGraph ? [[graphId, parsedGraph]] : [];
       }),
-    ) as Record<string, DialogueGraph>,
-    quests: Object.fromEntries(
+    ),
+    quests: toRecordFromEntries(
       Object.entries(questsRecord).flatMap(([questId, quest]) => {
         if (questId.length === 0) {
           return [];
         }
         const parsedQuest = parseQuestRecord(questId, quest);
-        return parsedQuest ? [[questId, parsedQuest] as const] : [];
+        return parsedQuest ? [[questId, parsedQuest]] : [];
       }),
-    ) as Record<string, QuestDefinition>,
-    triggers: Object.fromEntries(
+    ),
+    triggers: toRecordFromEntries(
       Object.entries(triggersRecord).flatMap(([triggerId, trigger]) => {
         if (triggerId.length === 0) {
           return [];
         }
         const parsedTrigger = parseTriggerRecord(triggerId, trigger);
-        return parsedTrigger ? [[triggerId, parsedTrigger] as const] : [];
+        return parsedTrigger ? [[triggerId, parsedTrigger]] : [];
       }),
-    ) as Record<string, TriggerDefinition>,
-    flags: Object.fromEntries(
+    ),
+    flags: toRecordFromEntries(
       Object.entries(flagsRecord).flatMap(([flagKey, flag]) => {
         if (flagKey.length === 0) {
           return [];
         }
         const parsedFlag = parseFlagRecord(flagKey, flag);
-        return parsedFlag ? [[flagKey, parsedFlag] as const] : [];
+        return parsedFlag ? [[flagKey, parsedFlag]] : [];
       }),
-    ) as Record<string, GameFlagDefinition>,
-    generationJobs: Object.fromEntries(
+    ),
+    generationJobs: toRecordFromEntries(
       Object.entries(generationJobsRecord).flatMap(([jobId, job]) => {
         if (jobId.length === 0) {
           return [];
         }
         const parsedJob = parseGenerationJobRecord(jobId, job);
-        return parsedJob ? [[jobId, parsedJob] as const] : [];
+        return parsedJob ? [[jobId, parsedJob]] : [];
       }),
-    ) as Record<string, GenerationJob>,
-    artifacts: Object.fromEntries(
+    ),
+    artifacts: toRecordFromEntries(
       Object.entries(artifactsRecord).flatMap(([artifactId, artifact]) => {
         if (artifactId.length === 0) {
           return [];
         }
         const parsedArtifact = parseGenerationArtifactRecord(artifactId, artifact);
-        return parsedArtifact ? [[artifactId, parsedArtifact] as const] : [];
+        return parsedArtifact ? [[artifactId, parsedArtifact]] : [];
       }),
-    ) as Record<string, GenerationArtifact>,
-    automationRuns: Object.fromEntries(
+    ),
+    automationRuns: toRecordFromEntries(
       Object.entries(automationRunsRecord).flatMap(([runId, run]) => {
         if (runId.length === 0) {
           return [];
         }
         const parsedRun = parseAutomationRunRecord(runId, run);
-        return parsedRun ? [[runId, parsedRun] as const] : [];
+        return parsedRun ? [[runId, parsedRun]] : [];
       }),
-    ) as Record<string, AutomationRun>,
+    ),
   };
 };
 
@@ -2645,7 +2667,7 @@ export class BuilderProjectStateStore {
       return null;
     }
     const updated = await prisma.builderProject.publishStateSnapshot(sanitized, true, {
-      state: JSON.parse(JSON.stringify(entry.state)) as Prisma.InputJsonValue,
+      state: safeJsonParse<Prisma.InputJsonValue>(JSON.stringify(entry.state), {}),
       checksum: checksumOf(entry.state),
     });
     if (!updated) {

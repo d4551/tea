@@ -6,6 +6,8 @@ import type {
   PlayerInventoryState, // Contains max capacity, slots, equipment, currency
 } from "../../shared/contracts/game.ts";
 
+type EquippableSlot = Exclude<ItemDefinition["equipSlot"], "consumable" | undefined>;
+
 /**
  * Result of attempting to modify inventory state.
  */
@@ -145,7 +147,8 @@ export class InventoryService {
       return { ok: false, state, reason: "item_not_in_inventory" };
     }
 
-    const currentEquip = state.equipment[item.equipSlot as keyof EquipmentLoadout];
+    const equipSlot: EquippableSlot = item.equipSlot;
+    const currentEquip = state.equipment[equipSlot];
     if (currentEquip === item.id) {
       return { ok: true, state }; // Already equipped
     }
@@ -167,7 +170,7 @@ export class InventoryService {
 
     const newEquipment: EquipmentLoadout = {
       ...tempState.equipment,
-      [item.equipSlot as keyof EquipmentLoadout]: item.id,
+      [equipSlot]: item.id,
     };
 
     return {
@@ -187,7 +190,8 @@ export class InventoryService {
       return { ok: false, state, reason: "not_equippable" };
     }
 
-    if (state.equipment[item.equipSlot as keyof EquipmentLoadout] !== item.id) {
+    const equipSlot: EquippableSlot = item.equipSlot;
+    if (state.equipment[equipSlot] !== item.id) {
       return { ok: false, state, reason: "item_not_equipped" };
     }
 
@@ -196,7 +200,7 @@ export class InventoryService {
     if (!addRes.ok) return addRes;
 
     const newEquipment = { ...state.equipment };
-    delete newEquipment[item.equipSlot as keyof EquipmentLoadout];
+    delete newEquipment[equipSlot];
 
     return {
       ok: true,
@@ -211,7 +215,7 @@ export class InventoryService {
     equipmentIds: string[],
     itemsIndex: Map<string, ItemDefinition>,
   ): Partial<CombatantStats> {
-    const stats: Partial<Record<keyof CombatantStats, number>> = {};
+    const stats: Partial<CombatantStats> = {};
     for (const eqId of equipmentIds) {
       const def = itemsIndex.get(eqId);
       if (!def) continue;
@@ -221,7 +225,7 @@ export class InventoryService {
         stats[effect.stat] = current + effect.value;
       }
     }
-    return stats as Partial<CombatantStats>;
+    return stats;
   }
 
   private findNextAvailableIndex(slots: InventorySlot[], capacity: number): number {

@@ -714,6 +714,24 @@ export interface MessageLookupOptions {
   readonly missingValueFallback?: string;
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+export const readMessageValue = (messages: Messages, key: string): unknown => {
+  const parts = key.split(".");
+  let current: unknown = messages;
+
+  for (const part of parts) {
+    if (!isRecord(current) || !(part in current)) {
+      return null;
+    }
+
+    current = current[part];
+  }
+
+  return current;
+};
+
 /**
  * Resolves a typed message key for a resolved message catalog.
  *
@@ -728,25 +746,12 @@ export const translateMessage = (
   options: MessageLookupOptions = {},
 ): string => {
   const keyPath = String(key);
-  const parts = keyPath.split(".");
-  let current: unknown = messages;
-  for (const part of parts) {
-    if (typeof current !== "object" || current === null) {
-      return options.missingValueFallback ?? keyPath;
-    }
-
-    if (!(part in current)) {
-      return options.missingValueFallback ?? keyPath;
-    }
-
-    current = (current as Record<string, unknown>)[part];
-  }
-
-  if (typeof current !== "string") {
+  const value = readMessageValue(messages, keyPath);
+  if (typeof value !== "string") {
     return options.missingValueFallback ?? keyPath;
   }
 
-  return current;
+  return value;
 };
 
 /**

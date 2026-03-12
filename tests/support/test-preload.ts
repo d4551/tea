@@ -1,5 +1,5 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { mkdirSync, rmSync, writeFileSync } from "fs";
+import { dirname, resolve } from "path";
 
 const testDatabaseFile = resolve(
   process.cwd(),

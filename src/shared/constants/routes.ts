@@ -1,10 +1,80 @@
 import { appConfig, type LocaleCode } from "../../config/environment.ts";
 
+type AppRouteMap = {
+  readonly home: string;
+  readonly game: string;
+  readonly gameAssets: string;
+  readonly gameApiSession: string;
+  readonly gameApiSessionRestore: string;
+  readonly gameApiSessionClose: string;
+  readonly gameApiSessionState: string;
+  readonly gameApiSessionCommand: string;
+  readonly gameApiSessionDialogue: string;
+  readonly gameApiSessionSave: string;
+  readonly gameApiSessionHud: string;
+  readonly gameApiSessionWebSocket: string;
+  readonly gameApiSessionInvite: string;
+  readonly gameApiSessionJoin: string;
+  readonly aiPlaygroundPartial: string;
+  readonly oracleApi: string;
+  readonly healthApi: string;
+  readonly aiStatus: string;
+  readonly aiHealth: string;
+  readonly aiCapabilities: string;
+  readonly aiCatalog: string;
+  readonly aiKnowledgeDocuments: string;
+  readonly aiKnowledgeSearch: string;
+  readonly aiAssistRetrieval: string;
+  readonly aiPlanTools: string;
+  readonly aiGenerateDialogue: string;
+  readonly aiGenerateScene: string;
+  readonly aiAssist: string;
+  readonly aiTranscribe: string;
+  readonly aiSynthesize: string;
+  readonly aiHealthStream: string;
+  readonly aiProviderModels: string;
+  readonly aiProviderOllamaPull: string;
+  readonly aiBuilderCapabilities: string;
+  readonly aiBuilderTest: string;
+  readonly aiBuilderAssist: string;
+  readonly aiBuilderCompose: string;
+  readonly aiBuilderKnowledgeList: string;
+  readonly aiBuilderKnowledgeDocuments: string;
+  readonly aiBuilderKnowledgeSearch: string;
+  readonly aiBuilderToolPlan: string;
+  readonly aiBuilderPatchPreviewForm: string;
+  readonly aiBuilderPatchApplyForm: string;
+  readonly builderPlatformReadiness: string;
+  readonly builder: string;
+  readonly builderScenes: string;
+  readonly builderNpcs: string;
+  readonly builderDialogue: string;
+  readonly builderAssets: string;
+  readonly builderMechanics: string;
+  readonly builderAutomation: string;
+  readonly builderAi: string;
+  readonly builderApiProjects: string;
+  readonly builderApiScenes: string;
+  readonly builderApiSceneNodes: string;
+  readonly builderApiNpcs: string;
+  readonly builderApiDialogue: string;
+  readonly builderApiAssets: string;
+  readonly builderApiAssetsUpload: string;
+  readonly builderApiAnimationClips: string;
+  readonly builderApiDialogueGraphs: string;
+  readonly builderApiQuests: string;
+  readonly builderApiTriggers: string;
+  readonly builderApiGenerationJobs: string;
+  readonly builderApiGenerationJobStream: string;
+  readonly builderApiAutomationRuns: string;
+  readonly builderApiAutomationRunStream: string;
+};
+
 /**
  * Canonical route map for the web app.
  * Every route path is defined once here to avoid drift across handlers and templates.
  */
-export const appRoutes = {
+export const appRoutes: AppRouteMap = {
   home: "/",
   game: appConfig.playableGame.mountPath,
   gameAssets: appConfig.playableGame.assetPrefix,
@@ -72,7 +142,7 @@ export const appRoutes = {
   builderApiGenerationJobStream: "/api/builder/generation-jobs/:jobId/stream",
   builderApiAutomationRuns: "/api/builder/automation-runs",
   builderApiAutomationRunStream: "/api/builder/automation-runs/:runId/stream",
-} as const;
+};
 
 /**
  * Route identifier union derived from {@link appRoutes}.

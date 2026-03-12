@@ -19,11 +19,11 @@ export interface LocalModelOperationOptions<TValue> {
   /** Operation timeout in milliseconds. */
   readonly timeoutMs: number;
   /** Promise-producing operation. */
-  readonly execute: () => Promise<TValue>;
+  readonly execute: () => Promise<unknown>;
   /** Optional model key used for diagnostics. */
   readonly modelKey?: ModelKey;
-  /** Optional validator for successful payloads. */
-  readonly validate?: (value: TValue) => boolean;
+  /** Validator for successful payloads. */
+  readonly validate: (value: unknown) => value is TValue;
   /** Error message used when validation fails. */
   readonly invalidMessage?: string;
 }
@@ -121,7 +121,7 @@ export const runLocalModelOperation = async <TValue>(
     );
   }
 
-  if (options.validate && !options.validate(result.value)) {
+  if (!options.validate(result.value)) {
     return localModelFailure({
       code: "invalid-output",
       message: options.invalidMessage ?? `${options.operation} returned an invalid payload.`,

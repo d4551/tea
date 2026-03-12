@@ -563,7 +563,7 @@ export interface BuilderService {
  * Clones scene definitions while preserving compile-time shape.
  */
 const cloneScene = (scene: SceneDefinition): SceneDefinition =>
-  structuredClone(scene) as SceneDefinition;
+  structuredClone(scene);
 
 const parseBuilderInteger = (value: string | undefined, fallback: number): number => {
   if (typeof value !== "string") {
@@ -916,8 +916,10 @@ const buildAssetVariants = (
   ];
 };
 
+const clipDirections: readonly AnimationClip["direction"][] = ["up", "down", "left", "right"];
+
 const inferClipDirection = (stateTag: string): AnimationClip["direction"] | undefined =>
-  (["up", "down", "left", "right"] as const).find((candidate) => stateTag.includes(candidate));
+  clipDirections.find((candidate) => stateTag.includes(candidate));
 
 const isSceneNode3d = (
   node: SceneNodeDefinition | undefined,
@@ -1176,6 +1178,30 @@ const parsePatchTarget = (path: string): PatchTarget | null => {
   return null;
 };
 
+const buildScenePatchFallback = (sceneId: string): SceneDefinition => ({
+  id: sceneId,
+  titleKey: "",
+  background: "",
+  geometry: {
+    width: 1,
+    height: 1,
+  },
+  spawn: {
+    x: 0,
+    y: 0,
+  },
+  npcs: [],
+  collisions: [],
+});
+
+const parseScenePatch = (sceneId: string, payload: object, fallback?: SceneDefinition): SceneDefinition => {
+  const base = safeJsonParse<SceneDefinition>(JSON.stringify(payload), fallback ?? buildScenePatchFallback(sceneId));
+  return structuredClone({
+    ...base,
+    id: sceneId,
+  });
+};
+
 /**
  * Prisma-backed builder store with immutable release snapshots.
  */
@@ -1225,7 +1251,7 @@ class PrismaBuilderService implements BuilderService {
         ok: true,
         payload: {
           action,
-          scene: cloneScene(state.scenes[payload.id] as SceneDefinition),
+            scene: cloneScene(state.scenes[payload.id]),
         },
       };
     });
@@ -1459,7 +1485,7 @@ class PrismaBuilderService implements BuilderService {
       const existingIndex = scene.npcs.findIndex(
         (candidate) => candidate.characterKey === payload.npc.characterKey,
       );
-      const nextNpc = structuredClone(payload.npc) as SceneNpcDefinition;
+      const nextNpc = structuredClone(payload.npc);
       const nextNpcs = [...scene.npcs];
       if (existingIndex === -1) {
         nextNpcs.push(nextNpc);
@@ -1511,7 +1537,7 @@ class PrismaBuilderService implements BuilderService {
         return { ok: false };
       }
 
-      const currentNpc = scene.npcs[existingIndex] as SceneNpcDefinition;
+      const currentNpc = scene.npcs[existingIndex];
       const nextDialogueKeys = (payload.dialogueKeys ?? "")
         .split(",")
         .map((key) => key.trim())
@@ -1530,15 +1556,18 @@ class PrismaBuilderService implements BuilderService {
         dialogueKeys: nextDialogueKeys.length > 0 ? nextDialogueKeys : [...currentNpc.dialogueKeys],
         ai: {
           ...currentNpc.ai,
+          idlePauseMs: (() => {
+            const nextIdlePause: readonly [number, number] = [
+              Math.max(0, parseBuilderInteger(payload.idlePauseMinMs, currentNpc.ai.idlePauseMs[0])),
+              Math.max(0, parseBuilderInteger(payload.idlePauseMaxMs, currentNpc.ai.idlePauseMs[1])),
+            ];
+            return nextIdlePause;
+          })(),
           wanderRadius: Math.max(
             0,
             parseBuilderInteger(payload.wanderRadius, currentNpc.ai.wanderRadius),
           ),
           wanderSpeed: Math.max(0, parseNodeFloat(payload.wanderSpeed, currentNpc.ai.wanderSpeed)),
-          idlePauseMs: [
-            Math.max(0, parseBuilderInteger(payload.idlePauseMinMs, currentNpc.ai.idlePauseMs[0])),
-            Math.max(0, parseBuilderInteger(payload.idlePauseMaxMs, currentNpc.ai.idlePauseMs[1])),
-          ] as [number, number],
           greetOnApproach: parseBuilderBoolean(
             payload.greetOnApproach,
             currentNpc.ai.greetOnApproach,
@@ -1557,7 +1586,7 @@ class PrismaBuilderService implements BuilderService {
       return {
         ok: true,
         payload: {
-          npc: structuredClone(nextNpc) as SceneNpcDefinition,
+          npc: structuredClone(nextNpc),
         },
       };
     });
@@ -1598,7 +1627,7 @@ class PrismaBuilderService implements BuilderService {
 
         return {
           ok: true,
-          payload: structuredClone(nextNpcs) as SceneNpcDefinition[],
+          payload: structuredClone(nextNpcs),
         };
       },
     );
@@ -1724,7 +1753,7 @@ class PrismaBuilderService implements BuilderService {
     for (const scene of Object.values(entry.state.scenes)) {
       const npc = scene.npcs.find((candidate) => candidate.characterKey === npcId);
       if (npc) {
-        return structuredClone(npc) as SceneNpcDefinition;
+        return structuredClone(npc);
       }
     }
 
@@ -1776,7 +1805,7 @@ class PrismaBuilderService implements BuilderService {
         ok: true,
         payload: {
           action,
-          asset: structuredClone(state.assets[payload.id] as BuilderAsset),
+          asset: structuredClone(state.assets[payload.id]),
         },
       };
     });
@@ -1876,7 +1905,7 @@ class PrismaBuilderService implements BuilderService {
         ok: true,
         payload: {
           action,
-          clip: structuredClone(state.animationClips[payload.id] as AnimationClip),
+          clip: structuredClone(state.animationClips[payload.id]),
         },
       };
     });
@@ -1975,7 +2004,7 @@ class PrismaBuilderService implements BuilderService {
         ok: true,
         payload: {
           action,
-          graph: structuredClone(state.dialogueGraphs[payload.id] as DialogueGraph),
+          graph: structuredClone(state.dialogueGraphs[payload.id]),
         },
       };
     });
@@ -2064,7 +2093,7 @@ class PrismaBuilderService implements BuilderService {
         ok: true,
         payload: {
           action,
-          quest: structuredClone(state.quests[payload.id] as QuestDefinition),
+          quest: structuredClone(state.quests[payload.id]),
         },
       };
     });
@@ -2145,7 +2174,7 @@ class PrismaBuilderService implements BuilderService {
 
         return {
           ok: true,
-          payload: structuredClone(nextQuest) as QuestDefinition,
+          payload: structuredClone(nextQuest),
         };
       },
     );
@@ -2205,7 +2234,7 @@ class PrismaBuilderService implements BuilderService {
         ok: true,
         payload: {
           action,
-          trigger: structuredClone(state.triggers[payload.id] as TriggerDefinition),
+          trigger: structuredClone(state.triggers[payload.id]),
         },
       };
     });
@@ -2293,7 +2322,7 @@ class PrismaBuilderService implements BuilderService {
         ok: true,
         payload: {
           action,
-          job: structuredClone(state.generationJobs[payload.id] as GenerationJob),
+          job: structuredClone(state.generationJobs[payload.id]),
         },
       };
     });
@@ -2450,7 +2479,7 @@ class PrismaBuilderService implements BuilderService {
 
       return {
         ok: true,
-        payload: structuredClone(state.generationJobs[jobId] as GenerationJob),
+        payload: structuredClone(state.generationJobs[jobId]),
       };
     });
     if (!mutation) {
@@ -2495,7 +2524,7 @@ class PrismaBuilderService implements BuilderService {
         ok: true,
         payload: {
           action,
-          run: structuredClone(state.automationRuns[payload.id] as AutomationRun),
+          run: structuredClone(state.automationRuns[payload.id]),
         },
       };
     });
@@ -2573,7 +2602,7 @@ class PrismaBuilderService implements BuilderService {
         };
         return {
           ok: true,
-          payload: structuredClone(state.automationRuns[runId] as AutomationRun),
+          payload: structuredClone(state.automationRuns[runId]),
         };
       },
     );
@@ -2691,7 +2720,7 @@ class PrismaBuilderService implements BuilderService {
       return null;
     }
 
-    const previewState = structuredClone(entry.state) as BuilderProjectState;
+    const previewState = structuredClone(entry.state);
     const reports: BuilderPatchPreviewOperation[] = [];
 
     for (const operation of operations) {
@@ -2755,10 +2784,7 @@ class PrismaBuilderService implements BuilderService {
         continue;
       }
 
-      const nextScene = {
-        ...(parsed as SceneDefinition),
-        id: target.sceneId,
-      } as SceneDefinition;
+      const nextScene = parseScenePatch(target.sceneId, parsed, beforeScene);
       previewState.scenes[target.sceneId] = structuredClone(nextScene);
       reports.push({
         operation,
@@ -2834,10 +2860,11 @@ class PrismaBuilderService implements BuilderService {
           continue;
         }
 
-        nextState.scenes[target.sceneId] = {
-          ...(parsed as SceneDefinition),
-          id: target.sceneId,
-        };
+        nextState.scenes[target.sceneId] = parseScenePatch(
+          target.sceneId,
+          parsed,
+          nextState.scenes[target.sceneId],
+        );
       }
 
       return {

@@ -1,4 +1,4 @@
-import { rm } from "node:fs/promises";
+import { rm } from "fs/promises";
 import { ProviderRegistry } from "../../src/domain/ai/providers/provider-registry.ts";
 import { prisma } from "../../src/shared/services/db.ts";
 

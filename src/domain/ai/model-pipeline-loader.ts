@@ -21,13 +21,14 @@ export interface DisposablePipeline {
 /**
  * Runtime pipeline instance shape used by the local-model manager.
  */
-export type AnyPipeline = DisposablePipeline & object;
+export type AnyPipeline =
+  DisposablePipeline & ((input: unknown, options?: Record<string, unknown>) => Promise<unknown>);
 
-const corruptedCacheErrorFragments = [
+const corruptedCacheErrorFragments: readonly string[] = [
   "protobuf",
   "invalid wire type",
   "index out of range",
-] as const;
+];
 
 // Serve ONNX WASM binaries locally rather than fetching from CDN.
 if (env.backends.onnx.wasm) {
@@ -68,16 +69,16 @@ const loadPipelineOnce = async (key: ModelKey): Promise<AnyPipeline> => {
     throw new Error(`Model target "${key}" is disabled.`);
   }
 
-  const taskPipeline = pipeline as (
-    task: typeof entry.task,
-    model: string,
-    options: { dtype?: string; device?: string },
-  ) => Promise<AnyPipeline>;
-
-  return taskPipeline(entry.task, entry.model, {
+  const loadedPipeline = await pipeline(entry.task, entry.model, {
     dtype: entry.dtype,
     device: entry.device,
   });
+
+  if (typeof loadedPipeline !== "function") {
+    throw new Error(`Unexpected pipeline shape for "${key}".`);
+  }
+
+  return loadedPipeline;
 };
 
 const purgeModelCache = async (key: ModelKey): Promise<void> => {
