@@ -10,6 +10,39 @@ import type {
 } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 
+const parseGenerationJobKind = (value: string): GenerationJob["kind"] | null => {
+  if (
+    value === "portrait" ||
+    value === "sprite-sheet" ||
+    value === "tiles" ||
+    value === "voice-line" ||
+    value === "animation-plan" ||
+    value === "combat-encounter" ||
+    value === "item-set" ||
+    value === "cutscene-script"
+  ) {
+    return value;
+  }
+  return null;
+};
+
+const parseBuilderAssetKind = (value: string): BuilderAssetKind | null => {
+  if (
+    value === "portrait" ||
+    value === "sprite-sheet" ||
+    value === "background" ||
+    value === "model" ||
+    value === "audio" ||
+    value === "tiles" ||
+    value === "tile-set" ||
+    value === "material" ||
+    value === "document"
+  ) {
+    return value;
+  }
+  return null;
+};
+
 /**
  * Resolves a localized node type label for builder scene editing surfaces.
  *
@@ -292,7 +325,10 @@ export const getArtifactLabel = (messages: Messages, artifact: GenerationArtifac
 
   const reviewPrefix = "generation.artifact.label.review:";
   if (artifact.label.startsWith(reviewPrefix)) {
-    const kind = artifact.label.slice(reviewPrefix.length) as GenerationJob["kind"];
+    const kind = parseGenerationJobKind(artifact.label.slice(reviewPrefix.length));
+    if (!kind) {
+      return artifact.label;
+    }
     return `${messages.builder.reviewLabelPrefix} ${getGenerationJobKindLabel(messages, kind)}`;
   }
 
@@ -310,10 +346,9 @@ export const getAssetLabel = (messages: Messages, asset: BuilderAsset): string =
   const generatedPrefix = "generation.asset.label.generated:";
   if (asset.label.startsWith(generatedPrefix)) {
     const [kind] = asset.label.slice(generatedPrefix.length).split(":", 1);
-    return `${messages.builder.generatedLabelPrefix} ${getAssetKindLabel(
-      messages,
-      (kind ?? asset.kind) as BuilderAssetKind,
-    )}`;
+    const parsedKind = kind !== undefined ? parseBuilderAssetKind(kind) : null;
+    const resolvedKind = parsedKind ?? asset.kind;
+    return `${messages.builder.generatedLabelPrefix} ${getAssetKindLabel(messages, resolvedKind)}`;
   }
 
   return asset.label;

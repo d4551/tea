@@ -50,19 +50,20 @@ const showToast = (payload: unknown): void => {
     return;
   }
 
-  const message = payload["message"];
+  const message = payload.message;
   if (typeof message !== "string") {
     return;
   }
 
-  const typedType = payload["type"];
+  const typedType = payload.type;
 
   const container = document.getElementById(CONTAINER_ID);
   if (!container) return;
 
-  const type = typedType === "success" || typedType === "error" || typedType === "warning"
-    ? typedType
-    : "info";
+  const type =
+    typedType === "success" || typedType === "error" || typedType === "warning"
+      ? typedType
+      : "info";
   const el = document.createElement("div");
   el.className = `alert ${alertClass(type)} alert-soft shadow-lg transition-opacity duration-300 opacity-100`;
   el.setAttribute("role", "alert");

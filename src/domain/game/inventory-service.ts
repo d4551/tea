@@ -7,6 +7,7 @@ import type {
 } from "../../shared/contracts/game.ts";
 
 type EquippableSlot = Exclude<ItemDefinition["equipSlot"], "consumable" | undefined>;
+type MutableCombatantStats = { -readonly [K in keyof CombatantStats]: CombatantStats[K] };
 
 /**
  * Result of attempting to modify inventory state.
@@ -215,7 +216,7 @@ export class InventoryService {
     equipmentIds: string[],
     itemsIndex: Map<string, ItemDefinition>,
   ): Partial<CombatantStats> {
-    const stats: Partial<CombatantStats> = {};
+    const stats: Partial<MutableCombatantStats> = {};
     for (const eqId of equipmentIds) {
       const def = itemsIndex.get(eqId);
       if (!def) continue;

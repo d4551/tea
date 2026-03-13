@@ -1,10 +1,10 @@
 import { appConfig } from "../src/config/environment.ts";
-import { safeJsonParse } from "../src/shared/utils/safe-json.ts";
 import {
   assetRelativePaths,
   getHtmxExtensionEntryPaths,
   joinLocalPath,
 } from "../src/shared/constants/assets.ts";
+import { safeJsonParse } from "../src/shared/utils/safe-json.ts";
 
 type BunBuildOptions = Parameters<typeof Bun.build>[0];
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -75,10 +75,26 @@ const resolveFromRoot = (relativeRoot: string, relativePath: string): string =>
 const resolveInProject = (...parts: readonly string[]): string =>
   resolveFromProjectRoot(parts.join("/"));
 
+type AssetPipelinePathMap = Readonly<{
+  projectRoot: string;
+  outputStylesheetPath: string;
+  gameClientOutputDirectory: string;
+  htmxExtensionsOutputDirectory: string;
+  gameClientEntryPath: string;
+  builderSceneEditorEntryPath: string;
+  gameClientOutdir: string;
+  builderSceneEditorOutdir: string;
+  htmxExtensionsOutdir: string;
+  htmxSourcePath: string;
+  htmxDestinationPath: string;
+  onnxWasmSourceDirectory: string;
+  onnxWasmDestinationDirectory: string;
+}>;
+
 /**
  * Canonical Bun asset-pipeline paths shared by build and watch scripts.
  */
-export const assetPipelinePaths: Readonly<Record<string, string>> = {
+export const assetPipelinePaths: AssetPipelinePathMap = {
   projectRoot,
   outputStylesheetPath: joinLocalPath(
     appConfig.staticAssets.publicDirectory,

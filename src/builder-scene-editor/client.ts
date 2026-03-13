@@ -90,6 +90,17 @@ const formatSceneNumber = (value: number): string => {
   return value.toFixed(3).replace(/(?:\.0+|(\.\d+?)0+)$/u, "$1");
 };
 
+const isSceneNodeFormField = (value: string): value is SceneNodeFormField =>
+  value === "positionX" ||
+  value === "positionY" ||
+  value === "positionZ" ||
+  value === "rotationX" ||
+  value === "rotationY" ||
+  value === "rotationZ" ||
+  value === "scaleX" ||
+  value === "scaleY" ||
+  value === "scaleZ";
+
 const findSceneNodeForm = (root: HTMLElement, nodeId: string): HTMLFormElement | null =>
   root.querySelector<HTMLFormElement>(
     `[data-scene-node-form][data-scene-node-id="${CSS.escape(nodeId)}"]`,
@@ -120,7 +131,15 @@ const updateSceneNodeFormValues = (
     return null;
   }
 
-  for (const [field, rawValue] of Object.entries(values) as Array<[SceneNodeFormField, number]>) {
+  for (const [rawField, rawValue] of Object.entries(values)) {
+    if (
+      !isSceneNodeFormField(rawField) ||
+      typeof rawValue !== "number" ||
+      !Number.isFinite(rawValue)
+    ) {
+      continue;
+    }
+    const field = rawField;
     const control = form.elements.namedItem(field);
     if (
       control instanceof HTMLInputElement ||
@@ -181,7 +200,8 @@ const render2dScene = async (
   };
 
   if (scene.background.length > 0) {
-    const texture = ((await Assets.load(scene.background)) as Texture | undefined) ?? Texture.EMPTY;
+    const loadedBackground = await Assets.load(scene.background);
+    const texture = loadedBackground instanceof Texture ? loadedBackground : Texture.EMPTY;
     const background = new Container();
     const backgroundImage = new Sprite(texture);
     backgroundImage.width = scene.geometry.width;

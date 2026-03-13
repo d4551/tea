@@ -148,7 +148,7 @@ export const renderDialogueEditor = (
               <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueSearchLabel)}</legend>
-                <input name="search" type="text" class="input w-full" value="${escapeHtml(search)}" placeholder="${escapeHtml(messages.builder.dialogueSearchPlaceholder)}" />
+                <input name="search" type="text" class="input w-full" value="${escapeHtml(search)}" placeholder="${escapeHtml(messages.builder.dialogueSearchPlaceholder)}" aria-label="${escapeHtml(messages.builder.dialogueSearchLabel)}" />
               </fieldset>
               <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.filterAction)}">${escapeHtml(messages.builder.filterAction)}</button>
             </form>
@@ -165,11 +165,11 @@ export const renderDialogueEditor = (
               <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueKey)}</legend>
-                <input name="key" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.dialogueKeyPlaceholder)}" aria-required="true" required />
+                <input name="key" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.dialogueKeyPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.dialogueKeyPlaceholder)}" />
               </fieldset>
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueLine)}</legend>
-                <textarea name="text" class="textarea w-full" rows="3" placeholder="${escapeHtml(messages.builder.addLinePlaceholder)}" aria-required="true" required></textarea>
+            <textarea name="text" class="textarea w-full" rows="3" placeholder="${escapeHtml(messages.builder.addLinePlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.dialogueLine)}"></textarea>
               </fieldset>
               <div class="flex items-center gap-2">
                 <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.addDialogue)}">${escapeHtml(messages.builder.addDialogue)}</button>
@@ -259,6 +259,7 @@ export const renderDialogueDetail = (
             name="text"
             class="textarea w-full min-h-28"
             required
+            aria-label="${escapeHtml(messages.builder.dialogueLine)}"
           >${escapeHtml(text)}</textarea>
         </fieldset>
         <div class="flex items-center justify-end gap-2">

@@ -183,9 +183,8 @@ const asRecord = (value: unknown): Record<string, unknown> => {
   return record;
 };
 
-const toRecordFromEntries = <T>(
-  entries: Iterable<readonly [string, T]>,
-): Record<string, T> => Object.fromEntries(entries);
+const toRecordFromEntries = <T>(entries: Iterable<readonly [string, T]>): Record<string, T> =>
+  Object.fromEntries(entries);
 
 const toStringValue = (value: unknown): string | null => (typeof value === "string" ? value : null);
 
@@ -338,49 +337,55 @@ const checksumOf = (value: unknown): string => {
 };
 
 const buildBaselineAssets = (): Record<string, BuilderAsset> => {
-  const backgroundAssets = Object.values(gameScenes).map((scene) => ({
-    id: `asset.background.${scene.id}`,
-    kind: "background",
-    label: scene.id,
-    sceneMode: scene.sceneMode,
-    source: scene.background,
-    sourceFormat: "png",
-    tags: ["baseline", scene.id],
-    variants: [
-      {
-        id: `variant.background.${scene.id}.runtime`,
-        format: "png",
+  const backgroundAssets = Object.values(gameScenes).map(
+    (scene) =>
+      ({
+        id: `asset.background.${scene.id}`,
+        kind: "background",
+        label: scene.id,
+        sceneMode: scene.sceneMode ?? "2d",
         source: scene.background,
-        usage: "runtime",
-        mimeType: "image/png",
-      },
-    ],
-    approved: true,
-    createdAtMs: baselineCreatedAtMs,
-    updatedAtMs: baselineCreatedAtMs,
-  } satisfies BuilderAsset));
+        sourceFormat: "png",
+        tags: ["baseline", scene.id],
+        variants: [
+          {
+            id: `variant.background.${scene.id}.runtime`,
+            format: "png",
+            source: scene.background,
+            usage: "runtime",
+            mimeType: "image/png",
+          },
+        ],
+        approved: true,
+        createdAtMs: baselineCreatedAtMs,
+        updatedAtMs: baselineCreatedAtMs,
+      }) satisfies BuilderAsset,
+  );
 
-  const spriteAssets = Object.entries(gameSpriteManifests).map(([characterKey, manifest]) => ({
-    id: `asset.sprite.${characterKey}`,
-    kind: "sprite-sheet",
-    label: characterKey,
-    sceneMode: "2d",
-    source: manifest.sheet,
-    sourceFormat: "png",
-    tags: ["baseline", "sprite", characterKey],
-    variants: [
-      {
-        id: `variant.sprite.${characterKey}.runtime`,
-        format: "png",
+  const spriteAssets = Object.entries(gameSpriteManifests).map(
+    ([characterKey, manifest]) =>
+      ({
+        id: `asset.sprite.${characterKey}`,
+        kind: "sprite-sheet",
+        label: characterKey,
+        sceneMode: "2d",
         source: manifest.sheet,
-        usage: "runtime",
-        mimeType: "image/png",
-      },
-    ],
-    approved: true,
-    createdAtMs: baselineCreatedAtMs,
-    updatedAtMs: baselineCreatedAtMs,
-  } satisfies BuilderAsset));
+        sourceFormat: "png",
+        tags: ["baseline", "sprite", characterKey],
+        variants: [
+          {
+            id: `variant.sprite.${characterKey}.runtime`,
+            format: "png",
+            source: manifest.sheet,
+            usage: "runtime",
+            mimeType: "image/png",
+          },
+        ],
+        approved: true,
+        createdAtMs: baselineCreatedAtMs,
+        updatedAtMs: baselineCreatedAtMs,
+      }) satisfies BuilderAsset,
+  );
 
   const modelAssets: BuilderAsset[] = [
     {
@@ -1120,8 +1125,7 @@ const isAnimationEasing = (value: string): value is AnimationKeyframe["easing"] 
  * Returns an empty array on malformed input.
  */
 const parseTrackKeyframes = (raw: string): AnimationTimeline["tracks"][number]["keyframes"] => {
-  const fallback: unknown[] = [];
-  const parsed = safeJsonParse<unknown[]>(raw, fallback);
+  const parsed = safeJsonParse<unknown[]>(raw, []);
   if (!Array.isArray(parsed)) {
     return [];
   }
@@ -1187,7 +1191,7 @@ const toDialogueGraphNodes = (value: unknown): DialogueGraph["nodes"] =>
             {
               id: item.id,
               line: item.line,
-              edges: item.edges.flatMap((edge) => {
+              edges: item.edges.flatMap((edge: unknown) => {
                 const edgeRecord = edge && typeof edge === "object" ? asRecord(edge) : null;
 
                 if (!edgeRecord) {

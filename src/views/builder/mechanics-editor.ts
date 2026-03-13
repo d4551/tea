@@ -66,15 +66,15 @@ export const renderQuestEditForm = (
         <input type="hidden" name="id" value="${escapeHtml(quest.id)}" />
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.titleLabel)}</legend>
-          <input name="title" type="text" class="input w-full" value="${escapeHtml(quest.title)}" aria-required="true" required />
+          <input name="title" type="text" class="input w-full" value="${escapeHtml(quest.title)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.titleLabel)}" />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.descriptionLabel)}</legend>
-          <textarea name="description" class="textarea w-full" rows="3" aria-required="true" required>${escapeHtml(quest.description)}</textarea>
+          <textarea name="description" class="textarea w-full" rows="3" aria-required="true" required aria-label="${escapeHtml(messages.builder.descriptionLabel)}">${escapeHtml(quest.description)}</textarea>
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.triggerIdLabel)}</legend>
-          <input name="triggerId" type="text" class="input w-full" value="${escapeHtml(firstStep?.triggerId ?? "")}" aria-required="true" required />
+          <input name="triggerId" type="text" class="input w-full" value="${escapeHtml(firstStep?.triggerId ?? "")}" aria-required="true" required aria-label="${escapeHtml(messages.builder.triggerIdLabel)}" />
         </fieldset>
         <div class="flex items-center gap-2">
           <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.save)}">${escapeHtml(messages.builder.save)}</button>
@@ -122,19 +122,19 @@ export const renderTriggerEditForm = (
         <input type="hidden" name="id" value="${escapeHtml(trigger.id)}" />
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.labelField)}</legend>
-          <input name="label" type="text" class="input w-full" value="${escapeHtml(trigger.label)}" aria-required="true" required />
+          <input name="label" type="text" class="input w-full" value="${escapeHtml(trigger.label)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.labelField)}" />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.triggerEventLabel)}</legend>
-          <select name="event" class="select w-full">${renderTriggerEventOptions(messages, trigger.event)}</select>
+          <select name="event" class="select w-full" aria-label="${escapeHtml(messages.builder.triggerEventLabel)}">${renderTriggerEventOptions(messages, trigger.event)}</select>
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneId)}</legend>
-          <input name="sceneId" type="text" class="input w-full" value="${escapeHtml(trigger.sceneId ?? "")}" />
+          <input name="sceneId" type="text" class="input w-full" value="${escapeHtml(trigger.sceneId ?? "")}" aria-label="${escapeHtml(messages.builder.sceneId)}" />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.npcIdLabel)}</legend>
-          <input name="npcId" type="text" class="input w-full" value="${escapeHtml(trigger.npcId ?? "")}" placeholder="${escapeHtml(messages.builder.dialogueNpcIdPlaceholder)}" />
+          <input name="npcId" type="text" class="input w-full" value="${escapeHtml(trigger.npcId ?? "")}" placeholder="${escapeHtml(messages.builder.dialogueNpcIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.npcIdLabel)}" />
         </fieldset>
         <div class="flex items-center gap-2">
           <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.save)}">${escapeHtml(messages.builder.save)}</button>
@@ -185,15 +185,15 @@ export const renderDialogueGraphEditForm = (
         <input type="hidden" name="id" value="${escapeHtml(graph.id)}" />
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.titleLabel)}</legend>
-          <input name="title" type="text" class="input w-full" value="${escapeHtml(graph.title)}" aria-required="true" required />
+          <input name="title" type="text" class="input w-full" value="${escapeHtml(graph.title)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.titleLabel)}" />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.npcIdLabel)}</legend>
-          <input name="npcId" type="text" class="input w-full" value="${escapeHtml(graph.npcId ?? "")}" placeholder="${escapeHtml(messages.builder.dialogueNpcIdPlaceholder)}" />
+          <input name="npcId" type="text" class="input w-full" value="${escapeHtml(graph.npcId ?? "")}" placeholder="${escapeHtml(messages.builder.dialogueNpcIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.npcIdLabel)}" />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueLine)}</legend>
-          <textarea name="line" class="textarea w-full" rows="3" aria-required="true" required>${escapeHtml(line)}</textarea>
+          <textarea name="line" class="textarea w-full" rows="3" aria-required="true" required aria-label="${escapeHtml(messages.builder.dialogueLine)}">${escapeHtml(line)}</textarea>
         </fieldset>
         <div class="flex items-center gap-2">
           <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.save)}">${escapeHtml(messages.builder.save)}</button>
@@ -355,19 +355,19 @@ export const renderMechanicsEditor = (
           <h2 class="card-title">${escapeHtml(messages.builder.questsTitle)}</h2>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.questIdLabel)}</legend>
-            <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.questIdPlaceholder)}" aria-required="true" required />
+            <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.questIdPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.questIdLabel)}" />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.titleLabel)}</legend>
-            <input name="title" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.questTitlePlaceholder)}" aria-required="true" required />
+            <input name="title" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.questTitlePlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.titleLabel)}" />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.descriptionLabel)}</legend>
-            <textarea name="description" class="textarea w-full" rows="3" placeholder="${escapeHtml(messages.builder.questDescriptionPlaceholder)}" aria-required="true" required></textarea>
+            <textarea name="description" class="textarea w-full" rows="3" placeholder="${escapeHtml(messages.builder.questDescriptionPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.descriptionLabel)}"></textarea>
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.triggerIdLabel)}</legend>
-            <input name="triggerId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.triggerIdPlaceholder)}" aria-required="true" required />
+            <input name="triggerId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.triggerIdPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.triggerIdLabel)}" />
           </fieldset>
           <div class="flex items-center gap-2">
             <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.createQuest)}">${escapeHtml(messages.builder.createQuest)}</button>
@@ -383,23 +383,23 @@ export const renderMechanicsEditor = (
           <h2 class="card-title">${escapeHtml(messages.builder.triggersTitle)}</h2>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.triggerIdLabel)}</legend>
-            <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.triggerIdPlaceholder)}" aria-required="true" required />
+            <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.triggerIdPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.triggerIdLabel)}" />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.labelField)}</legend>
-            <input name="label" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.triggerLabelPlaceholder)}" aria-required="true" required />
+            <input name="label" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.triggerLabelPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.labelField)}" />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.triggerEventLabel)}</legend>
-            <select name="event" class="select w-full">${renderTriggerEventOptions(messages)}</select>
+            <select name="event" class="select w-full" aria-label="${escapeHtml(messages.builder.triggerEventLabel)}">${renderTriggerEventOptions(messages)}</select>
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneId)}</legend>
-            <input name="sceneId" type="text" class="input w-full" />
+            <input name="sceneId" type="text" class="input w-full" aria-label="${escapeHtml(messages.builder.sceneId)}" />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.npcIdLabel)}</legend>
-            <input name="npcId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.dialogueNpcIdPlaceholder)}" />
+            <input name="npcId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.dialogueNpcIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.npcIdLabel)}" />
           </fieldset>
           <div class="flex items-center gap-2">
             <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.createTrigger)}">${escapeHtml(messages.builder.createTrigger)}</button>
@@ -415,19 +415,19 @@ export const renderMechanicsEditor = (
           <h2 class="card-title">${escapeHtml(messages.builder.dialogueGraphsTitle)}</h2>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.graphIdLabel)}</legend>
-            <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.graphIdPlaceholder)}" aria-required="true" required />
+            <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.graphIdPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.graphIdLabel)}" />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.titleLabel)}</legend>
-            <input name="title" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.graphTitlePlaceholder)}" aria-required="true" required />
+            <input name="title" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.graphTitlePlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.titleLabel)}" />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.npcIdLabel)}</legend>
-            <input name="npcId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.dialogueNpcIdPlaceholder)}" />
+            <input name="npcId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.dialogueNpcIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.npcIdLabel)}" />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueLine)}</legend>
-            <textarea name="line" class="textarea w-full" rows="3" placeholder="${escapeHtml(messages.builder.addLinePlaceholder)}" aria-required="true" required></textarea>
+            <textarea name="line" class="textarea w-full" rows="3" placeholder="${escapeHtml(messages.builder.addLinePlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.dialogueLine)}"></textarea>
           </fieldset>
           <div class="flex items-center gap-2">
             <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.createDialogueGraph)}">${escapeHtml(messages.builder.createDialogueGraph)}</button>

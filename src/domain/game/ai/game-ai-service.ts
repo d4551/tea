@@ -70,8 +70,7 @@ export interface AvailableAiFeatures {
 const buildNpcSystemPrompt = (npcId: string, locale: GameLocale, sceneId: string): string => {
   const npcLabel = resolveGameText(locale, toNpcCatalogKey(npcId, "label"));
   const catalog = gameTextByLocale[locale] ?? gameTextByLocale["en-US"];
-  const sceneTitle =
-    catalog.scenes[toSceneCatalogKey(sceneId)] ?? sceneId;
+  const sceneTitle = catalog.scenes[toSceneCatalogKey(sceneId)] ?? sceneId;
 
   const languageInstruction =
     locale === "zh-CN"
@@ -258,9 +257,7 @@ export const suggestUserFlowStep = async (
   const registry = await ProviderRegistry.getInstance();
 
   const messages = [
-    ...(gameContext
-      ? [{ role: userRole, content: `Current game state: ${gameContext}` }]
-      : []),
+    ...(gameContext ? [{ role: userRole, content: `Current game state: ${gameContext}` }] : []),
     { role: userRole, content: userPrompt },
   ];
 

@@ -1,12 +1,17 @@
-import { mkdirSync, rmSync, writeFileSync } from "fs";
-import { dirname, resolve } from "path";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import {
+  applyTestEnvironment,
+  buildTestDatabaseUrl,
+  testEnvDefaults,
+  testPreloadConfig,
+} from "./test-environment.ts";
 
-const testDatabaseFile = resolve(
+const testDatabaseUrl = buildTestDatabaseUrl(
   process.cwd(),
-  "prisma",
   `test-${process.pid}-${Date.now().toString(36)}.db`,
 );
-const testDatabaseUrl = `file:${testDatabaseFile}`;
+const testDatabaseFile = testDatabaseUrl.slice("file:".length);
 
 mkdirSync(dirname(testDatabaseFile), { recursive: true });
 rmSync(testDatabaseFile, { force: true });
@@ -14,14 +19,7 @@ rmSync(`${testDatabaseFile}-journal`, { force: true });
 rmSync(`${testDatabaseFile}-shm`, { force: true });
 rmSync(`${testDatabaseFile}-wal`, { force: true });
 
-process.env.DATABASE_URL = testDatabaseUrl;
-Bun.env.DATABASE_URL = testDatabaseUrl;
-process.env.NODE_ENV = "test";
-Bun.env.NODE_ENV = "test";
-process.env.AI_LOCAL_EMBEDDINGS_ENABLED = "false";
-Bun.env.AI_LOCAL_EMBEDDINGS_ENABLED = "false";
-process.env.BUILDER_LOCAL_AUTOMATION_ORIGIN = "http://127.0.0.1:1";
-Bun.env.BUILDER_LOCAL_AUTOMATION_ORIGIN = "http://127.0.0.1:1";
+applyTestEnvironment(testPreloadConfig(testDatabaseUrl));
 
 const schemaScriptPath = resolve(
   process.cwd(),
@@ -43,7 +41,7 @@ const diffResult = Bun.spawnSync(
   ],
   {
     cwd: process.cwd(),
-    env: process.env,
+    env: Bun.env,
     stderr: "pipe",
     stdout: "pipe",
   },
@@ -62,8 +60,8 @@ const bootstrapResult = Bun.spawnSync(
   {
     cwd: process.cwd(),
     env: {
-      ...process.env,
-      DATABASE_URL: testDatabaseUrl,
+      ...Bun.env,
+      [testEnvDefaults.databaseUrlKey]: testDatabaseUrl,
     },
     stderr: "pipe",
     stdout: "pipe",

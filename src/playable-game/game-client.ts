@@ -41,6 +41,11 @@ const clientLog = (
   browserLogger.info(event, payload);
 };
 
+const readReconnectButton = (): HTMLButtonElement | null => {
+  const candidate = document.getElementById("game-reconnect");
+  return candidate instanceof HTMLButtonElement ? candidate : null;
+};
+
 const initGameClient = async (): Promise<void> => {
   const wrapper = document.getElementById("game-canvas-wrapper");
   if (!(wrapper instanceof HTMLElement)) {
@@ -56,7 +61,7 @@ const initGameClient = async (): Promise<void> => {
   const queueBadge = document.getElementById("game-command-queue");
   const statusBadge = document.getElementById("game-connection-status");
   const statusTarget = document.getElementById("game-session-meta");
-  const reconnectButton = document.getElementById("game-reconnect") as HTMLButtonElement | null;
+  const reconnectButton = readReconnectButton();
   const connectionAlert = document.getElementById("game-connection-alert");
   const connectionAlertText = document.getElementById("game-connection-alert-text");
   const focusStatus = document.getElementById("game-runtime-focus-status");
@@ -204,7 +209,7 @@ const bootGameClient = async (): Promise<void> => {
   const wrapper = document.getElementById("game-canvas-wrapper");
   const statusBadge = document.getElementById("game-connection-status");
   const queueBadge = document.getElementById("game-command-queue");
-  const reconnectButton = document.getElementById("game-reconnect") as HTMLButtonElement | null;
+  const reconnectButton = readReconnectButton();
   if (!(wrapper instanceof HTMLElement)) {
     return;
   }

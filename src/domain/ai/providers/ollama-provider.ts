@@ -576,7 +576,9 @@ export class OllamaProvider implements AiProvider {
     const startMs = Date.now();
     const model = params.model ?? appConfig.ai.ollamaChatModel;
     const systemRole: "system" = "system";
-    const systemMessages = params.systemPrompt ? [{ role: systemRole, content: params.systemPrompt }] : [];
+    const systemMessages = params.systemPrompt
+      ? [{ role: systemRole, content: params.systemPrompt }]
+      : [];
 
     const messages = [
       ...systemMessages,
@@ -633,7 +635,9 @@ export class OllamaProvider implements AiProvider {
   async *chatStream(params: AiChatParams): AsyncGenerator<string> {
     const model = params.model ?? appConfig.ai.ollamaChatModel;
     const systemRole: "system" = "system";
-    const systemMessages = params.systemPrompt ? [{ role: systemRole, content: params.systemPrompt }] : [];
+    const systemMessages = params.systemPrompt
+      ? [{ role: systemRole, content: params.systemPrompt }]
+      : [];
 
     const messages = [
       ...systemMessages,

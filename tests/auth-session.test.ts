@@ -24,21 +24,12 @@ const COOKIE_NAME = appConfig.auth.sessionCookieName;
  * @returns Mock cookie bag compatible with AuthCookieBag.
  */
 const createMockCookieBag = (sessionValue?: string): AuthCookieBag => {
-  const bag: Record<string, { value: unknown; set: (opts: Record<string, unknown>) => void }> = {};
-
-  if (typeof sessionValue === "string") {
-    bag[COOKIE_NAME] = {
+  return {
+    [COOKIE_NAME]: {
       value: sessionValue,
       set: () => {},
-    };
-  } else {
-    bag[COOKIE_NAME] = {
-      value: undefined,
-      set: () => {},
-    };
-  }
-
-  return bag as AuthCookieBag;
+    },
+  };
 };
 
 describe("resolveAuthSession", () => {

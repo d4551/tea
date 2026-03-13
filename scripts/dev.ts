@@ -1,4 +1,5 @@
 import { createLogger } from "../src/lib/logger.ts";
+import { settleAsync } from "../src/shared/utils/async-result.ts";
 import {
   assetPipelinePaths,
   createGameClientBuildCommand,
@@ -44,15 +45,6 @@ type ShutdownReason =
     };
 
 type WatcherProcess = ReturnType<typeof Bun.spawn>;
-type WatcherExitResult =
-  | {
-      readonly ok: true;
-      readonly exitCode: number;
-    }
-  | {
-      readonly ok: false;
-      readonly error: string;
-    };
 
 const runWatchers = async (): Promise<void> => {
   const cssWatcher = Bun.spawn({
@@ -130,22 +122,18 @@ const runWatchers = async (): Promise<void> => {
   process.once("SIGINT", handleSigInt);
   process.once("SIGTERM", handleSigTerm);
 
+  const detachSignalHandlers = (): void => {
+    process.off("SIGINT", handleSigInt);
+    process.off("SIGTERM", handleSigTerm);
+  };
+
   const observeWatcherExit = async (
     watcherName: keyof typeof watcherProcesses,
   ): Promise<number> => {
-    const exitResult = await watcherProcesses[watcherName].exited.then<WatcherExitResult>(
-      (exitCode) => ({
-        ok: true,
-        exitCode,
-      }),
-      (error: unknown) => ({
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      }),
-    );
+    const exitResult = await settleAsync(watcherProcesses[watcherName].exited);
 
     if (exitResult.ok) {
-      const { exitCode } = exitResult;
+      const { value: exitCode } = exitResult;
       if (exitCode !== 0) {
         logger.error("watcher.terminated", { watcherName, exitCode });
       }
@@ -157,7 +145,7 @@ const runWatchers = async (): Promise<void> => {
 
     logger.error("watcher.terminated.error", {
       watcherName,
-      error: exitResult.error,
+      error: exitResult.error.message,
     });
     if (!shutdownReasonType) {
       stopWatchers({ type: "server-exit", exitCode: 1 });
@@ -170,58 +158,55 @@ const runWatchers = async (): Promise<void> => {
   const gameClientWatcherExited = observeWatcherExit("gameClientWatcher");
   const serverWatcherExited = observeWatcherExit("serverWatcher");
 
-  try {
-    const serverExitCode = await serverWatcherExited;
-    const cssExitCode = await cssWatcherExited;
-    const htmxExtensionExitCode = await htmxExtensionWatcherExited;
-    const gameClientExitCode = await gameClientWatcherExited;
+  const watcherExitCodes = await Promise.all([
+    serverWatcherExited,
+    cssWatcherExited,
+    htmxExtensionWatcherExited,
+    gameClientWatcherExited,
+  ]);
+  const [serverExitCode, cssExitCode, htmxExtensionExitCode, gameClientExitCode] = watcherExitCodes;
+  const watcherTerminatedBySignal = watcherProcesses.serverWatcher.signalCode !== null;
 
-    const watcherTerminatedBySignal = watcherProcesses.serverWatcher.signalCode !== null;
-
-    if (shutdownReasonType === "signal" && shutdownSignal) {
-      logger.warn("process.shutdown", { signal: shutdownSignal });
-      return;
-    }
-
-    if (
-      shutdownReasonType === "server-exit" &&
-      shutdownExitCode === 0 &&
-      watcherTerminatedBySignal
-    ) {
-      logger.warn("process.shutdown", {
-        signal: "external",
-        watcher: "serverWatcher",
-      });
-      return;
-    }
-
-    if (shutdownReasonType === "server-exit" && serverExitCode === 0) {
-      logger.warn("process.shutdown", {
-        signal: "external",
-        watcher: "serverWatcher",
-        message: "server watcher exited cleanly before explicit shutdown",
-      });
-      return;
-    }
-
-    logger.error("watcher.termination.unexpected", {
-      cssWatcherExitCode: cssExitCode,
-      htmxExtensionExitCode,
-      gameClientExitCode,
-      serverWatcherExitCode: serverExitCode,
-      cssWatcherSignal: watcherProcesses.cssWatcher.signalCode,
-      htmxExtensionSignal: watcherProcesses.htmxExtensionWatcher.signalCode,
-      gameClientSignal: watcherProcesses.gameClientWatcher.signalCode,
-      serverWatcherSignal: watcherProcesses.serverWatcher.signalCode,
-    });
-
-    throw new Error(
-      `Watcher terminated unexpectedly. cssWatcher=${cssExitCode}, htmxExtensionWatcher=${htmxExtensionExitCode}, gameClientWatcher=${gameClientExitCode}, serverWatcher=${serverExitCode}`,
-    );
-  } finally {
-    process.off("SIGINT", handleSigInt);
-    process.off("SIGTERM", handleSigTerm);
+  if (shutdownReasonType === "signal" && shutdownSignal) {
+    detachSignalHandlers();
+    logger.warn("process.shutdown", { signal: shutdownSignal });
+    return;
   }
+
+  if (shutdownReasonType === "server-exit" && shutdownExitCode === 0 && watcherTerminatedBySignal) {
+    detachSignalHandlers();
+    logger.warn("process.shutdown", {
+      signal: "external",
+      watcher: "serverWatcher",
+    });
+    return;
+  }
+
+  if (shutdownReasonType === "server-exit" && serverExitCode === 0) {
+    detachSignalHandlers();
+    logger.warn("process.shutdown", {
+      signal: "external",
+      watcher: "serverWatcher",
+      message: "server watcher exited cleanly before explicit shutdown",
+    });
+    return;
+  }
+
+  logger.error("watcher.termination.unexpected", {
+    cssWatcherExitCode: cssExitCode,
+    htmxExtensionExitCode,
+    gameClientExitCode,
+    serverWatcherExitCode: serverExitCode,
+    cssWatcherSignal: watcherProcesses.cssWatcher.signalCode,
+    htmxExtensionSignal: watcherProcesses.htmxExtensionWatcher.signalCode,
+    gameClientSignal: watcherProcesses.gameClientWatcher.signalCode,
+    serverWatcherSignal: watcherProcesses.serverWatcher.signalCode,
+  });
+
+  detachSignalHandlers();
+  throw new Error(
+    `Watcher terminated unexpectedly. cssWatcher=${cssExitCode}, htmxExtensionWatcher=${htmxExtensionExitCode}, gameClientWatcher=${gameClientExitCode}, serverWatcher=${serverExitCode}`,
+  );
 };
 
 await runBlockingSetup();

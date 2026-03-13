@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { normalizeLocale } from "../config/environment.ts";
+import { type LocaleCode, normalizeLocale } from "../config/environment.ts";
 import { gameTextByLocale } from "../domain/game/data/game-text.ts";
 import { gameLoop } from "../domain/game/game-loop.ts";
 import { ensureCorrelationIdHeader } from "../lib/correlation-id.ts";
@@ -957,12 +957,12 @@ const wsConnSockets = new Map<
   { close(code?: number): void; unsubscribe(topic: string): void }
 >();
 const wsConnectionKeysBySession = new Map<string, Set<string>>();
-const wsLocales = new Map<string, SupportedLocale>();
+const wsLocales = new Map<string, LocaleCode>();
 
 const registerWsConnection = (
   sessionId: string,
   connKey: string,
-  locale: SupportedLocale,
+  locale: LocaleCode,
   participantSessionId: string,
   participantRole: "owner" | "controller" | "spectator",
   cleanup: () => void,

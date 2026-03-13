@@ -34,6 +34,14 @@ interface SqliteVecModule {
   readonly load: (db: Database) => void;
 }
 
+const isSqliteVecModule = (value: unknown): value is SqliteVecModule => {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  return typeof Reflect.get(value, "load") === "function";
+};
+
 /**
  * Attempts to dynamically load the sqlite-vec native module.
  * Returns null when the module is not installed or fails to load.
@@ -50,7 +58,8 @@ const loadSqliteVecModule = (): SqliteVecModule | null => {
     if (!resolved) {
       return null;
     }
-    return require(resolved) as SqliteVecModule | undefined;
+    const loadedModule = require(resolved);
+    return isSqliteVecModule(loadedModule) ? loadedModule : null;
   })();
 
   if (m?.load) {
@@ -226,9 +235,10 @@ class VectorStore {
     }
 
     const placeholders = chunkIds.map(() => "?").join(", ");
+    const removableChunkIds = [...chunkIds];
     db.run(
       `DELETE FROM vec_knowledge_chunks WHERE chunk_id IN (${placeholders})`,
-      chunkIds as string[],
+      removableChunkIds,
     );
   }
 
@@ -285,9 +295,14 @@ class VectorStore {
     }
 
     const row = db
-      .query<{ count: number }, []>("SELECT count(*) as count FROM vec_knowledge_chunks")
+      .query<{ total: number | string }, []>("SELECT count(*) AS total FROM vec_knowledge_chunks")
       .get();
-    return row?.count ?? 0;
+    const rawCount = row?.total;
+    if (typeof rawCount === "number" && Number.isFinite(rawCount)) {
+      return rawCount;
+    }
+    const parsedCount = typeof rawCount === "string" ? Number(rawCount) : 0;
+    return Number.isFinite(parsedCount) ? parsedCount : 0;
   }
 
   /**

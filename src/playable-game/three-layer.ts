@@ -66,7 +66,7 @@ export class ThreeLayer {
    */
   getContext(): WebGLRenderingContext | WebGL2RenderingContext | null {
     if (this.renderer instanceof THREE.WebGLRenderer) {
-      return this.renderer.getContext() as WebGLRenderingContext | WebGL2RenderingContext;
+      return this.renderer.getContext();
     }
     return null;
   }
@@ -279,12 +279,12 @@ export class ThreeLayer {
     const positions = new Float32Array(LEAF_COUNT * 3);
     const velocities = new Float32Array(LEAF_COUNT * 3);
     const colors = new Float32Array(LEAF_COUNT * 3);
-    const palette = [
+    const palette: readonly THREE.Color[] = [
       new THREE.Color(0xc2691d),
       new THREE.Color(0xe8a027),
       new THREE.Color(0x8b3a0f),
       new THREE.Color(0xd4a853),
-    ] as const;
+    ];
 
     for (let index = 0; index < LEAF_COUNT; index += 1) {
       const offset = index * 3;
@@ -299,7 +299,7 @@ export class ThreeLayer {
       );
       velocities[offset + 2] = 0;
 
-      const color = palette[Math.floor(Math.random() * palette.length)] as THREE.Color;
+      const color = palette[Math.floor(Math.random() * palette.length)];
       colors[offset] = color.r;
       colors[offset + 1] = color.g;
       colors[offset + 2] = color.b;
@@ -324,11 +324,11 @@ export class ThreeLayer {
   }
 
   private _buildLanternLights(): void {
-    const positions = [
+    const positions: readonly [number, number, number][] = [
       [-2.5, 1.5, 1],
       [2.5, 1.5, 1],
       [0, 2, 0.5],
-    ] as const;
+    ];
 
     for (const [x, y, z] of positions) {
       const light = new THREE.PointLight(0xffaa44, 1.2, 4);

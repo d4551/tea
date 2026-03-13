@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { type SseUtils, ssePlugin } from "../src/plugins/sse-plugin.ts";
+import { type SseUtils, sseUtils } from "../src/plugins/sse-plugin.ts";
 
 /**
  * SSE Plugin unit tests.
@@ -8,7 +8,7 @@ import { type SseUtils, ssePlugin } from "../src/plugins/sse-plugin.ts";
  * an Elysia server instance.
  */
 
-const sse: SseUtils = (ssePlugin as { decorator: { sse: SseUtils } }).decorator.sse;
+const sse: SseUtils = sseUtils;
 
 describe("ssePlugin", () => {
   test("event formats a basic named event", () => {

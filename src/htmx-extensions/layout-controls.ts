@@ -276,9 +276,7 @@ const wireHtmxLifecycle = (): void => {
 };
 
 const resolveDrawerControl = (target: EventTarget | null): DrawerToggleControl | null =>
-  target instanceof Element
-    ? target.closest<DrawerToggleControl>(drawerToggleSelector)
-    : null;
+  target instanceof Element ? target.closest<DrawerToggleControl>(drawerToggleSelector) : null;
 
 document.addEventListener("click", (event) => {
   const control = resolveDrawerControl(event.target);

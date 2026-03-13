@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { appConfig } from "../src/config/environment.ts";
-import { settleAsync } from "../src/shared/utils/async-result.ts";
 import { TransformersProvider } from "../src/domain/ai/providers/transformers-provider.ts";
+import { settleAsync } from "../src/shared/utils/async-result.ts";
 
 describe("transformers provider adapter", () => {
   test("maps typed local text-generation results back to AiGenerationResult", async () => {

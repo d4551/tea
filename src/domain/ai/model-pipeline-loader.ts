@@ -13,16 +13,10 @@ import { MODEL_REGISTRY, type ModelKey } from "./model-registry.ts";
 /**
  * Disposable pipeline contract returned by Transformers.js.
  */
-export interface DisposablePipeline {
-  /** Optional disposal hook exposed by the runtime. */
-  readonly dispose?: () => void | Promise<void>;
-}
-
 /**
  * Runtime pipeline instance shape used by the local-model manager.
  */
-export type AnyPipeline =
-  DisposablePipeline & ((input: unknown, options?: Record<string, unknown>) => Promise<unknown>);
+export type AnyPipeline = Awaited<ReturnType<typeof pipeline>>;
 
 const corruptedCacheErrorFragments: readonly string[] = [
   "protobuf",

@@ -1,12 +1,14 @@
-import { rm } from "fs/promises";
+import { rm } from "node:fs/promises";
 import { ProviderRegistry } from "../../src/domain/ai/providers/provider-registry.ts";
 import { prisma } from "../../src/shared/services/db.ts";
+import { settleAsync } from "../../src/shared/utils/async-result.ts";
+import { testEnvDefaults } from "./test-environment.ts";
 
 let providerDisposed = false;
 let prismaDisconnected = false;
 let testDatabaseCleaned = false;
 
-const resolvedTestDatabaseUrl = Bun.env.DATABASE_URL ?? process.env.DATABASE_URL ?? "";
+const resolvedTestDatabaseUrl = Bun.env[testEnvDefaults.databaseUrlKey] ?? "";
 
 const resolveTestDatabasePath = (databaseUrl: string): string | null => {
   const normalized = databaseUrl.trim();
@@ -62,10 +64,10 @@ export const cleanupTestDatabase = async (): Promise<void> => {
 
   await Promise.all(
     candidatePaths.map(async (candidatePath) => {
-      try {
-        await rm(candidatePath, { force: true });
-      } catch {
+      const result = await settleAsync(rm(candidatePath, { force: true }));
+      if (!result.ok) {
         // Ignore cleanup races between Bun workers removing the same test sidecar file.
+        return;
       }
     }),
   );

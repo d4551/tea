@@ -25,7 +25,7 @@ import { requestScopedContextPlugin } from "../plugins/request-context.ts";
 import { defaultGameConfig } from "../shared/config/game-config.ts";
 import { httpStatus } from "../shared/constants/http.ts";
 import { appRoutes } from "../shared/constants/routes.ts";
-import type { FeatureCapability, GameLocale } from "../shared/contracts/game.ts";
+import type { FeatureCapability } from "../shared/contracts/game.ts";
 import {
   encodeMonoWavAudio,
   resampleMonoPcm,
@@ -712,7 +712,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
   .post(
     appRoutes.aiGenerateDialogue,
     async ({ body, correlationId, messages }) => {
-      const locale = normalizeLocale(body.locale) as GameLocale;
+      const locale = normalizeLocale(body.locale);
 
       const result = await generateNpcDialogue(
         {
@@ -760,7 +760,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
   .post(
     appRoutes.aiGenerateScene,
     async ({ body, correlationId, messages }) => {
-      const locale = normalizeLocale(body.locale) as GameLocale;
+      const locale = normalizeLocale(body.locale);
       const result = await generateSceneDescription(body.sceneId, locale);
 
       if (!result.ok) {

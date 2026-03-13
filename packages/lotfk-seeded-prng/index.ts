@@ -30,7 +30,11 @@ export class SeededPrng {
    * Picks a random element from an array in a deterministic way.
    */
   pick<T>(worldTimeMs: number, arr: readonly T[], offset = 0): T {
-    return arr[this.int(worldTimeMs, 0, arr.length, offset)] as T;
+    if (arr.length === 0) {
+      throw new RangeError("Cannot pick from an empty collection.");
+    }
+
+    return arr[this.int(worldTimeMs, 0, arr.length, offset)];
   }
 }
 

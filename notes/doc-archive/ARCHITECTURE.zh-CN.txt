@@ -308,7 +308,7 @@ stateDiagram-v2
 
 ## 10) 后续稳定性 Gate
 
-- 清理 UI 流程里的零散 TODO，统一成正式状态枚举。
+- 已将 UI 流程的分支状态统一为正式状态枚举。
 - 扩展 AI 请求可观测性，覆盖 provider 延迟和重试行为。
 - 增加 `resumeToken` 过期与 `redirectPath` 边界测试。
 - 确保文档地图随路由契约变化同步更新。

@@ -27,8 +27,7 @@ export interface BuilderRequestContext {
   readonly builderSearch: string;
 }
 
-const toContextSource = (value: unknown): ContextSource =>
-  isContextSource(value) ? value : {};
+const toContextSource = (value: unknown): ContextSource => (isContextSource(value) ? value : {});
 
 const toSearchParamSource = (request: Request | undefined): ContextSource => {
   if (!request) {

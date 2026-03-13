@@ -1,12 +1,13 @@
 import { resolveSpriteManifest } from "../../../shared/config/game-config.ts";
 import type {
   BuilderAsset,
-  Direction,
   GameDialogueEntry,
   GameFlagDefinition,
   GameLocale,
+  NpcState,
   GameQuestState,
   GameSceneState,
+  Direction,
   NpcStateMachine,
   QuestDefinition,
   SceneDefinition,
@@ -76,7 +77,7 @@ export const buildSessionSceneState = (
     ? createLocalBounds(playerManifest.frameWidth, playerManifest.frameHeight)
     : { x: 8, y: 48, width: 40, height: 80 };
 
-  const playerState = {
+  const playerState: GameSceneState["player"] = {
     id: "player",
     label: "Player",
     characterKey: "chaJiang",
@@ -84,14 +85,14 @@ export const buildSessionSceneState = (
       x: sceneDefinition.spawn.x,
       y: sceneDefinition.spawn.y,
     },
-    facing: "down" as Direction,
+    facing: "down" satisfies Direction,
     animation: "idle-down",
     frame: 0,
     velocity: { x: 0, y: 0 },
     bounds: playerBounds,
   };
 
-  const npcs = sceneDefinition.npcs.map((npcDefinition, index) => {
+  const npcs: readonly NpcState[] = sceneDefinition.npcs.map((npcDefinition, index): NpcState => {
     const manifest = resolveSpriteManifest(npcDefinition.characterKey);
     const npcManifest = manifest ?? gameSpriteManifests[npcDefinition.characterKey];
 
@@ -105,7 +106,7 @@ export const buildSessionSceneState = (
       label: resolveGameText(locale, npcDefinition.labelKey),
       characterKey: npcDefinition.characterKey,
       position: { x: npcDefinition.x, y: npcDefinition.y },
-      facing: ((seed + index) % 2 === 0 ? "left" : "right") as Direction,
+      facing: ((seed + index) % 2 === 0 ? "left" : "right") satisfies Direction,
       animation: "idle-down",
       frame: 0,
       velocity: { x: 0, y: 0 },
@@ -120,7 +121,7 @@ export const buildSessionSceneState = (
         ...npcDefinition.ai,
       },
       active: false,
-      state: "idle" as NpcStateMachine,
+      state: "idle" satisfies NpcStateMachine,
     };
   });
 

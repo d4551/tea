@@ -63,32 +63,30 @@ const isSentimentResult = (value: unknown): value is SentimentResult =>
   Number.isFinite(value.score);
 
 const isSentimentResultArray = (value: unknown): value is SentimentResult[] =>
-  Array.isArray(value) && value.every(isSentimentResult);
+  Array.isArray(value) && value.length > 0 && value.every(isSentimentResult);
 
-const isGenerationOutput = (
-  value: unknown,
-): value is readonly { readonly generated_text: string }[] =>
+const isGenerationOutput = (value: unknown): value is { generated_text: string }[] =>
   Array.isArray(value) &&
   value.every((entry) => isRecord(entry) && isNonEmptyString(entry.generated_text));
 
 const isTensorLike = (value: unknown): value is TensorLike =>
   isRecord(value) &&
-  ("data" in value) &&
+  "data" in value &&
   (isFloat32Array(value.data) ||
     isFloat64Array(value.data) ||
     (Array.isArray(value.data) && isNumericArray(value.data)));
 
-const isAsrOutput = (value: unknown): value is AsrOutput =>
+const _isAsrOutput = (value: unknown): value is AsrOutput =>
   isRecord(value) && typeof value.text === "string";
 
 const isTranscriptionOutput = (value: unknown): value is AsrOutput | string =>
-  isRecord(value)
-    ? isNonEmptyString(value.text)
-    : isNonEmptyString(value);
+  isRecord(value) ? isNonEmptyString(value.text) : isNonEmptyString(value);
 
 const isTtsOutput = (value: unknown): value is TtsOutput =>
   isRecord(value) &&
   isFloat32Array(value.audio) &&
+  value.audio.length > 0 &&
+  typeof value.sampling_rate === "number" &&
   value.sampling_rate > 0;
 
 /**
@@ -150,9 +148,15 @@ export class ModelManager implements LocalModelRuntime {
     }
 
     if (!this._warmupPromise) {
-      this._warmupPromise = this._warmup().finally(() => {
-        this._warmupPromise = null;
-      });
+      this._warmupPromise = this._warmup().then(
+        () => {
+          this._warmupPromise = null;
+        },
+        (error) => {
+          this._warmupPromise = null;
+          throw error;
+        },
+      );
     }
 
     await this._warmupPromise;
@@ -195,7 +199,17 @@ export class ModelManager implements LocalModelRuntime {
     }
 
     this._health.markSuccess();
-    return localModelSuccess(result.value[0]);
+    const topResult = result.value[0];
+    if (topResult === undefined) {
+      return this._failOperation("model.sentiment.failed", {
+        code: "invalid-output",
+        message: "Sentiment model returned no predictions.",
+        operation: "sentiment.classify",
+        modelKey: "sentiment",
+        retryable: false,
+      });
+    }
+    return localModelSuccess(topResult);
   }
 
   /**
@@ -243,8 +257,7 @@ export class ModelManager implements LocalModelRuntime {
       operation: `${modelKey}.generate`,
       modelKey,
       timeoutMs: appConfig.ai.pipelineTimeoutMs,
-      execute: () =>
-        pipe.value(prompt, entry.generationConfig ?? {}),
+      execute: () => pipe.value(prompt, entry.generationConfig ?? {}),
       validate: isGenerationOutput,
       invalidMessage: `${modelKey} generation returned an invalid payload.`,
     });
@@ -366,8 +379,7 @@ export class ModelManager implements LocalModelRuntime {
       operation: "speech-to-text.transcribe",
       modelKey: "speechToText",
       timeoutMs: appConfig.ai.pipelineTimeoutMs * 4,
-      execute: () =>
-        pipe.value(audio, {}),
+      execute: () => pipe.value(audio, {}),
       validate: isTranscriptionOutput,
       invalidMessage: "Speech-to-text model returned an invalid payload.",
     });

@@ -16,7 +16,8 @@ describe("createLogger", () => {
 
   test("does not throw when stdout sink rejects", async () => {
     const previousFailures = getLoggerWriteFailures();
-    Bun.write = (() => Promise.reject(new Error("stream unavailable"))) as typeof Bun.write;
+    const writeFails: typeof Bun.write = () => Promise.reject(new Error("stream unavailable"));
+    Bun.write = writeFails;
 
     const logger = createLogger("logger.test");
 
@@ -31,12 +32,13 @@ describe("createLogger", () => {
 
   test("records stderr stream failures on error logs", async () => {
     const previousFailures = getLoggerWriteFailures();
-    Bun.write = ((stream) => {
+    const writeWithConditionalFailure: typeof Bun.write = (stream) => {
       if (stream === Bun.stderr) {
         return Promise.reject(new Error("stderr blocked"));
       }
       return Promise.resolve(0);
-    }) as typeof Bun.write;
+    };
+    Bun.write = writeWithConditionalFailure;
 
     const logger = createLogger("logger.test");
 

@@ -326,7 +326,7 @@ stateDiagram-v2
 
 ## 10) Future work gates
 
-- Remove remaining fragile TODOs in UI state transitions by mapping to a formal state enum.
+- Formalized UI state transitions by mapping legacy branches to a single enum.
 - Expand AI request observability around provider latency and retry behavior.
 - Add contract tests for resume token expiry and malformed redirectPath behavior.
 - Keep doc map in sync with route-level contract changes.

@@ -11,7 +11,7 @@ const createFetchStub = (
 ): typeof fetch => Object.assign(responder, originalFetch);
 
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer =>
-  bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 
 const baseConfig: OpenAiCompatibleProviderConfig = {
   name: "openai-compatible-local",

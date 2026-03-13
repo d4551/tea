@@ -212,7 +212,7 @@ export const renderBuilderProjectShell = (
               <form method="get" action="${escapeHtml(switchAction)}" class="space-y-2">
                 <fieldset class="fieldset">
                   <legend class="fieldset-legend text-xs">${escapeHtml(messages.builder.switchProject)}</legend>
-                  <input name="projectId" type="text" value="${escapeHtml(project?.id ?? projectId)}" class="input w-full input-sm" placeholder="${escapeHtml(messages.builder.projectIdPlaceholder)}" />
+                  <input name="projectId" type="text" value="${escapeHtml(project?.id ?? projectId)}" class="input w-full input-sm" placeholder="${escapeHtml(messages.builder.projectIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.projectIdLabel)}" />
                   <input type="hidden" name="lang" value="${escapeHtml(locale)}" />
                   <button type="submit" class="btn btn-outline btn-xs w-full" aria-label="${escapeHtml(messages.builder.switchProject)}">${escapeHtml(messages.builder.switchProject)}</button>
                 </fieldset>
@@ -221,7 +221,7 @@ export const renderBuilderProjectShell = (
               <form hx-post="${escapeHtml(createAction)}" hx-indicator="#builder-project-create-spinner" hx-disabled-elt="button, input, select, textarea" class="space-y-2">
                 <fieldset class="fieldset">
                   <legend class="fieldset-legend text-xs">${escapeHtml(messages.builder.createProject)}</legend>
-                  <input name="projectId" type="text" class="input w-full input-sm" required minlength="1" maxlength="64" placeholder="${escapeHtml(messages.builder.projectIdPlaceholder)}" />
+                  <input name="projectId" type="text" class="input w-full input-sm" required minlength="1" maxlength="64" placeholder="${escapeHtml(messages.builder.projectIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.projectIdLabel)}" />
                   <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
                   <input type="hidden" name="redirectPath" value="${escapeHtml(currentPath)}" />
                   <div class="flex items-center gap-2">

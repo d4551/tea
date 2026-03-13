@@ -66,9 +66,10 @@ const rebuildKnowledgeChunkTerms = async (): Promise<void> => {
 };
 
 const migrationResult = await settleAsync(
-  runCommand(["bunx", "--bun", "prisma", "migrate", "deploy"], "bunx --bun prisma migrate deploy").then(
-    () => rebuildKnowledgeChunkTerms(),
-  ),
+  runCommand(
+    ["bunx", "--bun", "prisma", "migrate", "deploy"],
+    "bunx --bun prisma migrate deploy",
+  ).then(() => rebuildKnowledgeChunkTerms()),
 );
 
 const disconnectResult = await settleAsync(prismaBase.$disconnect());

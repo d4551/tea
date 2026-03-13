@@ -56,6 +56,9 @@ const readSseUntil = async (
   return collected;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
 const waitUntil = async (
   predicate: () => Promise<boolean>,
   timeoutMs = defaultGameConfig.tickMs * 12,
@@ -455,16 +458,13 @@ describe("game engine runtime", () => {
       return;
     }
 
-    try {
-      await expect(isolatedGameLoop.saveSessionNow(session.sessionId)).rejects.toThrow(
-        "simulated-save-failure",
-      );
-      const nextState = await isolatedGameLoop.getSessionState(session.sessionId);
-      expect(nextState?.stateVersion).toBe(initialState.stateVersion);
-      expect(saveAttempts).toBe(1);
-    } finally {
-      await gameStateStore.deleteSession(session.sessionId);
-    }
+    await expect(isolatedGameLoop.saveSessionNow(session.sessionId)).rejects.toThrow(
+      "simulated-save-failure",
+    );
+    const nextState = await isolatedGameLoop.getSessionState(session.sessionId);
+    expect(nextState?.stateVersion).toBe(initialState.stateVersion);
+    expect(saveAttempts).toBe(1);
+    await gameStateStore.deleteSession(session.sessionId);
   });
 
   test("purgeExpiredSessions delegates through the canonical runtime owner", async () => {
@@ -623,20 +623,19 @@ describe("game engine HTTP contracts", () => {
         },
       }),
     );
-    const payload = (await secondSave.json()) as {
-      readonly ok: boolean;
-      readonly error?: {
-        readonly code: string;
-        readonly message: string;
-      };
-    };
+    const rawPayload = await secondSave.json();
+    const payload = isRecord(rawPayload) ? rawPayload : {};
+    const payloadError = isRecord(payload.error) ? payload.error : {};
+    const payloadErrorMessage =
+      typeof payloadError.message === "string" ? payloadError.message : "";
 
     expect(firstSave.status).toBe(httpStatus.ok);
     expect(secondSave.status).toBe(httpStatus.tooManyRequests);
     expect(payload.ok).toBe(false);
-    expect(payload.error?.code).toBe("CONFLICT");
-    expect(payload.error?.message.includes("save-cooldown:")).toBe(false);
-    expect(payload.error?.message.includes("Save is cooling down.")).toBe(true);
+    expect(payload).toEqual(expect.objectContaining({ ok: false }));
+    expect(payloadError).toEqual(expect.objectContaining({ code: "CONFLICT" }));
+    expect(payloadErrorMessage.includes("save-cooldown:")).toBe(false);
+    expect(payloadErrorMessage.includes("Save is cooling down.")).toBe(true);
   });
 
   test("hud stream escapes runtime dialogue content", async () => {

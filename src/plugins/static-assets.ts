@@ -135,28 +135,31 @@ for (const mount of resolveStaticAssetMounts(appConfig)) {
   const normalizedPrefix = normalizeMountAssetRoot(mount.prefix);
   const normalizedAssetsRoot = resolveAssetRoot(mount.assets);
 
-  staticAssetsPlugin.get(`${normalizedPrefix}/*`, async ({ params }: { params: { "*": string | undefined } }) => {
-    const wildcardPath = params["*"];
-    if (!wildcardPath) {
-      return new Response(null, { status: httpStatus.notFound });
-    }
+  staticAssetsPlugin.get(
+    `${normalizedPrefix}/*`,
+    async ({ params }: { params: { "*": string | undefined } }) => {
+      const wildcardPath = params["*"];
+      if (!wildcardPath) {
+        return new Response(null, { status: httpStatus.notFound });
+      }
 
-    const absolutePath = resolveAssetPath(normalizedAssetsRoot, wildcardPath);
-    if (absolutePath === null) {
-      return new Response(null, { status: httpStatus.notFound });
-    }
+      const absolutePath = resolveAssetPath(normalizedAssetsRoot, wildcardPath);
+      if (absolutePath === null) {
+        return new Response(null, { status: httpStatus.notFound });
+      }
 
-    const file = Bun.file(absolutePath);
-    const exists = await file.exists();
-    if (!exists) {
-      return new Response(null, { status: httpStatus.notFound });
-    }
+      const file = Bun.file(absolutePath);
+      const exists = await file.exists();
+      if (!exists) {
+        return new Response(null, { status: httpStatus.notFound });
+      }
 
-    return new Response(file, {
-      headers: {
-        "content-type": resolveMimeTypeFromPath(absolutePath),
-        "cache-control": `public, max-age=${appConfig.staticAssets.cacheMaxAgeSeconds}`,
-      },
-    });
-  });
+      return new Response(file, {
+        headers: {
+          "content-type": resolveMimeTypeFromPath(absolutePath),
+          "cache-control": `public, max-age=${appConfig.staticAssets.cacheMaxAgeSeconds}`,
+        },
+      });
+    },
+  );
 }

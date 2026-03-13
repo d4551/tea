@@ -562,8 +562,7 @@ export interface BuilderService {
 /**
  * Clones scene definitions while preserving compile-time shape.
  */
-const cloneScene = (scene: SceneDefinition): SceneDefinition =>
-  structuredClone(scene);
+const cloneScene = (scene: SceneDefinition): SceneDefinition => structuredClone(scene);
 
 const parseBuilderInteger = (value: string | undefined, fallback: number): number => {
   if (typeof value !== "string") {
@@ -1194,8 +1193,15 @@ const buildScenePatchFallback = (sceneId: string): SceneDefinition => ({
   collisions: [],
 });
 
-const parseScenePatch = (sceneId: string, payload: object, fallback?: SceneDefinition): SceneDefinition => {
-  const base = safeJsonParse<SceneDefinition>(JSON.stringify(payload), fallback ?? buildScenePatchFallback(sceneId));
+const parseScenePatch = (
+  sceneId: string,
+  payload: object,
+  fallback?: SceneDefinition,
+): SceneDefinition => {
+  const base = safeJsonParse<SceneDefinition>(
+    JSON.stringify(payload),
+    fallback ?? buildScenePatchFallback(sceneId),
+  );
   return structuredClone({
     ...base,
     id: sceneId,
@@ -1251,7 +1257,7 @@ class PrismaBuilderService implements BuilderService {
         ok: true,
         payload: {
           action,
-            scene: cloneScene(state.scenes[payload.id]),
+          scene: cloneScene(state.scenes[payload.id]),
         },
       };
     });
@@ -1558,8 +1564,14 @@ class PrismaBuilderService implements BuilderService {
           ...currentNpc.ai,
           idlePauseMs: (() => {
             const nextIdlePause: readonly [number, number] = [
-              Math.max(0, parseBuilderInteger(payload.idlePauseMinMs, currentNpc.ai.idlePauseMs[0])),
-              Math.max(0, parseBuilderInteger(payload.idlePauseMaxMs, currentNpc.ai.idlePauseMs[1])),
+              Math.max(
+                0,
+                parseBuilderInteger(payload.idlePauseMinMs, currentNpc.ai.idlePauseMs[0]),
+              ),
+              Math.max(
+                0,
+                parseBuilderInteger(payload.idlePauseMaxMs, currentNpc.ai.idlePauseMs[1]),
+              ),
             ];
             return nextIdlePause;
           })(),

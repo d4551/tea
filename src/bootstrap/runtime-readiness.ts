@@ -42,7 +42,7 @@ export interface SetupWorkflowResult {
   readonly readiness: RuntimeReadinessReport;
 }
 
-const requiredPublicAssetPaths: readonly string[] = [
+const requiredPublicAssetPaths = [
   joinLocalPath(appConfig.staticAssets.publicDirectory, assetRelativePaths.stylesheetOutputFile),
   joinLocalPath(appConfig.staticAssets.publicDirectory, assetRelativePaths.htmxPublicBundleFile),
   joinLocalPath(
@@ -54,7 +54,7 @@ const requiredPublicAssetPaths: readonly string[] = [
     assetRelativePaths.builderSceneEditorBundleFile,
   ),
   joinLocalPath(appConfig.playableGame.sourceDirectory, assetRelativePaths.gameClientBundleFile),
-] as const;
+];
 
 const resolveRequiredDirectories = (): readonly string[] => {
   const candidates = [
@@ -103,12 +103,12 @@ const verifyDatabaseReachable = async (): Promise<RuntimeReadinessCheck> => {
   };
 };
 
-const requiredDatabaseTables: readonly string[] = [
+const requiredDatabaseTables = [
   "BuilderProject",
   "GameSession",
   "OracleInteraction",
   "AiKnowledgeDocument",
-] as const;
+];
 
 const verifyDatabaseSchema = async (): Promise<RuntimeReadinessCheck> => {
   const rows = await prisma.$queryRaw<readonly { readonly name: string }[]>`

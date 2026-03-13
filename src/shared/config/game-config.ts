@@ -223,4 +223,4 @@ export const makeGameSuccess = <TData>(
  * @returns Cloned snapshot.
  */
 export const serializeSessionSnapshot = <T extends Record<string, unknown>>(snapshot: T): T =>
-  JSON.parse(JSON.stringify(snapshot)) as T;
+  structuredClone(snapshot);

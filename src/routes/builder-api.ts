@@ -27,9 +27,9 @@ import {
   evaluateBuilderPlatformReadiness,
 } from "../domain/builder/platform-readiness.ts";
 import {
+  type AvailableAiFeatures,
   detectAvailableFeatures,
   generateNpcDialogue,
-  type AvailableAiFeatures,
   suggestUserFlowStep,
 } from "../domain/game/ai/game-ai-service.ts";
 import { gameScenes, gameSpriteManifests } from "../domain/game/data/sprite-data.ts";
@@ -895,9 +895,7 @@ const makeAiResult = async (request: BuilderAIRequest): Promise<BuilderAIRespons
   );
 
   const payload = generated.ok
-    ? [
-        createBuilderPatch("replace", generated.text, 0.62),
-      ]
+    ? [createBuilderPatch("replace", generated.text, 0.62)]
     : [createBuilderPatch("replace", generated.error, 0)];
 
   return {

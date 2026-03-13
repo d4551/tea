@@ -1,4 +1,4 @@
-import { appConfig } from "../../../config/environment.ts";
+import { appConfig, normalizeLocale } from "../../../config/environment.ts";
 import { createLogger } from "../../../lib/logger.ts";
 import { defaultGameConfig, resolveScene } from "../../../shared/config/game-config.ts";
 import { gameAssetUrls } from "../../../shared/constants/game-assets.ts";
@@ -114,6 +114,36 @@ const toSceneMode = (value: string): SceneMode | null => {
       return value;
     default:
       return null;
+  }
+};
+
+const toCombatPhase = (value: string): CombatPhase => {
+  switch (value) {
+    case "intro":
+    case "player_turn":
+    case "enemy_turn":
+    case "resolution":
+    case "victory":
+    case "defeat":
+    case "fled":
+      return value;
+    default:
+      return "intro";
+  }
+};
+
+const toTriggerEvent = (value: string): TriggerDefinition["event"] => {
+  switch (value) {
+    case "scene-enter":
+    case "npc-interact":
+    case "chat":
+    case "dialogue-confirmed":
+    case "combat-victory":
+    case "item-acquired":
+    case "cutscene-completed":
+      return value;
+    default:
+      return "scene-enter";
   }
 };
 
@@ -1573,7 +1603,7 @@ const toCombatEncounterStateFromRows = (
 
   return {
     id: stateRow.encounterId,
-    phase: stateRow.phase as CombatPhase,
+    phase: toCombatPhase(stateRow.phase),
     turnIndex: stateRow.turnIndex,
     combatants,
     turnOrder: combatants.map((c) => c.id),
@@ -1617,7 +1647,7 @@ const toTriggerDefinitionsFromRows = (
     return {
       id: row.id,
       label: row.label,
-      event: row.event as TriggerDefinition["event"],
+      event: toTriggerEvent(row.event),
       sceneId: row.sceneId ?? undefined,
       npcId: row.npcId ?? undefined,
       nodeId: row.nodeId ?? undefined,
@@ -1758,7 +1788,7 @@ const restoreSceneState = (
 
   const sceneDefinition = resolveScene(row.sceneId) ?? defaultSceneDefinition();
   return {
-    scene: buildSessionSceneState(sceneDefinition, row.locale as GameLocale, row.seed),
+    scene: buildSessionSceneState(sceneDefinition, normalizeLocale(row.locale), row.seed),
     projectId: row.projectId ?? undefined,
     releaseVersion: row.releaseVersion ?? undefined,
     triggerDefinitions: undefined,
@@ -1872,7 +1902,7 @@ const toGameSessionFromRow = (
       id: row.id,
       ownerSessionId: row.ownerSessionId,
       seed: row.seed,
-      locale: row.locale as GameLocale,
+      locale: normalizeLocale(row.locale),
       scene: restored.scene,
       projectId: restored.projectId,
       releaseVersion: restored.releaseVersion,
@@ -2071,7 +2101,7 @@ class PrismaGameStateStore implements GameStateStore {
           id: resolvedId,
           ownerSessionId: seed.ownerSessionId,
           seed: seed.seed,
-          locale: seed.locale as string,
+          locale: seed.locale,
           sceneId: seed.scene.sceneId,
           projectId: seed.projectId,
           releaseVersion: seed.releaseVersion,

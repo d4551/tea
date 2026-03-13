@@ -17,7 +17,7 @@
  */
 import { Elysia } from "elysia";
 
-const sseUtils = {
+export const sseUtils = {
   /**
    * Formats a named SSE event with an HTML data payload.
    * Compatible with htmx `sse-swap="<name>"` attribute.

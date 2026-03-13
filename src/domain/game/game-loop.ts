@@ -2,9 +2,8 @@ import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
 import { defaultGameConfig, resolveScene } from "../../shared/config/game-config.ts";
 import type {
-  CombatEncounterState,
-  CutscenePlaybackState,
   CutsceneStep,
+  EquipmentSlotType,
   GameActionState,
   GameCommandEnvelope,
   GameCommandInput,
@@ -20,7 +19,6 @@ import type {
   GameSessionParticipantRole,
   GameSessionSnapshot,
   GameSessionState,
-  PlayerInventoryState,
   QuestDefinition,
   SceneNodeDefinition,
   TriggerDefinition,
@@ -247,6 +245,30 @@ export class GameLoopService {
     this.progressStore = deps.progressStore ?? playerProgressStore;
   }
 
+  private toMutable<T>(value: T): Mutable<T> {
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  private resolveEquippedItemId(
+    equipment: {
+      readonly weapon?: string;
+      readonly armor?: string;
+      readonly accessory?: string;
+    },
+    slot: EquipmentSlotType,
+  ): string | undefined {
+    if (slot === "weapon") {
+      return equipment.weapon;
+    }
+    if (slot === "armor") {
+      return equipment.armor;
+    }
+    if (slot === "accessory") {
+      return equipment.accessory;
+    }
+    return undefined;
+  }
+
   private actorTokenKey(sessionId: string, participantSessionId: string): string {
     return `${sessionId}:${participantSessionId}`;
   }
@@ -440,18 +462,22 @@ export class GameLoopService {
   private buildInitialQuests(
     definitions: readonly QuestDefinition[] | undefined,
   ): NonNullable<MutableGameSceneState["quests"]> {
-    return (definitions ?? []).map((definition) => ({
-      id: definition.id,
-      title: definition.title,
-      description: definition.description,
-      completed: false,
-      steps: definition.steps.map((step, index) => ({
-        id: step.id,
-        title: step.title,
-        description: step.description,
-        state: index === 0 ? "active" : "pending",
-      })),
-    })) as NonNullable<MutableGameSceneState["quests"]>;
+    const quests: NonNullable<MutableGameSceneState["quests"]> = (definitions ?? []).map(
+      (definition) => ({
+        id: definition.id,
+        title: definition.title,
+        description: definition.description,
+        completed: false,
+        steps: definition.steps.map((step, index) => ({
+          id: step.id,
+          title: step.title,
+          description: step.description,
+          state: index === 0 ? "active" : "pending",
+        })),
+      }),
+    );
+
+    return quests;
   }
 
   private triggerMatchesRequiredFlags(
@@ -631,14 +657,14 @@ export class GameLoopService {
 
     const scene = buildSessionSceneState(
       resolvedScene,
-      locale as GameLocale,
+      locale,
       seed,
       dialogueCatalog,
       publishedFlags,
       publishedQuests,
       publishedProject ? Array.from(publishedProject.assets.values()) : [],
     );
-    const mutableScene = scene as MutableGameSceneState;
+    const mutableScene: MutableGameSceneState = this.toMutable(scene);
     mutableScene.flags = this.buildInitialFlags(publishedFlags);
     mutableScene.quests = this.buildInitialQuests(publishedQuests);
     if (publishedTriggers.length > 0) {
@@ -652,7 +678,7 @@ export class GameLoopService {
       ownerSessionId,
       seed,
       locale,
-      scene,
+      scene: mutableScene,
       projectId: publishedProject ? projectId : undefined,
       releaseVersion: publishedProject?.publishedReleaseVersion ?? undefined,
       triggerDefinitions: publishedTriggers,
@@ -668,9 +694,7 @@ export class GameLoopService {
     if (!saved.ok) throw new Error(`Failed to create session: ${sessionId}`);
 
     this.ensureSessionMaps(sessionId);
-    const liveSession = (await this.enrichSessionParticipants(
-      saved.payload as Mutable<GameSession>,
-    )) as Mutable<GameSession>;
+    const liveSession = await this.enrichSessionParticipants(this.toMutable(saved.payload));
     this.liveSessions.set(sessionId, liveSession);
     this.lastPersistAtMs.set(sessionId, Date.now());
     this.chatWindow.set(sessionId, []);
@@ -1060,7 +1084,7 @@ export class GameLoopService {
           (persisted.payload.stateVersion > liveSession.stateVersion ||
             persisted.payload.updatedAtMs > liveSession.updatedAtMs)
         ) {
-          const refreshedSession = persisted.payload as Mutable<GameSession>;
+          const refreshedSession = this.toMutable(persisted.payload);
           await this.enrichSessionParticipants(refreshedSession);
           this.liveSessions.set(sessionId, refreshedSession);
           return { ok: true, payload: refreshedSession };
@@ -1075,7 +1099,7 @@ export class GameLoopService {
       return sessionResult;
     }
 
-    const mutableSession = sessionResult.payload as Mutable<GameSession>;
+    const mutableSession = this.toMutable(sessionResult.payload);
     await this.enrichSessionParticipants(mutableSession);
     this.liveSessions.set(sessionId, mutableSession);
     this.ensureSessionMaps(sessionId);
@@ -1171,7 +1195,7 @@ export class GameLoopService {
             error: String(restored.error),
           });
         } else if (restored.value.ok) {
-          this.liveSessions.set(sessionId, restored.value.payload as Mutable<GameSession>);
+          this.liveSessions.set(sessionId, this.toMutable(restored.value.payload));
         } else {
           logger.debug("game-loop.tick.restore-miss", {
             sessionId,
@@ -1230,9 +1254,7 @@ export class GameLoopService {
     actor: RuntimeActorEntity,
     npcId: string,
   ): Mutable<(typeof state.npcs)[number]> | null {
-    const target = state.npcs.find((candidate) => candidate.id === npcId) as
-      | Mutable<(typeof state.npcs)[number]>
-      | undefined;
+    const target = state.npcs.find((candidate) => candidate.id === npcId);
     if (!target) {
       return null;
     }
@@ -1274,18 +1296,18 @@ export class GameLoopService {
 
     let queue = this.commandQueue.get(sessionId);
     if (!queue) {
-      queue = [] as QueuedCommand[];
+      queue = [];
       this.commandQueue.set(sessionId, queue);
     }
 
     const nextSequence = (this.commandSeq.get(sessionId) ?? 0) + 1;
-    const safeCommand = {
+    const safeCommand: GameCommandEnvelope = {
       ...validation.data,
       sequenceId:
         validation.data.sequenceId && validation.data.sequenceId > 0
           ? validation.data.sequenceId
           : nextSequence,
-    } as GameCommandEnvelope;
+    };
     const effectiveLocale = this.normalizeLocale(sessionLocale, safeCommand.locale);
     const envelope = {
       ...safeCommand,
@@ -1430,7 +1452,7 @@ export class GameLoopService {
           actor.position,
           actor.bounds,
           state.npcs,
-        ) as Mutable<(typeof state.npcs)[0]> | null;
+        );
 
         if (interactable) {
           interactable.state = "talking";
@@ -1589,7 +1611,7 @@ export class GameLoopService {
                 nextActionState = "idle";
                 state.player.position = { x: 50, y: 50 }; // Basic revive/respawn mechanic
               } else {
-                state.combat = nextCombatState as Mutable<CombatEncounterState>;
+                state.combat = this.toMutable(nextCombatState);
                 nextActionState = "inCombat";
               }
             } else {
@@ -1620,9 +1642,7 @@ export class GameLoopService {
                 1,
               );
               if (removeResult.ok) {
-                state.inventory = structuredClone(
-                  removeResult.state,
-                ) as Mutable<PlayerInventoryState>;
+                state.inventory = this.toMutable(removeResult.state);
                 // Apply healing effects to active combatant if in combat
                 if (state.combat) {
                   const playerCombatant = state.combat.combatants.find((c) => c.isPlayer);
@@ -1659,9 +1679,7 @@ export class GameLoopService {
                 itemDef,
               );
               if (equipResult.ok) {
-                state.inventory = structuredClone(
-                  equipResult.state,
-                ) as Mutable<PlayerInventoryState>;
+                state.inventory = this.toMutable(equipResult.state);
               }
             }
           }
@@ -1670,8 +1688,7 @@ export class GameLoopService {
       } else if (commandType === "unequipItem" && cmd.slot) {
         commandApplied = true;
         if (state.inventory) {
-          const equippedItemId =
-            state.inventory.equipment[cmd.slot as keyof typeof state.inventory.equipment];
+          const equippedItemId = this.resolveEquippedItemId(state.inventory.equipment, cmd.slot);
           if (equippedItemId) {
             const itemDef = session.itemDefinitions?.find((d) => d.id === equippedItemId);
             if (itemDef) {
@@ -1680,9 +1697,7 @@ export class GameLoopService {
                 itemDef,
               );
               if (unequipResult.ok) {
-                state.inventory = structuredClone(
-                  unequipResult.state,
-                ) as Mutable<PlayerInventoryState>;
+                state.inventory = this.toMutable(unequipResult.state);
               }
             }
           }
@@ -1704,7 +1719,7 @@ export class GameLoopService {
                 { sceneId: state.sceneId },
               );
             } else {
-              state.cutscene = result.state as Mutable<CutscenePlaybackState>;
+              state.cutscene = this.toMutable(result.state);
               nextActionState = "inCutscene";
             }
           }
@@ -1725,7 +1740,7 @@ export class GameLoopService {
                 { sceneId: state.sceneId },
               );
             } else {
-              state.cutscene = result.state as Mutable<CutscenePlaybackState>;
+              state.cutscene = this.toMutable(result.state);
               nextActionState = "inCutscene";
             }
           }
@@ -1763,7 +1778,7 @@ export class GameLoopService {
             { sceneId: state.sceneId },
           );
         } else {
-          state.cutscene = result.state as Mutable<CutscenePlaybackState>;
+          state.cutscene = this.toMutable(result.state);
           nextActionState = "inCutscene";
         }
       } else {

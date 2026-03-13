@@ -193,12 +193,12 @@ export const renderLayout = (input: LayoutInput): string => {
     
     <!-- AI Chat Wrapper (Right Drawer) -->
     <div class="drawer drawer-end">
-      <input id="ai-chat-drawer" type="checkbox" class="drawer-toggle" />
+      <input id="ai-chat-drawer" type="checkbox" class="drawer-toggle" aria-label="${escapeHtml(messages.common.openAiAssistant)}" />
       <div class="drawer-content flex flex-col min-h-screen relative">
         
         <!-- Main Nav Wrapper (Left Drawer) -->
         <div class="drawer lg:drawer-open flex-1">
-          <input id="main-nav-drawer" type="checkbox" class="drawer-toggle" />
+          <input id="main-nav-drawer" type="checkbox" class="drawer-toggle" aria-label="${escapeHtml(messages.common.openMenu)}" />
           <div class="drawer-content flex flex-col w-full max-w-[100vw]">
             
             <!-- Mobile Top Bar & Desktop Breadcrumbs -->

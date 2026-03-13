@@ -150,16 +150,16 @@ export class SceneEngine {
   /**
    * Finds the closest NPC within an interaction radius.
    */
-  public findInteractableNpc(
+  public findInteractableNpc<TNpc extends NpcState = NpcState>(
     playerPos: { x: number; y: number },
     playerBounds: CollisionMask,
-    npcs: readonly NpcState[],
+    npcs: readonly TNpc[],
     radius?: number,
-  ): NpcState | null {
+  ): TNpc | null {
     const px = playerPos.x + playerBounds.x + playerBounds.width / 2;
     const py = playerPos.y + playerBounds.y + playerBounds.height / 2;
 
-    let closest: NpcState | null = null;
+    let closest: TNpc | null = null;
     let minDistance = Number.POSITIVE_INFINITY;
 
     for (const npc of npcs) {

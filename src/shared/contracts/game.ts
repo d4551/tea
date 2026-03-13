@@ -345,7 +345,7 @@ export interface DialogueGraphEdge {
 export interface DialogueGraphNode {
   /** Stable node identifier. */
   readonly id: string;
-  /** Localized dialogue line key or literal string. */
+  /** Localized dialogue line key or translated fallback text resource reference. */
   readonly line: string;
   /** Optional next edges available from this node. */
   readonly edges: readonly DialogueGraphEdge[];
@@ -2092,8 +2092,8 @@ export const validateGameRealtimeFrame = (
     payload.participants === undefined
       ? undefined
       : Array.isArray(payload.participants)
-        ? payload.participants.filter(
-            (value): value is GameSessionParticipant => isGameSessionParticipant(value),
+        ? payload.participants.filter((value): value is GameSessionParticipant =>
+            isGameSessionParticipant(value),
           )
         : undefined;
   const participantRole =
@@ -2106,7 +2106,9 @@ export const validateGameRealtimeFrame = (
     payload.coPlayers === undefined
       ? undefined
       : Array.isArray(payload.coPlayers)
-        ? payload.coPlayers.filter((value): value is GameParticipantPresence => isGameParticipantPresence(value))
+        ? payload.coPlayers.filter((value): value is GameParticipantPresence =>
+            isGameParticipantPresence(value),
+          )
         : undefined;
 
   return {
@@ -2185,9 +2187,7 @@ export const validateGameCommand = (
 
   if (rawType === "move") {
     const requestedDirection = typeof record.direction === "string" ? record.direction : "";
-    const direction = isDirectionValue(requestedDirection)
-      ? requestedDirection
-      : null;
+    const direction = isDirectionValue(requestedDirection) ? requestedDirection : null;
 
     if (direction === null) {
       return {
@@ -2901,7 +2901,10 @@ export const parsePlayerProgressV2 = (
     interactionsValue !== null &&
     !Array.isArray(interactionsValue)
       ? interactionsValue
-      : parseJson(typeof interactionsValue === "string" ? interactionsValue : "{}", emptyInteractions);
+      : parseJson(
+          typeof interactionsValue === "string" ? interactionsValue : "{}",
+          emptyInteractions,
+        );
 
   return {
     xp: typeof xp === "number" && Number.isFinite(xp) ? Math.max(0, Math.trunc(xp)) : 0,

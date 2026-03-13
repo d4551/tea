@@ -382,13 +382,7 @@ export const renderBuilderDashboard = (
     "webgpuRenderer",
     "aiOnnxGpu",
   ].map((key) =>
-    renderCapabilityCard(
-      messages,
-      locale,
-      projectId,
-      findCapability(stats.readiness, key),
-      stats,
-    ),
+    renderCapabilityCard(messages, locale, projectId, findCapability(stats.readiness, key), stats),
   );
 
   return `

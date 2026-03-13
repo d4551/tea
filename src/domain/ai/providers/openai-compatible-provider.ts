@@ -130,9 +130,29 @@ const readString = (value: unknown): string | null => (typeof value === "string"
 const readFiniteNumber = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
 
-const normalizeMessageContent = (
-  value: string | readonly { readonly type?: string; readonly text?: string }[],
-): string => {
+type ChatMessageContent = string | readonly { readonly type?: string; readonly text?: string }[];
+const isChatMessageContentEntry = (
+  value: unknown,
+): value is { readonly type?: string; readonly text?: string } => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  if (value.type !== undefined && typeof value.type !== "string") {
+    return false;
+  }
+
+  if (value.text !== undefined && typeof value.text !== "string") {
+    return false;
+  }
+
+  return true;
+};
+
+const isChatMessageContent = (value: unknown): value is ChatMessageContent =>
+  typeof value === "string" || (Array.isArray(value) && value.every(isChatMessageContentEntry));
+
+const normalizeMessageContent = (value: ChatMessageContent): string => {
   if (typeof value === "string") {
     return value;
   }
@@ -210,16 +230,14 @@ const parseChatCompletionResponse = (
 
       const role = readString(entry.message.role);
       const rawContent = entry.message.content;
-      if (!role || (typeof rawContent !== "string" && !Array.isArray(rawContent))) {
+      if (!role || !isChatMessageContent(rawContent)) {
         return null;
       }
 
       return {
         message: {
           role,
-          content: rawContent as
-            | string
-            | readonly { readonly type?: string; readonly text?: string }[],
+          content: rawContent,
         },
       };
     })
@@ -321,12 +339,7 @@ const parseChatCompletionChunk = (value: unknown): OpenAiCompatibleChatCompletio
 
     const delta = isRecord(entry.delta)
       ? {
-          content:
-            typeof entry.delta.content === "string" || Array.isArray(entry.delta.content)
-              ? (entry.delta.content as
-                  | string
-                  | readonly { readonly type?: string; readonly text?: string }[])
-              : undefined,
+          content: isChatMessageContent(entry.delta.content) ? entry.delta.content : undefined,
         }
       : undefined;
 
@@ -356,7 +369,7 @@ const normalizeModerationLabel = (value: string): string =>
     .toUpperCase();
 
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer =>
-  bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  bytes.slice().buffer;
 
 const buildAuthHeaders = (apiKey: string): HeadersInit => ({
   ...(apiKey.length > 0 ? { authorization: `Bearer ${apiKey}` } : {}),

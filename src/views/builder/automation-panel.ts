@@ -146,7 +146,7 @@ export const renderAutomationPanel = (
         <h2 class="card-title text-2xl">${escapeHtml(messages.builder.createAutomationRun)}</h2>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.automationGoalLabel)}</legend>
-          <textarea name="goal" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.automationGoalPlaceholder)}" aria-required="true" required></textarea>
+          <textarea name="goal" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.automationGoalPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.automationGoalLabel)}"></textarea>
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.automationStepsJsonLabel)}</legend>
@@ -156,6 +156,7 @@ export const renderAutomationPanel = (
             rows="8"
             placeholder="${escapeHtml(messages.builder.automationStepsJsonPlaceholder)}"
             aria-describedby="automation-steps-json-help"
+            aria-label="${escapeHtml(messages.builder.automationStepsJsonLabel)}"
           ></textarea>
           <p id="automation-steps-json-help" class="label text-xs text-base-content/60">
             ${escapeHtml(messages.builder.automationStepsJsonHelp)}

@@ -244,7 +244,10 @@ export const createGameClientRenderRuntime = async ({
       antialias: false,
     });
 
-    const pixiCanvas = pixiRenderer.canvas as HTMLCanvasElement;
+    const pixiCanvas = pixiRenderer.canvas;
+    if (!(pixiCanvas instanceof HTMLCanvasElement)) {
+      throw new Error("Pixi renderer did not expose a canvas element.");
+    }
     pixiCanvas.classList.add("absolute", "inset-0", "w-full", "h-full");
     wrapper.appendChild(pixiCanvas);
   } else {
@@ -254,7 +257,17 @@ export const createGameClientRenderRuntime = async ({
 
     pixiRenderer = await autoDetectRenderer({
       preference: "webgl",
-      context: threeLayer.getContext() as WebGL2RenderingContext,
+      context: (() => {
+        const webglContext = threeLayer.getContext();
+        if (
+          webglContext instanceof WebGL2RenderingContext ||
+          webglContext instanceof WebGLRenderingContext
+        ) {
+          return webglContext;
+        }
+
+        throw new Error("Three.js layer did not expose a WebGL rendering context.");
+      })(),
       width: wrapper.clientWidth,
       height: wrapper.clientHeight,
       clearBeforeRender: false,
@@ -281,7 +294,8 @@ export const createGameClientRenderRuntime = async ({
       return cached;
     }
 
-    const texture = (await Assets.load(assetUrl)) as Texture;
+    const loadedTexture = await Assets.load(assetUrl);
+    const texture = loadedTexture instanceof Texture ? loadedTexture : Texture.EMPTY;
     loadedTextures.set(assetUrl, texture);
     if (loadedTextures.size > MAX_TEXTURE_CACHE_SIZE) {
       evictLruEntry(loadedTextures);

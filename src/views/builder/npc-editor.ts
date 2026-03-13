@@ -130,15 +130,15 @@ export const renderNpcEditor = (
             <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.npcCreateSceneLabel)}</legend>
-              <select name="sceneId" class="select w-full">${sceneOptions}</select>
+              <select name="sceneId" class="select w-full" aria-label="${escapeHtml(messages.builder.sceneId)}">${sceneOptions}</select>
             </fieldset>
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.npcName)}</legend>
-              <input name="characterKey" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.npcCreateKeyPlaceholder)}" aria-required="true" required />
+              <input name="characterKey" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.npcCreateKeyPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.npcCreateKeyPlaceholder)}" />
             </fieldset>
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.npcLabel)}</legend>
-              <input name="labelKey" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.npcCreateLabelPlaceholder)}" aria-required="true" required />
+              <input name="labelKey" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.npcCreateLabelPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.labelField)}" />
             </fieldset>
             <div class="flex items-center gap-2">
               <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.addNpc)}">${escapeHtml(messages.builder.addNpc)}</button>
@@ -245,47 +245,47 @@ export const renderNpcDetail = (
         >
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.npcLabel)}</legend>
-            <input name="labelKey" type="text" class="input w-full" value="${escapeHtml(npc.labelKey)}" aria-required="true" required />
+            <input name="labelKey" type="text" class="input w-full" value="${escapeHtml(npc.labelKey)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.labelField)}" />
           </fieldset>
 
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.npcPosition)}</legend>
             <label class="label" for="npc-x">${escapeHtml(messages.builder.xLabel)}</label>
-            <input id="npc-x" name="x" type="number" class="input w-full" value="${npc.x}" aria-required="true" required />
+            <input id="npc-x" name="x" type="number" class="input w-full" value="${npc.x}" aria-required="true" required aria-label="${escapeHtml(messages.builder.xLabel)}" />
             <label class="label" for="npc-y">${escapeHtml(messages.builder.yLabel)}</label>
-            <input id="npc-y" name="y" type="number" class="input w-full" value="${npc.y}" aria-required="true" required />
+            <input id="npc-y" name="y" type="number" class="input w-full" value="${npc.y}" aria-required="true" required aria-label="${escapeHtml(messages.builder.yLabel)}" />
           </fieldset>
 
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.geometry)}</legend>
             <label class="label" for="npc-interact-radius">${escapeHtml(messages.builder.interactRadius)}</label>
-            <input id="npc-interact-radius" name="interactRadius" type="number" class="input w-full" value="${npc.interactRadius}" min="1" aria-required="true" required />
+            <input id="npc-interact-radius" name="interactRadius" type="number" class="input w-full" value="${npc.interactRadius}" min="1" aria-required="true" required aria-label="${escapeHtml(messages.builder.interactRadius)}" />
             <label class="label" for="npc-wander-radius">${escapeHtml(messages.builder.wanderRadius)}</label>
-            <input id="npc-wander-radius" name="wanderRadius" type="number" class="input w-full" value="${npc.ai.wanderRadius}" min="0" aria-required="true" required />
+            <input id="npc-wander-radius" name="wanderRadius" type="number" class="input w-full" value="${npc.ai.wanderRadius}" min="0" aria-required="true" required aria-label="${escapeHtml(messages.builder.wanderRadius)}" />
           </fieldset>
 
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.wanderSpeed)}</legend>
             <label class="label" for="npc-wander-speed">${escapeHtml(messages.builder.wanderSpeed)}</label>
-            <input id="npc-wander-speed" name="wanderSpeed" type="number" class="input w-full" value="${npc.ai.wanderSpeed}" min="0" step="0.1" aria-required="true" required />
+            <input id="npc-wander-speed" name="wanderSpeed" type="number" class="input w-full" value="${npc.ai.wanderSpeed}" min="0" step="0.1" aria-required="true" required aria-label="${escapeHtml(messages.builder.wanderSpeed)}" />
             <label class="label" for="npc-idle-min">${escapeHtml(messages.builder.idlePauseMinMs)}</label>
-            <input id="npc-idle-min" name="idlePauseMinMs" type="number" class="input w-full" value="${npc.ai.idlePauseMs[0]}" min="0" step="1" aria-required="true" required />
+            <input id="npc-idle-min" name="idlePauseMinMs" type="number" class="input w-full" value="${npc.ai.idlePauseMs[0]}" min="0" step="1" aria-required="true" required aria-label="${escapeHtml(messages.builder.idlePauseMinMs)}" />
             <label class="label" for="npc-idle-max">${escapeHtml(messages.builder.idlePauseMaxMs)}</label>
-            <input id="npc-idle-max" name="idlePauseMaxMs" type="number" class="input w-full" value="${npc.ai.idlePauseMs[1]}" min="0" step="1" aria-required="true" required />
+            <input id="npc-idle-max" name="idlePauseMaxMs" type="number" class="input w-full" value="${npc.ai.idlePauseMs[1]}" min="0" step="1" aria-required="true" required aria-label="${escapeHtml(messages.builder.idlePauseMaxMs)}" />
           </fieldset>
 
           <fieldset class="fieldset lg:col-span-2">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogue)}</legend>
             <label class="label" for="npc-dialogue-keys">${escapeHtml(messages.builder.dialogueKey)}</label>
-            <textarea id="npc-dialogue-keys" name="dialogueKeys" class="textarea w-full" rows="3">${escapeHtml(dialogueKeys)}</textarea>
+            <textarea id="npc-dialogue-keys" name="dialogueKeys" class="textarea w-full" rows="3" aria-label="${escapeHtml(messages.builder.dialogueSearchLabel)}">${escapeHtml(dialogueKeys)}</textarea>
             <div class="grid gap-4 lg:grid-cols-2">
               <div>
                 <label class="label" for="npc-greet-line-key">${escapeHtml(messages.builder.greetLineKey)}</label>
-                <input id="npc-greet-line-key" name="greetLineKey" type="text" class="input w-full" value="${escapeHtml(npc.ai.greetLineKey)}" />
+                <input id="npc-greet-line-key" name="greetLineKey" type="text" class="input w-full" value="${escapeHtml(npc.ai.greetLineKey)}" aria-label="${escapeHtml(messages.builder.greetLineKey)}" />
               </div>
               <div>
                 <label class="label" for="npc-greet-enabled">${escapeHtml(messages.builder.greetOnApproach)}</label>
-                <select id="npc-greet-enabled" name="greetOnApproach" class="select w-full">
+                <select id="npc-greet-enabled" name="greetOnApproach" class="select w-full" aria-label="${escapeHtml(messages.builder.greetOnApproach)}">
                   <option value="true"${npc.ai.greetOnApproach ? " selected" : ""}>${escapeHtml(getBooleanLabel(messages, true))}</option>
                   <option value="false"${npc.ai.greetOnApproach ? "" : " selected"}>${escapeHtml(getBooleanLabel(messages, false))}</option>
                 </select>

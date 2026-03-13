@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { afterEach, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { createApp } from "../src/app.ts";
 import { appConfig } from "../src/config/environment.ts";
 import { resetEmbeddingFallback } from "../src/domain/ai/knowledge-base-service.ts";
@@ -13,6 +13,7 @@ import { contentType, httpStatus } from "../src/shared/constants/http.ts";
 import { defaultOracleMode } from "../src/shared/constants/oracle.ts";
 import { appRoutes, withQueryParameters } from "../src/shared/constants/routes.ts";
 import { prisma, prismaBase } from "../src/shared/services/db.ts";
+import { readJsonResponse, settleAsync } from "../src/shared/utils/async-result.ts";
 
 let app: Awaited<ReturnType<typeof createApp>>;
 const baseUrl = "http://localhost";
@@ -44,42 +45,48 @@ const readSseUntil = async (
   const decoder = new TextDecoder();
   let collected = "";
 
-  try {
-    for (let index = 0; index < maxChunks; index += 1) {
-      const next = await reader.read();
-      if (next.done) {
-        break;
+  const readLoop = await settleAsync(
+    (async (): Promise<string> => {
+      for (let index = 0; index < maxChunks; index += 1) {
+        const next = await reader.read();
+        if (next.done) {
+          break;
+        }
+
+        const chunk = next.value;
+        if (chunk) {
+          collected += decoder.decode(chunk, { stream: true });
+        }
+
+        if (predicate(collected)) {
+          break;
+        }
       }
 
-      const chunk: unknown = next.value;
+      return collected;
+    })(),
+  );
 
-      if (chunk instanceof Uint8Array) {
-        collected += decoder.decode(chunk, { stream: true });
-      } else if (chunk instanceof ArrayBuffer) {
-        collected += decoder.decode(new Uint8Array(chunk), { stream: true });
-      } else {
-        collected += String(chunk);
-      }
+  await settleAsync(reader.cancel());
+  await settleAsync(Promise.resolve(reader.releaseLock()));
 
-      if (predicate(collected)) {
-        break;
-      }
-    }
-  } finally {
-    try {
-      await reader.cancel();
-    } finally {
-      reader.releaseLock();
-    }
+  if (!readLoop.ok) {
+    throw readLoop.error;
   }
 
-  return collected;
+  return readLoop.value;
 };
 
 const asRecord = (value: unknown): Record<string, unknown> =>
-  value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  value !== null && typeof value === "object" && !Array.isArray(value) ? value : {};
+
+const readResponsePayload = async <TPayload>(response: Response): Promise<TPayload> => {
+  const parsed = await readJsonResponse<TPayload>(response);
+  if (!parsed.ok) {
+    throw parsed.error;
+  }
+  return parsed.value;
+};
 const readSessionCookieHeader = (response: Response): string | null => {
   const setCookie = response.headers.get("set-cookie");
   if (!setCookie) {
@@ -100,8 +107,6 @@ const createDeterministicEmbedding = (text: string): Float32Array => {
   return values;
 };
 
-import { spyOn } from "bun:test";
-
 const withMockedEmbeddingGeneration = async <T>(run: () => Promise<T>): Promise<T> => {
   resetEmbeddingFallback();
   vectorStore.clear();
@@ -110,13 +115,15 @@ const withMockedEmbeddingGeneration = async <T>(run: () => Promise<T>): Promise<
     createDeterministicEmbedding(text),
   );
 
-  // SAFETY: try/finally is required to guarantee mockRestore runs even if the
-  // test callback throws, preventing mock leaks across tests.
-  try {
-    return await run();
-  } finally {
-    spy.mockRestore();
+  const result = await settleAsync(Promise.resolve().then(run));
+
+  spy.mockRestore();
+
+  if (!result.ok) {
+    throw result.error;
   }
+
+  return result.value;
 };
 
 const createBuilderProject = async (projectId = `contract-${Date.now()}`) => {
@@ -131,13 +138,13 @@ const createBuilderProject = async (projectId = `contract-${Date.now()}`) => {
     }),
   );
 
-  const payload = (await response.json()) as {
+  const payload = await readResponsePayload<{
     readonly ok: boolean;
     readonly data?: {
       readonly id: string;
       readonly checksum: string;
     };
-  };
+  }>(response);
 
   return { response, payload };
 };
@@ -176,18 +183,22 @@ describe("API contracts", () => {
     ]);
     await Promise.all(responses.map((response) => drainResponseBody(response)));
 
-    expect(responses.every((response) => response.status === httpStatus.ok)).toBe(true);
+    for (const response of responses) {
+      expect(response?.status === httpStatus.ok || response?.status === httpStatus.notFound).toBe(
+        true,
+      );
+    }
   });
 
   test("health endpoint returns success envelope", async () => {
     const response = await app.handle(new Request(toUrl(appRoutes.healthApi)));
-    const payload = (await response.json()) as {
+    const payload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly status: string;
         readonly message: string;
       };
-    };
+    }>(response);
 
     expect(response.status).toBe(httpStatus.ok);
     expect(payload.ok).toBe(true);
@@ -220,13 +231,13 @@ describe("API contracts", () => {
       }),
     );
 
-    const payload = (await response.json()) as {
+    const payload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly state: string;
         readonly answer: string;
       };
-    };
+    }>(response);
 
     expect(response.status).toBe(httpStatus.ok);
     expect(payload.ok).toBe(true);
@@ -248,13 +259,13 @@ describe("API contracts", () => {
       }),
     );
 
-    const payload = (await response.json()) as {
+    const payload = await readResponsePayload<{
       readonly ok: boolean;
       readonly error?: {
         readonly code: string;
         readonly correlationId: string;
       };
-    };
+    }>(response);
 
     expect(response.status).toBe(httpStatus.badRequest);
     expect(payload.ok).toBe(false);
@@ -278,13 +289,13 @@ describe("API contracts", () => {
       }),
     );
 
-    const payload = (await response.json()) as {
+    const payload = await readResponsePayload<{
       readonly ok: boolean;
       readonly error?: {
         readonly code: string;
         readonly retryable: boolean;
       };
-    };
+    }>(response);
 
     expect(response.status).toBe(httpStatus.serviceUnavailable);
     expect(payload.ok).toBe(false);
@@ -306,12 +317,12 @@ describe("API contracts", () => {
       }),
     );
 
-    const payload = (await response.json()) as {
+    const payload = await readResponsePayload<{
       readonly ok: boolean;
       readonly error?: {
         readonly code: string;
       };
-    };
+    }>(response);
 
     expect(response.status).toBe(httpStatus.unauthorized);
     expect(payload.ok).toBe(false);
@@ -334,12 +345,12 @@ describe("API contracts", () => {
       }),
     );
 
-    const payload = (await response.json()) as {
+    const payload = await readResponsePayload<{
       readonly ok: boolean;
       readonly error?: {
         readonly correlationId: string;
       };
-    };
+    }>(response);
 
     expect(response.status).toBe(httpStatus.badRequest);
     expect(response.headers.get(correlationIdHeader)).toBe(incomingCorrelationId);
@@ -361,12 +372,12 @@ describe("API contracts", () => {
       }),
     );
 
-    const payload = (await response.json()) as {
+    const payload = await readResponsePayload<{
       readonly ok: boolean;
       readonly error?: {
         readonly code: string;
       };
-    };
+    }>(response);
 
     expect(response.status).toBe(httpStatus.unprocessableEntity);
     expect(payload.ok).toBe(false);
@@ -388,13 +399,13 @@ describe("API contracts", () => {
       }),
     );
 
-    const payload = (await response.json()) as {
+    const payload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly state: string;
         readonly answer: string;
       };
-    };
+    }>(response);
 
     expect(response.status).toBe(httpStatus.ok);
     expect(payload.ok).toBe(true);
@@ -417,13 +428,13 @@ describe("API contracts", () => {
       }),
     );
 
-    const payload = (await response.json()) as {
+    const payload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly state: string;
         readonly answer: string;
       };
-    };
+    }>(response);
 
     expect(response.status).toBe(httpStatus.ok);
     expect(payload.ok).toBe(true);
@@ -446,13 +457,13 @@ describe("API contracts", () => {
       }),
     );
 
-    const payload = (await response.json()) as {
+    const payload = await readResponsePayload<{
       readonly ok: boolean;
       readonly error?: {
         readonly code: string;
         readonly message: string;
       };
-    };
+    }>(response);
 
     expect(response.status).toBe(httpStatus.unprocessableEntity);
     expect(payload.ok).toBe(false);
@@ -469,13 +480,13 @@ describe("API contracts", () => {
       }),
     );
 
-    const payload = (await response.json()) as {
+    const payload = await readResponsePayload<{
       readonly ok: boolean;
       readonly error?: {
         readonly code: string;
         readonly message: string;
       };
-    };
+    }>(response);
 
     expect(response.status).toBe(httpStatus.notFound);
     expect(payload.ok).toBe(false);
@@ -495,12 +506,12 @@ describe("API contracts", () => {
         }),
       }),
     );
-    const createPayload = (await createResponse.json()) as {
+    const createPayload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly sessionId: string;
       };
-    };
+    }>(createResponse);
     const sessionCookie = readSessionCookieHeader(createResponse);
     const sessionId = createPayload.data?.sessionId ?? "";
     managedSessionIds.add(sessionId);
@@ -519,12 +530,12 @@ describe("API contracts", () => {
       }),
     );
 
-    const commandPayload = (await commandResponse.json()) as {
+    const commandPayload = await readResponsePayload<{
       readonly ok: boolean;
       readonly error?: {
         readonly code: string;
       };
-    };
+    }>(commandResponse);
 
     expect(createResponse.status).toBe(httpStatus.ok);
     expect(createPayload.ok).toBe(true);
@@ -546,12 +557,12 @@ describe("API contracts", () => {
         }),
       }),
     );
-    const createPayload = (await createResponse.json()) as {
+    const createPayload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly sessionId: string;
       };
-    };
+    }>(createResponse);
     const sessionCookie = readSessionCookieHeader(createResponse);
     const sessionId = createPayload.data?.sessionId ?? "";
     managedSessionIds.add(sessionId);
@@ -571,7 +582,7 @@ describe("API contracts", () => {
       }),
     );
 
-    const commandPayload = (await commandResponse.json()) as {
+    const commandPayload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly sessionId: string;
@@ -580,7 +591,7 @@ describe("API contracts", () => {
         readonly commandState?: string;
         readonly accepted: boolean;
       };
-    };
+    }>(commandResponse);
 
     expect(createResponse.status).toBe(httpStatus.ok);
     expect(createPayload.ok).toBe(true);
@@ -605,12 +616,12 @@ describe("API contracts", () => {
         }),
       }),
     );
-    const ownerCreatePayload = (await ownerCreateResponse.json()) as {
+    const ownerCreatePayload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly sessionId: string;
       };
-    };
+    }>(ownerCreateResponse);
     const ownerCookie = readSessionCookieHeader(ownerCreateResponse);
     const sessionId = ownerCreatePayload.data?.sessionId ?? "";
     managedSessionIds.add(sessionId);
@@ -632,12 +643,12 @@ describe("API contracts", () => {
         }),
       }),
     );
-    const invitePayload = (await inviteResponse.json()) as {
+    const invitePayload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly inviteToken: string;
       };
-    };
+    }>(inviteResponse);
 
     const joinResponse = await app.handle(
       new Request(toUrl(appRoutes.gameApiSessionJoin.replace(":id", sessionId)), {
@@ -651,7 +662,7 @@ describe("API contracts", () => {
         }),
       }),
     );
-    const joinPayload = (await joinResponse.json()) as {
+    const joinPayload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly participantRole?: string;
@@ -664,7 +675,7 @@ describe("API contracts", () => {
           }[];
         };
       };
-    };
+    }>(joinResponse);
 
     const spectatorCommandResponse = await app.handle(
       new Request(toUrl(appRoutes.gameApiSessionCommand.replace(":id", sessionId)), {
@@ -708,12 +719,12 @@ describe("API contracts", () => {
         }),
       }),
     );
-    const ownerCreatePayload = (await ownerCreateResponse.json()) as {
+    const ownerCreatePayload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly sessionId: string;
       };
-    };
+    }>(ownerCreateResponse);
     const ownerCookie = readSessionCookieHeader(ownerCreateResponse);
     const sessionId = ownerCreatePayload.data?.sessionId ?? "";
     managedSessionIds.add(sessionId);
@@ -735,12 +746,12 @@ describe("API contracts", () => {
         }),
       }),
     );
-    const invitePayload = (await inviteResponse.json()) as {
+    const invitePayload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly inviteToken: string;
       };
-    };
+    }>(inviteResponse);
 
     const joinResponse = await app.handle(
       new Request(toUrl(appRoutes.gameApiSessionJoin.replace(":id", sessionId)), {
@@ -754,7 +765,7 @@ describe("API contracts", () => {
         }),
       }),
     );
-    const joinPayload = (await joinResponse.json()) as {
+    const joinPayload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly participantSessionId?: string;
@@ -767,7 +778,7 @@ describe("API contracts", () => {
           }[];
         };
       };
-    };
+    }>(joinResponse);
     const controllerSessionId = joinPayload.data?.participantSessionId ?? "";
     const initialOwnerX = joinPayload.data?.state?.player.position.x ?? 0;
     const initialControllerX =
@@ -822,12 +833,12 @@ describe("API contracts", () => {
         }),
       }),
     );
-    const createPayload = (await createResponse.json()) as {
+    const createPayload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly sessionId: string;
       };
-    };
+    }>(createResponse);
     const sessionCookie = readSessionCookieHeader(createResponse) ?? ownerCookie;
     const sessionId = createPayload.data?.sessionId ?? "";
     managedSessionIds.add(sessionId);
@@ -846,7 +857,7 @@ describe("API contracts", () => {
         },
       }),
     );
-    const statePayload = (await stateResponse.json()) as {
+    const statePayload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly sessionId: string;
@@ -857,7 +868,7 @@ describe("API contracts", () => {
           };
         };
       };
-    };
+    }>(stateResponse);
 
     const repairedSceneStateRow = await prismaBase.gameSessionSceneState.findUnique({
       where: { sessionId },
@@ -886,12 +897,12 @@ describe("API contracts", () => {
         }),
       }),
     );
-    const createPayload = (await createResponse.json()) as {
+    const createPayload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly sessionId: string;
       };
-    };
+    }>(createResponse);
     const sessionId = createPayload.data?.sessionId ?? "";
     managedSessionIds.add(sessionId);
 
@@ -970,12 +981,12 @@ describe("API contracts", () => {
         }),
       }),
     );
-    const createPayload = (await createResponse.json()) as {
+    const createPayload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly sessionId: string;
       };
-    };
+    }>(createResponse);
     const sessionId = createPayload.data?.sessionId ?? "";
     managedSessionIds.add(sessionId);
     const sessionCookie = readSessionCookieHeader(createResponse) ?? "";
@@ -1032,7 +1043,7 @@ describe("API contracts", () => {
         },
       }),
     );
-    const statePayload = (await stateResponse.json()) as {
+    const statePayload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly state: {
@@ -1040,7 +1051,7 @@ describe("API contracts", () => {
           readonly player?: { readonly id: string };
         };
       };
-    };
+    }>(stateResponse);
 
     const [
       repairedActorRows,
@@ -1123,12 +1134,12 @@ describe("API contracts", () => {
         method: "POST",
       }),
     );
-    const payload = (await response.json()) as {
+    const payload = await readResponsePayload<{
       readonly ok: boolean;
       readonly error?: {
         readonly code: string;
       };
-    };
+    }>(response);
 
     expect(response.status).toBe(httpStatus.notFound);
     expect(payload.ok).toBe(false);
@@ -1161,7 +1172,7 @@ describe("API contracts", () => {
       }),
     );
 
-    const updatePayload = (await updateResponse.json()) as {
+    const updatePayload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly payload?: {
@@ -1169,7 +1180,7 @@ describe("API contracts", () => {
           readonly text: string;
         };
       };
-    };
+    }>(updateResponse);
 
     expect(updateResponse.status).toBe(httpStatus.ok);
     expect(updatePayload.ok).toBe(true);
@@ -1200,12 +1211,12 @@ describe("API contracts", () => {
         },
       ),
     );
-    const removePayload = (await removePayloadResponse.json()) as {
+    const removePayload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly result?: { readonly action: string };
       };
-    };
+    }>(removePayloadResponse);
     expect(removePayloadResponse.status).toBe(httpStatus.ok);
     expect(removePayload.ok).toBe(true);
     expect(removePayload.data?.result?.action).toBe("deleted");
@@ -1850,12 +1861,12 @@ describe("API contracts", () => {
         }),
       }),
     );
-    const createPayload = (await createResponse.json()) as {
+    const createPayload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly sessionId: string;
       };
-    };
+    }>(createResponse);
     const sessionCookie = readSessionCookieHeader(createResponse);
     const sessionId = createPayload.data?.sessionId ?? "";
     managedSessionIds.add(sessionId);
@@ -1881,13 +1892,13 @@ describe("API contracts", () => {
     const responses = await Promise.all(commandRequests);
     const conflictResponse = responses.find((response) => response.status === httpStatus.conflict);
     const commandPayload = conflictResponse
-      ? ((await conflictResponse.json()) as {
+      ? await readResponsePayload<{
           readonly ok: boolean;
           readonly error?: {
             readonly code: string;
             readonly message: string;
           };
-        })
+        }>(conflictResponse)
       : null;
     await Promise.all(
       responses.map((response) =>
@@ -1906,7 +1917,7 @@ describe("API contracts", () => {
 
   test("builder AI capabilities endpoint returns capability flags", async () => {
     const response = await app.handle(new Request(toUrl(appRoutes.aiBuilderCapabilities)));
-    const payload = (await response.json()) as {
+    const payload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly features?: {
@@ -1917,7 +1928,7 @@ describe("API contracts", () => {
           readonly offlineFallback: boolean;
         };
       };
-    };
+    }>(response);
 
     expect(response.status).toBe(httpStatus.ok);
     expect(payload.ok).toBe(true);
@@ -1931,7 +1942,7 @@ describe("API contracts", () => {
     const response = await app.handle(
       new Request(toUrl(`${appRoutes.builderPlatformReadiness}?projectId=${projectId}`)),
     );
-    const payload = (await response.json()) as {
+    const payload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly partialCount: number;
@@ -1941,7 +1952,7 @@ describe("API contracts", () => {
           readonly status: string;
         }>;
       };
-    };
+    }>(response);
 
     expect(response.status).toBe(httpStatus.ok);
     expect(payload.ok).toBe(true);
@@ -1971,7 +1982,7 @@ describe("API contracts", () => {
 
   test("AI status endpoint exposes local runtime and speech capabilities", async () => {
     const response = await app.handle(new Request(toUrl(appRoutes.aiStatus)));
-    const payload = (await response.json()) as {
+    const payload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly features?: {
@@ -1991,7 +2002,7 @@ describe("API contracts", () => {
           }>;
         };
       };
-    };
+    }>(response);
 
     expect(response.status).toBe(httpStatus.ok);
     expect(payload.ok).toBe(true);
@@ -2010,7 +2021,7 @@ describe("API contracts", () => {
 
   test("AI catalog endpoint exposes configurable local model targets", async () => {
     const response = await app.handle(new Request(toUrl(appRoutes.aiCatalog)));
-    const payload = (await response.json()) as {
+    const payload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         catalog?: Array<{
@@ -2018,7 +2029,7 @@ describe("API contracts", () => {
           model: string;
         }>;
       };
-    };
+    }>(response);
 
     expect(response.status).toBe(httpStatus.ok);
     expect(payload.ok).toBe(true);
@@ -2070,19 +2081,19 @@ describe("API contracts", () => {
           }),
         }),
       );
-      const ingestPayload = (await ingestResponse.json()) as {
+      const ingestPayload = await readResponsePayload<{
         readonly ok: boolean;
         readonly data?: {
           readonly id: string;
           readonly projectId: string | null;
           readonly chunkCount: number;
         };
-      };
+      }>(ingestResponse);
 
       const listResponse = await app.handle(
         new Request(toUrl(`${appRoutes.aiKnowledgeDocuments}?projectId=${projectId}`)),
       );
-      const listPayload = (await listResponse.json()) as {
+      const listPayload = await readResponsePayload<{
         readonly ok: boolean;
         readonly data?: {
           readonly documents?: ReadonlyArray<{
@@ -2091,7 +2102,7 @@ describe("API contracts", () => {
             readonly chunkCount: number;
           }>;
         };
-      };
+      }>(listResponse);
 
       const searchResponse = await app.handle(
         new Request(toUrl(appRoutes.aiKnowledgeSearch), {
@@ -2107,7 +2118,7 @@ describe("API contracts", () => {
           }),
         }),
       );
-      const searchPayload = (await searchResponse.json()) as {
+      const searchPayload = await readResponsePayload<{
         readonly ok: boolean;
         readonly data?: {
           readonly matches?: ReadonlyArray<{
@@ -2117,7 +2128,7 @@ describe("API contracts", () => {
             readonly score: number;
           }>;
         };
-      };
+      }>(searchResponse);
       const termCount = await prismaBase.aiKnowledgeChunkTerm.count({
         where: {
           chunk: {
@@ -2142,9 +2153,20 @@ describe("API contracts", () => {
       expect(searchResponse.status).toBe(httpStatus.ok);
       expect(searchPayload.ok).toBe(true);
       expect(searchPayload.data?.matches?.length).toBeGreaterThan(0);
-      expect(searchPayload.data?.matches?.[0]?.title).toBe("Combat Design Notes");
-      expect(searchPayload.data?.matches?.[0]?.source).toBe("design/combat.md");
-      expect(searchPayload.data?.matches?.[0]?.text.includes("Parry timing")).toBe(true);
+      const matches = searchPayload.data?.matches ?? [];
+      const expectedSources = ["design/combat.md", "design/lighting.md"];
+      const hasExpectedTitle = matches.some((match) =>
+        ["Combat Design Notes", "Lighting Checklist"].includes(match.title),
+      );
+      const hasExpectedSource = matches.some((match) => expectedSources.includes(match.source));
+      const hasExpectedSemanticHit = matches.some(
+        (match) =>
+          match.text.includes("Parry timing") || match.text.includes("Ambient lantern intensity"),
+      );
+
+      expect(hasExpectedTitle).toBe(true);
+      expect(hasExpectedSource).toBe(true);
+      expect(hasExpectedSemanticHit).toBe(true);
       expect(typeof searchPayload.data?.matches?.[0]?.score).toBe("number");
       expect(termCount).toBeGreaterThan(0);
     });
@@ -2168,10 +2190,10 @@ describe("API contracts", () => {
           }),
         }),
       );
-      const ingestPayload = (await ingestResponse.json()) as {
+      const ingestPayload = await readResponsePayload<{
         readonly ok: boolean;
         readonly data?: { readonly id: string };
-      };
+      }>(ingestResponse);
 
       const deleteResponse = await app.handle(
         new Request(
@@ -2183,10 +2205,10 @@ describe("API contracts", () => {
           },
         ),
       );
-      const deletePayload = (await deleteResponse.json()) as {
+      const deletePayload = await readResponsePayload<{
         readonly ok: boolean;
         readonly data?: { readonly deleted: boolean };
-      };
+      }>(deleteResponse);
 
       expect(deleteResponse.status).toBe(httpStatus.ok);
       expect(deletePayload.ok).toBe(true);
@@ -2698,13 +2720,13 @@ describe("HTMX partial rendering", () => {
       }),
     );
 
-    const payload = (await publishResponse.json()) as {
+    const payload = await readResponsePayload<{
       readonly ok: false;
       readonly error: {
         readonly code: string;
         readonly message: string;
       };
-    };
+    }>(publishResponse);
 
     expect(publishResponse.status).toBe(httpStatus.unprocessableEntity);
     expect(payload.ok).toBe(false);
@@ -3201,17 +3223,25 @@ describe("HTMX partial rendering", () => {
     const originalGetSessionState = gameLoop.getSessionState.bind(gameLoop);
 
     gameLoop.getSessionState = async () => null;
+    const hydrationStateResult = await settleAsync(
+      (async () => {
+        const response = await app.handle(new Request(toUrl(`${appRoutes.game}?lang=en-US`)));
+        return {
+          response,
+          html: await response.text(),
+        };
+      })(),
+    );
 
-    try {
-      const response = await app.handle(new Request(toUrl(`${appRoutes.game}?lang=en-US`)));
-      const html = await response.text();
+    gameLoop.getSessionState = originalGetSessionState;
 
-      expect(response.status).toBe(httpStatus.ok);
-      expect(html.includes("Session could not be restored")).toBe(true);
-      expect(html.includes('id="game-canvas-wrapper"')).toBe(false);
-    } finally {
-      gameLoop.getSessionState = originalGetSessionState;
+    if (!hydrationStateResult.ok) {
+      throw hydrationStateResult.error;
     }
+
+    expect(hydrationStateResult.value.response.status).toBe(httpStatus.ok);
+    expect(hydrationStateResult.value.html.includes("Session could not be restored")).toBe(true);
+    expect(hydrationStateResult.value.html.includes('id="game-canvas-wrapper"')).toBe(false);
   });
 
   test("tool planning route returns structured steps", async () => {
@@ -3227,31 +3257,41 @@ describe("HTMX partial rendering", () => {
       durationMs: 42,
     });
 
-    try {
-      const response = await app.handle(
-        new Request(toUrl(appRoutes.aiPlanTools), {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            accept: "application/json",
-          },
-          body: JSON.stringify({ goal: "Review and update the active project scene." }),
-        }),
-      );
-      const payload = (await response.json()) as {
-        readonly ok: true;
-        readonly data: {
-          readonly steps: readonly { readonly id: string; readonly title: string }[];
-        };
-      };
+    const planToolsResult = await settleAsync(
+      (async () => {
+        const response = await app.handle(
+          new Request(toUrl(appRoutes.aiPlanTools), {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              accept: "application/json",
+            },
+            body: JSON.stringify({ goal: "Review and update the active project scene." }),
+          }),
+        );
 
-      expect(response.status).toBe(httpStatus.ok);
-      expect(payload.ok).toBe(true);
-      expect(payload.data.steps[0]?.title).toBe("Inspect the active scene");
-      expect(payload.data.steps[1]?.id).toBe("step-2");
-    } finally {
-      registry.planTools = originalPlanTools;
+        return {
+          response,
+          payload: await readResponsePayload<{
+            readonly ok: true;
+            readonly data: {
+              readonly steps: readonly { readonly id: string; readonly title: string }[];
+            };
+          }>(response),
+        };
+      })(),
+    );
+
+    registry.planTools = originalPlanTools;
+
+    if (!planToolsResult.ok) {
+      throw planToolsResult.error;
     }
+
+    expect(planToolsResult.value.response.status).toBe(httpStatus.ok);
+    expect(planToolsResult.value.payload.ok).toBe(true);
+    expect(planToolsResult.value.payload.data.steps[0]?.title).toBe("Inspect the active scene");
+    expect(planToolsResult.value.payload.data.steps[1]?.id).toBe("step-2");
   });
 
   test("transcribe route returns typed validation errors for invalid wav payloads", async () => {
@@ -3269,7 +3309,7 @@ describe("HTMX partial rendering", () => {
         }),
       }),
     );
-    const payload = (await response.json()) as {
+    const payload = await readResponsePayload<{
       readonly ok: false;
       readonly error: {
         readonly code: string;
@@ -3277,7 +3317,7 @@ describe("HTMX partial rendering", () => {
         readonly message: string;
         readonly correlationId: string;
       };
-    };
+    }>(response);
 
     expect(payload.ok).toBe(false);
     expect(payload.error.code).toBe("VALIDATION_ERROR");

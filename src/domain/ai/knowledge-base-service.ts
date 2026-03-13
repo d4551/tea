@@ -326,7 +326,7 @@ const toPersistedChunkRows = (
     ordinal: chunk.ordinal,
     text: chunk.text,
     searchText: chunk.searchText,
-    embedding: JSON.parse(JSON.stringify(chunk.embedding)) as Prisma.InputJsonValue,
+    embedding: JSON.parse(JSON.stringify(chunk.embedding)),
     tokenEstimate: chunk.tokenEstimate,
   }));
   const termRows = chunks.flatMap((chunk) =>

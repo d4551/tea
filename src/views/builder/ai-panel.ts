@@ -337,7 +337,7 @@ const renderAiAssistForm = (messages: Messages, locale: LocaleCode, projectId: s
         <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.promptLabel)}</legend>
-          <textarea id="ai-assist-prompt" name="prompt" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.assistPromptPlaceholder)}" required aria-required="true"></textarea>
+          <textarea id="ai-assist-prompt" name="prompt" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.assistPromptPlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.promptLabel)}"></textarea>
         </fieldset>
         <div class="flex items-center gap-2">
           <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.designAssist)}">
@@ -377,11 +377,11 @@ const renderAiTestForm = (messages: Messages, locale: LocaleCode, projectId: str
         <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.npcIdLabel)}</legend>
-          <input id="ai-test-npc" name="npcId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.testNpcPlaceholder)}" required aria-required="true" />
+          <input id="ai-test-npc" name="npcId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.testNpcPlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.npcIdLabel)}" />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.messageLabel)}</legend>
-          <textarea id="ai-test-message" name="message" class="textarea w-full" rows="2" placeholder="${escapeHtml(messages.builder.testMessagePlaceholder)}" required aria-required="true"></textarea>
+          <textarea id="ai-test-message" name="message" class="textarea w-full" rows="2" placeholder="${escapeHtml(messages.builder.testMessagePlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.messageLabel)}"></textarea>
         </fieldset>
         <div class="flex items-center gap-2">
           <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.testDialogue)}">
@@ -429,15 +429,15 @@ const renderAiKnowledgeWorkspace = (
       >
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.knowledgeTitleLabel)}</legend>
-          <input id="knowledge-title" name="title" type="text" class="input w-full" required aria-required="true" />
+          <input id="knowledge-title" name="title" type="text" class="input w-full" required aria-required="true" aria-label="${escapeHtml(messages.builder.knowledgeTitleLabel)}" />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.knowledgeSourceLabel)}</legend>
-          <input id="knowledge-source" name="source" type="text" class="input w-full" required aria-required="true" />
+          <input id="knowledge-source" name="source" type="text" class="input w-full" required aria-required="true" aria-label="${escapeHtml(messages.builder.knowledgeSourceLabel)}" />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.knowledgeTextLabel)}</legend>
-          <textarea id="knowledge-text" name="text" class="textarea w-full min-h-36" required aria-required="true"></textarea>
+          <textarea id="knowledge-text" name="text" class="textarea w-full min-h-36" required aria-required="true" aria-label="${escapeHtml(messages.builder.knowledgeTextLabel)}"></textarea>
         </fieldset>
         <div class="flex items-center gap-2">
           <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.ingestKnowledgeDocument)}">
@@ -490,7 +490,7 @@ const renderAiRetrievalAndToolPlan = (
         >
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.promptLabel)}</legend>
-            <textarea id="retrieval-prompt" name="prompt" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.retrievalPromptPlaceholder)}" required aria-required="true"></textarea>
+            <textarea id="retrieval-prompt" name="prompt" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.retrievalPromptPlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.runRetrievalAssist)}"></textarea>
           </fieldset>
           <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.runRetrievalAssist)}">
             ${escapeHtml(messages.builder.runRetrievalAssist)}
@@ -515,7 +515,7 @@ const renderAiRetrievalAndToolPlan = (
         >
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.automationGoalLabel)}</legend>
-            <textarea id="tool-plan-goal" name="goal" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.toolPlanGoalPlaceholder)}" required aria-required="true"></textarea>
+            <textarea id="tool-plan-goal" name="goal" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.toolPlanGoalPlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.automationGoalLabel)}"></textarea>
           </fieldset>
           <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.previewToolPlan)}">
             ${escapeHtml(messages.builder.previewToolPlan)}
@@ -575,7 +575,7 @@ const renderAiPatchAndApiSurface = (
           <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.operationsJsonLabel)}</legend>
-            <textarea name="operationsJson" class="textarea w-full min-h-28" placeholder="${escapeHtml(messages.builder.operationsJsonPlaceholder)}"></textarea>
+            <textarea id="operations-json" name="operationsJson" class="textarea w-full min-h-28" placeholder="${escapeHtml(messages.builder.operationsJsonPlaceholder)}" aria-label="${escapeHtml(messages.builder.operationsJsonLabel)}"></textarea>
           </fieldset>
           <div class="flex items-center gap-2">
             <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.previewChanges)}">${escapeHtml(messages.builder.previewChanges)}</button>
@@ -685,7 +685,7 @@ export const renderAiPanel = (
                 >
                   <fieldset class="fieldset">
                     <legend class="fieldset-legend">${escapeHtml(messages.builder.promptLabel)}</legend>
-                    <textarea id="voice-synthesize-text" name="text" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.synthesizeTextPlaceholder)}" required aria-required="true"></textarea>
+                <textarea id="voice-synthesize-text" name="text" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.synthesizeTextPlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.promptLabel)}"></textarea>
                   </fieldset>
                   <div class="flex items-center gap-2">
                     <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.synthesizeSubmit)}">
@@ -712,7 +712,7 @@ export const renderAiPanel = (
                 >
                   <fieldset class="fieldset">
                     <legend class="fieldset-legend">${escapeHtml(messages.builder.transcribeFileLabel)}</legend>
-                    <input id="voice-transcribe-file" name="file" type="file" class="file-input file-input-sm w-full" accept="audio/*" required aria-required="true" />
+                <input id="voice-transcribe-file" name="file" type="file" class="file-input file-input-sm w-full" accept="audio/*" required aria-required="true" aria-label="${escapeHtml(messages.builder.transcribeFileLabel)}" />
                   </fieldset>
                   <div class="flex items-center gap-2">
                     <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.transcribeSubmit)}">

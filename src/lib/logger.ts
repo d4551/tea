@@ -130,9 +130,18 @@ const writeToBunStream = (stream: "stderr" | "stdout", bytes: Uint8Array): boole
     return false;
   }
 
-  const target = stream === "stdout" ? Bun.stdout : Bun.stderr;
+  if (stream === "stdout") {
+    void Bun.write(Bun.stdout, bytes).then(
+      () => true,
+      (error: unknown) => {
+        recordLoggerWriteFailure(stream, error);
+        return false;
+      },
+    );
+    return true;
+  }
 
-  void Bun.write(target as never, bytes).then(
+  void Bun.write(Bun.stderr, bytes).then(
     () => true,
     (error: unknown) => {
       recordLoggerWriteFailure(stream, error);
