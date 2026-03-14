@@ -11,6 +11,7 @@ import {
   type KnowledgeSearchMatch,
   knowledgeBaseService,
 } from "../domain/ai/knowledge-base-service.ts";
+import { auditService } from "../domain/audit/audit-service.ts";
 import { getAiRuntimeProfile } from "../domain/ai/local-runtime-profile.ts";
 import { ProviderRegistry } from "../domain/ai/providers/provider-registry.ts";
 import {
@@ -20,6 +21,7 @@ import {
   suggestUserFlowStep,
 } from "../domain/game/ai/game-ai-service.ts";
 import { ApplicationError, errorEnvelope, successEnvelope } from "../lib/error-envelope.ts";
+import { authSessionContextPlugin } from "../plugins/auth-session.ts";
 import { i18nContextPlugin } from "../plugins/i18n-context.ts";
 import { requestScopedContextPlugin } from "../plugins/request-context.ts";
 import { defaultGameConfig } from "../shared/config/game-config.ts";
@@ -42,6 +44,14 @@ const generationResultSchema = t.Object({
     text: t.String(),
     model: t.String(),
     durationMs: t.Number(),
+    provenance: t.Optional(
+      t.Object({
+        provider: t.String(),
+        model: t.String(),
+        policyRouted: t.Boolean(),
+        policyReason: t.Optional(t.String()),
+      }),
+    ),
   }),
 });
 
@@ -287,6 +297,14 @@ const toolPlanResponseSchema = t.Object({
     steps: t.Array(toolPlanStepSchema),
     model: t.String(),
     durationMs: t.Number(),
+    provenance: t.Optional(
+      t.Object({
+        provider: t.String(),
+        model: t.String(),
+        policyRouted: t.Boolean(),
+        policyReason: t.Optional(t.String()),
+      }),
+    ),
   }),
 });
 
@@ -339,6 +357,32 @@ const createAiFailureEnvelope = (
     ),
     correlationId,
   );
+
+const toAuditActor = (context: {
+  readonly authPrincipalType: "anonymous" | "user";
+  readonly authPrincipalUserId: string | null;
+  readonly authPrincipalOrganizationId: string | null;
+  readonly authPrincipalRoleKeys: readonly string[];
+}) => ({
+  type: context.authPrincipalType,
+  id: context.authPrincipalUserId,
+  organizationId: context.authPrincipalOrganizationId,
+  roleKeys: context.authPrincipalRoleKeys,
+});
+
+const toGovernanceContext = (context: {
+  readonly authPrincipalUserId: string | null;
+  readonly authPrincipalOrganizationId: string | null;
+  readonly requestSource: string;
+  readonly projectId?: string;
+  readonly sensitiveContext?: boolean;
+}) => ({
+  actorId: context.authPrincipalUserId ?? undefined,
+  organizationId: context.authPrincipalOrganizationId ?? undefined,
+  projectId: context.projectId,
+  requestSource: context.requestSource,
+  sensitiveContext: context.sensitiveContext === true,
+});
 
 const decodeAudioPayload = (audioBase64: string): Uint8Array => {
   const trimmed = audioBase64.trim();
@@ -407,6 +451,7 @@ const toAiRuntimeRecord = () => {
 export const aiRoutes = new Elysia({ name: "ai-routes" })
   .use(i18nContextPlugin)
   .use(requestScopedContextPlugin)
+  .use(authSessionContextPlugin)
   .get(
     appRoutes.aiHealth,
     async () => {
@@ -672,14 +717,52 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
   )
   .post(
     appRoutes.aiPlanTools,
-    async ({ body, correlationId, messages }) => {
+    async ({
+      body,
+      correlationId,
+      messages,
+      authPrincipalType,
+      authPrincipalUserId,
+      authPrincipalOrganizationId,
+      authPrincipalRoleKeys,
+    }) => {
       const registry = await ProviderRegistry.getInstance();
       const result = await registry.planTools({
         goal: body.goal,
         projectId: body.projectId,
+        governance: toGovernanceContext({
+          authPrincipalUserId,
+          authPrincipalOrganizationId,
+          requestSource: "ai-routes.plan-tools",
+          projectId: body.projectId,
+          sensitiveContext: body.sensitiveContext,
+        }),
+        requireExplicitApproval: body.requireExplicitApproval,
+        approvalGranted: body.approvalGranted,
       });
 
       if (!result.ok) {
+        await auditService.tryRecord({
+          correlationId,
+          action: "ai.plan-tools",
+          requestSource: "ai-api",
+          policyDecision: "deny",
+          result: "failure",
+          actor: toAuditActor({
+            authPrincipalType,
+            authPrincipalUserId,
+            authPrincipalOrganizationId,
+            authPrincipalRoleKeys,
+          }),
+          target: {
+            type: "ai-planner",
+            id: body.projectId ?? "global",
+          },
+          metadata: {
+            reason: result.error,
+            sensitiveContext: body.sensitiveContext ?? false,
+          },
+        });
         return createAiFailureEnvelope(
           correlationId,
           messages.ai.toolPlanningUnavailable,
@@ -687,16 +770,41 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
         );
       }
 
+      await auditService.tryRecord({
+        correlationId,
+        action: "ai.plan-tools",
+        requestSource: "ai-api",
+        policyDecision: "allow",
+        result: "success",
+        actor: toAuditActor({
+          authPrincipalType,
+          authPrincipalUserId,
+          authPrincipalOrganizationId,
+          authPrincipalRoleKeys,
+        }),
+        target: {
+          type: "ai-planner",
+          id: body.projectId ?? "global",
+        },
+        metadata: {
+          stepCount: result.steps.length,
+          model: result.model,
+        },
+      });
       return successEnvelope({
         steps: [...result.steps],
         model: result.model,
         durationMs: result.durationMs,
+        provenance: result.provenance,
       });
     },
     {
       body: t.Object({
         goal: t.String({ minLength: 1 }),
         projectId: t.Optional(t.String()),
+        sensitiveContext: t.Optional(t.Boolean()),
+        requireExplicitApproval: t.Optional(t.Boolean()),
+        approvalGranted: t.Optional(t.Boolean()),
       }),
       detail: {
         tags: ["ai"],
@@ -711,7 +819,42 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
   )
   .post(
     appRoutes.aiGenerateDialogue,
-    async ({ body, correlationId, messages }) => {
+    async ({
+      body,
+      correlationId,
+      messages,
+      authPrincipalType,
+      authPrincipalUserId,
+      authPrincipalOrganizationId,
+      authPrincipalRoleKeys,
+    }) => {
+      if (appConfig.ai.generationKillSwitchEnabled) {
+        await auditService.tryRecord({
+          correlationId,
+          action: "ai.generate-dialogue",
+          requestSource: "ai-api",
+          policyDecision: "deny",
+          result: "failure",
+          actor: toAuditActor({
+            authPrincipalType,
+            authPrincipalUserId,
+            authPrincipalOrganizationId,
+            authPrincipalRoleKeys,
+          }),
+          target: {
+            type: "npc",
+            id: body.npcId,
+          },
+          metadata: {
+            reason: "ai-generation-kill-switch-enabled",
+          },
+        });
+        return createAiFailureEnvelope(
+          correlationId,
+          "AI generation is currently disabled by incident controls.",
+          false,
+        );
+      }
       const locale = normalizeLocale(body.locale);
 
       const result = await generateNpcDialogue(
@@ -725,17 +868,59 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
       );
 
       if (!result.ok) {
+        await auditService.tryRecord({
+          correlationId,
+          action: "ai.generate-dialogue",
+          requestSource: "ai-api",
+          policyDecision: "allow",
+          result: "failure",
+          actor: toAuditActor({
+            authPrincipalType,
+            authPrincipalUserId,
+            authPrincipalOrganizationId,
+            authPrincipalRoleKeys,
+          }),
+          target: {
+            type: "npc",
+            id: body.npcId,
+          },
+          metadata: {
+            reason: result.error,
+          },
+        });
         return createAiFailureEnvelope(
           correlationId,
           messages.ai.dialogueGenerationUnavailable,
           result.retryable,
         );
       }
+      await auditService.tryRecord({
+        correlationId,
+        action: "ai.generate-dialogue",
+        requestSource: "ai-api",
+        policyDecision: "allow",
+        result: "success",
+        actor: toAuditActor({
+          authPrincipalType,
+          authPrincipalUserId,
+          authPrincipalOrganizationId,
+          authPrincipalRoleKeys,
+        }),
+        target: {
+          type: "npc",
+          id: body.npcId,
+        },
+        metadata: {
+          model: result.model,
+          durationMs: result.durationMs,
+        },
+      });
 
       return successEnvelope({
         text: result.text,
         model: result.model,
         durationMs: result.durationMs,
+        provenance: result.provenance,
       });
     },
     {
@@ -759,22 +944,126 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
   )
   .post(
     appRoutes.aiGenerateScene,
-    async ({ body, correlationId, messages }) => {
+    async ({
+      body,
+      correlationId,
+      messages,
+      authPrincipalType,
+      authPrincipalUserId,
+      authPrincipalOrganizationId,
+      authPrincipalRoleKeys,
+    }) => {
+      if (appConfig.ai.generationKillSwitchEnabled) {
+        await auditService.tryRecord({
+          correlationId,
+          action: "ai.generate-scene",
+          requestSource: "ai-api",
+          policyDecision: "deny",
+          result: "failure",
+          actor: toAuditActor({
+            authPrincipalType,
+            authPrincipalUserId,
+            authPrincipalOrganizationId,
+            authPrincipalRoleKeys,
+          }),
+          target: {
+            type: "scene",
+            id: body.sceneId,
+          },
+          metadata: {
+            reason: "ai-generation-kill-switch-enabled",
+          },
+        });
+        return createAiFailureEnvelope(
+          correlationId,
+          "AI generation is currently disabled by incident controls.",
+          false,
+        );
+      }
+      if (!appConfig.ai.allowHighCostGeneration) {
+        await auditService.tryRecord({
+          correlationId,
+          action: "ai.generate-scene",
+          requestSource: "ai-api",
+          policyDecision: "deny",
+          result: "failure",
+          actor: toAuditActor({
+            authPrincipalType,
+            authPrincipalUserId,
+            authPrincipalOrganizationId,
+            authPrincipalRoleKeys,
+          }),
+          target: {
+            type: "scene",
+            id: body.sceneId,
+          },
+          metadata: {
+            reason: "high-cost-generation-disabled",
+          },
+        });
+        return createAiFailureEnvelope(
+          correlationId,
+          "High-cost generation is currently disabled by policy.",
+          false,
+        );
+      }
       const locale = normalizeLocale(body.locale);
       const result = await generateSceneDescription(body.sceneId, locale);
 
       if (!result.ok) {
+        await auditService.tryRecord({
+          correlationId,
+          action: "ai.generate-scene",
+          requestSource: "ai-api",
+          policyDecision: "allow",
+          result: "failure",
+          actor: toAuditActor({
+            authPrincipalType,
+            authPrincipalUserId,
+            authPrincipalOrganizationId,
+            authPrincipalRoleKeys,
+          }),
+          target: {
+            type: "scene",
+            id: body.sceneId,
+          },
+          metadata: {
+            reason: result.error,
+          },
+        });
         return createAiFailureEnvelope(
           correlationId,
           messages.ai.sceneGenerationUnavailable,
           result.retryable,
         );
       }
+      await auditService.tryRecord({
+        correlationId,
+        action: "ai.generate-scene",
+        requestSource: "ai-api",
+        policyDecision: "allow",
+        result: "success",
+        actor: toAuditActor({
+          authPrincipalType,
+          authPrincipalUserId,
+          authPrincipalOrganizationId,
+          authPrincipalRoleKeys,
+        }),
+        target: {
+          type: "scene",
+          id: body.sceneId,
+        },
+        metadata: {
+          model: result.model,
+          durationMs: result.durationMs,
+        },
+      });
 
       return successEnvelope({
         text: result.text,
         model: result.model,
         durationMs: result.durationMs,
+        provenance: result.provenance,
       });
     },
     {

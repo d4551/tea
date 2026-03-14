@@ -56,6 +56,10 @@ export interface AppConfig {
     readonly workerPollIntervalMs: number;
     readonly localAutomationOrigin: string;
     readonly automationProbeTimeoutMs: number;
+    readonly automationSigningSecret: string;
+    readonly automationMaxSteps: number;
+    readonly automationMaxRuntimeMs: number;
+    readonly automationAllowedRequestPathPrefixes: readonly string[];
   };
   readonly ui: {
     readonly defaultTheme: string;
@@ -112,6 +116,7 @@ export interface AppConfig {
     readonly combatDamageMultiplier: number;
     readonly combatSkillBaseDamage: number;
     readonly spriteAtlasMaxWidth: number;
+    readonly commandThroughputKillSwitchEnabled: boolean;
   };
   readonly ai: {
     readonly warmupOnBoot: boolean;
@@ -142,6 +147,11 @@ export interface AppConfig {
     readonly requestTimeoutMs: number;
     readonly commandRetryBudgetMs: number;
     readonly retryBackoffBaseMs: number;
+    readonly providerAllowlist: readonly string[];
+    readonly allowHighCostGeneration: boolean;
+    readonly generationKillSwitchEnabled: boolean;
+    readonly quotaPerUserPerHour: number;
+    readonly quotaPerProjectPerHour: number;
     readonly localSentimentModel: string;
     readonly localTextGenerationModel: string;
     readonly localNpcDialogueModel: string;
@@ -198,6 +208,15 @@ export interface AppConfig {
     readonly audioUploadMaxBytes: number;
     readonly textToSpeechSpeakerEmbeddings: string;
   };
+  readonly controls: {
+    readonly allowUnsafeAutomationActions: boolean;
+    readonly rpaExecutionKillSwitchEnabled: boolean;
+  };
+  readonly compliance: {
+    readonly auditRetentionDays: number;
+    readonly artifactRetentionDays: number;
+    readonly exportDirectory: string;
+  };
 }
 
 const DEFAULT_PORT = 3088;
@@ -243,6 +262,11 @@ const DEFAULT_AI_AUDIO_UPLOAD_MAX_BYTES = 6 * 1024 * 1024;
 const DEFAULT_AI_REQUEST_TIMEOUT_MS = 8_000;
 const DEFAULT_AI_COMMAND_RETRY_BUDGET_MS = 30_000;
 const DEFAULT_AI_RETRY_BACKOFF_BASE_MS = 350;
+const DEFAULT_AI_PROVIDER_ALLOWLIST = "";
+const DEFAULT_AI_ALLOW_HIGH_COST_GENERATION = true;
+const DEFAULT_AI_GENERATION_KILL_SWITCH_ENABLED = false;
+const DEFAULT_AI_QUOTA_PER_USER_PER_HOUR = 120;
+const DEFAULT_AI_QUOTA_PER_PROJECT_PER_HOUR = 600;
 const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434";
 const DEFAULT_OLLAMA_CHAT_MODEL = "llama3.2";
 const DEFAULT_OLLAMA_VISION_MODEL = "llava";
@@ -278,6 +302,17 @@ const DEFAULT_STATIC_ASSET_CACHE_MAX_AGE_SECONDS = 3600;
 const DEFAULT_DOCS_PATH = "/docs";
 const DEFAULT_BUILDER_WORKER_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_BUILDER_AUTOMATION_PROBE_TIMEOUT_MS = 500;
+const DEFAULT_BUILDER_AUTOMATION_MAX_STEPS = 32;
+const DEFAULT_BUILDER_AUTOMATION_MAX_RUNTIME_MS = 120_000;
+const DEFAULT_BUILDER_AUTOMATION_ALLOWED_PATH_PREFIXES =
+  "/api/builder,/builder,/api/game/session";
+const DEFAULT_BUILDER_AUTOMATION_SIGNING_SECRET = "local-dev-automation-secret";
+const DEFAULT_ALLOW_UNSAFE_AUTOMATION_ACTIONS = false;
+const DEFAULT_RPA_EXECUTION_KILL_SWITCH_ENABLED = false;
+const DEFAULT_GAME_COMMAND_THROUGHPUT_KILL_SWITCH = false;
+const DEFAULT_COMPLIANCE_AUDIT_RETENTION_DAYS = 90;
+const DEFAULT_COMPLIANCE_ARTIFACT_RETENTION_DAYS = 30;
+const DEFAULT_COMPLIANCE_EXPORT_DIRECTORY = "uploads/compliance-exports";
 const DEFAULT_PLAYABLE_GAME_MOUNT_PATH = defaultAppRouteRoots.game;
 const DEFAULT_PLAYABLE_GAME_SOURCE_DIRECTORY = "public/game";
 const DEFAULT_THEME = "silk";
@@ -403,6 +438,12 @@ const parseOptionalString = (value: string | undefined): string | undefined => {
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : undefined;
 };
+
+const parseCsvValues = (value: string | undefined, fallback: string): readonly string[] =>
+  (value ?? fallback)
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
 
 const parseAbsoluteUrl = (value: string | undefined, variableName: string): string => {
   const raw = parseRequiredString(value, variableName);
@@ -680,6 +721,25 @@ export const appConfig: AppConfig = {
       100,
       "BUILDER_AUTOMATION_PROBE_TIMEOUT_MS",
     ),
+    automationSigningSecret:
+      parseOptionalString(Bun.env.BUILDER_AUTOMATION_SIGNING_SECRET) ??
+      DEFAULT_BUILDER_AUTOMATION_SIGNING_SECRET,
+    automationMaxSteps: parseInteger(
+      Bun.env.BUILDER_AUTOMATION_MAX_STEPS,
+      DEFAULT_BUILDER_AUTOMATION_MAX_STEPS,
+      1,
+      "BUILDER_AUTOMATION_MAX_STEPS",
+    ),
+    automationMaxRuntimeMs: parseInteger(
+      Bun.env.BUILDER_AUTOMATION_MAX_RUNTIME_MS,
+      DEFAULT_BUILDER_AUTOMATION_MAX_RUNTIME_MS,
+      1_000,
+      "BUILDER_AUTOMATION_MAX_RUNTIME_MS",
+    ),
+    automationAllowedRequestPathPrefixes: parseCsvValues(
+      Bun.env.BUILDER_AUTOMATION_ALLOWED_REQUEST_PATH_PREFIXES,
+      DEFAULT_BUILDER_AUTOMATION_ALLOWED_PATH_PREFIXES,
+    ),
   },
   ui: {
     defaultTheme: Bun.env.APP_THEME ?? DEFAULT_THEME,
@@ -876,6 +936,11 @@ export const appConfig: AppConfig = {
       1,
       "GAME_SPRITE_ATLAS_MAX_WIDTH",
     ),
+    commandThroughputKillSwitchEnabled: parseBoolean(
+      Bun.env.GAME_COMMAND_THROUGHPUT_KILL_SWITCH_ENABLED,
+      DEFAULT_GAME_COMMAND_THROUGHPUT_KILL_SWITCH,
+      "GAME_COMMAND_THROUGHPUT_KILL_SWITCH_ENABLED",
+    ),
   },
   ai: {
     warmupOnBoot: parseBoolean(
@@ -964,6 +1029,32 @@ export const appConfig: AppConfig = {
       DEFAULT_AI_RETRY_BACKOFF_BASE_MS,
       50,
       "AI_RETRY_BACKOFF_BASE_MS",
+    ),
+    providerAllowlist: parseCsvValues(
+      Bun.env.AI_PROVIDER_ALLOWLIST,
+      DEFAULT_AI_PROVIDER_ALLOWLIST,
+    ),
+    allowHighCostGeneration: parseBoolean(
+      Bun.env.AI_ALLOW_HIGH_COST_GENERATION,
+      DEFAULT_AI_ALLOW_HIGH_COST_GENERATION,
+      "AI_ALLOW_HIGH_COST_GENERATION",
+    ),
+    generationKillSwitchEnabled: parseBoolean(
+      Bun.env.AI_GENERATION_KILL_SWITCH_ENABLED,
+      DEFAULT_AI_GENERATION_KILL_SWITCH_ENABLED,
+      "AI_GENERATION_KILL_SWITCH_ENABLED",
+    ),
+    quotaPerUserPerHour: parseInteger(
+      Bun.env.AI_QUOTA_PER_USER_PER_HOUR,
+      DEFAULT_AI_QUOTA_PER_USER_PER_HOUR,
+      1,
+      "AI_QUOTA_PER_USER_PER_HOUR",
+    ),
+    quotaPerProjectPerHour: parseInteger(
+      Bun.env.AI_QUOTA_PER_PROJECT_PER_HOUR,
+      DEFAULT_AI_QUOTA_PER_PROJECT_PER_HOUR,
+      1,
+      "AI_QUOTA_PER_PROJECT_PER_HOUR",
     ),
     localSentimentModel: Bun.env.AI_LOCAL_SENTIMENT_MODEL ?? DEFAULT_AI_LOCAL_SENTIMENT_MODEL,
     localTextGenerationModel:
@@ -1134,5 +1225,34 @@ export const appConfig: AppConfig = {
       1,
       "AI_CIRCUIT_BREAKER_COOLDOWN_MULTIPLIER",
     ),
+  },
+  controls: {
+    allowUnsafeAutomationActions: parseBoolean(
+      Bun.env.AUTOMATION_ALLOW_UNSAFE_ACTIONS,
+      DEFAULT_ALLOW_UNSAFE_AUTOMATION_ACTIONS,
+      "AUTOMATION_ALLOW_UNSAFE_ACTIONS",
+    ),
+    rpaExecutionKillSwitchEnabled: parseBoolean(
+      Bun.env.RPA_EXECUTION_KILL_SWITCH_ENABLED,
+      DEFAULT_RPA_EXECUTION_KILL_SWITCH_ENABLED,
+      "RPA_EXECUTION_KILL_SWITCH_ENABLED",
+    ),
+  },
+  compliance: {
+    auditRetentionDays: parseInteger(
+      Bun.env.COMPLIANCE_AUDIT_RETENTION_DAYS,
+      DEFAULT_COMPLIANCE_AUDIT_RETENTION_DAYS,
+      1,
+      "COMPLIANCE_AUDIT_RETENTION_DAYS",
+    ),
+    artifactRetentionDays: parseInteger(
+      Bun.env.COMPLIANCE_ARTIFACT_RETENTION_DAYS,
+      DEFAULT_COMPLIANCE_ARTIFACT_RETENTION_DAYS,
+      1,
+      "COMPLIANCE_ARTIFACT_RETENTION_DAYS",
+    ),
+    exportDirectory:
+      parseOptionalString(Bun.env.COMPLIANCE_EXPORT_DIRECTORY) ??
+      DEFAULT_COMPLIANCE_EXPORT_DIRECTORY,
   },
 };

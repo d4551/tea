@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia";
-import { type LocaleCode, normalizeLocale } from "../config/environment.ts";
+import { appConfig, type LocaleCode, normalizeLocale } from "../config/environment.ts";
+import { auditService } from "../domain/audit/audit-service.ts";
 import { gameTextByLocale } from "../domain/game/data/game-text.ts";
 import { gameLoop } from "../domain/game/game-loop.ts";
 import { playerProgressStore } from "../domain/game/services/player-progress-store.ts";
@@ -2005,6 +2006,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
         async ({
           body,
           params,
+          request,
           set,
           gameParticipantSessionId,
           gameRequestLocale,
@@ -2013,6 +2015,36 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
           gamePrincipalOrganizationId,
           gamePrincipalRoleKeys,
         }) => {
+          const correlationId = ensureCorrelationIdHeader(request, set.headers);
+          if (appConfig.game.commandThroughputKillSwitchEnabled) {
+            set.status = httpStatus.serviceUnavailable;
+            await auditService.tryRecord({
+              correlationId,
+              action: "game.command.process",
+              requestSource: "game-api",
+              policyDecision: "deny",
+              result: "failure",
+              actor: {
+                type: gamePrincipalType,
+                id: gamePrincipalUserId,
+                organizationId: gamePrincipalOrganizationId,
+                roleKeys: gamePrincipalRoleKeys,
+              },
+              target: {
+                type: "game-session",
+                id: params.id,
+              },
+              metadata: {
+                reason: "command-throughput-kill-switch-enabled",
+              },
+            });
+            throw new ApplicationError(
+              "UPSTREAM_ERROR",
+              "Game command throughput is temporarily disabled by incident controls.",
+              httpStatus.serviceUnavailable,
+              true,
+            );
+          }
           const session = await requireControllableGameSession(
             params.id,
             gameParticipantSessionId,
@@ -2032,6 +2064,27 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
             session.locale,
           );
           if (result.state === "rejected") {
+            await auditService.tryRecord({
+              correlationId,
+              action: "game.command.process",
+              requestSource: "game-api",
+              policyDecision: "allow",
+              result: "failure",
+              actor: {
+                type: gamePrincipalType,
+                id: gamePrincipalUserId,
+                organizationId: gamePrincipalOrganizationId,
+                roleKeys: gamePrincipalRoleKeys,
+              },
+              target: {
+                type: "game-session",
+                id: session.sessionId,
+              },
+              metadata: {
+                commandType: result.commandType,
+                errorCode: result.errorCode,
+              },
+            });
             set.status = httpStatus.unprocessableEntity;
             throw new ApplicationError(
               result.errorCode ?? "INVALID_COMMAND",
@@ -2044,6 +2097,28 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
           }
 
           if (result.state === "dropped" && result.errorCode === "CONFLICT") {
+            await auditService.tryRecord({
+              correlationId,
+              action: "game.command.process",
+              requestSource: "game-api",
+              policyDecision: "allow",
+              result: "failure",
+              actor: {
+                type: gamePrincipalType,
+                id: gamePrincipalUserId,
+                organizationId: gamePrincipalOrganizationId,
+                roleKeys: gamePrincipalRoleKeys,
+              },
+              target: {
+                type: "game-session",
+                id: session.sessionId,
+              },
+              metadata: {
+                commandType: result.commandType,
+                errorCode: result.errorCode,
+                errorReason: result.errorReason,
+              },
+            });
             set.status = httpStatus.conflict;
             throw new ApplicationError(
               result.errorCode,
@@ -2054,6 +2129,28 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
           }
 
           if (result.state === "dropped") {
+            await auditService.tryRecord({
+              correlationId,
+              action: "game.command.process",
+              requestSource: "game-api",
+              policyDecision: "allow",
+              result: "failure",
+              actor: {
+                type: gamePrincipalType,
+                id: gamePrincipalUserId,
+                organizationId: gamePrincipalOrganizationId,
+                roleKeys: gamePrincipalRoleKeys,
+              },
+              target: {
+                type: "game-session",
+                id: session.sessionId,
+              },
+              metadata: {
+                commandType: result.commandType,
+                errorCode: result.errorCode,
+                errorReason: result.errorReason,
+              },
+            });
             set.status = httpStatus.serviceUnavailable;
             throw new ApplicationError(
               result.errorCode ?? "INVALID_COMMAND",
@@ -2064,6 +2161,26 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
           }
 
           if (!result.commandType) {
+            await auditService.tryRecord({
+              correlationId,
+              action: "game.command.process",
+              requestSource: "game-api",
+              policyDecision: "allow",
+              result: "failure",
+              actor: {
+                type: gamePrincipalType,
+                id: gamePrincipalUserId,
+                organizationId: gamePrincipalOrganizationId,
+                roleKeys: gamePrincipalRoleKeys,
+              },
+              target: {
+                type: "game-session",
+                id: session.sessionId,
+              },
+              metadata: {
+                reason: "command-type-missing",
+              },
+            });
             set.status = httpStatus.unprocessableEntity;
             throw new ApplicationError(
               "INVALID_COMMAND",
@@ -2075,6 +2192,28 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
 
           // After the guard above, TypeScript still needs reassurance
           const resolvedCommandType = result.commandType;
+          await auditService.tryRecord({
+            correlationId,
+            action: "game.command.process",
+            requestSource: "game-api",
+            policyDecision: "allow",
+            result: "success",
+            actor: {
+              type: gamePrincipalType,
+              id: gamePrincipalUserId,
+              organizationId: gamePrincipalOrganizationId,
+              roleKeys: gamePrincipalRoleKeys,
+            },
+            target: {
+              type: "game-session",
+              id: session.sessionId,
+            },
+            metadata: {
+              commandType: resolvedCommandType,
+              commandId: result.commandId,
+              state: result.state,
+            },
+          });
 
           return {
             ok: true,

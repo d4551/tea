@@ -2728,7 +2728,7 @@ export class BuilderProjectStateStore {
     const actor = this.resolveUpdatedBy(updatedBy, "builder-publish");
 
     if (!published) {
-      const updated = await prisma.builderProject.publishStateSnapshot(sanitized, false, { updatedBy: actor });
+      const updated = await prisma.builderProject.publishStateSnapshot(sanitized, false, undefined, actor);
       if (!updated) {
         return null;
       }

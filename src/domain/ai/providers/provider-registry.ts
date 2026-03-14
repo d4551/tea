@@ -16,7 +16,9 @@ import type {
   AiCapability,
   AiChatParams,
   AiClassificationResult,
+  AiGovernanceContext,
   AiGenerationResult,
+  AiModelProvenance,
   AiModelCapabilities,
   AiProvider,
   AiSpeechSynthesisParams,
@@ -81,6 +83,8 @@ export class ProviderRegistry {
   private _providerAvailability = new Map<string, boolean>();
   private _providerReadiness = new Map<string, ProviderReadiness>();
   private _providerReasons = new Map<string, string>();
+  private _usageByUserByHour = new Map<string, number>();
+  private _usageByProjectByHour = new Map<string, number>();
   private _disposed = false;
 
   private constructor(providers: readonly AiProvider[]) {
@@ -217,20 +221,29 @@ export class ProviderRegistry {
    * @param capability Required capability.
    * @returns Best available provider, or null.
    */
-  selectProvider(capability: AiCapability): AiProvider | null {
+  selectProvider(
+    capability: AiCapability,
+    options?: { readonly localOnly?: boolean },
+  ): AiProvider | null {
     const preferred = appConfig.ai.preferredProvider;
 
     if (preferred !== "auto") {
-      const match = this._providers.find(
-        (p) => p.name === preferred && (this._providerAvailability.get(p.name) ?? false),
-      );
+      const match = this._providers.find((provider) => {
+        if (!(this._providerAvailability.get(provider.name) ?? false)) {
+          return false;
+        }
+        if (options?.localOnly && provider.name === "openai-compatible-cloud") {
+          return false;
+        }
+        return provider.name === preferred;
+      });
 
       if (match) {
         const hasCapability = this._allCapabilities.some(
-          (c) => c.provider === match.name && c.capabilities.has(capability),
+          (entry) => entry.provider === match.name && entry.capabilities.has(capability),
         );
         if (hasCapability) {
-          return match;
+          return this.applyAllowlist(match, capability, options);
         }
       }
     }
@@ -251,17 +264,20 @@ export class ProviderRegistry {
       );
 
     if (localProviders[0]) {
-      return localProviders[0];
+      return this.applyAllowlist(localProviders[0], capability, options);
     }
 
     if (!appConfig.ai.routing.cloudFallbackEnabled) {
       return null;
     }
 
-    return (
+    const cloudCandidate =
       this._providers
         .filter((provider) => {
           if (!(this._providerAvailability.get(provider.name) ?? false)) {
+            return false;
+          }
+          if (options?.localOnly && provider.name === "openai-compatible-cloud") {
             return false;
           }
 
@@ -272,8 +288,8 @@ export class ProviderRegistry {
         .sort(
           (left, right) =>
             (providerOrdering[left.name] ?? 99) - (providerOrdering[right.name] ?? 99),
-        )[0] ?? null
-    );
+        )[0] ?? null;
+    return this.applyAllowlist(cloudCandidate, capability, options);
   }
 
   /**
@@ -284,7 +300,32 @@ export class ProviderRegistry {
    */
   async chat(params: AiChatParams): Promise<AiGenerationResult> {
     await this._ensureCapabilitiesReady();
-    const provider = this.selectProvider("chat");
+    if (appConfig.ai.generationKillSwitchEnabled) {
+      return {
+        ok: false,
+        error: "AI generation is currently disabled by an incident kill switch",
+        retryable: false,
+      };
+    }
+    if (!appConfig.ai.allowHighCostGeneration && params.costTier === "high") {
+      return {
+        ok: false,
+        error: "High-cost AI generation is disabled by policy",
+        retryable: false,
+      };
+    }
+    const quotaAllowed = this.consumeQuota(params.governance, params.costTier === "high" ? 3 : 1);
+    if (!quotaAllowed) {
+      return {
+        ok: false,
+        error: "AI quota exceeded for current user or project",
+        retryable: false,
+      };
+    }
+
+    const provider = this.selectProvider("chat", {
+      localOnly: params.governance?.sensitiveContext === true,
+    });
     if (!provider) {
       return {
         ok: false,
@@ -294,7 +335,14 @@ export class ProviderRegistry {
     }
 
     logger.info("registry.chat.routing", { provider: provider.name });
-    return provider.chat(params);
+    const result = await provider.chat(params);
+    if (!result.ok) {
+      return result;
+    }
+    return {
+      ...result,
+      provenance: this.toProvenance(provider.name, result.model, params.governance),
+    };
   }
 
   /**
@@ -305,7 +353,12 @@ export class ProviderRegistry {
    */
   async *chatStream(params: AiChatParams): AsyncGenerator<string> {
     await this._ensureCapabilitiesReady();
-    const provider = this.selectProvider("chat");
+    if (appConfig.ai.generationKillSwitchEnabled) {
+      return;
+    }
+    const provider = this.selectProvider("chat", {
+      localOnly: params.governance?.sensitiveContext === true,
+    });
     if (!provider) {
       return;
     }
@@ -420,7 +473,32 @@ export class ProviderRegistry {
    */
   async planTools(params: AiToolPlanParams): Promise<AiToolPlanResult> {
     await this._ensureCapabilitiesReady();
-    const selectedPlanner = this.selectProvider("structured-planning");
+    if (appConfig.ai.generationKillSwitchEnabled) {
+      return {
+        ok: false,
+        error: "Tool planning is disabled by an incident kill switch",
+        retryable: false,
+      };
+    }
+    if (params.requireExplicitApproval && !params.approvalGranted) {
+      return {
+        ok: false,
+        error: "Explicit approval is required before planning in sensitive contexts",
+        retryable: false,
+      };
+    }
+    const quotaAllowed = this.consumeQuota(params.governance, 2);
+    if (!quotaAllowed) {
+      return {
+        ok: false,
+        error: "AI planning quota exceeded for current user or project",
+        retryable: false,
+      };
+    }
+
+    const selectedPlanner = this.selectProvider("structured-planning", {
+      localOnly: params.governance?.sensitiveContext === true,
+    });
     const directPlanner =
       selectedPlanner &&
       this._providers.find(
@@ -430,7 +508,14 @@ export class ProviderRegistry {
 
     if (directPlanner?.planTools) {
       logger.info("registry.planTools.routing", { provider: directPlanner.name, mode: "direct" });
-      return directPlanner.planTools(params);
+      const directResult = await directPlanner.planTools(params);
+      if (!directResult.ok) {
+        return directResult;
+      }
+      return {
+        ...directResult,
+        provenance: this.toProvenance(directPlanner.name, directResult.model, params.governance),
+      };
     }
 
     const fallback = await this.chat({
@@ -452,6 +537,7 @@ export class ProviderRegistry {
       steps: mapFallbackPlanSteps(fallback.text),
       model: fallback.model,
       durationMs: fallback.durationMs,
+      provenance: this.toProvenance("registry-fallback", fallback.model, params.governance),
     };
   }
 
@@ -524,8 +610,95 @@ export class ProviderRegistry {
     this._providerAvailability.clear();
     this._providerReadiness.clear();
     this._providerReasons.clear();
+    this._usageByUserByHour.clear();
+    this._usageByProjectByHour.clear();
     ProviderRegistry._instance = null;
     logger.info("registry.disposed");
+  }
+
+  private applyAllowlist(
+    candidate: AiProvider | null,
+    capability: AiCapability,
+    options?: { readonly localOnly?: boolean },
+  ): AiProvider | null {
+    if (!candidate) {
+      return null;
+    }
+
+    const allowlist = new Set(
+      appConfig.ai.providerAllowlist.map((entry) => entry.toLowerCase()),
+    );
+    if (allowlist.size === 0) {
+      return candidate;
+    }
+    if (allowlist.has(candidate.name.toLowerCase())) {
+      return candidate;
+    }
+
+    const fallback = this._providers.find((provider) => {
+      if (!(this._providerAvailability.get(provider.name) ?? false)) {
+        return false;
+      }
+      if (options?.localOnly && provider.name === "openai-compatible-cloud") {
+        return false;
+      }
+      if (!allowlist.has(provider.name.toLowerCase())) {
+        return false;
+      }
+      return this._allCapabilities.some(
+        (entry) => entry.provider === provider.name && entry.capabilities.has(capability),
+      );
+    });
+    return fallback ?? null;
+  }
+
+  private currentHourKey(): string {
+    return new Date().toISOString().slice(0, 13);
+  }
+
+  private consumeQuota(context: AiGovernanceContext | undefined, units: number): boolean {
+    const hourKey = this.currentHourKey();
+
+    if (context?.actorId) {
+      const userKey = `${hourKey}:user:${context.actorId}`;
+      const current = this._usageByUserByHour.get(userKey) ?? 0;
+      const next = current + units;
+      if (next > appConfig.ai.quotaPerUserPerHour) {
+        return false;
+      }
+      this._usageByUserByHour.set(userKey, next);
+    }
+
+    if (context?.projectId) {
+      const projectKey = `${hourKey}:project:${context.projectId}`;
+      const current = this._usageByProjectByHour.get(projectKey) ?? 0;
+      const next = current + units;
+      if (next > appConfig.ai.quotaPerProjectPerHour) {
+        return false;
+      }
+      this._usageByProjectByHour.set(projectKey, next);
+    }
+
+    return true;
+  }
+
+  private toProvenance(
+    provider: string,
+    model: string,
+    context: AiGovernanceContext | undefined,
+  ): AiModelProvenance {
+    const hasAllowlist = appConfig.ai.providerAllowlist.length > 0;
+    const policyRouted = hasAllowlist || Boolean(context?.sensitiveContext);
+    return {
+      provider,
+      model,
+      policyRouted,
+      policyReason: context?.sensitiveContext
+        ? "sensitive-context-local-routing"
+        : hasAllowlist
+          ? "provider-allowlist"
+          : undefined,
+    };
   }
 
   /**

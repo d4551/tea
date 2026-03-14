@@ -1,4 +1,5 @@
 import { appConfig, type LocaleCode } from "../../config/environment.ts";
+import { createHash } from "node:crypto";
 import {
   AUTOMATION_STEP_KIND_UNSUPPORTED_ERROR,
   DEFAULT_ANIMATION_FRAME_COUNT,
@@ -321,6 +322,12 @@ export interface BuilderAutomationRunCreatePayload {
   readonly goal: string;
   /** Optional JSON-encoded executable step plan. */
   readonly stepsJson?: string;
+  /** Optional dry-run mode for policy/preview execution. */
+  readonly dryRun?: boolean;
+  /** Optional max runtime bound override in ms. */
+  readonly maxRuntimeMs?: number;
+  /** Optional max step bound override. */
+  readonly maxSteps?: number;
 }
 
 /**
@@ -874,6 +881,16 @@ const buildDefaultAutomationStepSpecs = (projectId: string): readonly Automation
     sourceStepId: "step.capture-workspace",
   },
 ];
+
+const buildAutomationRunSignature = (
+  runId: string,
+  goal: string,
+  stepCount: number,
+  dryRun: boolean,
+): string => {
+  const payload = `${runId}|${goal.trim()}|${stepCount}|${dryRun ? "1" : "0"}|${appConfig.builder.automationSigningSecret}`;
+  return createHash("sha256").update(payload).digest("hex");
+};
 
 interface SuggestedAnimationPlanClip {
   readonly id: string;
@@ -2794,6 +2811,7 @@ class PrismaBuilderService implements BuilderService {
   ): Promise<BuilderMutation<AutomationRun> | null> {
     const runId = `run.${crypto.randomUUID()}`;
     const now = Date.now();
+    const dryRun = payload.dryRun === true;
     const parsedSpecs = parseAutomationStepSpecs(payload.stepsJson);
     const resolvedSpecs =
       parsedSpecs.length > 0 ? parsedSpecs : buildDefaultAutomationStepSpecs(projectId);
@@ -2813,6 +2831,15 @@ class PrismaBuilderService implements BuilderService {
       status: "pending",
       spec,
     }));
+    const maxRuntimeMs = Math.max(
+      1_000,
+      Math.min(payload.maxRuntimeMs ?? appConfig.builder.automationMaxRuntimeMs, 30 * 60 * 1_000),
+    );
+    const maxSteps = Math.max(
+      1,
+      Math.min(payload.maxSteps ?? appConfig.builder.automationMaxSteps, appConfig.builder.automationMaxSteps),
+    );
+    const signature = buildAutomationRunSignature(runId, payload.goal, steps.length, dryRun);
 
     return this.saveAutomationRun(projectId, {
       id: runId,
@@ -2823,6 +2850,13 @@ class PrismaBuilderService implements BuilderService {
         steps,
         artifactIds: [],
         statusMessage: "automation.queued-for-processing",
+        dryRun,
+        signature,
+        signedBy: this.resolveUpdatedBy(updatedBy, "builder-automation"),
+        signedAtMs: now,
+        maxRuntimeMs,
+        maxSteps,
+        allowedRequestPathPrefixes: appConfig.builder.automationAllowedRequestPathPrefixes,
         createdAtMs: now,
         updatedAtMs: now,
       },
@@ -2849,6 +2883,8 @@ class PrismaBuilderService implements BuilderService {
           statusMessage: approved
             ? "automation.approved-for-apply"
             : "automation.canceled-by-review",
+          approvedBy: approved ? this.resolveUpdatedBy(updatedBy, "builder-automation") : run.approvedBy,
+          approvedAtMs: approved ? Date.now() : run.approvedAtMs,
           updatedAtMs: Date.now(),
         };
         return {

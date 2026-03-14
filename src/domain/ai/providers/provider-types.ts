@@ -65,6 +65,10 @@ export interface AiChatParams {
   readonly temperature?: number;
   /** Whether to stream the response. */
   readonly stream?: boolean;
+  /** Optional policy context used for quota/routing decisions. */
+  readonly governance?: AiGovernanceContext;
+  /** Optional relative cost tier for policy enforcement. */
+  readonly costTier?: "standard" | "high";
 }
 
 /**
@@ -90,6 +94,8 @@ export interface AiGenerationSuccess {
   readonly model: string;
   /** Generation duration in milliseconds. */
   readonly durationMs: number;
+  /** Provenance metadata for compliance/auditability. */
+  readonly provenance?: AiModelProvenance;
 }
 
 /**
@@ -223,6 +229,8 @@ export interface AiImageGenerationSuccess {
   readonly model: string;
   /** Generation duration in milliseconds. */
   readonly durationMs: number;
+  /** Provenance metadata for compliance/auditability. */
+  readonly provenance?: AiModelProvenance;
 }
 
 /**
@@ -251,6 +259,12 @@ export interface AiToolPlanParams {
   readonly projectId?: string;
   /** Optional model override. */
   readonly model?: string;
+  /** Optional policy context used for approval/quota/routing decisions. */
+  readonly governance?: AiGovernanceContext;
+  /** Explicit approval requirement for sensitive planning contexts. */
+  readonly requireExplicitApproval?: boolean;
+  /** Whether explicit approval was granted by an authorized actor. */
+  readonly approvalGranted?: boolean;
 }
 
 /**
@@ -278,6 +292,38 @@ export interface AiToolPlanSuccess {
   readonly model: string;
   /** Planning duration in milliseconds. */
   readonly durationMs: number;
+  /** Provenance metadata for compliance/auditability. */
+  readonly provenance?: AiModelProvenance;
+}
+
+/**
+ * Request-time governance attributes used by enterprise policy controls.
+ */
+export interface AiGovernanceContext {
+  /** Stable actor id when available. */
+  readonly actorId?: string;
+  /** Stable organization id when available. */
+  readonly organizationId?: string;
+  /** Stable project id when available. */
+  readonly projectId?: string;
+  /** Source channel for policy/audit tracking. */
+  readonly requestSource?: string;
+  /** Whether this request is considered sensitive. */
+  readonly sensitiveContext?: boolean;
+}
+
+/**
+ * Model/provider provenance attached to AI outputs.
+ */
+export interface AiModelProvenance {
+  /** Logical provider selected by the registry. */
+  readonly provider: string;
+  /** Concrete model identifier used to produce the output. */
+  readonly model: string;
+  /** Whether policy restricted the selection (allowlist/local-only/etc). */
+  readonly policyRouted: boolean;
+  /** Optional reason for policy routing decisions. */
+  readonly policyReason?: string;
 }
 
 /**

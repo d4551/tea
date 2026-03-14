@@ -1,5 +1,6 @@
 import { chromium } from "playwright";
 import sharp from "sharp";
+import { createHash } from "node:crypto";
 import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
 import {
@@ -381,6 +382,82 @@ interface AutomationExecutionContext {
 const buildAutomationUrl = (path: string): URL =>
   new URL(path, appConfig.builder.localAutomationOrigin);
 
+const buildAutomationRunSignature = (
+  runId: string,
+  goal: string,
+  stepCount: number,
+  dryRun: boolean,
+): string => {
+  const payload = `${runId}|${goal.trim()}|${stepCount}|${dryRun ? "1" : "0"}|${appConfig.builder.automationSigningSecret}`;
+  return createHash("sha256").update(payload).digest("hex");
+};
+
+const validateAutomationRunPolicy = (run: AutomationRun): WorkerResult<null> => {
+  if (appConfig.controls.rpaExecutionKillSwitchEnabled) {
+    return {
+      ok: false,
+      error: "automation-kill-switch-enabled",
+    };
+  }
+
+  const maxSteps = Math.max(1, run.maxSteps ?? appConfig.builder.automationMaxSteps);
+  if (run.steps.length > maxSteps) {
+    return {
+      ok: false,
+      error: `automation-max-steps-exceeded:${run.steps.length}`,
+    };
+  }
+
+  if (!appConfig.controls.allowUnsafeAutomationActions) {
+    const hasUnsafeStep = run.steps.some((step) => {
+      if (!step.spec) {
+        return false;
+      }
+      return step.spec.kind === "request" || step.spec.kind === "create-asset";
+    });
+    if (hasUnsafeStep) {
+      return {
+        ok: false,
+        error: "automation-unsafe-actions-disabled",
+      };
+    }
+  }
+
+  const allowedPrefixes = new Set(
+    run.allowedRequestPathPrefixes && run.allowedRequestPathPrefixes.length > 0
+      ? run.allowedRequestPathPrefixes
+      : appConfig.builder.automationAllowedRequestPathPrefixes,
+  );
+  const invalidRequestStep = run.steps.find((step) => {
+    if (!step.spec || step.spec.kind !== "request") {
+      return false;
+    }
+    const { spec } = step;
+    return ![...allowedPrefixes].some((prefix) => spec.path.startsWith(prefix));
+  });
+  if (invalidRequestStep) {
+    return {
+      ok: false,
+      error: `automation-request-path-denied:${invalidRequestStep.id}`,
+    };
+  }
+
+  if (run.signature) {
+    const expected = buildAutomationRunSignature(run.id, run.goal, run.steps.length, run.dryRun === true);
+    if (run.signature !== expected) {
+      return {
+        ok: false,
+        error: "automation-signature-invalid",
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    data: null,
+  };
+};
+
 const ensureBrowserPage = async (
   context: AutomationExecutionContext,
 ): Promise<Awaited<ReturnType<Awaited<ReturnType<typeof chromium.launch>>["newPage"]>>> => {
@@ -719,6 +796,12 @@ export const executeGenerationJob = async (
   projectId: string,
   job: GenerationJob,
 ): Promise<WorkerResult<GenerationJobExecution>> => {
+  if (appConfig.ai.generationKillSwitchEnabled) {
+    return {
+      ok: false,
+      error: "ai-generation-kill-switch-enabled",
+    };
+  }
   const artifactResult = await runWorkerStep(() => buildGenerationArtifact(projectId, job));
   if (!artifactResult.ok) {
     return artifactResult;
@@ -744,6 +827,25 @@ export const executeAutomationRun = async (
   projectId: string,
   run: AutomationRun,
 ): Promise<WorkerResult<AutomationRunExecution>> => {
+  const policyValidation = validateAutomationRunPolicy(run);
+  if (!policyValidation.ok) {
+    return policyValidation;
+  }
+
+  if (run.dryRun === true) {
+    return {
+      ok: true,
+      data: {
+        steps: run.steps.map((step) => ({
+          ...step,
+          status: "completed",
+        })),
+        artifacts: [],
+        statusMessage: "automation.dry-run-complete",
+      },
+    };
+  }
+
   const context: AutomationExecutionContext = {
     projectId,
     run,
@@ -753,6 +855,8 @@ export const executeAutomationRun = async (
     page: null,
   };
   const completedSteps: AutomationRunStep[] = [];
+  const startedAtMs = Date.now();
+  const maxRuntimeMs = Math.max(1_000, run.maxRuntimeMs ?? appConfig.builder.automationMaxRuntimeMs);
 
   if (run.steps.some((step) => step.action === "browser")) {
     const targetUrl = buildAutomationUrl(withQueryParameters(appRoutes.builder, { projectId }));
@@ -766,6 +870,15 @@ export const executeAutomationRun = async (
   }
 
   for (const step of run.steps) {
+    if (Date.now() - startedAtMs > maxRuntimeMs) {
+      if (context.browser) {
+        await runWorkerStep(() => context.browser?.close() ?? Promise.resolve());
+      }
+      return {
+        ok: false,
+        error: "automation-runtime-limit-exceeded",
+      };
+    }
     const executed = await executeAutomationStep(context, step);
     if (!executed.ok) {
       if (context.browser) {

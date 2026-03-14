@@ -6,6 +6,7 @@
 import { Elysia, t } from "elysia";
 import { appConfig, type LocaleCode, normalizeLocale } from "../config/environment.ts";
 import { knowledgeBaseService } from "../domain/ai/knowledge-base-service.ts";
+import { auditService } from "../domain/audit/audit-service.ts";
 import { ProviderRegistry } from "../domain/ai/providers/provider-registry.ts";
 import { persistBuilderFile } from "../domain/builder/asset-storage.ts";
 import type { BuilderPublishValidationIssue } from "../domain/builder/builder-publish-validation.ts";
@@ -32,6 +33,7 @@ import {
   generateNpcDialogue,
   suggestUserFlowStep,
 } from "../domain/game/ai/game-ai-service.ts";
+import { gameLoop } from "../domain/game/game-loop.ts";
 import { gameScenes, gameSpriteManifests } from "../domain/game/data/sprite-data.ts";
 import { ensureCorrelationIdHeader } from "../lib/correlation-id.ts";
 import type { AppErrorCode } from "../lib/error-envelope.ts";
@@ -88,6 +90,15 @@ import { cardClasses, renderBuilderHiddenFields } from "../views/shared/ui-compo
 const route = (path: string): string => path.replace(/^\/api\/builder/, "");
 const isMutatingBuilderMethod = (method: string): boolean =>
   method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE";
+const highCostGenerationKinds = new Set<BuilderGenerationJobCreatePayload["kind"]>([
+  "sprite-sheet",
+  "portrait",
+  "voice-line",
+  "animation-plan",
+]);
+const hasUnsafeAutomationKinds = (stepsJson: string | undefined): boolean =>
+  typeof stepsJson === "string" &&
+  (stepsJson.includes("\"kind\":\"request\"") || stepsJson.includes("\"kind\":\"create-asset\""));
 
 const resolveBuilderPrincipalFromContext = (context: {
   readonly builderPrincipalType: "anonymous" | "user";
@@ -1118,6 +1129,67 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
 
     return status(httpStatus.ok, successEnvelope(readiness));
   })
+  .get("/ops/observability", async ({ builderProjectId, status }) => {
+    const project = await builderService.peekProject(builderProjectId);
+    const registry = await ProviderRegistry.getInstance();
+    const aiStatus = await registry.getStatus();
+    const readinessAudit =
+      project === null
+        ? undefined
+        : deriveBuilderReadinessAudit({
+            scenes: project.scenes.values(),
+            assets: project.assets.values(),
+            animationClips: project.animationClips.values(),
+            animationTimelines: project.animationTimelines.values(),
+            dialogueGraphs: project.dialogueGraphs.values(),
+            quests: project.quests.values(),
+            triggers: project.triggers.values(),
+            flags: project.flags.values(),
+            generationJobs: project.generationJobs.values(),
+            automationRuns: project.automationRuns.values(),
+            latestReleaseVersion: project.latestReleaseVersion,
+            publishedReleaseVersion: project.publishedReleaseVersion,
+          });
+    const readiness = evaluateBuilderPlatformReadiness({
+      sceneCount: project?.scenes.size ?? Object.keys(gameScenes).length,
+      spriteManifestCount: Object.keys(gameSpriteManifests).length,
+      aiFeatures: await detectAvailableFeatures(),
+      rendererPreference: appConfig.playableGame.rendererPreference,
+      onnxDevice: appConfig.ai.onnxDevice,
+      audit: readinessAudit,
+    });
+    const automationRunHistory = project
+      ? [...project.automationRuns.values()]
+          .sort((left, right) => right.updatedAtMs - left.updatedAtMs)
+          .slice(0, 20)
+      : [];
+    return status(
+      httpStatus.ok,
+      successEnvelope({
+        activeSessions: await gameLoop.countActiveSessions(),
+        readiness,
+        automationRunHistory,
+        ai: {
+          providers: aiStatus.providers,
+          preferredProvider: aiStatus.preferredProvider,
+          rag: {
+            chunkSize: appConfig.ai.ragChunkSize,
+            chunkOverlap: appConfig.ai.ragChunkOverlap,
+            searchLimit: appConfig.ai.ragSearchLimit,
+          },
+        },
+        recentAuditEvents: await auditService.listRecent(50),
+      }),
+    );
+  })
+  .get("/ops/retention-export", async ({ status }) => {
+    return status(
+      httpStatus.ok,
+      successEnvelope({
+        retention: auditService.retentionPolicy(),
+      }),
+    );
+  })
   .get(
     route(appRoutes.aiBuilderCapabilities),
     async ({ status }) => {
@@ -1517,6 +1589,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       response: {
         [httpStatus.ok]: t.String(),
         [httpStatus.notFound]: builderErrorResponse,
+        [httpStatus.forbidden]: builderErrorResponse,
       },
     },
   )
@@ -1574,6 +1647,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       response: {
         [httpStatus.ok]: t.String(),
         [httpStatus.notFound]: builderErrorResponse,
+        [httpStatus.forbidden]: builderErrorResponse,
       },
     },
   )
@@ -2018,6 +2092,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       response: {
         [httpStatus.ok]: t.String(),
         [httpStatus.notFound]: builderErrorResponse,
+        [httpStatus.forbidden]: builderErrorResponse,
       },
     },
   )
@@ -2190,6 +2265,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       response: {
         [httpStatus.ok]: t.String(),
         [httpStatus.notFound]: builderErrorResponse,
+        [httpStatus.forbidden]: builderErrorResponse,
       },
     },
   )
@@ -2420,6 +2496,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       response: {
         [httpStatus.ok]: t.String(),
         [httpStatus.notFound]: builderErrorResponse,
+        [httpStatus.forbidden]: builderErrorResponse,
       },
     },
   )
@@ -2470,6 +2547,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       response: {
         [httpStatus.ok]: t.String(),
         [httpStatus.notFound]: builderErrorResponse,
+        [httpStatus.forbidden]: builderErrorResponse,
       },
     },
   )
@@ -3401,6 +3479,41 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
+      const correlationId = ensureCorrelationIdHeader(request, set.headers);
+      if (!appConfig.ai.allowHighCostGeneration && highCostGenerationKinds.has(body.kind)) {
+        await auditService.tryRecord({
+          correlationId,
+          action: "builder.generation-job.create",
+          requestSource: "builder-api",
+          policyDecision: "deny",
+          result: "failure",
+          actor: {
+            type: actionContext.builderPrincipalType,
+            id: actionContext.builderPrincipalUserId,
+            organizationId: actionContext.builderPrincipalOrganizationId,
+            roleKeys: actionContext.builderPrincipalRoleKeys,
+          },
+          target: {
+            type: "builder-project",
+            id: projectId,
+          },
+          metadata: {
+            reason: "high-cost-generation-disabled",
+            kind: body.kind,
+          },
+        });
+        return status(
+          httpStatus.forbidden,
+          buildError(
+            request,
+            set.headers,
+            "UNAUTHORIZED",
+            httpStatus.forbidden,
+            "High-cost generation is currently disabled by policy.",
+            false,
+          ),
+        );
+      }
       const mutation = await builderService.createGenerationJob(
         projectId,
         {
@@ -3411,6 +3524,27 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         actionUpdatedBy,
       );
       if (!mutation) {
+        await auditService.tryRecord({
+          correlationId,
+          action: "builder.generation-job.create",
+          requestSource: "builder-api",
+          policyDecision: "allow",
+          result: "failure",
+          actor: {
+            type: actionContext.builderPrincipalType,
+            id: actionContext.builderPrincipalUserId,
+            organizationId: actionContext.builderPrincipalOrganizationId,
+            roleKeys: actionContext.builderPrincipalRoleKeys,
+          },
+          target: {
+            type: "builder-project",
+            id: projectId,
+          },
+          metadata: {
+            kind: body.kind,
+            reason: "project-not-found",
+          },
+        });
         return status(
           httpStatus.notFound,
           buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
@@ -3418,6 +3552,27 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       }
 
       await builderService.processQueuedWork(projectId, actionUpdatedBy);
+      await auditService.tryRecord({
+        correlationId,
+        action: "builder.generation-job.create",
+        requestSource: "builder-api",
+        policyDecision: "allow",
+        result: "queued",
+        actor: {
+          type: actionContext.builderPrincipalType,
+          id: actionContext.builderPrincipalUserId,
+          organizationId: actionContext.builderPrincipalOrganizationId,
+          roleKeys: actionContext.builderPrincipalRoleKeys,
+        },
+        target: {
+          type: "builder-generation-job",
+          id: mutation.payload.id,
+        },
+        metadata: {
+          projectId,
+          kind: body.kind,
+        },
+      });
 
       return withProjectChromeRefresh(
         locale,
@@ -3446,6 +3601,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       response: {
         [httpStatus.ok]: t.String(),
         [httpStatus.notFound]: builderErrorResponse,
+        [httpStatus.forbidden]: builderErrorResponse,
       },
     },
   )
@@ -3844,20 +4000,99 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
+      const correlationId = ensureCorrelationIdHeader(request, set.headers);
+      if (!appConfig.controls.allowUnsafeAutomationActions && hasUnsafeAutomationKinds(body.stepsJson)) {
+        await auditService.tryRecord({
+          correlationId,
+          action: "builder.automation-run.create",
+          requestSource: "builder-api",
+          policyDecision: "deny",
+          result: "failure",
+          actor: {
+            type: actionContext.builderPrincipalType,
+            id: actionContext.builderPrincipalUserId,
+            organizationId: actionContext.builderPrincipalOrganizationId,
+            roleKeys: actionContext.builderPrincipalRoleKeys,
+          },
+          target: {
+            type: "builder-project",
+            id: projectId,
+          },
+          metadata: {
+            reason: "unsafe-automation-actions-disabled",
+          },
+        });
+        return status(
+          httpStatus.forbidden,
+          buildError(
+            request,
+            set.headers,
+            "UNAUTHORIZED",
+            httpStatus.forbidden,
+            "Unsafe automation actions are disabled by policy.",
+            false,
+          ),
+        );
+      }
       const mutation = await builderService.createAutomationRun(
         projectId,
         {
           goal: body.goal,
           stepsJson: body.stepsJson,
+          dryRun: body.dryRun,
+          maxRuntimeMs: body.maxRuntimeMs,
+          maxSteps: body.maxSteps,
         } satisfies BuilderAutomationRunCreatePayload,
         actionUpdatedBy,
       );
       if (!mutation) {
+        await auditService.tryRecord({
+          correlationId,
+          action: "builder.automation-run.create",
+          requestSource: "builder-api",
+          policyDecision: "allow",
+          result: "failure",
+          actor: {
+            type: actionContext.builderPrincipalType,
+            id: actionContext.builderPrincipalUserId,
+            organizationId: actionContext.builderPrincipalOrganizationId,
+            roleKeys: actionContext.builderPrincipalRoleKeys,
+          },
+          target: {
+            type: "builder-project",
+            id: projectId,
+          },
+          metadata: {
+            reason: "project-not-found",
+          },
+        });
         return status(
           httpStatus.notFound,
           buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
         );
       }
+      await auditService.tryRecord({
+        correlationId,
+        action: "builder.automation-run.create",
+        requestSource: "builder-api",
+        policyDecision: "allow",
+        result: "queued",
+        actor: {
+          type: actionContext.builderPrincipalType,
+          id: actionContext.builderPrincipalUserId,
+          organizationId: actionContext.builderPrincipalOrganizationId,
+          roleKeys: actionContext.builderPrincipalRoleKeys,
+        },
+        target: {
+          type: "builder-automation-run",
+          id: mutation.payload.id,
+        },
+        metadata: {
+          projectId,
+          dryRun: mutation.payload.dryRun ?? false,
+          stepCount: mutation.payload.steps.length,
+        },
+      });
 
       return withProjectChromeRefresh(
         locale,
@@ -3872,10 +4107,14 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         locale: t.Optional(t.String()),
         goal: t.String(),
         stepsJson: t.Optional(t.String()),
+        dryRun: t.Optional(t.Boolean()),
+        maxRuntimeMs: t.Optional(t.Number()),
+        maxSteps: t.Optional(t.Number()),
       }),
       response: {
         [httpStatus.ok]: t.String(),
         [httpStatus.notFound]: builderErrorResponse,
+        [httpStatus.forbidden]: builderErrorResponse,
       },
     },
   )

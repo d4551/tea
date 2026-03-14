@@ -833,6 +833,24 @@ export interface AutomationRun {
   readonly artifactIds: readonly string[];
   /** Optional status note. */
   readonly statusMessage: string;
+  /** Whether execution should run in dry-run mode without side effects. */
+  readonly dryRun?: boolean;
+  /** Optional detached signature for plan integrity validation. */
+  readonly signature?: string;
+  /** Actor that signed this plan when available. */
+  readonly signedBy?: string;
+  /** Signature timestamp in ms since epoch. */
+  readonly signedAtMs?: number;
+  /** Optional actor that approved execution handoff. */
+  readonly approvedBy?: string;
+  /** Approval timestamp in ms since epoch. */
+  readonly approvedAtMs?: number;
+  /** Optional max runtime bound for execution. */
+  readonly maxRuntimeMs?: number;
+  /** Optional max step-count bound for execution. */
+  readonly maxSteps?: number;
+  /** Optional scoped allowlist of request path prefixes. */
+  readonly allowedRequestPathPrefixes?: readonly string[];
   /** Creation timestamp in ms since epoch. */
   readonly createdAtMs: number;
   /** Last update timestamp in ms since epoch. */
