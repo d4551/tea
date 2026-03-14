@@ -299,7 +299,9 @@ const renderTopBar = (
   </a>`;
 
   const breadcrumbNav =
-    breadcrumbs && breadcrumbs.length > 0 ? renderBreadcrumbs(messages, breadcrumbs) : `<span class="font-semibold">${escapeHtml(messages.metadata.appName)}</span>`;
+    breadcrumbs && breadcrumbs.length > 0
+      ? renderBreadcrumbs(messages, breadcrumbs)
+      : `<span class="font-semibold">${escapeHtml(messages.metadata.appName)}</span>`;
 
   return `<nav aria-label="${escapeHtml(messages.common.mobileNavigation)}" class="navbar w-full bg-base-300 px-2">
     <div class="navbar-start">

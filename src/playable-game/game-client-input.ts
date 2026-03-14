@@ -167,9 +167,16 @@ export const createGameClientStatusController = ({
     if (!statusIndicator) {
       return;
     }
-    ["status-success", "status-error", "status-warning", "status-neutral", "status-info", "status-primary"].forEach((candidate) =>
-      statusIndicator.classList.remove(candidate),
-    );
+    [
+      "status-success",
+      "status-error",
+      "status-warning",
+      "status-neutral",
+      "status-info",
+      "status-primary",
+    ].forEach((candidate) => {
+      statusIndicator.classList.remove(candidate);
+    });
     statusIndicator.classList.add(`status-${tone}`);
     if (tone === "warning") {
       statusIndicator.classList.add("status-ping");
@@ -180,78 +187,78 @@ export const createGameClientStatusController = ({
 
   return {
     setQueueDepth(depth) {
-    if (queueBadge) {
-      queueBadge.textContent = `${labels.queueLabel}: ${depth}`;
-    }
-
-    if (statusTarget) {
-      statusTarget.dataset.commandQueueDepth = String(depth);
-    }
-  },
-  setConnectionState(state, closeCode) {
-    if (!statusBadge || !statusText) {
-      return;
-    }
-
-    if (state === "connecting" || state === "connected" || state === "reconnecting") {
-      statusText.textContent = labels.connection[state];
-      setStatusTone(state === "connected" ? "success" : "warning");
-      const hudEl = getHudSceneElement();
-      if (hudEl && (state === "connecting" || state === "reconnecting")) {
-        hudEl.textContent =
-          state === "reconnecting" ? labels.connection.reconnecting : labels.connectingToRealm;
+      if (queueBadge) {
+        queueBadge.textContent = `${labels.queueLabel}: ${depth}`;
       }
-      return;
-    }
 
-    if (state === "expired" || state === "missing") {
-      statusText.textContent = labels.connection[state];
-      setStatusTone("error");
-      const hudEl = getHudSceneElement();
-      if (hudEl) {
-        const msg = labels.connection[state];
-        const reconnectLabel = escapeHtmlAttr(labels.reconnectAction);
-        const backLabel = escapeHtmlAttr(labels.backToBuilderLabel);
-        const builderHref = escapeHtmlAttr(labels.builderHref);
-        hudEl.innerHTML = `<div class="flex flex-col items-center gap-3 pointer-events-auto">
+      if (statusTarget) {
+        statusTarget.dataset.commandQueueDepth = String(depth);
+      }
+    },
+    setConnectionState(state, closeCode) {
+      if (!statusBadge || !statusText) {
+        return;
+      }
+
+      if (state === "connecting" || state === "connected" || state === "reconnecting") {
+        statusText.textContent = labels.connection[state];
+        setStatusTone(state === "connected" ? "success" : "warning");
+        const hudEl = getHudSceneElement();
+        if (hudEl && (state === "connecting" || state === "reconnecting")) {
+          hudEl.textContent =
+            state === "reconnecting" ? labels.connection.reconnecting : labels.connectingToRealm;
+        }
+        return;
+      }
+
+      if (state === "expired" || state === "missing") {
+        statusText.textContent = labels.connection[state];
+        setStatusTone("error");
+        const hudEl = getHudSceneElement();
+        if (hudEl) {
+          const msg = labels.connection[state];
+          const reconnectLabel = escapeHtmlAttr(labels.reconnectAction);
+          const backLabel = escapeHtmlAttr(labels.backToBuilderLabel);
+          const builderHref = escapeHtmlAttr(labels.builderHref);
+          hudEl.innerHTML = `<div class="flex flex-col items-center gap-3 pointer-events-auto">
           <span class="font-semibold">${escapeHtmlAttr(msg)}</span>
           <div class="flex gap-2">
             <button type="button" class="btn btn-warning btn-sm game-reconnect-overlay-trigger" aria-label="${reconnectLabel}">${reconnectLabel}</button>
             <a href="${builderHref}" class="btn btn-ghost btn-sm" aria-label="${backLabel}">${backLabel}</a>
           </div>
         </div>`;
-        const overlayBtn = hudEl.querySelector(".game-reconnect-overlay-trigger");
-        if (overlayBtn && reconnectButton) {
-          overlayBtn.addEventListener("click", () => reconnectButton.click());
+          const overlayBtn = hudEl.querySelector(".game-reconnect-overlay-trigger");
+          if (overlayBtn && reconnectButton) {
+            overlayBtn.addEventListener("click", () => reconnectButton.click());
+          }
         }
+        return;
       }
-      return;
-    }
 
-    const prefix = labels.connection.disconnected;
-    statusText.textContent = typeof closeCode === "number" ? `${prefix} (${closeCode})` : prefix;
-    setStatusTone("error");
-  },
-  setReconnectVisible(visible) {
-    if (!reconnectButton) {
-      return;
-    }
+      const prefix = labels.connection.disconnected;
+      statusText.textContent = typeof closeCode === "number" ? `${prefix} (${closeCode})` : prefix;
+      setStatusTone("error");
+    },
+    setReconnectVisible(visible) {
+      if (!reconnectButton) {
+        return;
+      }
 
-    reconnectButton.textContent = labels.reconnectAction;
-    reconnectButton.classList.toggle("hidden", !visible);
-  },
-  setConnectionAlert(message, tone = "warning") {
-    if (!connectionAlert || !connectionAlertText) {
-      return;
-    }
+      reconnectButton.textContent = labels.reconnectAction;
+      reconnectButton.classList.toggle("hidden", !visible);
+    },
+    setConnectionAlert(message, tone = "warning") {
+      if (!connectionAlert || !connectionAlertText) {
+        return;
+      }
 
-    connectionAlert.classList.toggle("hidden", !message);
-    connectionAlert.classList.remove("alert-info", "alert-warning", "alert-error");
-    connectionAlert.classList.add(
-      tone === "error" ? "alert-error" : tone === "info" ? "alert-info" : "alert-warning",
-    );
-    connectionAlertText.textContent = message ?? "";
-  },
+      connectionAlert.classList.toggle("hidden", !message);
+      connectionAlert.classList.remove("alert-info", "alert-warning", "alert-error");
+      connectionAlert.classList.add(
+        tone === "error" ? "alert-error" : tone === "info" ? "alert-info" : "alert-warning",
+      );
+      connectionAlertText.textContent = message ?? "";
+    },
   };
 };
 

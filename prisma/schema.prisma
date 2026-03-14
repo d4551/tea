@@ -7,6 +7,107 @@ datasource db {
   provider = "sqlite"
 }
 
+model AppUser {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  displayName String?
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  credentials AccountCredential[]
+  sessions    AppPrincipalSession[]
+  memberships AppUserOrganizationMembership[]
+
+  @@index([status])
+}
+
+model Organization {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  name          String
+  status        String   @default("active")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions     AppPrincipalSession[]
+  memberships   AppUserOrganizationMembership[]
+  roles         OrganizationRole[]
+
+  @@index([slug])
+  @@index([status])
+}
+
+model OrganizationRole {
+  id             String               @id @default(cuid())
+  organizationId String
+  key            String
+  name           String
+  description    String?
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships    AppUserOrganizationMembership[]
+
+  @@unique([organizationId, key])
+  @@index([organizationId])
+}
+
+model AccountCredential {
+  id                String  @id @default(cuid())
+  userId            String
+  provider          String
+  providerAccountId  String
+  credentialHash    String?
+  passwordSalt      String?
+  metadata          Json?
+  lastUsedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user AppUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model AppPrincipalSession {
+  id                String   @id @default(cuid())
+  legacySessionId   String   @unique
+  principalType     String   @default("anonymous")
+  userId            String?
+  organizationId    String?
+  isGuest           Boolean  @default(true)
+  roleKeys          Json?
+  status            String   @default("active")
+  lastSeenAt        DateTime @default(now())
+  expiresAt         DateTime
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user         AppUser?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([legacySessionId])
+  @@index([userId])
+  @@index([organizationId])
+  @@index([status])
+}
+
+model AppUserOrganizationMembership {
+  userId         String
+  organizationId String
+  roleId         String
+  status         String               @default("active")
+  createdAt      DateTime             @default(now())
+
+  user         AppUser          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role         OrganizationRole @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([userId, organizationId])
+  @@index([organizationId, roleId])
+  @@index([status])
+}
+
 model OracleInteraction {
   id        String   @id @default(cuid())
   prompt    String

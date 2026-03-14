@@ -4,6 +4,7 @@ import { createLogger } from "../lib/logger.ts";
 import { createManagedPollingPlugin } from "./managed-polling-plugin.ts";
 
 const logger = createLogger("creator.worker");
+const creatorWorkerUpdatedBy = "system:creator-worker";
 
 /**
  * Elysia plugin that starts a periodic builder work drain on server start
@@ -16,7 +17,7 @@ export const creatorWorkerPlugin = createManagedPollingPlugin({
   startedEvent: "creator.worker.started",
   stoppedEvent: "creator.worker.stopped",
   failedEvent: "creator.worker.failed",
-  run: async () => builderService.processQueuedWork(),
+  run: async () => builderService.processQueuedWork(undefined, creatorWorkerUpdatedBy),
   onSuccess: (processedCount) => {
     if (processedCount > 0) {
       logger.info("creator.worker.drained", {

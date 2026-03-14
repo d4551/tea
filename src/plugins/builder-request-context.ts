@@ -7,6 +7,12 @@ import {
   resolveRequestQueryParam,
 } from "../shared/constants/routes.ts";
 import { resolveRequestLocale } from "../shared/i18n/translator.ts";
+import type {
+  AuthCookieBag,
+  AuthRequestContext,
+  AuthPrincipal,
+} from "./auth-session.ts";
+import { resolveAuthSession } from "./auth-session.ts";
 
 type ContextSource = Record<string, unknown>;
 
@@ -25,6 +31,15 @@ export interface BuilderRequestContext {
   readonly builderCurrentPath: string;
   /** Optional builder workspace search term from the request. */
   readonly builderSearch: string;
+
+  /** Canonical principal actor type for authorization checks. */
+  readonly builderPrincipalType: AuthRequestContext["authPrincipalType"];
+  /** Canonical principal user id when authenticated. */
+  readonly builderPrincipalUserId: AuthRequestContext["authPrincipalUserId"];
+  /** Canonical principal organization id when available. */
+  readonly builderPrincipalOrganizationId: AuthRequestContext["authPrincipalOrganizationId"];
+  /** Canonical principal role keys when available. */
+  readonly builderPrincipalRoleKeys: AuthRequestContext["authPrincipalRoleKeys"];
 }
 
 const toContextSource = (value: unknown): ContextSource => (isContextSource(value) ? value : {});
@@ -119,19 +134,34 @@ export const resolveBuilderRequestContext = (input: {
   readonly query?: unknown;
   readonly body?: unknown;
   readonly params?: unknown;
+  readonly auth?: unknown;
 }): BuilderRequestContext => {
   const querySource =
     input.query === undefined ? toSearchParamSource(input.request) : toContextSource(input.query);
   const bodySource = toContextSource(input.body);
   const paramSource = toContextSource(input.params);
+  const authCookieSource = isAuthCookieSource(input.auth) ? input.auth : {};
+
+  const authSession = resolveAuthSession(authCookieSource);
+  const principal = authSession.principal as AuthPrincipal;
 
   return {
     builderLocale: resolveBuilderLocale(input.request, querySource, bodySource),
     builderProjectId: resolveBuilderProjectId(querySource, bodySource, paramSource),
     builderCurrentPath: resolveBuilderCurrentPath(input.request, querySource, bodySource),
     builderSearch: resolveBuilderSearch(querySource, bodySource),
+    builderPrincipalType: principal.actorType,
+    builderPrincipalUserId: principal.actorId,
+    builderPrincipalOrganizationId: principal.organizationId,
+    builderPrincipalRoleKeys: principal.roleKeys,
   };
 };
+
+const isAuthCookieSource = (value: unknown): value is AuthCookieBag =>
+  value !== null &&
+  typeof value === "object" &&
+  !Array.isArray(value) &&
+  Object.keys(value).length >= 0;
 
 /**
  * Merges validated body/query/params overrides onto an existing request-derived builder context.
@@ -169,6 +199,10 @@ export const mergeBuilderRequestContext = (
       (readStringField(bodySource, "search") ?? readStringField(querySource, "search"))
         ? resolveBuilderSearch(querySource, bodySource, base.builderSearch)
         : base.builderSearch,
+    builderPrincipalType: base.builderPrincipalType,
+    builderPrincipalUserId: base.builderPrincipalUserId,
+    builderPrincipalOrganizationId: base.builderPrincipalOrganizationId,
+    builderPrincipalRoleKeys: base.builderPrincipalRoleKeys,
   };
 };
 
@@ -182,7 +216,12 @@ export const mergeBuilderRequestContext = (
  */
 export const readBuilderScopedContext = (
   base: Pick<BuilderRequestContext, "builderLocale" | "builderProjectId" | "builderCurrentPath"> &
-    Partial<Pick<BuilderRequestContext, "builderSearch">>,
+    Partial<
+      Pick<
+        BuilderRequestContext,
+        "builderSearch" | "builderPrincipalType" | "builderPrincipalUserId" | "builderPrincipalOrganizationId" | "builderPrincipalRoleKeys"
+      >
+    >,
   input: {
     readonly body?: unknown;
     readonly query?: unknown;
@@ -195,6 +234,10 @@ export const readBuilderScopedContext = (
       builderProjectId: base.builderProjectId,
       builderCurrentPath: base.builderCurrentPath,
       builderSearch: base.builderSearch ?? "",
+      builderPrincipalType: base.builderPrincipalType ?? "anonymous",
+      builderPrincipalUserId: base.builderPrincipalUserId ?? null,
+      builderPrincipalOrganizationId: base.builderPrincipalOrganizationId ?? null,
+      builderPrincipalRoleKeys: base.builderPrincipalRoleKeys ?? [],
     },
     input,
   );
@@ -204,14 +247,18 @@ export const readBuilderScopedContext = (
  */
 export const builderRequestContextPlugin = new Elysia({ name: "builder-request-context" }).derive(
   { as: "scoped" },
-  ({ request }) => {
-    const context = resolveBuilderRequestContext({ request });
+  ({ request, cookie }) => {
+    const context = resolveBuilderRequestContext({ request, auth: cookie });
 
     return {
       builderLocale: context.builderLocale,
       builderProjectId: context.builderProjectId,
       builderCurrentPath: context.builderCurrentPath,
       builderSearch: context.builderSearch,
+      builderPrincipalType: context.builderPrincipalType,
+      builderPrincipalUserId: context.builderPrincipalUserId,
+      builderPrincipalOrganizationId: context.builderPrincipalOrganizationId,
+      builderPrincipalRoleKeys: context.builderPrincipalRoleKeys,
     };
   },
 );

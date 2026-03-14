@@ -8,6 +8,7 @@ import { ensureCorrelationIdHeader } from "../lib/correlation-id.ts";
 import { ApplicationError, errorEnvelope } from "../lib/error-envelope.ts";
 import { createLogger } from "../lib/logger.ts";
 import { authSessionGuard } from "../plugins/auth-session.ts";
+import { requireGameAction, type PrincipalIdentity } from "../domain/auth/authorization.ts";
 import { defaultGameConfig } from "../shared/config/game-config.ts";
 import { httpStatus } from "../shared/constants/http.ts";
 import {
@@ -32,6 +33,18 @@ import { type SseUtils, ssePlugin } from "./sse-plugin.ts";
 const _logger = createLogger("game.plugin");
 const wantsHtml = (acceptHeader: string | null | undefined): boolean =>
   (acceptHeader ?? "").includes("text/html");
+
+const resolveGamePrincipalIdentity = (input: {
+  readonly gamePrincipalType: PrincipalIdentity["actorType"];
+  readonly gamePrincipalUserId: string | null;
+  readonly gamePrincipalOrganizationId: string | null;
+  readonly gamePrincipalRoleKeys: readonly string[];
+}): PrincipalIdentity => ({
+  actorType: input.gamePrincipalType,
+  actorId: input.gamePrincipalUserId,
+  organizationId: input.gamePrincipalOrganizationId,
+  roleKeys: input.gamePrincipalRoleKeys,
+});
 
 const endpoint = (path: string): string => path.replace(/^\/api\/game/, "");
 const route = {
@@ -429,8 +442,12 @@ const requireOwnedGameSession = async (
   sessionId: string,
   ownerSessionId: string,
   locale: string,
+  principal?: PrincipalIdentity,
 ): Promise<GameSession> => {
   const messages = getGameMessages(locale);
+  if (principal !== undefined) {
+    requireGameAction(principal, "manage");
+  }
   const session = await requireGameSession(sessionId, locale);
   if (session.ownerSessionId !== ownerSessionId) {
     throw new ApplicationError(
@@ -451,8 +468,12 @@ const requireAccessibleGameSession = async (
   sessionId: string,
   participantSessionId: string,
   locale: string,
+  principal?: PrincipalIdentity,
 ): Promise<GameSessionState> => {
   const messages = getGameMessages(locale);
+  if (principal !== undefined) {
+    requireGameAction(principal, "observe");
+  }
   const state = await gameLoop.getSessionState(sessionId, participantSessionId);
   if (!state) {
     throw new ApplicationError(
@@ -473,9 +494,18 @@ const requireControllableGameSession = async (
   sessionId: string,
   participantSessionId: string,
   locale: string,
+  principal?: PrincipalIdentity,
 ): Promise<GameSessionState> => {
   const messages = getGameMessages(locale);
-  const state = await requireAccessibleGameSession(sessionId, participantSessionId, locale);
+  const state = await requireAccessibleGameSession(
+    sessionId,
+    participantSessionId,
+    locale,
+    principal,
+  );
+  if (principal !== undefined) {
+    requireGameAction(principal, "command");
+  }
   if (state.participantRole === "spectator") {
     throw new ApplicationError(
       "UNAUTHORIZED",
@@ -1129,6 +1159,10 @@ const createHudStreamHandler = async function* ({
   set,
   gameParticipantSessionId,
   gameRequestLocale,
+  gamePrincipalType,
+  gamePrincipalUserId,
+  gamePrincipalOrganizationId,
+  gamePrincipalRoleKeys,
 }: {
   params: { id: string };
   sse: SseUtils;
@@ -1136,6 +1170,10 @@ const createHudStreamHandler = async function* ({
   set: { headers: Record<string, string> };
   gameParticipantSessionId: string;
   gameRequestLocale: string;
+  gamePrincipalType: PrincipalIdentity["actorType"];
+  gamePrincipalUserId: string | null;
+  gamePrincipalOrganizationId: string | null;
+  gamePrincipalRoleKeys: readonly string[];
 }): AsyncGenerator<string> {
   set.headers["cache-control"] = "no-cache, no-transform";
   set.headers.connection = "keep-alive";
@@ -1145,6 +1183,12 @@ const createHudStreamHandler = async function* ({
     params.id,
     gameParticipantSessionId,
     gameRequestLocale,
+    resolveGamePrincipalIdentity({
+      gamePrincipalType,
+      gamePrincipalUserId,
+      gamePrincipalOrganizationId,
+      gamePrincipalRoleKeys,
+    }),
   );
   yield* createHudStream({
     session,
@@ -1234,8 +1278,23 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
     app
       .post(
         route.create,
-        async ({ body, gameParticipantSessionId, gameRequestLocale }) => {
+            async ({
+              body,
+              gameParticipantSessionId,
+              gameRequestLocale,
+              gamePrincipalType,
+              gamePrincipalUserId,
+              gamePrincipalOrganizationId,
+              gamePrincipalRoleKeys,
+            }) => {
           const ownerSessionId = gameParticipantSessionId;
+              const principal = resolveGamePrincipalIdentity({
+                gamePrincipalType,
+                gamePrincipalUserId,
+                gamePrincipalOrganizationId,
+                gamePrincipalRoleKeys,
+              });
+              requireGameAction(principal, "create");
           const requestedLocale =
             typeof body?.locale === "string" && body.locale.length > 0 ? body.locale : undefined;
           const sceneId =
@@ -1296,11 +1355,25 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .get(
         route.state,
-        async ({ params, gameParticipantSessionId, gameRequestLocale }) => {
+        async ({
+          params,
+          gameParticipantSessionId,
+          gameRequestLocale,
+          gamePrincipalType,
+          gamePrincipalUserId,
+          gamePrincipalOrganizationId,
+          gamePrincipalRoleKeys,
+        }) => {
           const state = await requireAccessibleGameSession(
             params.id,
             gameParticipantSessionId,
             gameRequestLocale,
+            resolveGamePrincipalIdentity({
+              gamePrincipalType,
+              gamePrincipalUserId,
+              gamePrincipalOrganizationId,
+              gamePrincipalRoleKeys,
+            }),
           );
           return { ok: true, data: toGameSessionStatePayload(state) };
         },
@@ -1316,7 +1389,17 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .post(
         route.restore,
-        async ({ params, body, set, gameParticipantSessionId, gameRequestLocale }) => {
+        async ({
+          params,
+          body,
+          set,
+          gameParticipantSessionId,
+          gameRequestLocale,
+          gamePrincipalType,
+          gamePrincipalUserId,
+          gamePrincipalOrganizationId,
+          gamePrincipalRoleKeys,
+        }) => {
           const messages = getGameMessages(gameRequestLocale);
           const restoredSession = await gameLoop.restoreSession(
             params.id,
@@ -1337,6 +1420,12 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
             params.id,
             gameParticipantSessionId,
             gameRequestLocale,
+            resolveGamePrincipalIdentity({
+              gamePrincipalType,
+              gamePrincipalUserId,
+              gamePrincipalOrganizationId,
+              gamePrincipalRoleKeys,
+            }),
           );
           return { ok: true, data: toGameSessionStatePayload(sessionState) };
         },
@@ -1361,11 +1450,24 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
           status,
           gameParticipantSessionId,
           gameRequestLocale,
+          gamePrincipalType,
+          gamePrincipalUserId,
+          gamePrincipalOrganizationId,
+          gamePrincipalRoleKeys,
         }) => {
           const messages = getGameMessages(gameRequestLocale);
           const sessionState = await gameLoop.joinSession(
             body.inviteToken,
             gameParticipantSessionId,
+          );
+          requireGameAction(
+            resolveGamePrincipalIdentity({
+              gamePrincipalType,
+              gamePrincipalUserId,
+              gamePrincipalOrganizationId,
+              gamePrincipalRoleKeys,
+            }),
+            "observe",
           );
           if (!sessionState || sessionState.sessionId !== params.id) {
             return status(
@@ -1395,12 +1497,27 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .post(
         route.close,
-        async ({ params, set, gameParticipantSessionId, gameRequestLocale }) => {
+        async ({
+          params,
+          set,
+          gameParticipantSessionId,
+          gameRequestLocale,
+          gamePrincipalType,
+          gamePrincipalUserId,
+          gamePrincipalOrganizationId,
+          gamePrincipalRoleKeys,
+        }) => {
           const ownerSessionId = gameParticipantSessionId;
           const session = await requireOwnedGameSession(
             params.id,
             ownerSessionId,
             gameRequestLocale,
+            resolveGamePrincipalIdentity({
+              gamePrincipalType,
+              gamePrincipalUserId,
+              gamePrincipalOrganizationId,
+              gamePrincipalRoleKeys,
+            }),
           );
           const closed = await gameLoop.closeSession(session.id);
           if (!closed) {
@@ -1443,10 +1560,24 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
           status,
           gameParticipantSessionId,
           gameRequestLocale,
+          gamePrincipalType,
+          gamePrincipalUserId,
+          gamePrincipalOrganizationId,
+          gamePrincipalRoleKeys,
         }) => {
           const ownerSessionId = gameParticipantSessionId;
           const messages = getGameMessages(gameRequestLocale);
-          await requireOwnedGameSession(params.id, ownerSessionId, gameRequestLocale);
+          await requireOwnedGameSession(
+            params.id,
+            ownerSessionId,
+            gameRequestLocale,
+            resolveGamePrincipalIdentity({
+              gamePrincipalType,
+              gamePrincipalUserId,
+              gamePrincipalOrganizationId,
+              gamePrincipalRoleKeys,
+            }),
+          );
           const inviteToken = await gameLoop.createInviteToken(
             params.id,
             ownerSessionId,
@@ -1506,13 +1637,28 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .post(
         route.save,
-        async ({ params, set, gameParticipantSessionId, gameRequestLocale }) => {
+        async ({
+          params,
+          set,
+          gameParticipantSessionId,
+          gameRequestLocale,
+          gamePrincipalType,
+          gamePrincipalUserId,
+          gamePrincipalOrganizationId,
+          gamePrincipalRoleKeys,
+        }) => {
           const ownerSessionId = gameParticipantSessionId;
           const messages = getGameMessages(gameRequestLocale);
           const session = await requireOwnedGameSession(
             params.id,
             ownerSessionId,
             gameRequestLocale,
+            resolveGamePrincipalIdentity({
+              gamePrincipalType,
+              gamePrincipalUserId,
+              gamePrincipalOrganizationId,
+              gamePrincipalRoleKeys,
+            }),
           );
           const saveCooldownRemainingMs = gameLoop.getSaveCooldownRemainingMs(params.id);
           if (saveCooldownRemainingMs > 0) {
@@ -1549,13 +1695,30 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .post(
         route.saveSlot,
-        async ({ body, params, request, set, gameParticipantSessionId, gameRequestLocale }) => {
+        async ({
+          body,
+          params,
+          request,
+          set,
+          gameParticipantSessionId,
+          gameRequestLocale,
+          gamePrincipalType,
+          gamePrincipalUserId,
+          gamePrincipalOrganizationId,
+          gamePrincipalRoleKeys,
+        }) => {
           const ownerSessionId = gameParticipantSessionId;
           const messages = getGameMessages(gameRequestLocale);
           const session = await requireOwnedGameSession(
             params.id,
             ownerSessionId,
             gameRequestLocale,
+            resolveGamePrincipalIdentity({
+              gamePrincipalType,
+              gamePrincipalUserId,
+              gamePrincipalOrganizationId,
+              gamePrincipalRoleKeys,
+            }),
           );
           const saveCooldownRemainingMs = gameLoop.getSaveCooldownRemainingMs(params.id);
           if (saveCooldownRemainingMs > 0) {
@@ -1621,10 +1784,29 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .get(
         route.saveSlots,
-        async ({ params, request, gameParticipantSessionId, gameRequestLocale }) => {
+        async ({
+          params,
+          request,
+          gameParticipantSessionId,
+          gameRequestLocale,
+          gamePrincipalType,
+          gamePrincipalUserId,
+          gamePrincipalOrganizationId,
+          gamePrincipalRoleKeys,
+        }) => {
           const ownerSessionId = gameParticipantSessionId;
           const messages = getGameMessages(gameRequestLocale);
-          await requireOwnedGameSession(params.id, ownerSessionId, gameRequestLocale);
+          await requireOwnedGameSession(
+            params.id,
+            ownerSessionId,
+            gameRequestLocale,
+            resolveGamePrincipalIdentity({
+              gamePrincipalType,
+              gamePrincipalUserId,
+              gamePrincipalOrganizationId,
+              gamePrincipalRoleKeys,
+            }),
+          );
           const slots = await saveSlotStore.listSlots(ownerSessionId);
 
           const restorePath = interpolateRoutePath(appRoutes.gameApiSessionRestoreSlot, {
@@ -1692,10 +1874,31 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .post(
         route.restoreSlot,
-        async ({ body, params, request, set, gameParticipantSessionId, gameRequestLocale }) => {
+        async ({
+          body,
+          params,
+          request,
+          set,
+          gameParticipantSessionId,
+          gameRequestLocale,
+          gamePrincipalType,
+          gamePrincipalUserId,
+          gamePrincipalOrganizationId,
+          gamePrincipalRoleKeys,
+        }) => {
           const ownerSessionId = gameParticipantSessionId;
           const messages = getGameMessages(gameRequestLocale);
-          await requireOwnedGameSession(params.id, ownerSessionId, gameRequestLocale);
+          await requireOwnedGameSession(
+            params.id,
+            ownerSessionId,
+            gameRequestLocale,
+            resolveGamePrincipalIdentity({
+              gamePrincipalType,
+              gamePrincipalUserId,
+              gamePrincipalOrganizationId,
+              gamePrincipalRoleKeys,
+            }),
+          );
           const slotId = body?.slotId;
           if (!slotId || typeof slotId !== "string") {
             set.status = httpStatus.badRequest;
@@ -1744,13 +1947,28 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .delete(
         "/session/:id",
-        async ({ params, set, gameParticipantSessionId, gameRequestLocale }) => {
+        async ({
+          params,
+          set,
+          gameParticipantSessionId,
+          gameRequestLocale,
+          gamePrincipalType,
+          gamePrincipalUserId,
+          gamePrincipalOrganizationId,
+          gamePrincipalRoleKeys,
+        }) => {
           const ownerSessionId = gameParticipantSessionId;
           const messages = getGameMessages(gameRequestLocale);
           const session = await requireOwnedGameSession(
             params.id,
             ownerSessionId,
             gameRequestLocale,
+            resolveGamePrincipalIdentity({
+              gamePrincipalType,
+              gamePrincipalUserId,
+              gamePrincipalOrganizationId,
+              gamePrincipalRoleKeys,
+            }),
           );
           const closed = await gameLoop.closeSession(session.id);
           if (!closed) {
@@ -1784,11 +2002,27 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .post(
         route.command,
-        async ({ body, params, set, gameParticipantSessionId, gameRequestLocale }) => {
+        async ({
+          body,
+          params,
+          set,
+          gameParticipantSessionId,
+          gameRequestLocale,
+          gamePrincipalType,
+          gamePrincipalUserId,
+          gamePrincipalOrganizationId,
+          gamePrincipalRoleKeys,
+        }) => {
           const session = await requireControllableGameSession(
             params.id,
             gameParticipantSessionId,
             gameRequestLocale,
+            resolveGamePrincipalIdentity({
+              gamePrincipalType,
+              gamePrincipalUserId,
+              gamePrincipalOrganizationId,
+              gamePrincipalRoleKeys,
+            }),
           );
           const messages = getGameMessages(session.locale);
           const result = gameLoop.processCommand(
@@ -1874,11 +2108,25 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .get(
         route.dialogue,
-        async ({ params, gameParticipantSessionId, gameRequestLocale }) => {
+        async ({
+          params,
+          gameParticipantSessionId,
+          gameRequestLocale,
+          gamePrincipalType,
+          gamePrincipalUserId,
+          gamePrincipalOrganizationId,
+          gamePrincipalRoleKeys,
+        }) => {
           const session = await requireAccessibleGameSession(
             params.id,
             gameParticipantSessionId,
             gameRequestLocale,
+            resolveGamePrincipalIdentity({
+              gamePrincipalType,
+              gamePrincipalUserId,
+              gamePrincipalOrganizationId,
+              gamePrincipalRoleKeys,
+            }),
           );
           return { ok: true, data: session.state.dialogue };
         },
@@ -1894,11 +2142,26 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
       )
       .get(
         route.itemTooltip,
-        async ({ params, query, gameParticipantSessionId, gameRequestLocale }) => {
+        async ({
+          params,
+          query,
+          gameParticipantSessionId,
+          gameRequestLocale,
+          gamePrincipalType,
+          gamePrincipalUserId,
+          gamePrincipalOrganizationId,
+          gamePrincipalRoleKeys,
+        }) => {
           await requireAccessibleGameSession(
             params.id,
             gameParticipantSessionId,
             gameRequestLocale,
+            resolveGamePrincipalIdentity({
+              gamePrincipalType,
+              gamePrincipalUserId,
+              gamePrincipalOrganizationId,
+              gamePrincipalRoleKeys,
+            }),
           );
           const sessionResult = await gameLoop.getStoredSession(params.id);
           if (!sessionResult.ok) {

@@ -13,11 +13,11 @@ import { escapeHtml } from "../layout.ts";
 
 /** DaisyUI card variants. Use for article/div wrappers. */
 export const cardClasses = {
-  default: "card bg-base-100 shadow-sm",
-  bordered: "card card-border bg-base-100 shadow-sm",
-  borderedGlass: "card card-border bg-base-100/90 shadow-sm backdrop-blur-sm",
-  borderedGlassNoBlur: "card card-border bg-base-100/90 shadow-sm",
-  borderedNoShadow: "card card-border bg-base-100",
+  default: "bg-base-200 card",
+  bordered: "bg-base-200 card",
+  borderedGlass: "bg-base-200 card",
+  borderedGlassNoBlur: "bg-base-200 card",
+  borderedNoShadow: "bg-base-200 card",
 } as const;
 
 /** DaisyUI loading spinner classes for HTMX indicators. */
@@ -273,7 +273,15 @@ export interface CollapseConfig {
  */
 export interface StatusConfig {
   /** Status token for the indicator. */
-  readonly tone: "neutral" | "primary" | "secondary" | "accent" | "success" | "warning" | "info" | "error";
+  readonly tone:
+    | "neutral"
+    | "primary"
+    | "secondary"
+    | "accent"
+    | "success"
+    | "warning"
+    | "info"
+    | "error";
   /** Optional size variant for status dot. */
   readonly size?: "xs" | "sm" | "md" | "lg";
   /** Optional animation token. */
@@ -741,9 +749,7 @@ export const renderHero = (config: HeroConfig): string => {
  */
 export const renderCollapse = (config: CollapseConfig): string => {
   const openAttr = config.open ? " open" : "";
-  const ariaLabel = config.ariaLabel
-    ? ` aria-label="${escapeHtml(config.ariaLabel)}"`
-    : "";
+  const ariaLabel = config.ariaLabel ? ` aria-label="${escapeHtml(config.ariaLabel)}"` : "";
 
   return `<details class="collapse ${config.className ?? "bg-base-200/50 rounded-box border border-dashed border-base-300"}"${openAttr}${ariaLabel}>
     <summary class="collapse-title font-medium text-sm">${escapeHtml(config.title)}</summary>

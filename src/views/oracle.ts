@@ -38,7 +38,8 @@ export type OraclePanelState =
 const renderOracleChatHeader = (label: string, mode: OracleMode): string =>
   `<div class="chat-header text-xs text-base-content/60">${escapeHtml(label)} · ${escapeHtml(mode)}</div>`;
 
-const renderOracleChatFooter = (): string => `<div class="chat-footer text-[0.65rem] text-base-content/60">${escapeHtml(new Date().toLocaleTimeString())}</div>`;
+const renderOracleChatFooter = (): string =>
+  `<div class="chat-footer text-[0.65rem] text-base-content/60">${escapeHtml(new Date().toLocaleTimeString())}</div>`;
 
 /**
  * Adapts normalized service outcomes to panel-render states.

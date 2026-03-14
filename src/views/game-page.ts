@@ -5,10 +5,10 @@ type PageScript = {
   readonly src: string;
   readonly type?: "module";
 };
+
 import {
   appRoutes,
   interpolateRoutePath,
-  withLocaleQuery,
   withQueryParameters,
 } from "../shared/constants/routes.ts";
 import type {
@@ -471,8 +471,8 @@ export function GamePage(props: GamePageProps) {
                       hx-swap="outerHTML"
                       class="stat-value text-base"
                     >${escapeHtml(
-                        sceneMode === "3d" ? messages.game.sceneMode3d : messages.game.sceneMode2d,
-                      )}</div>
+                      sceneMode === "3d" ? messages.game.sceneMode3d : messages.game.sceneMode2d,
+                    )}</div>
                     <div class="stat-desc">${escapeHtml(activeQuestTitle ?? messages.game.objectiveDescription)}</div>
                   </div>
                   <div class="stat">

@@ -2,7 +2,7 @@ import { Elysia } from "elysia";
 import type { LocaleCode } from "../config/environment.ts";
 import { resolveRequestQueryParam } from "../shared/constants/routes.ts";
 import { resolveRequestLocale } from "../shared/i18n/translator.ts";
-import { type AuthCookieBag, resolveAuthSession } from "./auth-session.ts";
+import { type AuthCookieBag, type AuthPrincipal, resolveAuthSession } from "./auth-session.ts";
 
 /**
  * Derived request context shared by game HTTP routes.
@@ -10,6 +10,14 @@ import { type AuthCookieBag, resolveAuthSession } from "./auth-session.ts";
 export interface GameRequestContext {
   /** Authenticated anonymous session id derived from the request cookie. */
   readonly gameParticipantSessionId: string;
+  /** Canonical principal type for authorization checks. */
+  readonly gamePrincipalType: AuthPrincipal["actorType"];
+  /** Canonical principal user identifier when available. */
+  readonly gamePrincipalUserId: string | null;
+  /** Canonical principal organization identifier when available. */
+  readonly gamePrincipalOrganizationId: string | null;
+  /** Canonical principal role keys when available. */
+  readonly gamePrincipalRoleKeys: readonly string[];
   /** Negotiated locale for the current request. */
   readonly gameRequestLocale: LocaleCode;
   /** Requested session id from the game page query string. */
@@ -77,14 +85,22 @@ const resolveTrimmedQueryValue = (request: Request, key: string): string | null 
 export const resolveGameRequestContext = (
   request: Request,
   cookie: AuthCookieBag,
-): GameRequestContext => ({
-  gameParticipantSessionId: resolveAuthSession(cookie).sessionId,
+): GameRequestContext => {
+  const authSession = resolveAuthSession(cookie);
+
+  return {
+    gameParticipantSessionId: authSession.sessionId,
+    gamePrincipalType: authSession.principal.actorType,
+    gamePrincipalUserId: authSession.principal.actorId,
+    gamePrincipalOrganizationId: authSession.principal.organizationId,
+    gamePrincipalRoleKeys: authSession.principal.roleKeys,
   gameRequestLocale: resolveRequestLocale(request),
   gameRequestedSessionId: resolveTrimmedQueryValue(request, "sessionId"),
   gameRequestedSceneId: resolveTrimmedQueryValue(request, "sceneId"),
   gameRequestedProjectId: resolveTrimmedQueryValue(request, "projectId"),
   gameInviteToken: resolveTrimmedQueryValue(request, "invite"),
-});
+  };
+};
 
 /**
  * Safely resolves websocket transport identity and resume-token metadata.
@@ -119,6 +135,10 @@ export const gameRequestContextPlugin = new Elysia({ name: "game-request-context
 
     return {
       gameParticipantSessionId: context.gameParticipantSessionId,
+      gamePrincipalType: context.gamePrincipalType,
+      gamePrincipalUserId: context.gamePrincipalUserId,
+      gamePrincipalOrganizationId: context.gamePrincipalOrganizationId,
+      gamePrincipalRoleKeys: context.gamePrincipalRoleKeys,
       gameRequestLocale: context.gameRequestLocale,
       gameRequestedSessionId: context.gameRequestedSessionId,
       gameRequestedSceneId: context.gameRequestedSceneId,

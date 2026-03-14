@@ -149,9 +149,7 @@ export const getHtmxExtensionEntryPaths = (): readonly string[] =>
  * @returns Canonical client module entrypoint paths.
  */
 export const getClientModuleEntryPaths = (): readonly string[] =>
-  clientModuleEntryFiles.map((fileName) =>
-    joinLocalPath("src/client", fileName),
-  );
+  clientModuleEntryFiles.map((fileName) => joinLocalPath("src/client", fileName));
 
 /**
  * Resolves all static file mounts from the application config.

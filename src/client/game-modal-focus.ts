@@ -58,10 +58,7 @@ const trapFocus = (event: KeyboardEvent, dialogElement: HTMLDialogElement): void
   }
 };
 
-const wireDialog = (
-  dialogId: string,
-  focusState: { focusedBeforeOpen: Element | null },
-): void => {
+const wireDialog = (dialogId: string, focusState: { focusedBeforeOpen: Element | null }): void => {
   const dialog = document.getElementById(dialogId) as HTMLDialogElement | null;
   if (!dialog) {
     return;
@@ -72,9 +69,7 @@ const wireDialog = (
       focusState.focusedBeforeOpen = document.activeElement;
     } else {
       const returnTarget =
-        focusState.focusedBeforeOpen instanceof HTMLElement
-          ? focusState.focusedBeforeOpen
-          : null;
+        focusState.focusedBeforeOpen instanceof HTMLElement ? focusState.focusedBeforeOpen : null;
       if (returnTarget) {
         returnTarget.focus();
       }

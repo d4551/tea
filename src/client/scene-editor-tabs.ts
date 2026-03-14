@@ -8,7 +8,7 @@
  *
  * Bootstraps on DOMContentLoaded and re-runs after htmx:afterSwap for partial updates.
  */
-import { safeJsonParse, acceptUnknown } from "../shared/utils/safe-json.ts";
+import { acceptUnknown, safeJsonParse } from "../shared/utils/safe-json.ts";
 
 interface TilemapLayer {
   readonly id: string;
@@ -28,11 +28,7 @@ interface TilemapAsset {
 declare global {
   interface Window {
     htmx?: {
-      readonly ajax: (
-        method: string,
-        url: string,
-        options: Record<string, unknown>,
-      ) => void;
+      readonly ajax: (method: string, url: string, options: Record<string, unknown>) => void;
     };
   }
 }
@@ -104,9 +100,7 @@ const wireTilemapEditor = (panel: HTMLElement): void => {
   const rows = parseInt(panel.getAttribute("data-tilemap-rows") ?? "8", 10);
 
   if (!layer.data || layer.data.length === 0) {
-    layer.data = Array.from({ length: rows }, () =>
-      Array.from({ length: cols }, () => -1),
-    );
+    layer.data = Array.from({ length: rows }, () => Array.from({ length: cols }, () => -1));
   }
 
   let mode = "brush";
@@ -222,9 +216,7 @@ const wireTilemapEditor = (panel: HTMLElement): void => {
       return;
     }
     targetRow[c] = v;
-    const cell = panel.querySelector<HTMLElement>(
-      `[data-tile-row="${r}"][data-tile-col="${c}"]`,
-    );
+    const cell = panel.querySelector<HTMLElement>(`[data-tile-row="${r}"][data-tile-col="${c}"]`);
     if (cell) {
       cell.setAttribute("data-tile-value", String(v));
       cell.classList.toggle("bg-primary/30", v >= 0);
@@ -257,7 +249,15 @@ const wireTilemapEditor = (panel: HTMLElement): void => {
       const key = `${r},${c}`;
       const row = layer.data[r];
 
-      if (r < 0 || r >= rows || c < 0 || c >= cols || visited.has(key) || !row || row[c] !== target) {
+      if (
+        r < 0 ||
+        r >= rows ||
+        c < 0 ||
+        c >= cols ||
+        visited.has(key) ||
+        !row ||
+        row[c] !== target
+      ) {
         continue;
       }
 
@@ -298,7 +298,9 @@ const wireTilemapEditor = (panel: HTMLElement): void => {
   const grid = panel.querySelector<HTMLElement>("[data-tilemap-grid]");
   if (grid) {
     grid.addEventListener("mousedown", (event) => {
-      const cell = (event.target as Element)?.closest<HTMLElement>("[data-tile-row][data-tile-col]");
+      const cell = (event.target as Element)?.closest<HTMLElement>(
+        "[data-tile-row][data-tile-col]",
+      );
       if (!cell) {
         return;
       }
@@ -320,7 +322,9 @@ const wireTilemapEditor = (panel: HTMLElement): void => {
         return;
       }
 
-      const cell = (event.target as Element)?.closest<HTMLElement>("[data-tile-row][data-tile-col]");
+      const cell = (event.target as Element)?.closest<HTMLElement>(
+        "[data-tile-row][data-tile-col]",
+      );
       if (!cell) {
         return;
       }

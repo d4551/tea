@@ -36,6 +36,7 @@ import { gameScenes, gameSpriteManifests } from "../domain/game/data/sprite-data
 import { ensureCorrelationIdHeader } from "../lib/correlation-id.ts";
 import type { AppErrorCode } from "../lib/error-envelope.ts";
 import { ApplicationError, errorEnvelope, successEnvelope } from "../lib/error-envelope.ts";
+import { canPerformBuilderAction, type PrincipalIdentity, requireBuilderAction } from "../domain/auth/authorization.ts";
 import {
   builderRequestContextPlugin,
   readBuilderScopedContext,
@@ -85,6 +86,38 @@ import { escapeHtml } from "../views/layout.ts";
 import { cardClasses, renderBuilderHiddenFields } from "../views/shared/ui-components.ts";
 
 const route = (path: string): string => path.replace(/^\/api\/builder/, "");
+const isMutatingBuilderMethod = (method: string): boolean =>
+  method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE";
+
+const resolveBuilderPrincipalFromContext = (context: {
+  readonly builderPrincipalType: "anonymous" | "user";
+  readonly builderPrincipalUserId: string | null;
+  readonly builderPrincipalOrganizationId: string | null;
+  readonly builderPrincipalRoleKeys: readonly string[];
+}): PrincipalIdentity => ({
+  actorType: context.builderPrincipalType,
+  actorId: context.builderPrincipalUserId,
+  organizationId: context.builderPrincipalOrganizationId,
+  roleKeys: context.builderPrincipalRoleKeys,
+});
+
+const resolveBuilderUpdatedByFromContext = (context: {
+  readonly builderPrincipalType: "anonymous" | "user";
+  readonly builderPrincipalUserId: string | null;
+  readonly builderPrincipalOrganizationId: string | null;
+  readonly builderPrincipalRoleKeys: readonly string[];
+}): string => {
+  const identity = resolveBuilderPrincipalFromContext(context);
+  const principalId = identity.actorId?.trim();
+  const organizationId = identity.organizationId?.trim();
+  if (principalId && principalId.length > 0) {
+    return `${identity.actorType}:${principalId}`;
+  }
+  if (organizationId && organizationId.length > 0) {
+    return `${identity.actorType}:${organizationId}`;
+  }
+  return `${identity.actorType}:guest`;
+};
 
 type CorrelationRequest = {
   request: Request;
@@ -1029,6 +1062,31 @@ const renderPatchPreviewHtml = (
 export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/builder" })
   .use(builderRequestContextPlugin)
   .use(ssePlugin)
+  .onBeforeHandle(
+    ({
+      request,
+      builderProjectId,
+      builderPrincipalType,
+      builderPrincipalUserId,
+      builderPrincipalOrganizationId,
+      builderPrincipalRoleKeys,
+    }) => {
+      if (!isMutatingBuilderMethod(request.method)) {
+        return;
+      }
+
+      const identity = resolveBuilderPrincipalFromContext({
+        builderPrincipalType,
+        builderPrincipalUserId,
+        builderPrincipalOrganizationId,
+        builderPrincipalRoleKeys,
+      });
+      const allowed = canPerformBuilderAction(identity, builderProjectId, "write");
+      if (!allowed) {
+        return requireBuilderAction(identity, builderProjectId, "write");
+      }
+    },
+  )
   .get(route(appRoutes.builderPlatformReadiness), async ({ builderProjectId, status }) => {
     const project = await builderService.peekProject(builderProjectId);
     const features = await detectAvailableFeatures();
@@ -1192,6 +1250,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         { body },
       );
       const { builderLocale: actionLocale, builderProjectId: actionProjectId } = actionContext;
+    const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const requestText = body.prompt?.trim();
       if (!requestText) {
         return status(
@@ -1469,10 +1528,12 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         { body },
       );
       const { builderLocale: actionLocale, builderProjectId: actionProjectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const applied = await builderService.applyArtifactPatch(
         actionProjectId,
         parseOperation(body.operationsJson),
         body.expectedVersion ? Number.parseInt(body.expectedVersion, 10) : undefined,
+        actionUpdatedBy,
       );
       if (!applied) {
         return status(
@@ -1622,14 +1683,17 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   .post(
     route(appRoutes.aiBuilderPatchApply),
     async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
-      const { builderLocale: actionLocale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
+      const { builderLocale: actionLocale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const applied = await builderService.applyArtifactPatch(
         projectId,
         body.operations,
         body.expectedVersion,
+        actionUpdatedBy,
       );
       if (!applied) {
         return status(
@@ -1695,7 +1759,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         builderProjectId: actionProjectId,
         builderCurrentPath: actionCurrentPath,
       } = actionContext;
-      const project = await builderService.createProject(actionProjectId);
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
+      const project = await builderService.createProject(actionProjectId, actionUpdatedBy);
       if (!project) {
         return status(
           httpStatus.notFound,
@@ -1835,8 +1900,9 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         builderProjectId: actionProjectId,
         builderCurrentPath: actionCurrentPath,
       } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const shouldPublish = builderService.resolvePublishState(body.published);
-      const result = await builderService.publishProject(actionProjectId, shouldPublish);
+      const result = await builderService.publishProject(actionProjectId, shouldPublish, actionUpdatedBy);
       if (!result) {
         return status(
           httpStatus.notFound,
@@ -1905,10 +1971,12 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   .post(
     route(appRoutes.builderApiScenesCreateForm),
     async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const createPayload: BuilderSceneCreatePayload = {
         id: body.id,
         titleKey: body.titleKey,
@@ -1919,7 +1987,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         spawnX: body.spawnX,
         spawnY: body.spawnY,
       };
-      const result = await builderService.createScene(projectId, createPayload);
+      const result = await builderService.createScene(projectId, createPayload, actionUpdatedBy);
       if (!result) {
         return status(
           httpStatus.notFound,
@@ -1961,13 +2029,14 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         { body },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const scenePayload: BuilderScenePayload = {
         id: body.scene.id,
         scene: body.scene,
         checksum: body.checksum,
       };
 
-      const result = await builderService.saveScene(projectId, scenePayload);
+      const result = await builderService.saveScene(projectId, scenePayload, actionUpdatedBy);
       if (!result) {
         return status(
           httpStatus.notFound,
@@ -2071,10 +2140,12 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       builderProjectId,
       builderCurrentPath,
     }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const payload: BuilderSceneFormPayload = {
         sceneId: params.sceneId,
         titleKey: body.titleKey,
@@ -2086,7 +2157,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         spawnY: body.spawnY,
         tilemap: body.tilemap,
       };
-      const result = await builderService.saveSceneForm(projectId, payload);
+      const result = await builderService.saveSceneForm(projectId, payload, actionUpdatedBy);
       if (!result) {
         return status(
           httpStatus.notFound,
@@ -2134,17 +2205,19 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       builderProjectId,
       builderCurrentPath,
     }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const payload: BuilderScenePayload = {
         id: params.sceneId,
         scene: { ...body.scene, id: params.sceneId },
         checksum: body.checksum,
       };
 
-      const result = await builderService.saveScene(projectId, payload);
+      const result = await builderService.saveScene(projectId, payload, actionUpdatedBy);
       if (!result) {
         return status(
           httpStatus.notFound,
@@ -2220,11 +2293,13 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       builderProjectId,
       builderCurrentPath,
     }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { query },
       );
-      const mutation = await builderService.removeScene(projectId, params.sceneId);
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
+      const mutation = await builderService.removeScene(projectId, params.sceneId, actionUpdatedBy);
       if (!mutation) {
         return status(
           httpStatus.notFound,
@@ -2275,30 +2350,36 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       builderProjectId,
       builderCurrentPath,
     }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
-      const mutation = await builderService.saveSceneNode(projectId, {
-        sceneId: params.sceneId,
-        id: body.id,
-        nodeKind: body.nodeKind,
-        nodeType: body.nodeType,
-        assetId: body.assetId,
-        animationClipId: body.animationClipId,
-        layer: body.layer,
-        positionX: body.positionX,
-        positionY: body.positionY,
-        positionZ: body.positionZ,
-        rotationX: body.rotationX,
-        rotationY: body.rotationY,
-        rotationZ: body.rotationZ,
-        scaleX: body.scaleX,
-        scaleY: body.scaleY,
-        scaleZ: body.scaleZ,
-        sizeWidth: body.sizeWidth,
-        sizeHeight: body.sizeHeight,
-      } satisfies BuilderSceneNodePayload);
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
+      const mutation = await builderService.saveSceneNode(
+        projectId,
+        {
+          sceneId: params.sceneId,
+          id: body.id,
+          nodeKind: body.nodeKind,
+          nodeType: body.nodeType,
+          assetId: body.assetId,
+          animationClipId: body.animationClipId,
+          layer: body.layer,
+          positionX: body.positionX,
+          positionY: body.positionY,
+          positionZ: body.positionZ,
+          rotationX: body.rotationX,
+          rotationY: body.rotationY,
+          rotationZ: body.rotationZ,
+          scaleX: body.scaleX,
+          scaleY: body.scaleY,
+          scaleZ: body.scaleZ,
+          sizeWidth: body.sizeWidth,
+          sizeHeight: body.sizeHeight,
+        } satisfies BuilderSceneNodePayload,
+        actionUpdatedBy,
+      );
       if (!mutation) {
         return status(
           httpStatus.notFound,
@@ -2354,14 +2435,17 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       builderProjectId,
       builderCurrentPath,
     }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { query },
       );
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const mutation = await builderService.removeSceneNode(
         projectId,
         params.sceneId,
         params.nodeId,
+        actionUpdatedBy,
       );
       if (!mutation) {
         return status(
@@ -2392,28 +2476,34 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   .post(
     route(appRoutes.builderApiNpcsCreateForm),
     async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
-      const mutation = await builderService.saveNpc(projectId, {
-        sceneId: body.sceneId,
-        npc: {
-          characterKey: body.characterKey.trim(),
-          x: DEFAULT_NPC_SPAWN_X,
-          y: DEFAULT_NPC_SPAWN_Y,
-          labelKey: body.labelKey.trim(),
-          dialogueKeys: [],
-          interactRadius: DEFAULT_NPC_INTERACT_RADIUS,
-          ai: {
-            wanderRadius: DEFAULT_NPC_WANDER_RADIUS,
-            wanderSpeed: DEFAULT_NPC_WANDER_SPEED,
-            idlePauseMs: [...DEFAULT_NPC_IDLE_PAUSE_MS],
-            greetOnApproach: false,
-            greetLineKey: `${body.characterKey.trim()}.greet`,
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
+      const mutation = await builderService.saveNpc(
+        projectId,
+        {
+          sceneId: body.sceneId,
+          npc: {
+            characterKey: body.characterKey.trim(),
+            x: DEFAULT_NPC_SPAWN_X,
+            y: DEFAULT_NPC_SPAWN_Y,
+            labelKey: body.labelKey.trim(),
+            dialogueKeys: [],
+            interactRadius: DEFAULT_NPC_INTERACT_RADIUS,
+            ai: {
+              wanderRadius: DEFAULT_NPC_WANDER_RADIUS,
+              wanderSpeed: DEFAULT_NPC_WANDER_SPEED,
+              idlePauseMs: [...DEFAULT_NPC_IDLE_PAUSE_MS],
+              greetOnApproach: false,
+              greetLineKey: `${body.characterKey.trim()}.greet`,
+            },
           },
         },
-      });
+        actionUpdatedBy,
+      );
       if (!mutation) {
         return status(
           httpStatus.notFound,
@@ -2445,16 +2535,18 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   .post(
     route(appRoutes.builderApiNpcs),
     async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
-      const { builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
+      const { builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const payload: BuilderNpcPayload = {
         sceneId: body.sceneId,
         npc: body.npc,
       };
 
-      const mutation = await builderService.saveNpc(projectId, payload);
+      const mutation = await builderService.saveNpc(projectId, payload, actionUpdatedBy);
       if (!mutation) {
         return status(
           httpStatus.notFound,
@@ -2556,10 +2648,12 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       builderProjectId,
       builderCurrentPath,
     }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const sceneId = body.sceneId?.trim() ?? "";
       if (sceneId.length === 0) {
         return status(
@@ -2590,21 +2684,25 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         );
       }
 
-      const mutation = await builderService.saveNpcForm(projectId, {
-        sceneId,
-        npcId: params.npcId,
-        labelKey: body.labelKey,
-        x: body.x,
-        y: body.y,
-        interactRadius: body.interactRadius,
-        dialogueKeys: body.dialogueKeys,
-        wanderRadius: body.wanderRadius,
-        wanderSpeed: body.wanderSpeed,
-        idlePauseMinMs: body.idlePauseMinMs,
-        idlePauseMaxMs: body.idlePauseMaxMs,
-        greetOnApproach: body.greetOnApproach,
-        greetLineKey: body.greetLineKey,
-      } satisfies BuilderNpcFormPayload);
+      const mutation = await builderService.saveNpcForm(
+        projectId,
+        {
+          sceneId,
+          npcId: params.npcId,
+          labelKey: body.labelKey,
+          x: body.x,
+          y: body.y,
+          interactRadius: body.interactRadius,
+          dialogueKeys: body.dialogueKeys,
+          wanderRadius: body.wanderRadius,
+          wanderSpeed: body.wanderSpeed,
+          idlePauseMinMs: body.idlePauseMinMs,
+          idlePauseMaxMs: body.idlePauseMaxMs,
+          greetOnApproach: body.greetOnApproach,
+          greetLineKey: body.greetLineKey,
+        } satisfies BuilderNpcFormPayload,
+        actionUpdatedBy,
+      );
       if (!mutation || !mutation.payload) {
         return status(
           httpStatus.notFound,
@@ -2663,17 +2761,23 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       builderProjectId,
       builderCurrentPath,
     }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
-      const mutation = await builderService.saveNpc(projectId, {
-        sceneId: body.sceneId,
-        npc: {
-          ...body.npc,
-          characterKey: params.npcId,
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
+      const mutation = await builderService.saveNpc(
+        projectId,
+        {
+          sceneId: body.sceneId,
+          npc: {
+            ...body.npc,
+            characterKey: params.npcId,
+          },
         },
-      });
+        actionUpdatedBy,
+      );
 
       if (!mutation) {
         return status(
@@ -2733,10 +2837,12 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       builderProjectId,
       builderCurrentPath,
     }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { query },
       );
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const scenes = await builderService.listScenes(projectId);
       const owner = scenes.find((scene) =>
         scene.npcs.some((candidate) => candidate.characterKey === params.npcId),
@@ -2748,7 +2854,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         );
       }
 
-      const mutation = await builderService.removeNpc(projectId, owner.id, params.npcId);
+      const mutation = await builderService.removeNpc(projectId, owner.id, params.npcId, actionUpdatedBy);
       if (!mutation) {
         return status(
           httpStatus.notFound,
@@ -2789,15 +2895,21 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   .post(
     route(appRoutes.builderApiDialogueCreateForm),
     async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
-      const mutation = await builderService.saveDialogue(projectId, {
-        key: body.key.trim(),
-        text: body.text.trim(),
-        locale,
-      });
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
+      const mutation = await builderService.saveDialogue(
+        projectId,
+        {
+          key: body.key.trim(),
+          text: body.text.trim(),
+          locale,
+        },
+        actionUpdatedBy,
+      );
       if (!mutation) {
         return status(
           httpStatus.notFound,
@@ -2833,6 +2945,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         { body },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const payload: BuilderDialoguePayload = {
         key: body.key,
         text: body.text,
@@ -2840,7 +2953,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         checksum: body.checksum,
       };
 
-      const mutation = await builderService.saveDialogue(projectId, payload);
+      const mutation = await builderService.saveDialogue(projectId, payload, actionUpdatedBy);
       if (!mutation) {
         return status(
           httpStatus.notFound,
@@ -2918,16 +3031,22 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       builderProjectId,
       builderCurrentPath,
     }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const key = decodePathValue(params.key);
-      const mutation = await builderService.saveDialogue(projectId, {
-        key,
-        text: body.text ?? "",
-        locale,
-      });
+      const mutation = await builderService.saveDialogue(
+        projectId,
+        {
+          key,
+          text: body.text ?? "",
+          locale,
+        },
+        actionUpdatedBy,
+      );
       if (!mutation) {
         return status(
           httpStatus.notFound,
@@ -2974,16 +3093,22 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       builderProjectId,
       builderCurrentPath,
     }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const key = decodePathValue(params.key);
-      const mutation = await builderService.saveDialogue(projectId, {
-        key,
-        text: body.text,
-        locale,
-      });
+      const mutation = await builderService.saveDialogue(
+        projectId,
+        {
+          key,
+          text: body.text,
+          locale,
+        },
+        actionUpdatedBy,
+      );
       if (!mutation) {
         return status(
           httpStatus.notFound,
@@ -3035,12 +3160,14 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       builderProjectId,
       builderCurrentPath,
     }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { query },
       );
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const key = decodePathValue(params.key);
-      const removed = await builderService.removeDialogue(projectId, locale, key);
+      const removed = await builderService.removeDialogue(projectId, locale, key, actionUpdatedBy);
       if (!removed) {
         return status(
           httpStatus.notFound,
@@ -3081,10 +3208,12 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   .post(
     route(appRoutes.builderApiAssetsUpload),
     async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const bytes = await body.file.arrayBuffer();
       const stored = await persistBuilderFile(
         projectId,
@@ -3105,7 +3234,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         sourceName: body.file.name,
         sourceMimeType: body.file.type || undefined,
       };
-      const mutation = await builderService.createAsset(projectId, createPayload);
+      const mutation = await builderService.createAsset(projectId, createPayload, actionUpdatedBy);
 
       if (!mutation) {
         return status(
@@ -3163,10 +3292,12 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   .post(
     route(appRoutes.builderApiAssetsCreateForm),
     async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const createPayload: BuilderAssetCreatePayload = {
         id: body.id,
         label: body.label,
@@ -3174,7 +3305,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         sceneMode: body.sceneMode,
         source: body.source,
       };
-      const mutation = await builderService.createAsset(projectId, createPayload);
+      const mutation = await builderService.createAsset(projectId, createPayload, actionUpdatedBy);
       if (!mutation) {
         return status(
           httpStatus.notFound,
@@ -3217,10 +3348,12 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   .post(
     route(appRoutes.builderApiAnimationClipsCreateForm),
     async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const createPayload: BuilderAnimationClipCreatePayload = {
         id: body.id,
         assetId: body.assetId,
@@ -3228,7 +3361,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         playbackFps: body.playbackFps,
         frameCount: body.frameCount,
       };
-      const mutation = await builderService.createAnimationClip(projectId, createPayload);
+      const mutation = await builderService.createAnimationClip(projectId, createPayload, actionUpdatedBy);
       if (!mutation) {
         return status(
           httpStatus.notFound,
@@ -3262,15 +3395,21 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   .post(
     route(appRoutes.builderApiGenerationJobsCreateForm),
     async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
-      const mutation = await builderService.createGenerationJob(projectId, {
-        kind: body.kind,
-        prompt: body.prompt,
-        targetId: body.targetId,
-      } satisfies BuilderGenerationJobCreatePayload);
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
+      const mutation = await builderService.createGenerationJob(
+        projectId,
+        {
+          kind: body.kind,
+          prompt: body.prompt,
+          targetId: body.targetId,
+        } satisfies BuilderGenerationJobCreatePayload,
+        actionUpdatedBy,
+      );
       if (!mutation) {
         return status(
           httpStatus.notFound,
@@ -3278,7 +3417,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         );
       }
 
-      await builderService.processQueuedWork(projectId);
+      await builderService.processQueuedWork(projectId, actionUpdatedBy);
 
       return withProjectChromeRefresh(
         locale,
@@ -3322,13 +3461,20 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       builderProjectId,
       builderCurrentPath,
     }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const approved =
         typeof body.approved === "boolean" ? body.approved : body.approved === "true";
-      const mutation = await builderService.approveGenerationJob(projectId, params.jobId, approved);
+      const mutation = await builderService.approveGenerationJob(
+        projectId,
+        params.jobId,
+        approved,
+        actionUpdatedBy,
+      );
       if (!mutation) {
         return status(
           httpStatus.notFound,
@@ -3419,11 +3565,13 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   .post(
     route(appRoutes.builderApiQuestsCreateForm),
     async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
-      const mutation = await builderService.createQuest(projectId, body);
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
+      const mutation = await builderService.createQuest(projectId, body, actionUpdatedBy);
       if (!mutation) {
         return status(
           httpStatus.notFound,
@@ -3503,10 +3651,12 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       builderProjectId,
       builderCurrentPath,
     }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const questId = decodePathValue(params.questId);
       const existing = (await builderService.listQuests(projectId)).find((q) => q.id === questId);
       if (!existing) {
@@ -3515,12 +3665,16 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
           buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
         );
       }
-      const mutation = await builderService.saveQuestForm(projectId, {
-        questId,
-        title: body.title,
-        description: body.description,
-        triggerId: body.triggerId,
-      } satisfies BuilderQuestFormPayload);
+      const mutation = await builderService.saveQuestForm(
+        projectId,
+        {
+          questId,
+          title: body.title,
+          description: body.description,
+          triggerId: body.triggerId,
+        } satisfies BuilderQuestFormPayload,
+        actionUpdatedBy,
+      );
       if (!mutation) {
         return status(
           httpStatus.notFound,
@@ -3562,12 +3716,14 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       builderProjectId,
       builderCurrentPath,
     }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { query },
       );
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const questId = decodePathValue(params.questId);
-      const removed = await builderService.removeQuest(projectId, questId);
+      const removed = await builderService.removeQuest(projectId, questId, actionUpdatedBy);
       if (!removed) {
         return status(
           httpStatus.notFound,
@@ -3596,11 +3752,13 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   .post(
     route(appRoutes.builderApiTriggersCreateForm),
     async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
-      const mutation = await builderService.createTrigger(projectId, body);
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
+      const mutation = await builderService.createTrigger(projectId, body, actionUpdatedBy);
       if (!mutation) {
         return status(
           httpStatus.notFound,
@@ -3641,11 +3799,13 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   .post(
     route(appRoutes.builderApiDialogueGraphsCreateForm),
     async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
-      const mutation = await builderService.createDialogueGraph(projectId, body);
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
+      const mutation = await builderService.createDialogueGraph(projectId, body, actionUpdatedBy);
       if (!mutation) {
         return status(
           httpStatus.notFound,
@@ -3678,14 +3838,20 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   .post(
     route(appRoutes.builderApiAutomationRunsCreateForm),
     async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
-      const mutation = await builderService.createAutomationRun(projectId, {
-        goal: body.goal,
-        stepsJson: body.stepsJson,
-      } satisfies BuilderAutomationRunCreatePayload);
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
+      const mutation = await builderService.createAutomationRun(
+        projectId,
+        {
+          goal: body.goal,
+          stepsJson: body.stepsJson,
+        } satisfies BuilderAutomationRunCreatePayload,
+        actionUpdatedBy,
+      );
       if (!mutation) {
         return status(
           httpStatus.notFound,
@@ -3725,13 +3891,20 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       builderProjectId,
       builderCurrentPath,
     }) => {
-      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+      const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
         { body },
       );
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const approved =
         typeof body.approved === "boolean" ? body.approved : body.approved === "true";
-      const mutation = await builderService.approveAutomationRun(projectId, params.runId, approved);
+      const mutation = await builderService.approveAutomationRun(
+        projectId,
+        params.runId,
+        approved,
+        actionUpdatedBy,
+      );
       if (!mutation) {
         return status(
           httpStatus.notFound,

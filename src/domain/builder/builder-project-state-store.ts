@@ -2378,6 +2378,11 @@ export const normalizeBuilderLocale = (value: string | undefined): LocaleCode =>
 export class BuilderProjectStateStore {
   private readonly initPromise = this.ensureDefaultProject();
 
+  private resolveUpdatedBy(updatedBy: string | undefined, fallback: string): string {
+    const trimmed = (updatedBy ?? "").trim();
+    return trimmed.length > 0 ? trimmed : fallback;
+  }
+
   private async ensureDefaultProject(): Promise<void> {
     const existing = await prisma.builderProject.findStateRow(defaultBuilderProjectId);
     if (existing) {
@@ -2389,6 +2394,7 @@ export class BuilderProjectStateStore {
       defaultBuilderProjectId,
       toDraftStateInput(baseline),
       checksumOf(baseline),
+      undefined,
       {
         scenes: Object.values(baseline.scenes),
         dialogues: baseline.dialogues,
@@ -2562,7 +2568,10 @@ export class BuilderProjectStateStore {
    * @param projectId Target logical project id.
    * @returns Freshly created or existing snapshot.
    */
-  public async createProject(projectId: string): Promise<BuilderProjectSnapshot | null> {
+  public async createProject(
+    projectId: string,
+    createdBy?: string,
+  ): Promise<BuilderProjectSnapshot | null> {
     await this.initPromise;
     const sanitized = projectId.trim();
     if (sanitized.length === 0) {
@@ -2575,10 +2584,12 @@ export class BuilderProjectStateStore {
     }
 
     const baseline = createBaselineState();
+    const actor = this.resolveUpdatedBy(createdBy, "builder-service");
     const created = await prisma.builderProject.createStateProject(
       sanitized,
       toDraftStateInput(baseline),
       checksumOf(baseline),
+      actor,
       {
         scenes: Object.values(baseline.scenes),
         dialogues: baseline.dialogues,
@@ -2707,15 +2718,17 @@ export class BuilderProjectStateStore {
   public async publishProject(
     projectId: string,
     published: boolean,
+    updatedBy?: string,
   ): Promise<BuilderProjectSnapshot | null> {
     await this.initPromise;
     const sanitized = projectId.trim();
     if (sanitized.length === 0) {
       return null;
     }
+    const actor = this.resolveUpdatedBy(updatedBy, "builder-publish");
 
     if (!published) {
-      const updated = await prisma.builderProject.publishStateSnapshot(sanitized, false);
+      const updated = await prisma.builderProject.publishStateSnapshot(sanitized, false, { updatedBy: actor });
       if (!updated) {
         return null;
       }
@@ -2758,14 +2771,19 @@ export class BuilderProjectStateStore {
     if (!entry) {
       return null;
     }
-    const updated = await prisma.builderProject.publishStateSnapshot(sanitized, true, {
+    const updated = await prisma.builderProject.publishStateSnapshot(
+      sanitized,
+      true,
+      {
       state: safeJsonParse<Prisma.InputJsonValue>(
         JSON.stringify(entry.state),
         {},
         (v): v is Prisma.InputJsonValue => true,
       ),
       checksum: checksumOf(entry.state),
-    });
+      },
+      actor,
+    );
     if (!updated) {
       return null;
     }

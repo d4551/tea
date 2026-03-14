@@ -7,7 +7,7 @@ import type {
 import { appRoutes, withLocaleQuery, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
-import { renderCollapse, renderStats, type ColorToken } from "../shared/ui-components.ts";
+import { type ColorToken, renderCollapse, renderStats } from "../shared/ui-components.ts";
 
 import { renderWorkspaceShell } from "./workspace-shell.ts";
 
@@ -125,7 +125,10 @@ const metricToneToken = (tone: CapabilityMetric["tone"]): ColorToken | undefined
   }
 };
 
-const renderMetricStats = (metrics: readonly CapabilityMetric[], className = "bg-base-200"): string =>
+const renderMetricStats = (
+  metrics: readonly CapabilityMetric[],
+  className = "bg-base-200",
+): string =>
   renderStats({
     stats: metrics.map((metric) => ({
       title: metric.label,
@@ -466,18 +469,29 @@ export const renderBuilderDashboard = (
               <li class="step step-accent">${escapeHtml(messages.builder.mechanics)}</li>
               <li class="step ${published ? "step-success" : ""}">${escapeHtml(messages.builder.playPublishedBuild)}</li>
             </ul>
-            ${renderMetricStats([
-              { label: messages.builder.draftVersionLabel, value: stats.draftVersion, tone: "primary" },
-              { label: messages.builder.latestReleaseLabel, value: stats.latestReleaseVersion, tone: "secondary" },
-              {
-                label: messages.builder.publishedReleaseLabel,
-                value: releaseValue(
-                  stats.publishedReleaseVersion,
-                  messages.builder.noPublishedRelease,
-                ),
-                tone: "accent",
-              },
-            ], "bg-base-200/70 sm:stats-horizontal")}
+            ${renderMetricStats(
+              [
+                {
+                  label: messages.builder.draftVersionLabel,
+                  value: stats.draftVersion,
+                  tone: "primary",
+                },
+                {
+                  label: messages.builder.latestReleaseLabel,
+                  value: stats.latestReleaseVersion,
+                  tone: "secondary",
+                },
+                {
+                  label: messages.builder.publishedReleaseLabel,
+                  value: releaseValue(
+                    stats.publishedReleaseVersion,
+                    messages.builder.noPublishedRelease,
+                  ),
+                  tone: "accent",
+                },
+              ],
+              "bg-base-200/70 sm:stats-horizontal",
+            )}
           </div>
         </article>
 
@@ -494,9 +508,20 @@ export const renderBuilderDashboard = (
                   value: stats.aiProviderCount,
                   tone: "primary",
                 },
-                { label: messages.builder.runtimeLabel, value: stats.rendererPreference.toUpperCase(), tone: "secondary" },
-                { label: messages.builder.modelLabel, value: stats.onnxDevice.toUpperCase(), tone: "accent" },
-                { label: messages.builder.generationJobCountLabel, value: stats.generationJobCount },
+                {
+                  label: messages.builder.runtimeLabel,
+                  value: stats.rendererPreference.toUpperCase(),
+                  tone: "secondary",
+                },
+                {
+                  label: messages.builder.modelLabel,
+                  value: stats.onnxDevice.toUpperCase(),
+                  tone: "accent",
+                },
+                {
+                  label: messages.builder.generationJobCountLabel,
+                  value: stats.generationJobCount,
+                },
               ],
               "bg-base-200/70 sm:stats-horizontal",
             )}

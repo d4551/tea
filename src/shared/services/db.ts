@@ -1387,6 +1387,7 @@ const withBuilderCoreExtensions = (base: PrismaClient) =>
           id: string,
           state: Prisma.InputJsonValue,
           checksum: string,
+          createdBy?: string,
           content?: {
             readonly scenes: readonly SceneDefinition[];
             readonly dialogues: Readonly<Record<LocaleCode, Record<string, string>>>;
@@ -1402,11 +1403,14 @@ const withBuilderCoreExtensions = (base: PrismaClient) =>
           },
         ): Promise<BuilderProjectRow> {
           return base.$transaction(async (tx) => {
+            const actor = (createdBy ?? "").trim() || "system";
             const row = await tx.builderProject.create({
               data: {
                 id,
                 state,
                 checksum,
+                createdBy: actor,
+                updatedBy: actor,
               },
               select: builderProjectRowSelect,
             });
@@ -1884,8 +1888,10 @@ const withBuilderCoreExtensions = (base: PrismaClient) =>
             readonly state: Prisma.InputJsonValue;
             readonly checksum: string;
           },
+          updatedBy?: string,
         ): Promise<BuilderProjectRow | null> {
           return base.$transaction(async (tx) => {
+            const actor = (updatedBy ?? "").trim() || "builder-publish";
             const row = await tx.builderProject.findUnique({
               where: { id: projectId },
             });
@@ -1915,7 +1921,7 @@ const withBuilderCoreExtensions = (base: PrismaClient) =>
                 data: {
                   latestReleaseVersion: nextReleaseVersion,
                   publishedReleaseVersion: nextReleaseVersion,
-                  updatedBy: "builder-publish",
+                updatedBy: actor,
                   version: {
                     increment: 1,
                   },
@@ -1926,7 +1932,7 @@ const withBuilderCoreExtensions = (base: PrismaClient) =>
                 where: { id: row.id },
                 data: {
                   publishedReleaseVersion: null,
-                  updatedBy: "builder-publish",
+                  updatedBy: actor,
                   version: {
                     increment: 1,
                   },

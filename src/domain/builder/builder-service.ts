@@ -372,7 +372,7 @@ export interface BuilderDialogueGraphCreatePayload {
  */
 export interface BuilderService {
   /** Creates a fresh project from game baseline data. */
-  createProject(projectId: string): Promise<BuilderProjectSnapshot | null>;
+  createProject(projectId: string, updatedBy?: string): Promise<BuilderProjectSnapshot | null>;
   /** Returns one builder project snapshot by id. */
   getProject(projectId: string): Promise<BuilderProjectSnapshot | null>;
   /** Returns one existing project snapshot without implicitly creating it. */
@@ -383,59 +383,77 @@ export interface BuilderService {
   saveScene(
     projectId: string,
     payload: BuilderScenePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<SceneDefinition> | null>;
   /** Creates a scene using canonical domain-owned defaults. */
   createScene(
     projectId: string,
     payload: BuilderSceneCreatePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<SceneDefinition> | null>;
   /** Applies a partial scene form update without replacing nested authored state. */
   saveSceneForm(
     projectId: string,
     payload: BuilderSceneFormPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<SceneDefinition> | null>;
   /** Persists or updates one authored scene node without clobbering unspecified fields. */
   saveSceneNode(
     projectId: string,
     payload: BuilderSceneNodePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<SceneDefinition> | null>;
   /** Removes one authored scene node from a scene. */
   removeSceneNode(
     projectId: string,
     sceneId: string,
     nodeId: string,
+    updatedBy?: string,
   ): Promise<BuilderMutation<SceneDefinition> | null>;
   /** Removes a scene from a project. */
-  removeScene(projectId: string, sceneId: string): Promise<BuilderMutation<null> | null>;
+  removeScene(
+    projectId: string,
+    sceneId: string,
+    updatedBy?: string,
+  ): Promise<BuilderMutation<null> | null>;
   /** Persists an NPC payload into a scene. */
   saveNpc(
     projectId: string,
     payload: BuilderNpcPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<SceneNpcDefinition | null> | null>;
   /** Applies a partial NPC form update without replacing authored AI/dialogue defaults. */
   saveNpcForm(
     projectId: string,
     payload: BuilderNpcFormPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<SceneNpcDefinition | null> | null>;
   /** Removes an NPC from a project. */
   removeNpc(
     projectId: string,
     sceneId: string,
     npcId: string,
+    updatedBy?: string,
   ): Promise<BuilderMutation<SceneNpcDefinition[]> | null>;
   /** Persists dialogue text for locale-scoped catalog. */
   saveDialogue(
     projectId: string,
     payload: BuilderDialoguePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<string> | null>;
   /** Removes dialogue key for locale-scoped catalog. */
   removeDialogue(
     projectId: string,
     locale: LocaleCode,
     key: string,
+    updatedBy?: string,
   ): Promise<BuilderMutation<string | null> | null>;
   /** Publishes or unpublishes a project. */
-  publishProject(projectId: string, published: boolean): Promise<BuilderPublishResult | null>;
+  publishProject(
+    projectId: string,
+    published: boolean,
+    updatedBy?: string,
+  ): Promise<BuilderPublishResult | null>;
   /** Resolves a transport publish flag into a canonical boolean state. */
   resolvePublishState(value: boolean | string): boolean;
   /** Finds a scene by project and scene id. */
@@ -452,75 +470,106 @@ export interface BuilderService {
   saveAsset(
     projectId: string,
     payload: BuilderAssetPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<BuilderAsset> | null>;
   /** Creates one authored asset using canonical source-derived defaults. */
   createAsset(
     projectId: string,
     payload: BuilderAssetCreatePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<BuilderAsset> | null>;
   /** Removes one asset. */
-  removeAsset(projectId: string, assetId: string): Promise<BuilderMutation<null> | null>;
+  removeAsset(
+    projectId: string,
+    assetId: string,
+    updatedBy?: string,
+  ): Promise<BuilderMutation<null> | null>;
   /** Lists authored animation clips. */
   listAnimationClips(projectId: string): Promise<readonly AnimationClip[]>;
   /** Persists an animation clip. */
   saveAnimationClip(
     projectId: string,
     payload: BuilderAnimationClipPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<AnimationClip> | null>;
   /** Creates one animation clip using canonical domain-owned defaults. */
   createAnimationClip(
     projectId: string,
     payload: BuilderAnimationClipCreatePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<AnimationClip> | null>;
   /** Removes an animation clip. */
-  removeAnimationClip(projectId: string, clipId: string): Promise<BuilderMutation<null> | null>;
+  removeAnimationClip(
+    projectId: string,
+    clipId: string,
+    updatedBy?: string,
+  ): Promise<BuilderMutation<null> | null>;
   /** Lists authored dialogue graphs. */
   listDialogueGraphs(projectId: string): Promise<readonly DialogueGraph[]>;
   /** Persists a dialogue graph. */
   saveDialogueGraph(
     projectId: string,
     payload: BuilderDialogueGraphPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<DialogueGraph> | null>;
   /** Creates a dialogue graph using canonical domain-owned root-node defaults. */
   createDialogueGraph(
     projectId: string,
     payload: BuilderDialogueGraphCreatePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<DialogueGraph> | null>;
   /** Removes a dialogue graph. */
-  removeDialogueGraph(projectId: string, graphId: string): Promise<BuilderMutation<null> | null>;
+  removeDialogueGraph(
+    projectId: string,
+    graphId: string,
+    updatedBy?: string,
+  ): Promise<BuilderMutation<null> | null>;
   /** Lists authored quests. */
   listQuests(projectId: string): Promise<readonly QuestDefinition[]>;
   /** Persists a quest. */
   saveQuest(
     projectId: string,
     payload: BuilderQuestPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<QuestDefinition> | null>;
   /** Creates a quest using canonical domain-owned initial-step defaults. */
   createQuest(
     projectId: string,
     payload: BuilderQuestCreatePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<QuestDefinition> | null>;
   /** Applies a partial quest form update without replacing authored branching steps. */
   saveQuestForm(
     projectId: string,
     payload: BuilderQuestFormPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<QuestDefinition> | null>;
   /** Removes a quest. */
-  removeQuest(projectId: string, questId: string): Promise<BuilderMutation<null> | null>;
+  removeQuest(
+    projectId: string,
+    questId: string,
+    updatedBy?: string,
+  ): Promise<BuilderMutation<null> | null>;
   /** Lists authored triggers. */
   listTriggers(projectId: string): Promise<readonly TriggerDefinition[]>;
   /** Persists a trigger. */
   saveTrigger(
     projectId: string,
     payload: BuilderTriggerPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<TriggerDefinition> | null>;
   /** Creates a trigger using canonical domain-owned scope defaults. */
   createTrigger(
     projectId: string,
     payload: BuilderTriggerCreatePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<TriggerDefinition> | null>;
   /** Removes a trigger. */
-  removeTrigger(projectId: string, triggerId: string): Promise<BuilderMutation<null> | null>;
+  removeTrigger(
+    projectId: string,
+    triggerId: string,
+    updatedBy?: string,
+  ): Promise<BuilderMutation<null> | null>;
   /** Lists authored flags. */
   listFlags(projectId: string): Promise<readonly GameFlagDefinition[]>;
   /** Lists generation jobs. */
@@ -529,17 +578,20 @@ export interface BuilderService {
   saveGenerationJob(
     projectId: string,
     payload: BuilderGenerationJobPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<GenerationJob> | null>;
   /** Queues a generation job using canonical domain-owned defaults. */
   createGenerationJob(
     projectId: string,
     payload: BuilderGenerationJobCreatePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<GenerationJob> | null>;
   /** Updates a generation job review status. */
   approveGenerationJob(
     projectId: string,
     jobId: string,
     approved: boolean,
+    updatedBy?: string,
   ): Promise<BuilderMutation<GenerationJob> | null>;
   /** Lists generated artifacts. */
   listArtifacts(projectId: string): Promise<readonly GenerationArtifact[]>;
@@ -549,20 +601,23 @@ export interface BuilderService {
   saveAutomationRun(
     projectId: string,
     payload: BuilderAutomationRunPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<AutomationRun> | null>;
   /** Queues an automation run using canonical domain-owned workflow steps. */
   createAutomationRun(
     projectId: string,
     payload: BuilderAutomationRunCreatePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<AutomationRun> | null>;
   /** Updates automation review status. */
   approveAutomationRun(
     projectId: string,
     runId: string,
     approved: boolean,
+    updatedBy?: string,
   ): Promise<BuilderMutation<AutomationRun> | null>;
   /** Processes queued generation and automation work for all or one project. */
-  processQueuedWork(projectId?: string): Promise<number>;
+  processQueuedWork(projectId?: string, updatedBy?: string): Promise<number>;
   /** Builds a deterministic preview for proposed AI patch operations. */
   previewArtifactPatch(
     projectId: string,
@@ -573,6 +628,7 @@ export interface BuilderService {
     projectId: string,
     operations: readonly BuilderArtifactPatch[],
     expectedVersion?: number,
+    updatedBy?: string,
   ): Promise<BuilderPatchApplyResult | null>;
 }
 
@@ -1272,6 +1328,11 @@ const parseScenePatch = (
 class PrismaBuilderService implements BuilderService {
   private readonly stateStore = createBuilderProjectStateStore();
 
+  private resolveUpdatedBy(updatedBy: string | undefined, fallback: string): string {
+    const trimmed = (updatedBy ?? "").trim();
+    return trimmed.length > 0 ? trimmed : fallback;
+  }
+
   private async readProjectEntry(projectId: string): Promise<BuilderProjectStateEntry | null> {
     return this.stateStore.readProjectEntry(projectId);
   }
@@ -1286,8 +1347,11 @@ class PrismaBuilderService implements BuilderService {
     return this.stateStore.updateProject(projectId, updatedBy, mutate);
   }
 
-  public async createProject(projectId: string): Promise<BuilderProjectSnapshot | null> {
-    return this.stateStore.createProject(projectId);
+  public async createProject(
+    projectId: string,
+    updatedBy?: string,
+  ): Promise<BuilderProjectSnapshot | null> {
+    return this.stateStore.createProject(projectId, updatedBy);
   }
 
   public async getProject(projectId: string): Promise<BuilderProjectSnapshot | null> {
@@ -1305,8 +1369,12 @@ class PrismaBuilderService implements BuilderService {
   public async saveScene(
     projectId: string,
     payload: BuilderScenePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<SceneDefinition> | null> {
-    const mutation = await this.mutateProject(projectId, "builder-editor", (state) => {
+    const mutation = await this.mutateProject(
+      projectId,
+      this.resolveUpdatedBy(updatedBy, "builder-editor"),
+      (state) => {
       const nextScene = cloneScene(payload.scene);
       const action: BuilderMutationResult["action"] = Object.hasOwn(state.scenes, payload.id)
         ? "updated"
@@ -1370,10 +1438,11 @@ class PrismaBuilderService implements BuilderService {
   public async saveSceneForm(
     projectId: string,
     payload: BuilderSceneFormPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<SceneDefinition> | null> {
     const mutation = await this.mutateProject<SceneDefinition>(
       projectId,
-      "builder-editor",
+      this.resolveUpdatedBy(updatedBy, "builder-editor"),
       (state) => {
         const current = state.scenes[payload.sceneId];
         if (!current) {
@@ -1441,10 +1510,11 @@ class PrismaBuilderService implements BuilderService {
   public async saveSceneNode(
     projectId: string,
     payload: BuilderSceneNodePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<SceneDefinition> | null> {
     const mutation = await this.mutateProject<SceneDefinition>(
       projectId,
-      "builder-editor",
+      this.resolveUpdatedBy(updatedBy, "builder-editor"),
       (state) => {
         const scene = state.scenes[payload.sceneId];
         if (!scene) {
@@ -1492,10 +1562,11 @@ class PrismaBuilderService implements BuilderService {
     projectId: string,
     sceneId: string,
     nodeId: string,
+    updatedBy?: string,
   ): Promise<BuilderMutation<SceneDefinition> | null> {
     const mutation = await this.mutateProject<SceneDefinition>(
       projectId,
-      "builder-editor",
+      this.resolveUpdatedBy(updatedBy, "builder-editor"),
       (state) => {
         const scene = state.scenes[sceneId];
         if (!scene) {
@@ -1533,8 +1604,12 @@ class PrismaBuilderService implements BuilderService {
   public async removeScene(
     projectId: string,
     sceneId: string,
+    updatedBy?: string,
   ): Promise<BuilderMutation<null> | null> {
-    const mutation = await this.mutateProject(projectId, "builder-editor", (state) => {
+    const mutation = await this.mutateProject(
+      projectId,
+      this.resolveUpdatedBy(updatedBy, "builder-editor"),
+      (state) => {
       if (!Object.hasOwn(state.scenes, sceneId)) {
         return { ok: false };
       }
@@ -1558,11 +1633,12 @@ class PrismaBuilderService implements BuilderService {
   public async saveNpc(
     projectId: string,
     payload: BuilderNpcPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<SceneNpcDefinition | null> | null> {
     const mutation = await this.mutateProject<{
       readonly action: BuilderMutationResult["action"];
       readonly npc: SceneNpcDefinition;
-    }>(projectId, "builder-editor", (state) => {
+    }>(projectId, this.resolveUpdatedBy(updatedBy, "builder-editor"), (state) => {
       const scene = state.scenes[payload.sceneId];
       if (!scene) {
         return { ok: false };
@@ -1607,10 +1683,11 @@ class PrismaBuilderService implements BuilderService {
   public async saveNpcForm(
     projectId: string,
     payload: BuilderNpcFormPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<SceneNpcDefinition | null> | null> {
     const mutation = await this.mutateProject<{
       readonly npc: SceneNpcDefinition;
-    }>(projectId, "builder-editor", (state) => {
+    }>(projectId, this.resolveUpdatedBy(updatedBy, "builder-editor"), (state) => {
       const scene = state.scenes[payload.sceneId];
       if (!scene) {
         return { ok: false };
@@ -1700,10 +1777,11 @@ class PrismaBuilderService implements BuilderService {
     projectId: string,
     sceneId: string,
     npcId: string,
+    updatedBy?: string,
   ): Promise<BuilderMutation<SceneNpcDefinition[]> | null> {
     const mutation = await this.mutateProject<SceneNpcDefinition[]>(
       projectId,
-      "builder-editor",
+      this.resolveUpdatedBy(updatedBy, "builder-editor"),
       (state) => {
         const scene = state.scenes[sceneId];
         if (!scene) {
@@ -1740,9 +1818,13 @@ class PrismaBuilderService implements BuilderService {
   public async saveDialogue(
     projectId: string,
     payload: BuilderDialoguePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<string> | null> {
     const locale = normalizeBuilderLocale(payload.locale);
-    const mutation = await this.mutateProject(projectId, "builder-editor", (state) => {
+    const mutation = await this.mutateProject(
+      projectId,
+      this.resolveUpdatedBy(updatedBy, "builder-editor"),
+      (state) => {
       const catalog = state.dialogues[locale];
       const action: BuilderMutationResult["action"] = Object.hasOwn(catalog, payload.key)
         ? "updated"
@@ -1771,9 +1853,13 @@ class PrismaBuilderService implements BuilderService {
     projectId: string,
     locale: LocaleCode,
     key: string,
+    updatedBy?: string,
   ): Promise<BuilderMutation<string | null> | null> {
     const normalizedLocale = normalizeBuilderLocale(locale);
-    const mutation = await this.mutateProject(projectId, "builder-editor", (state) => {
+    const mutation = await this.mutateProject(
+      projectId,
+      this.resolveUpdatedBy(updatedBy, "builder-editor"),
+      (state) => {
       const catalog = state.dialogues[normalizedLocale];
       if (!Object.hasOwn(catalog, key)) {
         return { ok: false };
@@ -1799,9 +1885,11 @@ class PrismaBuilderService implements BuilderService {
   public async publishProject(
     projectId: string,
     published: boolean,
+    updatedBy?: string,
   ): Promise<BuilderPublishResult | null> {
+    const actor = this.resolveUpdatedBy(updatedBy, "builder-api");
     if (!published) {
-      const snapshot = await this.stateStore.publishProject(projectId, false);
+      const snapshot = await this.stateStore.publishProject(projectId, false, actor);
       return snapshot ? { ok: true, snapshot } : null;
     }
 
@@ -1815,7 +1903,7 @@ class PrismaBuilderService implements BuilderService {
       return { ok: false, issues: validation.issues };
     }
 
-    const snapshot = await this.stateStore.publishProject(projectId, true);
+    const snapshot = await this.stateStore.publishProject(projectId, true, actor);
     return snapshot ? { ok: true, snapshot } : null;
   }
 
@@ -1890,8 +1978,12 @@ class PrismaBuilderService implements BuilderService {
   public async saveAsset(
     projectId: string,
     payload: BuilderAssetPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<BuilderAsset> | null> {
-    const mutation = await this.mutateProject(projectId, "builder-assets", (state) => {
+    const mutation = await this.mutateProject(
+      projectId,
+      this.resolveUpdatedBy(updatedBy, "builder-assets"),
+      (state) => {
       const nextAsset = structuredClone(payload.asset);
       const action: BuilderMutationResult["action"] = Object.hasOwn(state.assets, payload.id)
         ? "updated"
@@ -1921,6 +2013,7 @@ class PrismaBuilderService implements BuilderService {
   public async createAsset(
     projectId: string,
     payload: BuilderAssetCreatePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<BuilderAsset> | null> {
     const source = payload.source.trim();
     const sourceName = trimOptionalField(payload.sourceName);
@@ -1950,14 +2043,18 @@ class PrismaBuilderService implements BuilderService {
         createdAtMs: now,
         updatedAtMs: now,
       },
-    });
+    }, updatedBy);
   }
 
   public async removeAsset(
     projectId: string,
     assetId: string,
+    updatedBy?: string,
   ): Promise<BuilderMutation<null> | null> {
-    const mutation = await this.mutateProject(projectId, "builder-assets", (state) => {
+    const mutation = await this.mutateProject(
+      projectId,
+      this.resolveUpdatedBy(updatedBy, "builder-assets"),
+      (state) => {
       if (!Object.hasOwn(state.assets, assetId)) {
         return { ok: false };
       }
@@ -1988,8 +2085,12 @@ class PrismaBuilderService implements BuilderService {
   public async saveAnimationClip(
     projectId: string,
     payload: BuilderAnimationClipPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<AnimationClip> | null> {
-    const mutation = await this.mutateProject(projectId, "builder-assets", (state) => {
+    const mutation = await this.mutateProject(
+      projectId,
+      this.resolveUpdatedBy(updatedBy, "builder-assets"),
+      (state) => {
       const nextClip = structuredClone(payload.clip);
       const action: BuilderMutationResult["action"] = Object.hasOwn(
         state.animationClips,
@@ -2022,6 +2123,7 @@ class PrismaBuilderService implements BuilderService {
   public async createAnimationClip(
     projectId: string,
     payload: BuilderAnimationClipCreatePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<AnimationClip> | null> {
     const entry = await this.readProjectEntry(projectId);
     if (!entry) {
@@ -2056,14 +2158,18 @@ class PrismaBuilderService implements BuilderService {
         createdAtMs: now,
         updatedAtMs: now,
       },
-    });
+    }, updatedBy);
   }
 
   public async removeAnimationClip(
     projectId: string,
     clipId: string,
+    updatedBy?: string,
   ): Promise<BuilderMutation<null> | null> {
-    const mutation = await this.mutateProject(projectId, "builder-assets", (state) => {
+    const mutation = await this.mutateProject(
+      projectId,
+      this.resolveUpdatedBy(updatedBy, "builder-assets"),
+      (state) => {
       if (!Object.hasOwn(state.animationClips, clipId)) {
         return { ok: false };
       }
@@ -2094,8 +2200,12 @@ class PrismaBuilderService implements BuilderService {
   public async saveDialogueGraph(
     projectId: string,
     payload: BuilderDialogueGraphPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<DialogueGraph> | null> {
-    const mutation = await this.mutateProject(projectId, "builder-mechanics", (state) => {
+    const mutation = await this.mutateProject(
+      projectId,
+      this.resolveUpdatedBy(updatedBy, "builder-mechanics"),
+      (state) => {
       const nextGraph = structuredClone(payload.graph);
       const action: BuilderMutationResult["action"] = Object.hasOwn(
         state.dialogueGraphs,
@@ -2125,6 +2235,7 @@ class PrismaBuilderService implements BuilderService {
   public async createDialogueGraph(
     projectId: string,
     payload: BuilderDialogueGraphCreatePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<DialogueGraph> | null> {
     const graphId = payload.id.trim();
     const title = payload.title.trim();
@@ -2149,14 +2260,18 @@ class PrismaBuilderService implements BuilderService {
         createdAtMs: now,
         updatedAtMs: now,
       },
-    });
+    }, updatedBy);
   }
 
   public async removeDialogueGraph(
     projectId: string,
     graphId: string,
+    updatedBy?: string,
   ): Promise<BuilderMutation<null> | null> {
-    const mutation = await this.mutateProject(projectId, "builder-mechanics", (state) => {
+    const mutation = await this.mutateProject(
+      projectId,
+      this.resolveUpdatedBy(updatedBy, "builder-mechanics"),
+      (state) => {
       if (!Object.hasOwn(state.dialogueGraphs, graphId)) {
         return { ok: false };
       }
@@ -2187,8 +2302,9 @@ class PrismaBuilderService implements BuilderService {
   public async saveQuest(
     projectId: string,
     payload: BuilderQuestPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<QuestDefinition> | null> {
-    const mutation = await this.mutateProject(projectId, "builder-mechanics", (state) => {
+    const mutation = await this.mutateProject(projectId, this.resolveUpdatedBy(updatedBy, "builder-mechanics"), (state) => {
       const nextQuest = structuredClone(payload.quest);
       const action: BuilderMutationResult["action"] = Object.hasOwn(state.quests, payload.id)
         ? "updated"
@@ -2215,6 +2331,7 @@ class PrismaBuilderService implements BuilderService {
   public async createQuest(
     projectId: string,
     payload: BuilderQuestCreatePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<QuestDefinition> | null> {
     const questId = payload.id.trim();
     const title = payload.title.trim();
@@ -2236,16 +2353,17 @@ class PrismaBuilderService implements BuilderService {
           },
         ],
       },
-    });
+    }, updatedBy);
   }
 
   public async saveQuestForm(
     projectId: string,
     payload: BuilderQuestFormPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<QuestDefinition> | null> {
     const mutation = await this.mutateProject<QuestDefinition>(
       projectId,
-      "builder-mechanics",
+      this.resolveUpdatedBy(updatedBy, "builder-mechanics"),
       (state) => {
         const existing = state.quests[payload.questId];
         if (!existing) {
@@ -2297,8 +2415,9 @@ class PrismaBuilderService implements BuilderService {
   public async removeQuest(
     projectId: string,
     questId: string,
+    updatedBy?: string,
   ): Promise<BuilderMutation<null> | null> {
-    const mutation = await this.mutateProject(projectId, "builder-mechanics", (state) => {
+    const mutation = await this.mutateProject(projectId, this.resolveUpdatedBy(updatedBy, "builder-mechanics"), (state) => {
       if (!Object.hasOwn(state.quests, questId)) {
         return { ok: false };
       }
@@ -2329,8 +2448,12 @@ class PrismaBuilderService implements BuilderService {
   public async saveTrigger(
     projectId: string,
     payload: BuilderTriggerPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<TriggerDefinition> | null> {
-    const mutation = await this.mutateProject(projectId, "builder-mechanics", (state) => {
+    const mutation = await this.mutateProject(
+      projectId,
+      this.resolveUpdatedBy(updatedBy, "builder-mechanics"),
+      (state) => {
       const nextTrigger = structuredClone(payload.trigger);
       const action: BuilderMutationResult["action"] = Object.hasOwn(state.triggers, payload.id)
         ? "updated"
@@ -2357,6 +2480,7 @@ class PrismaBuilderService implements BuilderService {
   public async createTrigger(
     projectId: string,
     payload: BuilderTriggerCreatePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<TriggerDefinition> | null> {
     const triggerId = payload.id.trim();
 
@@ -2369,14 +2493,18 @@ class PrismaBuilderService implements BuilderService {
         sceneId: trimOptionalField(payload.sceneId),
         npcId: trimOptionalField(payload.npcId),
       },
-    });
+    }, updatedBy);
   }
 
   public async removeTrigger(
     projectId: string,
     triggerId: string,
+    updatedBy?: string,
   ): Promise<BuilderMutation<null> | null> {
-    const mutation = await this.mutateProject(projectId, "builder-mechanics", (state) => {
+    const mutation = await this.mutateProject(
+      projectId,
+      this.resolveUpdatedBy(updatedBy, "builder-mechanics"),
+      (state) => {
       if (!Object.hasOwn(state.triggers, triggerId)) {
         return { ok: false };
       }
@@ -2415,8 +2543,12 @@ class PrismaBuilderService implements BuilderService {
   public async saveGenerationJob(
     projectId: string,
     payload: BuilderGenerationJobPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<GenerationJob> | null> {
-    const mutation = await this.mutateProject(projectId, "builder-ai", (state) => {
+    const mutation = await this.mutateProject(
+      projectId,
+      this.resolveUpdatedBy(updatedBy, "builder-ai"),
+      (state) => {
       const nextJob = structuredClone(payload.job);
       const action: BuilderMutationResult["action"] = Object.hasOwn(
         state.generationJobs,
@@ -2446,6 +2578,7 @@ class PrismaBuilderService implements BuilderService {
   public async createGenerationJob(
     projectId: string,
     payload: BuilderGenerationJobCreatePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<GenerationJob> | null> {
     const jobId = `job.${crypto.randomUUID()}`;
     const now = Date.now();
@@ -2462,13 +2595,14 @@ class PrismaBuilderService implements BuilderService {
         createdAtMs: now,
         updatedAtMs: now,
       },
-    });
+    }, updatedBy);
   }
 
   public async approveGenerationJob(
     projectId: string,
     jobId: string,
     approved: boolean,
+    updatedBy?: string,
   ): Promise<BuilderMutation<GenerationJob> | null> {
     const currentEntry = await this.readProjectEntry(projectId);
     let preParsedAnimationPlan: SuggestedAnimationPlanPayload | null = null;
@@ -2491,7 +2625,10 @@ class PrismaBuilderService implements BuilderService {
       }
     }
 
-    const mutation = await this.mutateProject<GenerationJob>(projectId, "builder-ai", (state) => {
+    const mutation = await this.mutateProject<GenerationJob>(
+      projectId,
+      this.resolveUpdatedBy(updatedBy, "builder-ai"),
+      (state) => {
       const job = state.generationJobs[jobId];
       if (!job) {
         return { ok: false };
@@ -2618,8 +2755,12 @@ class PrismaBuilderService implements BuilderService {
   public async saveAutomationRun(
     projectId: string,
     payload: BuilderAutomationRunPayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<AutomationRun> | null> {
-    const mutation = await this.mutateProject(projectId, "builder-automation", (state) => {
+    const mutation = await this.mutateProject(
+      projectId,
+      this.resolveUpdatedBy(updatedBy, "builder-automation"),
+      (state) => {
       const nextRun = structuredClone(payload.run);
       const action: BuilderMutationResult["action"] = Object.hasOwn(
         state.automationRuns,
@@ -2649,6 +2790,7 @@ class PrismaBuilderService implements BuilderService {
   public async createAutomationRun(
     projectId: string,
     payload: BuilderAutomationRunCreatePayload,
+    updatedBy?: string,
   ): Promise<BuilderMutation<AutomationRun> | null> {
     const runId = `run.${crypto.randomUUID()}`;
     const now = Date.now();
@@ -2684,17 +2826,18 @@ class PrismaBuilderService implements BuilderService {
         createdAtMs: now,
         updatedAtMs: now,
       },
-    });
+    }, updatedBy);
   }
 
   public async approveAutomationRun(
     projectId: string,
     runId: string,
     approved: boolean,
+    updatedBy?: string,
   ): Promise<BuilderMutation<AutomationRun> | null> {
     const mutation = await this.mutateProject<AutomationRun>(
       projectId,
-      "builder-automation",
+      this.resolveUpdatedBy(updatedBy, "builder-automation"),
       (state) => {
         const run = state.automationRuns[runId];
         if (!run) {
@@ -2724,7 +2867,8 @@ class PrismaBuilderService implements BuilderService {
     };
   }
 
-  public async processQueuedWork(projectId?: string): Promise<number> {
+  public async processQueuedWork(projectId?: string, updatedBy?: string): Promise<number> {
+    const actor = this.resolveUpdatedBy(updatedBy, "builder-worker");
     const entries = await this.stateStore.listProjectEntries(projectId);
 
     let processedCount = 0;
@@ -2806,7 +2950,7 @@ class PrismaBuilderService implements BuilderService {
       }
 
       if (changed) {
-        await this.stateStore.updateProject(entry.row.id, "builder-worker", (nextState) => {
+        await this.stateStore.updateProject(entry.row.id, actor, (nextState) => {
           Object.assign(nextState, structuredClone(state));
           return {
             ok: true,
@@ -2915,6 +3059,7 @@ class PrismaBuilderService implements BuilderService {
     projectId: string,
     operations: readonly BuilderArtifactPatch[],
     expectedVersion?: number,
+    updatedBy?: string,
   ): Promise<BuilderPatchApplyResult | null> {
     const entry = await this.readProjectEntry(projectId);
     if (!entry) {
@@ -2939,7 +3084,10 @@ class PrismaBuilderService implements BuilderService {
       };
     }
 
-    const mutation = await this.mutateProject(projectId, "builder-ai", (nextState) => {
+    const mutation = await this.mutateProject(
+      projectId,
+      this.resolveUpdatedBy(updatedBy, "builder-ai"),
+      (nextState) => {
       for (const operation of operations) {
         const target = parsePatchTarget(operation.path);
         if (!target) {

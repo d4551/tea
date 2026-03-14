@@ -212,7 +212,8 @@ export const renderHomePage = (input: PageRenderInput): string => {
           ${renderCollapse({
             title: messages.pages.home.activityEmptyTitle,
             ariaLabel: messages.pages.home.activityEmptyTitle,
-            className: "collapse collapse-arrow bg-base-200/40 rounded-box border border-dashed border-base-300",
+            className:
+              "collapse collapse-arrow bg-base-200/40 rounded-box border border-dashed border-base-300",
             content: renderEmptyState(
               activityEmptyIcon,
               messages.pages.home.activityEmptyTitle,

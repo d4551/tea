@@ -34,7 +34,9 @@ const safeAbsoluteUrl = (value: string): string | null => {
   }
 
   if (typeof URL.canParse === "function") {
-    const absolute = value.startsWith("http") ? value : `${window.location.origin}${value.startsWith("/") ? "" : "/"}${value}`;
+    const absolute = value.startsWith("http")
+      ? value
+      : `${window.location.origin}${value.startsWith("/") ? "" : "/"}${value}`;
     return URL.canParse(absolute) ? new URL(absolute).toString() : null;
   }
 
@@ -67,14 +69,16 @@ export const createGameClientAudioService = (
     if (activeSource) {
       // SAFETY: AudioBufferSourceNode.stop() throws InvalidStateError when
       // the node has already been stopped. We suppress via void Promise.
-      void Promise.resolve().then(() => {
-        activeSource?.stop();
-        activeSource?.disconnect();
-        activeSource = null;
-      }).catch(() => {
-        activeSource?.disconnect();
-        activeSource = null;
-      });
+      void Promise.resolve()
+        .then(() => {
+          activeSource?.stop();
+          activeSource?.disconnect();
+          activeSource = null;
+        })
+        .catch(() => {
+          activeSource?.disconnect();
+          activeSource = null;
+        });
     }
 
     if (activeFallbackAudio) {

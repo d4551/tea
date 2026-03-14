@@ -115,8 +115,7 @@ const boot = (): void => {
       return;
     }
 
-    const listeningHint =
-      modal.getAttribute("data-listening-hint") ?? "Press any key...";
+    const listeningHint = modal.getAttribute("data-listening-hint") ?? "Press any key...";
     const setLabel = modal.getAttribute("data-set-label") ?? "Set";
 
     setButton.textContent = listeningHint;
