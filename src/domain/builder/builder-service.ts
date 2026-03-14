@@ -9,6 +9,7 @@ import {
   DEFAULT_SCENE_SPAWN_X,
   DEFAULT_SCENE_SPAWN_Y,
 } from "../../shared/constants/builder-defaults.ts";
+import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes } from "../../shared/constants/routes.ts";
 import type {
   AnimationClip,
@@ -42,7 +43,6 @@ import type {
   TilemapDefinition,
   TriggerDefinition,
 } from "../../shared/contracts/game.ts";
-import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { sha256Hex } from "../../shared/utils/crypto.ts";
 import { acceptUnknown, safeJsonParse } from "../../shared/utils/safe-json.ts";
 import { deriveSceneIdentity, resolveCreatorFacingText } from "./builder-display.ts";

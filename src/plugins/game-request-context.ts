@@ -106,7 +106,8 @@ export const resolveGameRequestContext = (
     gameRequestedSessionId: resolveTrimmedQueryValue(request, "sessionId"),
     gameRequestedSceneId: resolveTrimmedQueryValue(request, "sceneId"),
     gameRequestedProjectId:
-      resolveTrimmedParamValue(params, "projectId") ?? resolveTrimmedQueryValue(request, "projectId"),
+      resolveTrimmedParamValue(params, "projectId") ??
+      resolveTrimmedQueryValue(request, "projectId"),
     gameInviteToken: resolveTrimmedQueryValue(request, "invite"),
   };
 };

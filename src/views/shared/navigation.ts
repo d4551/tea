@@ -1,11 +1,11 @@
 import type { LocaleCode } from "../../config/environment.ts";
+import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import {
   type AppRouteKey,
   appRoutes,
   withLocaleQuery,
   withQueryParameters,
 } from "../../shared/constants/routes.ts";
-import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 
 const escapeHtml = (value: unknown): string =>
   String(value ?? "")
@@ -549,7 +549,7 @@ export const buildPublicPrimaryNavigation = (
       key: "builder",
       label: labels.builder,
       href: projectId
-        ? withQueryParameters(appRoutes.builderStart, { lang: locale, projectId })
+        ? buildNavigationHref(appRoutes.builderStart, locale, { projectId })
         : withLocaleQuery(appRoutes.builder, locale),
       icon: icons.builder,
       active: activeRoute === "builder",
@@ -558,8 +558,8 @@ export const buildPublicPrimaryNavigation = (
       key: "game",
       label: labels.game,
       href: projectId
-        ? withQueryParameters(appRoutes.game, { lang: locale, projectId })
-        : withLocaleQuery(appRoutes.builder, locale),
+        ? buildNavigationHref(appRoutes.game, locale, { projectId })
+        : withLocaleQuery(appRoutes.home, locale),
       icon: icons.game,
       active: activeRoute === "game",
     },

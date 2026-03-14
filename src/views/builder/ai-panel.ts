@@ -13,11 +13,11 @@ import type { AiRuntimeProfile } from "../../domain/ai/local-runtime-profile.ts"
 import type { AiToolPlanSuccess } from "../../domain/ai/providers/provider-types.ts";
 import type { BuilderPlatformReadiness } from "../../domain/builder/platform-readiness.ts";
 import type { AvailableAiFeatures } from "../../domain/game/ai/game-ai-service.ts";
+import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 import { cardClasses, renderBuilderHiddenFields, spinnerClasses } from "../shared/ui-components.ts";
-import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { renderPlatformReadinessSection } from "./platform-readiness.ts";
 import { renderWorkspaceFrame, renderWorkspaceShell } from "./workspace-shell.ts";
 
@@ -634,10 +634,9 @@ export const renderAiPanel = (
     interpolateRoutePath(appRoutes.builderAutomation, { projectId }),
     { lang: locale },
   );
-  const playtestHref = withQueryParameters(
-    interpolateRoutePath(appRoutes.game, { projectId }),
-    { lang: locale },
-  );
+  const playtestHref = withQueryParameters(interpolateRoutePath(appRoutes.game, { projectId }), {
+    lang: locale,
+  });
 
   return `
     <div class="space-y-6 animate-fade-in-up">

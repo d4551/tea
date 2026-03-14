@@ -5,9 +5,9 @@
  * Provides persistent project chrome plus sidebar navigation.
  */
 import type { LocaleCode } from "../../config/environment.ts";
+import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
-import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { escapeHtml, renderDrawerToggleControl } from "../layout.ts";
 import {
   type MenuActionItem,
@@ -18,8 +18,8 @@ import {
 } from "../shared/navigation.ts";
 import { spinnerClasses } from "../shared/ui-components.ts";
 import {
-  iconAssets,
   iconAi,
+  iconAssets,
   iconAutomation,
   iconDashboard,
   iconDialogue,
@@ -84,8 +84,6 @@ interface BuilderNavItem {
   readonly icon: () => string;
   readonly group: "overview" | "authoring" | "runtime";
 }
-
-
 
 /**
  * Builds the ordered list of sidebar navigation items.
@@ -274,10 +272,7 @@ const resolveCreatorWorkspaceLabel = (
  * @param activeTab Active tab key.
  * @returns Localized workspace label.
  */
-const resolveConsoleWorkspaceLabel = (
-  messages: Messages,
-  activeTab: string,
-): string => {
+const resolveConsoleWorkspaceLabel = (messages: Messages, activeTab: string): string => {
   if (activeTab === "automation" || activeTab === "operations") {
     return messages.builder.operations;
   }
@@ -423,9 +418,22 @@ export const renderBuilderProjectShell = (
 export const renderBuilderSidebar = (props: BuilderLayoutProps): string => {
   const { locale, messages, activeTab, projectId, project, navCounts } = props;
   const resolvedProjectId = project?.id ?? projectId;
-  const navGroups = buildBuilderNavigationGroups(messages, locale, resolvedProjectId, activeTab, navCounts);
+  const navGroups = buildBuilderNavigationGroups(
+    messages,
+    locale,
+    resolvedProjectId,
+    activeTab,
+    navCounts,
+  );
 
-  return renderSidebarShell(messages, locale, project, navGroups, messages.builder.title, messages.builder.creatorSafeAiDescription);
+  return renderSidebarShell(
+    messages,
+    locale,
+    project,
+    navGroups,
+    messages.builder.title,
+    messages.builder.creatorSafeAiDescription,
+  );
 };
 
 /**
@@ -437,9 +445,21 @@ export const renderBuilderSidebar = (props: BuilderLayoutProps): string => {
 export const renderConsoleSidebar = (props: BuilderLayoutProps): string => {
   const { locale, messages, activeTab, projectId, project } = props;
   const resolvedProjectId = project?.id ?? projectId;
-  const navGroups = buildProjectConsoleNavigationGroups(messages, locale, resolvedProjectId, activeTab);
+  const navGroups = buildProjectConsoleNavigationGroups(
+    messages,
+    locale,
+    resolvedProjectId,
+    activeTab,
+  );
 
-  return renderSidebarShell(messages, locale, project, navGroups, messages.builder.advancedTools, messages.builder.advancedAutomationDescription);
+  return renderSidebarShell(
+    messages,
+    locale,
+    project,
+    navGroups,
+    messages.builder.advancedTools,
+    messages.builder.advancedAutomationDescription,
+  );
 };
 
 /**
@@ -594,7 +614,18 @@ interface ShellFrameConfig {
  * @returns HTML string for the builder frame.
  */
 const renderShellFrame = (config: ShellFrameConfig): string => {
-  const { messages, locale, projectId, project, currentPath, body, shellLabel, activeWorkspaceLabel, playHref, dockHtml } = config;
+  const {
+    messages,
+    locale,
+    projectId,
+    project,
+    currentPath,
+    body,
+    shellLabel,
+    activeWorkspaceLabel,
+    playHref,
+    dockHtml,
+  } = config;
 
   return `
     <div class="isolate flex min-h-[calc(100vh-4rem)] flex-col overflow-hidden rounded-[1.75rem] border border-base-300/80 bg-base-100/85 shadow-xl backdrop-blur">

@@ -1,6 +1,6 @@
 import type { LocaleCode } from "../../config/environment.ts";
-import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
+import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { AutomationRun, GenerationArtifact } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
@@ -33,9 +33,12 @@ export const renderAutomationPanel = (
   artifacts: readonly GenerationArtifact[],
 ): string => {
   const createRunAction = `${appRoutes.builderApiAutomationRuns}/create/form`;
-  const settingsHref = withQueryParameters(interpolateRoutePath(appRoutes.builderAi, { projectId }), {
-    lang: locale,
-  });
+  const settingsHref = withQueryParameters(
+    interpolateRoutePath(appRoutes.builderAi, { projectId }),
+    {
+      lang: locale,
+    },
+  );
   const playtestHref = withQueryParameters(interpolateRoutePath(appRoutes.game, { projectId }), {
     lang: locale,
   });

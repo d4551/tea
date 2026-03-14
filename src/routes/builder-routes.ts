@@ -238,12 +238,72 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       ),
     );
   })
-  .get("/:projectId/start", async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
-    const messages = getMessages(builderLocale);
-    const project = await builderService.getProject(builderProjectId);
-    const chromeProject = toChromeProject(project);
-    if (!project) {
-      return wrapMissingProject(
+  .get(
+    "/:projectId/start",
+    async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
+      const messages = getMessages(builderLocale);
+      const project = await builderService.getProject(builderProjectId);
+      const chromeProject = toChromeProject(project);
+      if (!project) {
+        return wrapMissingProject(
+          request,
+          builderLocale,
+          messages,
+          "start",
+          builderCurrentPath,
+          builderProjectId,
+          chromeProject,
+        );
+      }
+      const features = await detectAvailableFeatures();
+      const totalScenes = project.scenes.size;
+      const sceneValues = Array.from(project.scenes.values());
+      const readinessAudit = deriveBuilderReadinessAudit({
+        scenes: project.scenes.values(),
+        assets: project.assets.values(),
+        animationClips: project.animationClips.values(),
+        animationTimelines: project.animationTimelines.values(),
+        dialogueGraphs: project.dialogueGraphs.values(),
+        quests: project.quests.values(),
+        triggers: project.triggers.values(),
+        flags: project.flags.values(),
+        generationJobs: project.generationJobs.values(),
+        automationRuns: project.automationRuns.values(),
+        latestReleaseVersion: project.latestReleaseVersion,
+        publishedReleaseVersion: project.publishedReleaseVersion,
+      });
+      const totalNpcs = sceneValues.reduce((acc, scene) => acc + scene.npcs.length, 0);
+      const readiness = evaluateBuilderPlatformReadiness({
+        sceneCount: totalScenes,
+        spriteManifestCount: project.spriteAtlases.size,
+        aiFeatures: features,
+        rendererPreference: appConfig.playableGame.rendererPreference,
+        onnxDevice: appConfig.ai.onnxDevice,
+        audit: readinessAudit,
+      });
+
+      const dashboard = {
+        activeSessions: await gameLoop.countActiveSessions(),
+        totalScenes,
+        totalNpcs,
+        assetCount: readinessAudit.assetCount,
+        animationClipCount: readinessAudit.animationClipCount,
+        dialogueGraphCount: project.dialogueGraphs.size,
+        questCount: project.quests.size,
+        draftVersion: project.version,
+        latestReleaseVersion: project.latestReleaseVersion,
+        publishedReleaseVersion: project.publishedReleaseVersion,
+        published: project.published,
+        creatorCapabilities: deriveCreatorCapabilities(messages, features, readiness),
+      };
+      const body = renderBuilderDashboard(
+        messages,
+        builderLocale,
+        dashboard,
+        builderProjectId,
+        project.published,
+      );
+      return wrapOrPartial(
         request,
         builderLocale,
         messages,
@@ -251,67 +311,10 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         builderCurrentPath,
         builderProjectId,
         chromeProject,
+        body,
       );
-    }
-    const features = await detectAvailableFeatures();
-    const totalScenes = project.scenes.size;
-    const sceneValues = Array.from(project.scenes.values());
-    const readinessAudit = deriveBuilderReadinessAudit({
-      scenes: project.scenes.values(),
-      assets: project.assets.values(),
-      animationClips: project.animationClips.values(),
-      animationTimelines: project.animationTimelines.values(),
-      dialogueGraphs: project.dialogueGraphs.values(),
-      quests: project.quests.values(),
-      triggers: project.triggers.values(),
-      flags: project.flags.values(),
-      generationJobs: project.generationJobs.values(),
-      automationRuns: project.automationRuns.values(),
-      latestReleaseVersion: project.latestReleaseVersion,
-      publishedReleaseVersion: project.publishedReleaseVersion,
-    });
-    const totalNpcs = sceneValues.reduce((acc, scene) => acc + scene.npcs.length, 0);
-    const readiness = evaluateBuilderPlatformReadiness({
-      sceneCount: totalScenes,
-      spriteManifestCount: project.spriteAtlases.size,
-      aiFeatures: features,
-      rendererPreference: appConfig.playableGame.rendererPreference,
-      onnxDevice: appConfig.ai.onnxDevice,
-      audit: readinessAudit,
-    });
-
-    const dashboard = {
-      activeSessions: await gameLoop.countActiveSessions(),
-      totalScenes,
-      totalNpcs,
-      assetCount: readinessAudit.assetCount,
-      animationClipCount: readinessAudit.animationClipCount,
-      dialogueGraphCount: project.dialogueGraphs.size,
-      questCount: project.quests.size,
-      draftVersion: project.version,
-      latestReleaseVersion: project.latestReleaseVersion,
-      publishedReleaseVersion: project.publishedReleaseVersion,
-      published: project.published,
-      creatorCapabilities: deriveCreatorCapabilities(messages, features, readiness),
-    };
-    const body = renderBuilderDashboard(
-      messages,
-      builderLocale,
-      dashboard,
-      builderProjectId,
-      project.published,
-    );
-    return wrapOrPartial(
-      request,
-      builderLocale,
-      messages,
-      "start",
-      builderCurrentPath,
-      builderProjectId,
-      chromeProject,
-      body,
-    );
-  })
+    },
+  )
   .get(
     "/:projectId/world",
     async ({ request, builderLocale, builderProjectId, builderCurrentPath, builderSearch }) => {
@@ -352,12 +355,32 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       );
     },
   )
-  .get("/:projectId/characters", async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
-    const messages = getMessages(builderLocale);
-    const project = await builderService.getProject(builderProjectId);
-    const chromeProject = toChromeProject(project);
-    if (!project) {
-      return wrapMissingProject(
+  .get(
+    "/:projectId/characters",
+    async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
+      const messages = getMessages(builderLocale);
+      const project = await builderService.getProject(builderProjectId);
+      const chromeProject = toChromeProject(project);
+      if (!project) {
+        return wrapMissingProject(
+          request,
+          builderLocale,
+          messages,
+          "characters",
+          builderCurrentPath,
+          builderProjectId,
+          chromeProject,
+        );
+      }
+      const scenes = toRecord(project.scenes);
+      const body = renderNpcEditor(
+        messages,
+        scenes,
+        gameSpriteManifests,
+        builderLocale,
+        builderProjectId,
+      );
+      return wrapOrPartial(
         request,
         builderLocale,
         messages,
@@ -365,27 +388,10 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         builderCurrentPath,
         builderProjectId,
         chromeProject,
+        body,
       );
-    }
-    const scenes = toRecord(project.scenes);
-    const body = renderNpcEditor(
-      messages,
-      scenes,
-      gameSpriteManifests,
-      builderLocale,
-      builderProjectId,
-    );
-    return wrapOrPartial(
-      request,
-      builderLocale,
-      messages,
-      "characters",
-      builderCurrentPath,
-      builderProjectId,
-      chromeProject,
-      body,
-    );
-  })
+    },
+  )
   .get(
     "/:projectId/story",
     async ({ request, builderLocale, builderProjectId, builderCurrentPath, builderSearch }) => {
@@ -463,12 +469,33 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       );
     },
   )
-  .get("/:projectId/systems", async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
-    const messages = getMessages(builderLocale);
-    const project = await builderService.getProject(builderProjectId);
-    const chromeProject = toChromeProject(project);
-    if (!project) {
-      return wrapMissingProject(
+  .get(
+    "/:projectId/systems",
+    async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
+      const messages = getMessages(builderLocale);
+      const project = await builderService.getProject(builderProjectId);
+      const chromeProject = toChromeProject(project);
+      if (!project) {
+        return wrapMissingProject(
+          request,
+          builderLocale,
+          messages,
+          "systems",
+          builderCurrentPath,
+          builderProjectId,
+          chromeProject,
+        );
+      }
+      const body = renderMechanicsEditor(
+        messages,
+        builderLocale,
+        builderProjectId,
+        Array.from(project.quests.values()),
+        Array.from(project.triggers.values()),
+        Array.from(project.dialogueGraphs.values()),
+        Array.from(project.flags.values()),
+      );
+      return wrapOrPartial(
         request,
         builderLocale,
         messages,
@@ -476,34 +503,35 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         builderCurrentPath,
         builderProjectId,
         chromeProject,
+        body,
       );
-    }
-    const body = renderMechanicsEditor(
-      messages,
-      builderLocale,
-      builderProjectId,
-      Array.from(project.quests.values()),
-      Array.from(project.triggers.values()),
-      Array.from(project.dialogueGraphs.values()),
-      Array.from(project.flags.values()),
-    );
-    return wrapOrPartial(
-      request,
-      builderLocale,
-      messages,
-      "systems",
-      builderCurrentPath,
-      builderProjectId,
-      chromeProject,
-      body,
-    );
-  })
-  .get("/:projectId/operations", async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
-    const messages = getMessages(builderLocale);
-    const project = await builderService.getProject(builderProjectId);
-    const chromeProject = toChromeProject(project);
-    if (!project) {
-      return wrapMissingProject(
+    },
+  )
+  .get(
+    "/:projectId/operations",
+    async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
+      const messages = getMessages(builderLocale);
+      const project = await builderService.getProject(builderProjectId);
+      const chromeProject = toChromeProject(project);
+      if (!project) {
+        return wrapMissingProject(
+          request,
+          builderLocale,
+          messages,
+          "operations",
+          builderCurrentPath,
+          builderProjectId,
+          chromeProject,
+        );
+      }
+      const body = renderAutomationPanel(
+        messages,
+        builderLocale,
+        builderProjectId,
+        Array.from(project.automationRuns.values()),
+        Array.from(project.artifacts.values()),
+      );
+      return wrapOrPartialConsole(
         request,
         builderLocale,
         messages,
@@ -511,32 +539,45 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         builderCurrentPath,
         builderProjectId,
         chromeProject,
+        body,
       );
-    }
-    const body = renderAutomationPanel(
-      messages,
-      builderLocale,
-      builderProjectId,
-      Array.from(project.automationRuns.values()),
-      Array.from(project.artifacts.values()),
-    );
-    return wrapOrPartialConsole(
-      request,
-      builderLocale,
-      messages,
-      "operations",
-      builderCurrentPath,
-      builderProjectId,
-      chromeProject,
-      body,
-    );
-  })
-  .get("/:projectId/settings", async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
-    const messages = getMessages(builderLocale);
-    const project = await builderService.getProject(builderProjectId);
-    const chromeProject = toChromeProject(project);
-    if (!project) {
-      return wrapMissingProject(
+    },
+  )
+  .get(
+    "/:projectId/settings",
+    async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
+      const messages = getMessages(builderLocale);
+      const project = await builderService.getProject(builderProjectId);
+      const chromeProject = toChromeProject(project);
+      if (!project) {
+        return wrapMissingProject(
+          request,
+          builderLocale,
+          messages,
+          "settings",
+          builderCurrentPath,
+          builderProjectId,
+          chromeProject,
+        );
+      }
+      const features = await detectAvailableFeatures();
+      const readiness = evaluateBuilderPlatformReadiness({
+        sceneCount: project.scenes.size,
+        spriteManifestCount: project.spriteAtlases.size,
+        aiFeatures: features,
+        rendererPreference: appConfig.playableGame.rendererPreference,
+        onnxDevice: appConfig.ai.onnxDevice,
+      });
+      const body = renderAiPanel(
+        messages,
+        features,
+        getAiRuntimeProfile(),
+        builderLocale,
+        builderProjectId,
+        readiness,
+        await knowledgeBaseService.listDocuments(builderProjectId),
+      );
+      return wrapOrPartialConsole(
         request,
         builderLocale,
         messages,
@@ -544,33 +585,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         builderCurrentPath,
         builderProjectId,
         chromeProject,
+        body,
       );
-    }
-    const features = await detectAvailableFeatures();
-    const readiness = evaluateBuilderPlatformReadiness({
-      sceneCount: project.scenes.size,
-      spriteManifestCount: project.spriteAtlases.size,
-      aiFeatures: features,
-      rendererPreference: appConfig.playableGame.rendererPreference,
-      onnxDevice: appConfig.ai.onnxDevice,
-    });
-    const body = renderAiPanel(
-      messages,
-      features,
-      getAiRuntimeProfile(),
-      builderLocale,
-      builderProjectId,
-      readiness,
-      await knowledgeBaseService.listDocuments(builderProjectId),
-    );
-    return wrapOrPartialConsole(
-      request,
-      builderLocale,
-      messages,
-      "settings",
-      builderCurrentPath,
-      builderProjectId,
-      chromeProject,
-      body,
-    );
-  });
+    },
+  );

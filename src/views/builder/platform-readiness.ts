@@ -5,8 +5,8 @@ import type {
   BuilderCapabilityStatus,
   BuilderPlatformReadiness,
 } from "../../domain/builder/platform-readiness.ts";
-import { appRoutes, withLocaleQuery, withQueryParameters } from "../../shared/constants/routes.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
+import { appRoutes, withLocaleQuery, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 import { cardClasses } from "../shared/ui-components.ts";

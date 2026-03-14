@@ -61,8 +61,8 @@ import {
   DEFAULT_NPC_WANDER_SPEED,
 } from "../shared/constants/builder-defaults.ts";
 import { httpStatus } from "../shared/constants/http.ts";
-import { appRoutes, withQueryParameters } from "../shared/constants/routes.ts";
 import { interpolateRoutePath } from "../shared/constants/route-patterns.ts";
+import { appRoutes, withQueryParameters } from "../shared/constants/routes.ts";
 import type {
   BuilderAIRequest,
   BuilderAIResponse,
@@ -792,8 +792,7 @@ const toBuilderRedirectPath = (path: string): string => {
     return appRoutes.builderStart;
   }
 
-  const genericPath =
-    `/projects/:projectId${projectPathMatch[2] ?? ""}`.replace(/\/$/, "");
+  const genericPath = `/projects/:projectId${projectPathMatch[2] ?? ""}`.replace(/\/$/, "");
   if (genericPath === "/projects/:projectId") {
     return appRoutes.builderStart;
   }
@@ -1930,7 +1929,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         set.headers["HX-Redirect"] = withQueryParameters(
           interpolateRoutePath(redirectPath, { projectId: project.id }),
           {
-          lang: actionLocale,
+            lang: actionLocale,
           },
         );
         return status(httpStatus.ok, "");

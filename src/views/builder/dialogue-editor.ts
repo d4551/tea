@@ -4,6 +4,7 @@
  * NPC-first dialogue workspace with filtering and AI generation hooks.
  */
 import type { LocaleCode } from "../../config/environment.ts";
+import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
@@ -52,9 +53,9 @@ export const renderDialogueEditor = (
 
   const selectedGroup = Array.from(npcGroups.entries())[0] ?? null;
   const selectedLine = selectedGroup?.[1][0] ?? null;
-  const searchAction = withQueryParameters(appRoutes.builderDialogue, {
+  const dialoguePath = interpolateRoutePath(appRoutes.builderDialogue, { projectId });
+  const searchAction = withQueryParameters(dialoguePath, {
     lang: locale,
-    projectId,
   });
   const createAction = `${appRoutes.builderApiDialogue}/create/form`;
   const generateHref = withQueryParameters(`${appRoutes.builderApiDialogue}/generate`, {

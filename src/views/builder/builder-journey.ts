@@ -1,6 +1,6 @@
 import type { LocaleCode } from "../../config/environment.ts";
-import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
+import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { BuilderWorkflowStageIdAny } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { buildBuilderWorkflowStages } from "./builder-flow.ts";
@@ -36,7 +36,9 @@ const resolveJourneyStageHref = (
   projectId: string,
 ): string => {
   if (stageId === "start") {
-    return withQueryParameters(interpolateRoutePath(appRoutes.builderStart, { projectId }), { lang: locale });
+    return withQueryParameters(interpolateRoutePath(appRoutes.builderStart, { projectId }), {
+      lang: locale,
+    });
   }
 
   if (stageId === "world") {
@@ -46,11 +48,15 @@ const resolveJourneyStageHref = (
   }
 
   if (stageId === "visuals") {
-    return withQueryParameters(interpolateRoutePath(appRoutes.builderAssets, { projectId }), { lang: locale });
+    return withQueryParameters(interpolateRoutePath(appRoutes.builderAssets, { projectId }), {
+      lang: locale,
+    });
   }
 
   if (stageId === "characters") {
-    return withQueryParameters(interpolateRoutePath(appRoutes.builderNpcs, { projectId }), { lang: locale });
+    return withQueryParameters(interpolateRoutePath(appRoutes.builderNpcs, { projectId }), {
+      lang: locale,
+    });
   }
 
   if (stageId === "story") {

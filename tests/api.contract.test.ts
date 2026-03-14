@@ -11,8 +11,8 @@ import { defaultGameConfig } from "../src/shared/config/game-config.ts";
 import { gameAssetUrls } from "../src/shared/constants/game-assets.ts";
 import { contentType, httpStatus } from "../src/shared/constants/http.ts";
 import { defaultOracleMode } from "../src/shared/constants/oracle.ts";
-import { appRoutes, withLocaleQuery, withQueryParameters } from "../src/shared/constants/routes.ts";
 import { interpolateRoutePath } from "../src/shared/constants/route-patterns.ts";
+import { appRoutes, withLocaleQuery, withQueryParameters } from "../src/shared/constants/routes.ts";
 import { prisma, prismaBase } from "../src/shared/services/db.ts";
 import { readJsonResponse, settleAsync } from "../src/shared/utils/async-result.ts";
 import { GamePage } from "../src/views/game-page.ts";
@@ -28,7 +28,6 @@ const withProjectPagePath = (
   locale = "en-US",
   params: Readonly<Record<string, string | undefined>> = {},
 ): string => withQueryParameters(path, { lang: locale, projectId, ...params });
-const htmlHref = (path: string): string => path.replaceAll("&", "&amp;");
 const withSessionId = (pattern: string, sessionId: string): string =>
   pattern.replace(":id", encodeURIComponent(sessionId));
 const countOccurrences = (source: string, fragment: string): number =>
@@ -2313,7 +2312,7 @@ describe("HTMX partial rendering", () => {
     expect(html.includes('aria-label="Breadcrumb"')).toBe(true);
     expect(html.includes('aria-current="page"')).toBe(true);
     expect(html.includes(`${withLocaleQuery(appRoutes.builder, "en-US")}`)).toBe(true);
-    expect(html.includes("/projects/default/playtest?lang=en-US")).toBe(true);
+    expect(html.includes("/projects/new?lang=en-US")).toBe(true);
     expect(html.includes('aria-label="Switch language to Chinese"')).toBe(true);
     expect(html.includes('data-drawer-toggle-target="main-nav-drawer"')).toBe(true);
     expect(html.includes('for="main-nav-drawer"')).toBe(true);
@@ -2335,12 +2334,8 @@ describe("HTMX partial rendering", () => {
   test("home page presents direct 2D and 3D scene launch links", async () => {
     const response = await app.handle(new Request(toUrl(appRoutes.home)));
     const html = await response.text();
-    const teaHouseLaunch = withQueryParameters(withLocaleQuery(appRoutes.game, "en-US"), {
-      sceneId: "teaHouse",
-    });
-    const crystalCavernLaunch = withQueryParameters(withLocaleQuery(appRoutes.game, "en-US"), {
-      sceneId: "crystalCavern",
-    });
+    const teaHouseLaunch = withLocaleQuery(appRoutes.builder, "en-US");
+    const crystalCavernLaunch = withLocaleQuery(appRoutes.builder, "en-US");
 
     expect(response.status).toBe(httpStatus.ok);
     expect(html.includes(teaHouseLaunch)).toBe(true);
@@ -2509,7 +2504,9 @@ describe("HTMX partial rendering", () => {
   });
 
   test("game page renders a single canonical HUD target and page-scoped assets", async () => {
-    const response = await app.handle(new Request(toUrl(`${appRoutes.game}?lang=en-US`)));
+    const response = await app.handle(
+      new Request(toUrl(withProjectPagePath(appRoutes.game, "default"))),
+    );
     const html = await response.text();
 
     expect(response.status).toBe(httpStatus.ok);
@@ -2567,7 +2564,9 @@ describe("HTMX partial rendering", () => {
   test("builder dashboard preserves locale-aware navigation links", async () => {
     const projectId = `builder-${crypto.randomUUID()}`;
     await createBuilderProject(projectId);
-    const response = await app.handle(new Request(toUrl(`${appRoutes.builder}?lang=zh-CN`)));
+    const response = await app.handle(
+      new Request(toUrl(withProjectPagePath(appRoutes.builderStart, projectId, "zh-CN"))),
+    );
     const html = await response.text();
 
     expect(response.status).toBe(httpStatus.ok);
@@ -2631,7 +2630,7 @@ describe("HTMX partial rendering", () => {
     const projectId = `mechanics-focus-${crypto.randomUUID()}`;
     await createBuilderProject(projectId);
     const response = await app.handle(
-      new Request(toUrl(`${appRoutes.builderMechanics}?lang=en-US&projectId=${projectId}`)),
+      new Request(toUrl(withProjectPagePath(appRoutes.builderMechanics, projectId))),
     );
     const html = await response.text();
 
@@ -2667,7 +2666,12 @@ describe("HTMX partial rendering", () => {
     });
     const response = await app.handle(
       new Request(
-        toUrl(`${appRoutes.builderScenes}?lang=en-US&projectId=${projectId}&search=yangtze&page=1`),
+        toUrl(
+          withProjectPagePath(appRoutes.builderScenes, projectId, "en-US", {
+            search: "yangtze",
+            page: "1",
+          }),
+        ),
       ),
     );
     const html = await response.text();
@@ -2697,7 +2701,10 @@ describe("HTMX partial rendering", () => {
     const response = await app.handle(
       new Request(
         toUrl(
-          `${appRoutes.builderAssets}?lang=en-US&projectId=${projectId}&search=harbor&assetId=harbor-theme`,
+          withProjectPagePath(appRoutes.builderAssets, projectId, "en-US", {
+            search: "harbor",
+            assetId: "harbor-theme",
+          }),
         ),
       ),
     );
@@ -2776,7 +2783,7 @@ describe("HTMX partial rendering", () => {
     const projectId = `ai-${crypto.randomUUID()}`;
     await createBuilderProject(projectId);
     const response = await app.handle(
-      new Request(toUrl(`${appRoutes.builderAi}?lang=en-US&projectId=${projectId}`)),
+      new Request(toUrl(withProjectPagePath(appRoutes.builderAi, projectId))),
     );
     const html = await response.text();
 
@@ -2791,7 +2798,7 @@ describe("HTMX partial rendering", () => {
     const projectId = `dashboard-${crypto.randomUUID()}`;
     await createBuilderProject(projectId);
     const response = await app.handle(
-      new Request(toUrl(`${appRoutes.builder}?lang=en-US&projectId=${projectId}`)),
+      new Request(toUrl(withProjectPagePath(appRoutes.builderStart, projectId))),
     );
     const html = await response.text();
 
@@ -2834,7 +2841,7 @@ describe("HTMX partial rendering", () => {
         body: JSON.stringify({
           published: true,
           locale: "en-US",
-          currentPath: appRoutes.builder,
+          currentPath: appRoutes.builderStart,
         }),
       }),
     );
@@ -2867,7 +2874,7 @@ describe("HTMX partial rendering", () => {
 
     expect(publishResponse.status).toBe(httpStatus.ok);
     expect(publishHtml.includes('id="builder-project-shell"')).toBe(true);
-    expect(publishHtml.includes("/projects/" + projectId + "/start?lang=en-US")).toBe(true);
+    expect(publishHtml.includes(`/projects/${projectId}/start?lang=en-US`)).toBe(true);
   });
 
   test("builder project create HTML action redirects to a builder path", async () => {
@@ -2883,15 +2890,13 @@ describe("HTMX partial rendering", () => {
           projectId,
           locale: "en-US",
           starterTemplateId: "blank",
-          redirectPath: `${appRoutes.builderAssets}?lang=fr`,
+          redirectPath: "/projects/route-placeholder/assets?lang=fr",
         }).toString(),
       }),
     );
 
     expect(response.status).toBe(httpStatus.ok);
-    expect(response.headers.get("HX-Redirect")).toBe(
-      `/projects/${projectId}/assets?lang=en-US`,
-    );
+    expect(response.headers.get("HX-Redirect")).toBe(`/projects/${projectId}/assets?lang=en-US`);
     expect((await response.text()).length).toBe(0);
   });
 
@@ -2981,7 +2986,7 @@ describe("HTMX partial rendering", () => {
         body: JSON.stringify({
           published: true,
           locale: "en-US",
-          currentPath: appRoutes.builder,
+          currentPath: appRoutes.builderStart,
         }),
       }),
     );
@@ -3091,7 +3096,7 @@ describe("HTMX partial rendering", () => {
     await createBuilderProject(projectId);
 
     const mechanicsPageResponse = await app.handle(
-      new Request(toUrl(`${appRoutes.builderMechanics}?lang=en-US&projectId=${projectId}`)),
+      new Request(toUrl(withProjectPagePath(appRoutes.builderMechanics, projectId))),
     );
     const mechanicsPageHtml = await mechanicsPageResponse.text();
     expect(mechanicsPageResponse.status).toBe(httpStatus.ok);
@@ -3099,7 +3104,7 @@ describe("HTMX partial rendering", () => {
     expect(mechanicsPageHtml.includes("Quests")).toBe(true);
 
     const automationPageResponse = await app.handle(
-      new Request(toUrl(`${appRoutes.builderAutomation}?lang=en-US&projectId=${projectId}`)),
+      new Request(toUrl(withProjectPagePath(appRoutes.builderAutomation, projectId))),
     );
     const automationPageHtml = await automationPageResponse.text();
     expect(automationPageResponse.status).toBe(httpStatus.ok);
@@ -3391,14 +3396,7 @@ describe("HTMX partial rendering", () => {
     expect(automationHtml.includes("Queued")).toBe(true);
     await builderService.processQueuedWork(projectId);
     const refreshedAutomationResponse = await app.handle(
-      new Request(
-        toUrl(
-          withQueryParameters(appRoutes.builderAutomation, {
-            projectId,
-            locale: "en-US",
-          }),
-        ),
-      ),
+      new Request(toUrl(withProjectPagePath(appRoutes.builderAutomation, projectId))),
     );
     const refreshedAutomationHtml = await refreshedAutomationResponse.text();
     expect(refreshedAutomationResponse.status).toBe(httpStatus.ok);
@@ -3468,29 +3466,35 @@ describe("HTMX partial rendering", () => {
   test("game route renders explicit missing and unpublished project states", async () => {
     const missingProjectId = `missing-${crypto.randomUUID()}`;
     const missingResponse = await app.handle(
-      new Request(toUrl(`${interpolateRoutePath(appRoutes.game, { projectId: missingProjectId })}?lang=en-US`)),
+      new Request(
+        toUrl(
+          `${interpolateRoutePath(appRoutes.game, { projectId: missingProjectId })}?lang=en-US`,
+        ),
+      ),
     );
     const missingHtml = await missingResponse.text();
 
     expect(missingResponse.status).toBe(httpStatus.ok);
     expect(missingHtml.includes(missingProjectId)).toBe(true);
-    expect(missingHtml.includes(`/projects/${missingProjectId}/start?lang=en-US`)).toBe(
-      true,
-    );
+    expect(missingHtml.includes(`/projects/${missingProjectId}/start?lang=en-US`)).toBe(true);
     expect(missingHtml.includes('id="game-canvas-wrapper"')).toBe(false);
 
     const unpublishedProjectId = `unpublished-${crypto.randomUUID()}`;
     await createBuilderProject(unpublishedProjectId);
     const unpublishedResponse = await app.handle(
-      new Request(toUrl(`${interpolateRoutePath(appRoutes.game, { projectId: unpublishedProjectId })}?lang=en-US`)),
+      new Request(
+        toUrl(
+          `${interpolateRoutePath(appRoutes.game, { projectId: unpublishedProjectId })}?lang=en-US`,
+        ),
+      ),
     );
     const unpublishedHtml = await unpublishedResponse.text();
 
     expect(unpublishedResponse.status).toBe(httpStatus.ok);
     expect(unpublishedHtml.includes(unpublishedProjectId)).toBe(true);
-    expect(
-      unpublishedHtml.includes(`/projects/${unpublishedProjectId}/start?lang=en-US`),
-    ).toBe(true);
+    expect(unpublishedHtml.includes(`/projects/${unpublishedProjectId}/start?lang=en-US`)).toBe(
+      true,
+    );
     expect(unpublishedHtml.includes('id="game-canvas-wrapper"')).toBe(false);
   });
 
@@ -3500,7 +3504,9 @@ describe("HTMX partial rendering", () => {
     gameLoop.getSessionState = async () => null;
     const hydrationStateResult = await settleAsync(
       (async () => {
-        const response = await app.handle(new Request(toUrl(`/projects/default/playtest?lang=en-US`)));
+        const response = await app.handle(
+          new Request(toUrl(`/projects/default/playtest?lang=en-US`)),
+        );
         return {
           response,
           html: await response.text(),

@@ -1,6 +1,6 @@
 import type { LocaleCode } from "../../config/environment.ts";
-import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
+import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type {
   BuilderWorkflowStage,
   CreatorCapability,
@@ -164,20 +164,36 @@ export const renderBuilderDashboard = (
   projectId: string,
   published: boolean,
 ): string => {
-  const worldHref = withQueryParameters(interpolateRoutePath(appRoutes.builderScenes, { projectId }), {
+  const worldHref = withQueryParameters(
+    interpolateRoutePath(appRoutes.builderScenes, { projectId }),
+    {
+      lang: locale,
+    },
+  );
+  const npcHref = withQueryParameters(interpolateRoutePath(appRoutes.builderNpcs, { projectId }), {
     lang: locale,
   });
-  const npcHref = withQueryParameters(interpolateRoutePath(appRoutes.builderNpcs, { projectId }), { lang: locale });
-  const dialogueHref = withQueryParameters(interpolateRoutePath(appRoutes.builderDialogue, { projectId }), {
+  const dialogueHref = withQueryParameters(
+    interpolateRoutePath(appRoutes.builderDialogue, { projectId }),
+    {
+      lang: locale,
+    },
+  );
+  const assetsHref = withQueryParameters(
+    interpolateRoutePath(appRoutes.builderAssets, { projectId }),
+    {
+      lang: locale,
+    },
+  );
+  const systemsHref = withQueryParameters(
+    interpolateRoutePath(appRoutes.builderMechanics, { projectId }),
+    {
+      lang: locale,
+    },
+  );
+  const gameHref = withQueryParameters(interpolateRoutePath(appRoutes.game, { projectId }), {
     lang: locale,
   });
-  const assetsHref = withQueryParameters(interpolateRoutePath(appRoutes.builderAssets, { projectId }), {
-    lang: locale,
-  });
-  const systemsHref = withQueryParameters(interpolateRoutePath(appRoutes.builderMechanics, { projectId }), {
-    lang: locale,
-  });
-  const gameHref = withQueryParameters(interpolateRoutePath(appRoutes.game, { projectId }), { lang: locale });
   const workflowStages = buildBuilderWorkflowStages(messages, locale, projectId, {
     scenes: context.totalScenes,
     assets: context.assetCount + context.animationClipCount,

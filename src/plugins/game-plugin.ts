@@ -1601,12 +1601,14 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
           const locale = normalizeLocale(body.locale ?? gameRequestLocale);
           const currentSession = await gameLoop.getSessionState(params.id, ownerSessionId);
           const joinPath = currentSession?.projectId
-            ? withQueryParameters(appRoutes.game, {
-                lang: locale,
-                invite: inviteToken,
-                sessionId: params.id,
-                projectId: currentSession.projectId,
-              })
+            ? withQueryParameters(
+                interpolateRoutePath(appRoutes.game, { projectId: currentSession.projectId }),
+                {
+                  lang: locale,
+                  invite: inviteToken,
+                  sessionId: params.id,
+                },
+              )
             : withQueryParameters(appRoutes.builder, { lang: locale });
           if (wantsHtml(request.headers.get("accept"))) {
             const messages = getMessages(locale);
@@ -1926,11 +1928,13 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
             );
           }
 
-          const gamePath = withQueryParameters(appRoutes.game, {
-            lang: gameRequestLocale,
-            sessionId: restored.sessionId,
-            projectId: restored.projectId,
-          });
+          const gamePath = withQueryParameters(
+            interpolateRoutePath(appRoutes.game, { projectId: restored.projectId }),
+            {
+              lang: gameRequestLocale,
+              sessionId: restored.sessionId,
+            },
+          );
           if (request.headers.get("HX-Request") === "true") {
             set.headers["HX-Redirect"] = gamePath;
           } else {

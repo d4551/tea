@@ -8,13 +8,9 @@ import {
   BUILDER_QUERY_PARAM_ASSET_ID,
   BUILDER_QUERY_PARAM_PAGE,
 } from "../../shared/constants/builder-query.ts";
-import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
-import type {
-  AnimationClip,
-  BuilderAsset,
-  BuilderAssetKind,
-} from "../../shared/contracts/game.ts";
+import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
+import type { AnimationClip, BuilderAsset, BuilderAssetKind } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 import { renderActionDropdown } from "../shared/navigation.ts";
@@ -27,11 +23,7 @@ import {
 import { buildAnimationAuthoringContext, buildCreatorAssistContext } from "./builder-flow.ts";
 import { buildBuilderJourneyConfig } from "./builder-journey.ts";
 import { renderCreatorAssistPanel } from "./creator-assist-panel.ts";
-import {
-  getAssetKindLabel,
-  getAssetLabel,
-  getSceneModeLabel,
-} from "./view-labels.ts";
+import { getAssetKindLabel, getAssetLabel, getSceneModeLabel } from "./view-labels.ts";
 import {
   paginateWorkspaceItems,
   renderWorkspaceBrowseControls,

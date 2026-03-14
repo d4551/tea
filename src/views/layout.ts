@@ -1,8 +1,8 @@
 import { appConfig, type LocaleCode } from "../config/environment.ts";
-import { assetRelativePaths, joinUrlPath } from "../shared/constants/assets.ts";
-import { appRoutes, withLocaleQuery } from "../shared/constants/routes.ts";
-import { interpolateRoutePath } from "../shared/constants/route-patterns.ts";
 import { defaultBuilderProjectId } from "../domain/builder/builder-project-state-store.ts";
+import { assetRelativePaths, joinUrlPath } from "../shared/constants/assets.ts";
+import { interpolateRoutePath } from "../shared/constants/route-patterns.ts";
+import { appRoutes, withLocaleQuery } from "../shared/constants/routes.ts";
 import type { Messages } from "../shared/i18n/messages.ts";
 import { type OraclePanelState, renderOracleSection } from "./oracle.ts";
 import {

@@ -1,11 +1,11 @@
 import type { LocaleCode } from "../../config/environment.ts";
-import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import {
   toCreatorCapabilities,
   toWorkflowStageStatus,
 } from "../../domain/builder/creator-capability-adapter.ts";
 import type { BuilderPlatformReadiness } from "../../domain/builder/platform-readiness.ts";
 import type { AvailableAiFeatures } from "../../domain/game/ai/game-ai-service.ts";
+import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type {
   AnimationAuthoringContext,

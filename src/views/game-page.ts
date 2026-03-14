@@ -90,7 +90,9 @@ const renderInactiveState = (
   state: InactiveGamePageProps["state"],
 ): string => {
   const builderHref = projectId
-    ? withQueryParameters(interpolateRoutePath(appRoutes.builderStart, { projectId }), { lang: locale })
+    ? withQueryParameters(interpolateRoutePath(appRoutes.builderStart, { projectId }), {
+        lang: locale,
+      })
     : withLocaleQuery(appRoutes.builder, locale);
   const title =
     state === "invalid-invite"
@@ -201,9 +203,12 @@ export function GamePage(props: GamePageProps) {
       ? `${origin.replace(/\/$/, "")}${gameHudStreamPath}`
       : gameHudStreamPath;
   const gameHudStreamUrl = withQueryParameters(gameHudStreamBaseUrl, { locale });
-  const builderHref = withQueryParameters(interpolateRoutePath(appRoutes.builderStart, { projectId: projectId ?? "" }), {
-    lang: locale,
-  });
+  const builderHref = withQueryParameters(
+    interpolateRoutePath(appRoutes.builderStart, { projectId: projectId ?? "" }),
+    {
+      lang: locale,
+    },
+  );
   const inviteAction = interpolateRoutePath(appRoutes.gameApiSessionInvite, { id: sessionId });
   const saveSlotAction = interpolateRoutePath(appRoutes.gameApiSessionSaveSlot, { id: sessionId });
   const saveSlotsAction = interpolateRoutePath(appRoutes.gameApiSessionSaveSlots, {

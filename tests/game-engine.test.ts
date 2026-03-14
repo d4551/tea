@@ -10,7 +10,8 @@ import { buildSessionSceneState } from "../src/domain/game/utils/session-state.t
 import { defaultGameConfig } from "../src/shared/config/game-config.ts";
 import { gameAssetUrls } from "../src/shared/constants/game-assets.ts";
 import { httpStatus } from "../src/shared/constants/http.ts";
-import { appRoutes } from "../src/shared/constants/routes.ts";
+import { interpolateRoutePath } from "../src/shared/constants/route-patterns.ts";
+import { appRoutes, withQueryParameters } from "../src/shared/constants/routes.ts";
 import type { SceneDefinition } from "../src/shared/contracts/game.ts";
 import { prismaBase } from "../src/shared/services/db.ts";
 
@@ -709,7 +710,18 @@ describe("game engine HTTP contracts", () => {
     const projectId = `assets-http-${crypto.randomUUID()}`;
     await builderService.createProject(projectId, "tea-house-story");
     const response = await app.handle(
-      new Request(toUrl(`${appRoutes.builderAssets}?lang=en-US&projectId=${projectId}`)),
+      new Request(
+        toUrl(
+          withQueryParameters(
+            interpolateRoutePath(appRoutes.builderAssets, {
+              projectId,
+            }),
+            {
+              lang: "en-US",
+            },
+          ),
+        ),
+      ),
     );
     const body = await response.text();
 

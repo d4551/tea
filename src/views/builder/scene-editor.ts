@@ -18,8 +18,8 @@ import {
   BUILDER_QUERY_PARAM_PAGE,
   BUILDER_QUERY_PARAM_SCENE_ID,
 } from "../../shared/constants/builder-query.ts";
-import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
+import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type {
   BuilderAsset,
   SceneDefinition,
