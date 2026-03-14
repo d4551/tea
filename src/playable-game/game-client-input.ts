@@ -159,8 +159,27 @@ export const createGameClientStatusController = ({
   connectionAlertText,
   getHudSceneElement,
   labels,
-}: GameClientStatusOptions): GameClientStatusController => ({
-  setQueueDepth(depth) {
+}: GameClientStatusOptions): GameClientStatusController => {
+  const statusText =
+    statusBadge?.querySelector<HTMLElement>("#game-connection-status-text") ?? statusBadge;
+  const statusIndicator = statusBadge?.querySelector<HTMLElement>("#game-connection-indicator");
+  const setStatusTone = (tone: "warning" | "success" | "error"): void => {
+    if (!statusIndicator) {
+      return;
+    }
+    ["status-success", "status-error", "status-warning", "status-neutral", "status-info", "status-primary"].forEach((candidate) =>
+      statusIndicator.classList.remove(candidate),
+    );
+    statusIndicator.classList.add(`status-${tone}`);
+    if (tone === "warning") {
+      statusIndicator.classList.add("status-ping");
+    } else {
+      statusIndicator.classList.remove("status-ping");
+    }
+  };
+
+  return {
+    setQueueDepth(depth) {
     if (queueBadge) {
       queueBadge.textContent = `${labels.queueLabel}: ${depth}`;
     }
@@ -170,12 +189,13 @@ export const createGameClientStatusController = ({
     }
   },
   setConnectionState(state, closeCode) {
-    if (!statusBadge) {
+    if (!statusBadge || !statusText) {
       return;
     }
 
     if (state === "connecting" || state === "connected" || state === "reconnecting") {
-      statusBadge.textContent = labels.connection[state];
+      statusText.textContent = labels.connection[state];
+      setStatusTone(state === "connected" ? "success" : "warning");
       const hudEl = getHudSceneElement();
       if (hudEl && (state === "connecting" || state === "reconnecting")) {
         hudEl.textContent =
@@ -185,7 +205,8 @@ export const createGameClientStatusController = ({
     }
 
     if (state === "expired" || state === "missing") {
-      statusBadge.textContent = labels.connection[state];
+      statusText.textContent = labels.connection[state];
+      setStatusTone("error");
       const hudEl = getHudSceneElement();
       if (hudEl) {
         const msg = labels.connection[state];
@@ -208,7 +229,8 @@ export const createGameClientStatusController = ({
     }
 
     const prefix = labels.connection.disconnected;
-    statusBadge.textContent = typeof closeCode === "number" ? `${prefix} (${closeCode})` : prefix;
+    statusText.textContent = typeof closeCode === "number" ? `${prefix} (${closeCode})` : prefix;
+    setStatusTone("error");
   },
   setReconnectVisible(visible) {
     if (!reconnectButton) {
@@ -230,7 +252,8 @@ export const createGameClientStatusController = ({
     );
     connectionAlertText.textContent = message ?? "";
   },
-});
+  };
+};
 
 /**
  * Creates the keyboard, focus, and reconnect interaction controller for the playable runtime.

@@ -22,7 +22,7 @@ import {
 import type { Messages } from "../shared/i18n/messages.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
 import { escapeHtml, type LayoutContext, renderDocument } from "./layout.ts";
-import { cardClasses, spinnerClasses } from "./shared/ui-components.ts";
+import { spinnerClasses } from "./shared/ui-components.ts";
 
 /**
  * Props for the playable runtime page.
@@ -107,11 +107,15 @@ const renderInactiveState = (
           ? messages.game.projectUnavailableDescription
           : messages.game.projectUnpublishedDescription;
 
-  return `<section class="hero min-h-[50vh] rounded-box bg-base-200" aria-label="${escapeHtml(title)}">
+  return `<section class="hero min-h-[60vh] rounded-box bg-base-200" aria-label="${escapeHtml(title)}">
     <div class="hero-content text-center">
       <div class="max-w-lg">
         <div class="mb-6">
           <svg xmlns="http://www.w3.org/2000/svg" class="size-16 text-warning/40 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.692-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+        </div>
+        <div class="alert alert-soft alert-warning mb-6 justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4m0 4h.01"/><circle cx="12" cy="12" r="10"/></svg>
+          <span>${escapeHtml(messages.pages.home.activityEmptyTitle)}</span>
         </div>
         <span class="badge badge-warning badge-soft mb-3">${escapeHtml(messages.game.publishedProjectLabel)}</span>
         <h1 class="text-3xl font-bold tracking-tight">${escapeHtml(title)}</h1>
@@ -240,7 +244,7 @@ export function GamePage(props: GamePageProps) {
     <script id="game-client-bootstrap" type="application/json">${serializeGameClientBootstrap(clientBootstrap)}</script>
     <div class="game-page-grid gap-5 font-serif stagger-children animate-fade-in-up" hx-boost="false" hx-ext="sse" sse-connect="${escapeHtml(gameHudStreamUrl)}" data-sse-url="${escapeHtml(gameHudStreamUrl)}" data-builder-href="${escapeHtml(builderHref)}" data-back-to-builder-label="${escapeHtml(messages.game.builderReturn)}" data-connecting-to-realm="${escapeHtml(messages.game.connectingToRealm)}">
       <!-- Game Header Bar -->
-      <header class="card card-border shadow-lg">
+      <header class="bg-base-200 card shadow">
         <div class="card-body p-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div class="flex items-center gap-3 min-w-0 shrink" role="group" aria-label="${escapeHtml(messages.game.sceneLabel)}">
             <div class="rounded-lg w-10 h-10 flex items-center justify-center bg-primary/15 text-primary shrink-0">
@@ -298,7 +302,7 @@ export function GamePage(props: GamePageProps) {
             </span>
             <div
               id="game-connection-status"
-              class="connection-status connection-status-connecting"
+              class="flex items-center gap-2 rounded-box bg-base-200 px-3 py-2 text-sm"
               aria-label="${escapeHtml(messages.game.connectionStatus)}"
               data-connecting-label="${escapeHtml(messages.game.connectionStatus)}"
               data-connected-label="${escapeHtml(messages.game.connectionConnected)}"
@@ -306,8 +310,11 @@ export function GamePage(props: GamePageProps) {
               data-reconnecting-label="${escapeHtml(messages.game.connectionReconnecting)}"
               data-expired-label="${escapeHtml(messages.game.connectionExpired)}"
               data-missing-label="${escapeHtml(messages.game.connectionMissing)}"
+              role="status"
+              aria-live="polite"
             >
-              <span>${escapeHtml(messages.game.connectionStatus)}</span>
+              <span id="game-connection-indicator" class="status status-warning status-sm status-ping"></span>
+              <span id="game-connection-status-text">${escapeHtml(messages.game.connectionStatus)}</span>
             </div>
             <span
               id="game-command-queue"
@@ -430,7 +437,7 @@ export function GamePage(props: GamePageProps) {
           </div>
 
           <aside class="order-2 lg:order-none space-y-4 game-sidebar" aria-label="${escapeHtml(messages.game.objectiveTitle)}">
-            <article class="card card-border shadow-sm flex-1">
+            <article class="bg-base-200 card flex-1">
               <div class="card-body">
                 <h2 class="card-title text-lg">${escapeHtml(messages.game.objectiveTitle)}</h2>
                 <div
@@ -440,61 +447,42 @@ export function GamePage(props: GamePageProps) {
                   class="hidden"
                   aria-label="${escapeHtml(messages.game.questLogTitle)}"
                 ></div>
-                <details class="collapse collapse-arrow mt-3 bg-base-200/70 rounded-box lg:open" aria-label="${escapeHtml(messages.game.sessionInfoLabel)}">
-                  <summary class="collapse-title font-medium text-sm">
-                    ${escapeHtml(messages.game.sessionInfoLabel)}
-                  </summary>
-                  <div class="collapse-content">
-                    <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
-                      <span>${escapeHtml(messages.game.sceneLabel)}</span>
-                      <span
-                        id="game-scene-title-value"
-                        sse-swap="scene-title-value"
-                        hx-swap="outerHTML"
-                        class="font-medium"
-                      >${escapeHtml(sceneTitle)}</span>
-                    </div>
-                    <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
-                      <span>${escapeHtml(messages.game.sceneModeLabel)}</span>
-                      <span
-                        id="game-scene-mode-value"
-                        sse-swap="scene-mode"
-                        hx-swap="outerHTML"
-                        class="font-medium"
-                      >${escapeHtml(
-                        sceneMode === "3d" ? messages.game.sceneMode3d : messages.game.sceneMode2d,
-                      )}</span>
-                    </div>
-                    <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
-                      <span>${escapeHtml(messages.game.projectLabel)}</span>
-                      <span class="font-mono text-xs">${escapeHtml(
-                        projectId ?? messages.game.projectUnavailableValue,
-                      )}</span>
-                    </div>
-                    <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
-                      <span>${escapeHtml(messages.game.sessionIdLabel)}</span>
-                      <span class="font-mono text-xs">${escapeHtml(sessionId)}</span>
-                    </div>
-                    <div class="flex items-center justify-between gap-2 rounded-box bg-base-200/70 px-3 py-2">
-                      <span>${escapeHtml(messages.game.localeLabel)}</span>
-                      <div class="flex items-center gap-2">
-                        <span class="font-medium">${escapeHtml(
-                          resolveLocaleDisplayName(messages, locale),
-                        )}</span>
-                        <a href="${escapeHtml(withLocaleQuery(currentPathWithQuery, locale === "en-US" ? "zh-CN" : "en-US"))}" class="link link-hover text-xs" aria-label="${escapeHtml(locale === "en-US" ? messages.navigation.switchToChinese : messages.navigation.switchToEnglish)}">${escapeHtml(locale === "en-US" ? messages.navigation.switchToChinese : messages.navigation.switchToEnglish)}</a>
-                      </div>
-                    </div>
-                    <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
-                      <span>${escapeHtml(messages.game.participantRoleLabel)}</span>
-                      <span class="font-medium">${escapeHtml(
-                        resolveParticipantRoleLabel(messages, participantRole),
-                      )}</span>
-                    </div>
+                <div class="stats stats-vertical bg-base-200 rounded-box mt-3">
+                  <div class="stat">
+                    <div class="stat-title">${escapeHtml(messages.game.participantsLabel)}</div>
+                    <div class="stat-value text-sm">${participants.length}</div>
+                    <div class="stat-desc">${escapeHtml(resolveParticipantRoleLabel(messages, participantRole))}</div>
                   </div>
-                </details>
+                  <div class="stat">
+                    <div class="stat-title">${escapeHtml(messages.game.sceneLabel)}</div>
+                    <div
+                      id="game-scene-title-value"
+                      sse-swap="scene-title-value"
+                      hx-swap="outerHTML"
+                      class="stat-value text-base"
+                    >${escapeHtml(sceneTitle)}</div>
+                    <div class="stat-desc">${escapeHtml(messages.game.sceneModeLabel)}</div>
+                  </div>
+                  <div class="stat">
+                    <div class="stat-title">${escapeHtml(messages.game.sceneModeLabel)}</div>
+                    <div
+                      id="game-scene-mode-value"
+                      sse-swap="scene-mode"
+                      hx-swap="outerHTML"
+                      class="stat-value text-base"
+                    >${escapeHtml(
+                        sceneMode === "3d" ? messages.game.sceneMode3d : messages.game.sceneMode2d,
+                      )}</div>
+                    <div class="stat-desc">${escapeHtml(activeQuestTitle ?? messages.game.objectiveDescription)}</div>
+                  </div>
+                  <div class="stat">
+                    <div class="stat-title">${escapeHtml(messages.game.projectLabel)}</div>
+                    <div class="stat-value text-xs">${escapeHtml(projectId ?? messages.game.projectUnavailableValue)}</div>
+                  </div>
+                </div>
               </div>
             </article>
-            <article class="card card-border shadow-sm flex-1">
+            <article class="bg-base-200 card flex-1">
               <div class="card-body">
                 <h2 class="card-title text-lg">${escapeHtml(messages.game.sessionContextTitle)}</h2>
                 <div class="flex flex-wrap gap-2">
@@ -506,7 +494,7 @@ export function GamePage(props: GamePageProps) {
                 </div>
               </div>
             </article>
-            <article class="card card-border shadow-sm flex-1">
+            <article class="bg-base-200 card flex-1">
               <div class="card-body gap-4">
                 <h2 class="card-title text-lg">${escapeHtml(messages.game.multiplayerTitle)}</h2>
                 <p class="text-sm text-base-content/70">${escapeHtml(messages.game.multiplayerDescription)}</p>
@@ -514,14 +502,15 @@ export function GamePage(props: GamePageProps) {
                   <div class="text-xs font-semibold uppercase tracking-wide text-base-content/60">${escapeHtml(
                     messages.game.participantsLabel,
                   )}</div>
-                  <div id="game-participants-list" sse-swap="participants" hx-swap="outerHTML" class="space-y-2">
+                  <div class="avatar-group -space-x-6" id="game-participants-list" sse-swap="participants" hx-swap="outerHTML" role="list" aria-live="polite">
                     ${participants
                       .map(
                         (
                           participant,
-                        ) => `<div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2 text-sm">
-                          <span class="font-mono text-xs">${escapeHtml(participant.sessionId)}</span>
-                          <span class="badge badge-outline">${escapeHtml(resolveParticipantRoleLabel(messages, participant.role))}</span>
+                        ) => `<div class="avatar tooltip" data-tip="${escapeHtml(participant.sessionId)}">
+                          <div class="w-12 rounded-full bg-base-200 ring ring-base-300">
+                            <span class="text-sm uppercase font-semibold">${escapeHtml(participant.role.slice(0, 1))}</span>
+                          </div>
                         </div>`,
                       )
                       .join("")}
@@ -552,7 +541,7 @@ export function GamePage(props: GamePageProps) {
                 }
               </div>
             </article>
-            <article class="card card-border shadow-sm flex-1">
+            <article class="bg-base-200 card flex-1">
               <div class="card-body">
                 <h2 class="card-title text-lg">${escapeHtml(messages.game.controlsTitle)}</h2>
                 <p id="game-runtime-help" class="text-sm text-base-content/70">${escapeHtml(messages.game.runtimeSurfaceHint)}</p>

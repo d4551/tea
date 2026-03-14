@@ -293,18 +293,29 @@ const renderTopBar = (
       : messages.navigation.switchToChinese;
   const localeSwitchHref = withLocaleQuery(currentPathWithQuery, languageSwitch);
 
-  return `<nav aria-label="${escapeHtml(messages.common.mobileNavigation)}" class="navbar w-full bg-base-300">
-    ${renderDrawerToggleControl({
-      targetId: "main-nav-drawer",
-      label: messages.common.openMenu,
-      className: "btn btn-square btn-ghost",
-      content:
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><path d="M4 4m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"></path><path d="M9 4v16"></path><path d="M14 10l2 2l-2 2"></path></svg>',
-    })}
-    <div class="px-4 grow min-w-0">
-      ${breadcrumbs && breadcrumbs.length > 0 ? renderBreadcrumbs(messages, breadcrumbs) : `<span class="font-bold text-lg">${escapeHtml(messages.metadata.appName)}</span>`}
+  const brand = `<a href="${withLocaleQuery(appRoutes.home, _locale)}" class="btn btn-ghost normal-case text-lg px-2 gap-2">
+    <svg xmlns="http://www.w3.org/2000/svg" class="size-5 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" /></svg>
+    ${escapeHtml(messages.metadata.appName)}
+  </a>`;
+
+  const breadcrumbNav =
+    breadcrumbs && breadcrumbs.length > 0 ? renderBreadcrumbs(messages, breadcrumbs) : `<span class="font-semibold">${escapeHtml(messages.metadata.appName)}</span>`;
+
+  return `<nav aria-label="${escapeHtml(messages.common.mobileNavigation)}" class="navbar w-full bg-base-300 px-2">
+    <div class="navbar-start">
+      ${renderDrawerToggleControl({
+        targetId: "main-nav-drawer",
+        label: messages.common.openMenu,
+        className: "btn btn-square btn-ghost",
+        content:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><path d="M4 4m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"></path><path d="M9 4v16"></path><path d="M14 10l2 2l-2 2"></path></svg>',
+      })}
+      <div class="hidden md:block ml-2">${brand}</div>
     </div>
-    <div class="flex gap-2 items-center">
+    <div class="navbar-center">
+      ${breadcrumbNav}
+    </div>
+    <div class="navbar-end flex gap-2">
       ${renderThemeDropdown(messages)}
       <a href="${escapeHtml(localeSwitchHref)}" class="btn btn-outline btn-xs font-medium" aria-label="${escapeHtml(localeSwitchAriaLabel)}">${escapeHtml(localeSwitchButtonText)}</a>
     </div>
@@ -395,7 +406,7 @@ const renderNavigation = (
 
   const listItems = items.map(renderItem).join("");
 
-  return `<div class="flex min-h-full flex-col items-start bg-base-200 is-drawer-close:w-14 is-drawer-open:w-64" role="navigation" aria-label="${escapeHtml(messages.common.primaryNavigation)}">
+  return `<div class="flex min-h-full flex-col items-start bg-base-200 is-drawer-close:w-14 is-drawer-open:w-72" role="navigation" aria-label="${escapeHtml(messages.common.primaryNavigation)}">
     <div class="w-full p-3 is-drawer-close:p-2">
       <a href="${withLocaleQuery(appRoutes.home, locale)}" class="is-drawer-close:tooltip is-drawer-close:tooltip-right flex items-center gap-2 px-2 py-1 text-xl font-bold" data-tip="${escapeHtml(messages.metadata.appName)}" aria-label="${escapeHtml(messages.metadata.appName)}">
         <svg xmlns="http://www.w3.org/2000/svg" class="size-5 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" /></svg>
@@ -481,22 +492,26 @@ const renderFooter = (messages: Messages, locale: LocaleCode): string => {
     .join("");
   const socialNav =
     socialLinks.length > 0
-      ? `<nav aria-label="${escapeHtml(messages.common.socialNavLabel)}" class="flex gap-4">${socialLinks}</nav>`
+      ? `<nav aria-label="${escapeHtml(messages.common.socialNavLabel)}" class="grid grid-flow-col gap-3">${socialLinks}</nav>`
       : "";
 
-  return `<footer class="bg-neutral text-neutral-content border-t border-base-300/30">
-    <div class="footer sm:footer-horizontal mx-auto w-full ${escapeHtml(appConfig.ui.maxContentWidthClass)} p-6 lg:p-10">
+  return `<footer class="bg-neutral text-neutral-content border-t border-base-300/30 sm:footer-horizontal">
+    <div class="footer mx-auto w-full ${escapeHtml(appConfig.ui.maxContentWidthClass)} p-6 lg:p-8">
       <aside>
-        <p class="footer-title flex items-center gap-2 opacity-100">
+        <div class="footer-title flex items-center gap-2">
           <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" /></svg>
           ${escapeHtml(messages.footer.title)}
-        </p>
-        <p class="text-sm opacity-70">${escapeHtml(messages.footer.copy)}</p>
+        </div>
+        <p class="text-xs opacity-70 max-w-xs leading-relaxed">${escapeHtml(messages.footer.copy)}</p>
       </aside>
-      <nav class="flex flex-wrap items-start gap-x-6 gap-y-2 text-sm">
+      <nav aria-label="resources-links">
+        <h6 class="footer-title">${escapeHtml("Resources")}</h6>
         ${resourceLinks}
       </nav>
-      ${socialNav}
+      <nav aria-label="${escapeHtml(messages.common.socialNavLabel)}">
+        <h6 class="footer-title">${escapeHtml(messages.common.socialNavLabel)}</h6>
+        ${socialNav}
+      </nav>
     </div>
     <div class="footer footer-center p-4 border-t border-base-content/10">
       <p class="text-xs opacity-50">${escapeHtml(messages.footer.copy)}</p>

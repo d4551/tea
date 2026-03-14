@@ -132,8 +132,6 @@ export interface BadgeConfig {
   readonly colorToken?: ColorToken;
   /** Optional size. */
   readonly size?: "xs" | "sm" | "md" | "lg";
-  /** Optional leading DaisyUI 5 status indicator. */
-  readonly statusIndicator?: boolean;
   /** Optional additional CSS classes. */
   readonly className?: string;
 }
@@ -232,6 +230,56 @@ export interface StatsConfig {
   readonly className?: string;
   /** Optional ARIA label. */
   readonly ariaLabel?: string;
+}
+
+/**
+ * Hero component configuration.
+ */
+export interface HeroConfig {
+  /** Hero title text. */
+  readonly title: string;
+  /** Optional hero subtitle. */
+  readonly subtitle?: string;
+  /** Optional action buttons/content area. */
+  readonly actions?: string;
+  /** Optional hero media column content. */
+  readonly media?: string;
+  /** Optional minimum height utility class. */
+  readonly minHeightClass?: string;
+  /** Optional additional wrapper classes. */
+  readonly className?: string;
+  /** Optional hero content area classes. */
+  readonly contentClassName?: string;
+}
+
+/**
+ * Collapse configuration.
+ */
+export interface CollapseConfig {
+  /** Summary title/label. */
+  readonly title: string;
+  /** Body content rendered inside collapse-content. */
+  readonly content: string;
+  /** Whether collapse should be open by default. */
+  readonly open?: boolean;
+  /** Optional additional classes for root details. */
+  readonly className?: string;
+  /** Optional aria-label override. */
+  readonly ariaLabel?: string;
+}
+
+/**
+ * Status indicator configuration.
+ */
+export interface StatusConfig {
+  /** Status token for the indicator. */
+  readonly tone: "neutral" | "primary" | "secondary" | "accent" | "success" | "warning" | "info" | "error";
+  /** Optional size variant for status dot. */
+  readonly size?: "xs" | "sm" | "md" | "lg";
+  /** Optional animation token. */
+  readonly animation?: "dot" | "ping" | "bounce";
+  /** Optional wrapper classes. */
+  readonly className?: string;
 }
 
 /**
@@ -492,11 +540,7 @@ export const renderBadge = (config: BadgeConfig): string => {
     .filter(Boolean)
     .join(" ");
 
-  const statusIndicator = config.statusIndicator
-    ? `<span class="status status-${config.colorToken ?? "neutral"} status-sm"></span>`
-    : "";
-
-  return `<span class="${classes}">${statusIndicator}${escapeHtml(config.content)}</span>`;
+  return `<span class="${classes}">${escapeHtml(config.content)}</span>`;
 };
 
 /**
@@ -641,7 +685,7 @@ const renderTabHtmxAttrs = (htmx: NonNullable<TabItem["htmx"]>): string => {
 export const renderStats = (config: StatsConfig): string => {
   const { stats, vertical = false, className = "", ariaLabel } = config;
 
-  const layoutClass = vertical ? "stats-vertical" : "stats-horizontal";
+  const layoutClass = vertical ? "stats-vertical" : "stats-vertical sm:stats-horizontal";
   const ariaLabelAttr = ariaLabel ? ` aria-label="${escapeHtml(ariaLabel)}"` : "";
 
   const statItems = stats
@@ -661,7 +705,72 @@ export const renderStats = (config: StatsConfig): string => {
     })
     .join("");
 
-  return `<div class="stats ${layoutClass} border border-base-300 bg-base-100 ${className}"${ariaLabelAttr}>${statItems}</div>`;
+  return `<div class="stats ${layoutClass} bg-base-200 border border-base-300 ${className}"${ariaLabelAttr}>${statItems}</div>`;
+};
+
+/**
+ * Renders a DaisyUI hero section.
+ */
+export const renderHero = (config: HeroConfig): string => {
+  const minHeightClass = config.minHeightClass ?? "min-h-[50vh]";
+  const className = [
+    "hero",
+    minHeightClass,
+    "bg-base-200",
+    "overflow-hidden",
+    config.className ?? "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const contentClassName = config.contentClassName ?? "max-w-4xl py-10";
+
+  return `<section class="${className}">
+  <div class="hero-content ${contentClassName}">
+    <div class="max-w-full">
+      <h1 class="text-display font-bold">${escapeHtml(config.title)}</h1>
+      ${config.subtitle ? `<p class="text-base-content/75 mt-3 leading-7">${escapeHtml(config.subtitle)}</p>` : ""}
+      ${config.actions ? `<div class="hero-actions mt-6 flex flex-wrap gap-2">${config.actions}</div>` : ""}
+    </div>
+    ${config.media ?? ""}
+  </div>
+</section>`;
+};
+
+/**
+ * Renders a DaisyUI collapse block.
+ */
+export const renderCollapse = (config: CollapseConfig): string => {
+  const openAttr = config.open ? " open" : "";
+  const ariaLabel = config.ariaLabel
+    ? ` aria-label="${escapeHtml(config.ariaLabel)}"`
+    : "";
+
+  return `<details class="collapse ${config.className ?? "bg-base-200/50 rounded-box border border-dashed border-base-300"}"${openAttr}${ariaLabel}>
+    <summary class="collapse-title font-medium text-sm">${escapeHtml(config.title)}</summary>
+    <div class="collapse-content">
+      ${config.content}
+    </div>
+</details>`;
+};
+
+/**
+ * Renders a DaisyUI status indicator element.
+ */
+export const renderStatus = (config: StatusConfig): string => {
+  const size = config.size ?? "sm";
+  const sizeClass = `status-${size}`;
+  const animationClass = config.animation ? `status-${config.animation}` : "";
+  const classes = [
+    "status",
+    `status-${config.tone}`,
+    sizeClass,
+    animationClass,
+    config.className ?? "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return `<span class="${classes}" aria-hidden="true"></span>`;
 };
 
 /* ------------------------------------------------------------------ */

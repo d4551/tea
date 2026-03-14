@@ -7,6 +7,7 @@ import type {
 import { appRoutes, withLocaleQuery, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
+import { renderCollapse, renderStats, type ColorToken } from "../shared/ui-components.ts";
 
 import { renderWorkspaceShell } from "./workspace-shell.ts";
 
@@ -111,24 +112,31 @@ const capabilityStatusLabel = (
   }
 };
 
-const metricToneClass = (tone: CapabilityMetric["tone"]): string => {
+const metricToneToken = (tone: CapabilityMetric["tone"]): ColorToken | undefined => {
   switch (tone) {
     case "primary":
-      return "text-primary";
+      return "primary";
     case "secondary":
-      return "text-secondary";
+      return "secondary";
     case "accent":
-      return "text-accent";
+      return "accent";
     default:
-      return "text-base-content";
+      return undefined;
   }
 };
 
-const renderMetric = (metric: CapabilityMetric): string => `
-  <div class="stat p-3">
-    <div class="stat-title text-[0.7rem] font-semibold uppercase tracking-[0.22em]">${escapeHtml(metric.label)}</div>
-    <div class="stat-value text-lg ${metricToneClass(metric.tone)}">${escapeHtml(String(metric.value))}</div>
-  </div>`;
+const renderMetricStats = (metrics: readonly CapabilityMetric[], className = "bg-base-200"): string =>
+  renderStats({
+    stats: metrics.map((metric) => ({
+      title: metric.label,
+      value: String(metric.value),
+      description: "",
+      colorToken: metricToneToken(metric.tone),
+    })),
+    vertical: true,
+    ariaLabel: metrics.map((metric) => metric.label).join(", "),
+    className,
+  });
 
 const capabilityHref = (
   capability: BuilderCapabilityKey,
@@ -319,7 +327,7 @@ const renderCapabilityCard = (
   stats: DashboardStats,
 ): string => {
   const copy = capabilityCopy(messages, capability.key);
-  const metrics = capabilityMetrics(messages, capability.key, stats).map(renderMetric).join("");
+  const metrics = renderMetricStats(capabilityMetrics(messages, capability.key, stats));
   const href = capabilityHref(capability.key, locale, projectId);
   const statusLabel = capabilityStatusLabel(messages, capability.status);
 
@@ -332,7 +340,7 @@ const renderCapabilityCard = (
         </div>
         <span class="badge ${capabilityTone(capability.status)} badge-soft badge-lg" role="status" aria-label="${escapeHtml(statusLabel)}">${escapeHtml(statusLabel)}</span>
       </div>
-      <dl class="stats stats-vertical sm:stats-horizontal bg-base-200/50 shadow-sm">${metrics}</dl>
+      ${metrics}
       <div class="card-actions justify-end">
         <a class="btn btn-ghost btn-sm" href="${escapeHtml(href)}" aria-label="${escapeHtml(messages.builder.openDetails)}: ${escapeHtml(copy.title)}">${escapeHtml(messages.builder.openDetails)}</a>
       </div>
@@ -458,18 +466,18 @@ export const renderBuilderDashboard = (
               <li class="step step-accent">${escapeHtml(messages.builder.mechanics)}</li>
               <li class="step ${published ? "step-success" : ""}">${escapeHtml(messages.builder.playPublishedBuild)}</li>
             </ul>
-            <dl class="grid gap-3 md:grid-cols-3">
-              ${renderMetric({ label: messages.builder.draftVersionLabel, value: stats.draftVersion, tone: "primary" })}
-              ${renderMetric({ label: messages.builder.latestReleaseLabel, value: stats.latestReleaseVersion, tone: "secondary" })}
-              ${renderMetric({
+            ${renderMetricStats([
+              { label: messages.builder.draftVersionLabel, value: stats.draftVersion, tone: "primary" },
+              { label: messages.builder.latestReleaseLabel, value: stats.latestReleaseVersion, tone: "secondary" },
+              {
                 label: messages.builder.publishedReleaseLabel,
                 value: releaseValue(
                   stats.publishedReleaseVersion,
                   messages.builder.noPublishedRelease,
                 ),
                 tone: "accent",
-              })}
-            </dl>
+              },
+            ], "bg-base-200/70 sm:stats-horizontal")}
           </div>
         </article>
 
@@ -479,36 +487,32 @@ export const renderBuilderDashboard = (
               <h2 class="card-title text-xl">${escapeHtml(messages.builder.localRuntimeTitle)}</h2>
               <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.platformReadinessWarning)}</p>
             </div>
-            <dl class="grid gap-3">
-              ${renderMetric({ label: messages.builder.providerCountLabel, value: stats.aiProviderCount, tone: "primary" })}
-              ${renderMetric({ label: messages.builder.runtimeLabel, value: stats.rendererPreference.toUpperCase(), tone: "secondary" })}
-              ${renderMetric({ label: messages.builder.modelLabel, value: stats.onnxDevice.toUpperCase(), tone: "accent" })}
-              ${renderMetric({ label: messages.builder.generationJobCountLabel, value: stats.generationJobCount })}
-            </dl>
+            ${renderMetricStats(
+              [
+                {
+                  label: messages.builder.providerCountLabel,
+                  value: stats.aiProviderCount,
+                  tone: "primary",
+                },
+                { label: messages.builder.runtimeLabel, value: stats.rendererPreference.toUpperCase(), tone: "secondary" },
+                { label: messages.builder.modelLabel, value: stats.onnxDevice.toUpperCase(), tone: "accent" },
+                { label: messages.builder.generationJobCountLabel, value: stats.generationJobCount },
+              ],
+              "bg-base-200/70 sm:stats-horizontal",
+            )}
           </div>
         </article>
       </section>
 
-      <section id="builder-platform-readiness" class="space-y-4" aria-labelledby="builder-platform-readiness-heading">
-        <details class="group">
-          <summary class="cursor-pointer list-none [&::-webkit-details-marker]:hidden" aria-label="${escapeHtml(messages.builder.readinessSummaryExpand)}">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <h2 id="builder-platform-readiness-heading" class="text-2xl font-semibold tracking-tight">${escapeHtml(messages.builder.platformReadinessTitle)}</h2>
-              <span class="flex items-center gap-2">
-                <span class="badge badge-ghost badge-sm">
-                  ${stats.readiness.implementedCount} of ${stats.readiness.implementedCount + stats.readiness.partialCount + stats.readiness.missingCount} ready
-                </span>
-                <span class="text-base-content/50 -rotate-90 group-open:rotate-0 transition-transform inline-block" aria-hidden="true">▾</span>
-              </span>
-            </div>
-          </summary>
-          <div class="mt-4 space-y-4">
-            <p class="max-w-4xl text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.platformReadinessDescription)}</p>
-            <div class="grid gap-4 2xl:grid-cols-2">
-              ${capabilityCards.join("")}
-            </div>
-          </div>
-        </details>
-      </section>
+      ${renderCollapse({
+        open: true,
+        title: `${escapeHtml(messages.builder.platformReadinessTitle)}`,
+        content: `<p class="max-w-4xl text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.platformReadinessDescription)}</p>
+          <div class="mt-4 grid gap-4 2xl:grid-cols-2">
+            ${capabilityCards.join("")}
+          </div>`,
+        ariaLabel: messages.builder.platformReadinessTitle,
+        className: "rounded-box bg-base-200/70 collapse-arrow",
+      })}
     </div>`;
 };

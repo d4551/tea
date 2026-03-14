@@ -542,19 +542,16 @@ const createHudStream = async function* ({
       sceneMode === "3d" ? messages.game.sceneMode3d : messages.game.sceneMode2d,
     )}</span>`;
   const renderParticipants = (participants: GameHudState["participants"]): string =>
-    `<div id="game-participants-list" sse-swap="participants" hx-swap="outerHTML" aria-live="polite" role="list" class="space-y-2">${participants
+    `<div id="game-participants-list" sse-swap="participants" hx-swap="outerHTML" aria-live="polite" role="list" class="avatar-group -space-x-6">${participants
       .map(
         (
           participant,
-        ) => `<div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2 text-sm">
-          <span class="font-mono text-xs">${escapeHtml(participant.sessionId)}</span>
-          <span class="badge badge-outline">${escapeHtml(
-            participant.role === "owner"
-              ? messages.game.participantRoleOwner
-              : participant.role === "controller"
-                ? messages.game.participantRoleController
-                : messages.game.participantRoleSpectator,
-          )}</span>
+        ) => `<div class="avatar tooltip" data-tip="${escapeHtml(participant.sessionId)}">
+          <div class="w-11 rounded-full bg-base-200 ring ring-base-300">
+            <span class="text-xs uppercase font-semibold">${escapeHtml(
+              participant.role.slice(0, 1),
+            )}</span>
+          </div>
         </div>`,
       )
       .join("")}</div>`;
