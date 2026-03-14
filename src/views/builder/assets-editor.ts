@@ -1,5 +1,4 @@
 import type { LocaleCode } from "../../config/environment.ts";
-import type { BuilderPlatformReadiness } from "../../domain/builder/platform-readiness.ts";
 import {
   DEFAULT_ANIMATION_FRAME_COUNT,
   DEFAULT_ANIMATION_PLAYBACK_FPS,
@@ -14,13 +13,17 @@ import type {
 } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
+import { renderActionDropdown } from "../shared/navigation.ts";
 import {
   cardClasses,
   renderBuilderHiddenFields,
   renderEmptyStateCompact,
   spinnerClasses,
 } from "../shared/ui-components.ts";
-import { renderPlatformReadinessSection } from "./platform-readiness.ts";
+import {
+  buildAnimationAuthoringContext,
+  buildCreatorAssistContext,
+} from "./builder-flow.ts";
 import {
   getArtifactLabel,
   getArtifactSummaryLabel,
@@ -52,7 +55,6 @@ export const renderAssetsEditor = (
   clips: readonly AnimationClip[],
   jobs: readonly GenerationJob[],
   artifacts: readonly GenerationArtifact[],
-  readiness?: BuilderPlatformReadiness,
 ): string => {
   const createAssetAction = `${appRoutes.builderApiAssets}/create/form`;
   const uploadAssetAction = appRoutes.builderApiAssetsUpload;
@@ -102,14 +104,22 @@ export const renderAssetsEditor = (
               <h3 class="card-title text-base truncate">${escapeHtml(getAssetLabel(messages, asset))}</h3>
               <p class="font-mono text-xs text-base-content/60 truncate">${escapeHtml(asset.id)}</p>
             </div>
-            <div class="dropdown dropdown-end">
-              <button type="button" tabindex="0" class="btn btn-ghost btn-xs btn-square" aria-label="${escapeHtml(messages.builder.openDetails)}" aria-haspopup="menu">
+            ${renderActionDropdown(
+              messages.builder.openDetails,
+              `<span class="btn btn-ghost btn-xs btn-square" aria-haspopup="menu">
                 <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
-              </button>
-              <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-10 w-40 p-1 shadow-lg border border-base-300">
-                <li><a href="#" class="text-sm">${escapeHtml(messages.builder.openDetails)}</a></li>
-              </ul>
-            </div>
+              </span>`,
+              [
+                {
+                  key: "open-source",
+                  label: messages.builder.openDetails,
+                  href: asset.source,
+                  target: "_blank",
+                  rel: "noreferrer",
+                },
+              ],
+              { align: "end", widthClass: "w-40", menuClassName: "p-1" },
+            )}
           </div>
           <div class="flex flex-wrap gap-1">
             <span class="badge badge-outline badge-sm">${escapeHtml(getAssetKindLabel(messages, asset.kind))}</span>
@@ -239,12 +249,23 @@ export const renderAssetsEditor = (
 
   const assets2d = assets.filter((asset) => asset.sceneMode !== "3d").length;
   const assets3d = assets.filter((asset) => asset.sceneMode === "3d").length;
+  const selectedAsset = assets[0] ?? null;
+  const creatorAssist = buildCreatorAssistContext(messages, locale, projectId, {
+    entityType: selectedAsset?.kind === "portrait" || selectedAsset?.kind === "sprite-sheet" ? "character" : "asset",
+    entityId: selectedAsset?.id ?? projectId,
+    title: selectedAsset?.label ?? selectedAsset?.id ?? messages.builder.assets,
+    targetId: selectedAsset?.id,
+  });
+  const animationContext =
+    selectedAsset !== null
+      ? buildAnimationAuthoringContext(selectedAsset.id, selectedAsset.sceneMode, messages)
+      : null;
 
   return `<section class="space-y-6 animate-fade-in-up">
     ${renderWorkspaceShell({
       eyebrow: messages.builder.assets,
       title: messages.builder.assetsWorkspaceTitle,
-      description: messages.builder.assetPlaceholder,
+      description: messages.builder.assetsWorkspaceDescription,
       facets: [
         { label: messages.builder.capabilitySpritePipelineTitle, badgeClassName: "badge-warning" },
         {
@@ -264,21 +285,33 @@ export const renderAssetsEditor = (
         },
       ],
     })}
-    ${
-      readiness
-        ? renderPlatformReadinessSection({
-            messages,
-            locale,
-            projectId,
-            readiness,
-            keys: ["runtime2d", "runtime3d", "spritePipeline", "animationPipeline"],
-          })
-        : ""
-    }
+    <section class="grid gap-4 xl:grid-cols-3">
+      <article class="${cardClasses.bordered}">
+        <div class="card-body gap-2">
+          <h2 class="card-title text-base text-primary">${escapeHtml(messages.builder.sceneMode2d)}</h2>
+          <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.assets2dGuide)}</p>
+        </div>
+      </article>
+      <article class="${cardClasses.bordered}">
+        <div class="card-body gap-2">
+          <h2 class="card-title text-base text-secondary">${escapeHtml(messages.builder.sceneMode3d)}</h2>
+          <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.assets3dGuide)}</p>
+        </div>
+      </article>
+      <article class="${cardClasses.bordered}">
+        <div class="card-body gap-2">
+          <h2 class="card-title text-base text-accent">${escapeHtml(messages.builder.modePrimerUsdTitle)}</h2>
+          <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.assetsUsdGuide)}</p>
+        </div>
+      </article>
+    </section>
     <div class="grid gap-4 xl:grid-cols-3">
       <article class="${cardClasses.bordered}">
         <div class="card-body gap-3">
           <h2 class="card-title">${escapeHtml(messages.builder.assetsWorkspaceTitle)}</h2>
+          <div class="rounded-box border border-base-300 bg-base-200/50 p-3 text-sm leading-6 text-base-content/72">
+            ${escapeHtml(messages.builder.assetsWorkspaceDescription)}
+          </div>
           <form class="space-y-3" hx-post="${escapeHtml(uploadAssetAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-encoding="multipart/form-data" hx-indicator="#asset-upload-spinner" hx-disabled-elt="button, input, select, textarea">
             ${renderBuilderHiddenFields(projectId, locale)}
             <fieldset class="fieldset">
@@ -346,7 +379,8 @@ export const renderAssetsEditor = (
       <article class="${cardClasses.bordered}">
         <form class="card-body gap-3" hx-post="${escapeHtml(createClipAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#clip-create-spinner" hx-disabled-elt="button, input, select, textarea">
           ${renderBuilderHiddenFields(projectId, locale)}
-          <h2 class="card-title">${escapeHtml(messages.builder.animationClipsTitle)}</h2>
+          <h2 class="card-title">${escapeHtml(messages.builder.animationAuthoringTitle)}</h2>
+          <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.animationAuthoringDescription)}</p>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.clipIdLabel)}</legend>
             <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.clipIdPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.animationClipIdFieldLabel)}" />
@@ -371,13 +405,47 @@ export const renderAssetsEditor = (
             <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.createAnimationClip)}">${escapeHtml(messages.builder.createAnimationClip)}</button>
             <span id="clip-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
+          ${
+            animationContext
+              ? `<div class="rounded-box border border-base-300 bg-base-200/50 p-3 text-sm leading-6 text-base-content/72">
+                  <div class="font-medium">${escapeHtml(animationContext.assetId)}</div>
+                  <div class="text-xs uppercase tracking-wide text-base-content/50">${escapeHtml(messages.builder.sceneModeLabel)}: ${escapeHtml(animationContext.sceneMode)}</div>
+                  <ul class="mt-2 space-y-1">
+                    ${animationContext.workflows
+                      .map((workflow) =>
+                        `<li>
+                            <div class="font-medium">${escapeHtml(
+                              workflow.mode,
+                            )}</div>
+                            <ul class="ml-4 mt-1 list-disc">
+                              ${workflow.actions.map((action) => `<li>${escapeHtml(action)}</li>`).join("")}
+                            </ul>
+                          </li>`
+                      )
+                      .join("")}
+                  </ul>
+                </div>`
+              : ""
+          }
         </form>
       </article>
 
       <article class="${cardClasses.bordered}">
         <form class="card-body gap-3" hx-post="${escapeHtml(createJobAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#job-create-spinner" hx-disabled-elt="button, input, select, textarea">
           ${renderBuilderHiddenFields(projectId, locale)}
-          <h2 class="card-title">${escapeHtml(messages.builder.generationJobsTitle)}</h2>
+          <h2 class="card-title">${escapeHtml(messages.builder.creatorAssistTitle)}</h2>
+          <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.creatorAssistDescription)}</p>
+          <div class="grid gap-2">
+            ${creatorAssist.actions
+              .map(
+                (action) => `<a class="rounded-box border border-base-300 bg-base-200/55 p-3 transition hover:border-primary/50 hover:bg-base-200" href="${escapeHtml(action.href)}">
+                  <div class="font-medium">${escapeHtml(action.label)}</div>
+                  <div class="mt-1 text-sm text-base-content/70">${escapeHtml(action.description)}</div>
+                </a>`,
+              )
+              .join("")}
+          </div>
+          <div class="divider text-xs text-base-content/60">${escapeHtml(messages.builder.generationJobsTitle)}</div>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.generationJobKindLabel)}</legend>
             <select name="kind" class="select w-full" aria-label="${escapeHtml(messages.builder.generationJobKindLabel)}">${generationKindOptionHtml}</select>
@@ -409,7 +477,7 @@ export const renderAssetsEditor = (
     </section>
 
     <section class="space-y-3">
-      <h2 class="text-2xl font-semibold">${escapeHtml(messages.builder.generationJobsTitle)}</h2>
+      <h2 class="text-2xl font-semibold">${escapeHtml(messages.builder.creatorAssistTitle)}</h2>
       <div class="grid gap-4 xl:grid-cols-2">${jobs.length === 0 ? emptyJobAlert : jobCards}</div>
     </section>
   </section>`;

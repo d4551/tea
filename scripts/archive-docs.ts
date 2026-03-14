@@ -42,7 +42,6 @@ const DOCUMENT_PAIRS: readonly { readonly en: string; readonly zh?: string }[] =
   { en: "docs/api-contracts.md", zh: "docs/api-contracts.zh-CN.md" },
   { en: "docs/builder-domain.md", zh: "docs/builder-domain.zh-CN.md" },
   { en: "docs/rmmz-pack.md", zh: "docs/rmmz-pack.zh-CN.md" },
-  { en: "docs/maintenance-audit-2026-03-10.md", zh: "docs/maintenance-audit-2026-03-10.zh-CN.md" },
   { en: "LOTFK_RMMZ_Agentic_Pack/README.md", zh: "LOTFK_RMMZ_Agentic_Pack/README.zh-CN.md" },
   {
     en: "LOTFK_RMMZ_Agentic_Pack/PLUGIN_SPEC.md",

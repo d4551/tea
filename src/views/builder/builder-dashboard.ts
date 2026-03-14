@@ -7,7 +7,12 @@ import type {
 import { appRoutes, withLocaleQuery, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
-import { type ColorToken, renderCollapse, renderStats } from "../shared/ui-components.ts";
+import { type ColorToken, renderStats } from "../shared/ui-components.ts";
+import {
+  buildBuilderWorkflowStages,
+  deriveCreatorCapabilities,
+} from "./builder-flow.ts";
+import type { BuilderWorkflowStage, CreatorCapability } from "../../shared/contracts/game.ts";
 
 import { renderWorkspaceShell } from "./workspace-shell.ts";
 
@@ -61,6 +66,20 @@ export interface DashboardStats {
   readonly automationStepCount: number;
   /** Whether any AI provider is currently available. */
   readonly aiAvailable: boolean;
+  /** Whether dialog generation capability is detected. */
+  readonly aiFeatureDialogue: boolean;
+  /** Whether vision capability is detected. */
+  readonly aiFeatureVision: boolean;
+  /** Whether sentiment analysis capability is detected. */
+  readonly aiFeatureSentiment: boolean;
+  /** Whether embeddings capability is detected. */
+  readonly aiFeatureEmbeddings: boolean;
+  /** Whether speech-to-text capability is detected. */
+  readonly aiFeatureSpeechToText: boolean;
+  /** Whether text-to-speech capability is detected. */
+  readonly aiFeatureSpeechSynthesis: boolean;
+  /** Whether any local AI inference path is available. */
+  readonly aiFeatureLocalInference: boolean;
   /** Available provider names for the current runtime. */
   readonly providers: readonly string[];
   /** Number of available AI providers. */
@@ -351,6 +370,71 @@ const renderCapabilityCard = (
   </article>`;
 };
 
+const renderGuidedWorkflowCard = (
+  title: string,
+  description: string,
+  href: string,
+  actionLabel: string,
+  toneClassName: string,
+): string => `<article class="card border border-base-300 bg-base-100 shadow-sm">
+  <div class="card-body gap-4">
+    <div class="space-y-2">
+      <h3 class="card-title text-lg ${toneClassName}">${escapeHtml(title)}</h3>
+      <p class="text-sm leading-6 text-base-content/72">${escapeHtml(description)}</p>
+    </div>
+    <div class="card-actions justify-start">
+      <a class="btn btn-outline btn-sm" href="${escapeHtml(href)}">${escapeHtml(actionLabel)}</a>
+    </div>
+  </div>
+</article>`;
+
+const renderWorkflowStageCard = (stage: BuilderWorkflowStage, messages: Messages): string => {
+  const statusTone =
+    stage.status === "complete"
+      ? "badge-success"
+      : stage.status === "in-progress"
+        ? "badge-warning"
+        : "badge-ghost";
+  const statusLabel =
+    stage.status === "complete"
+      ? messages.builder.readinessImplemented
+      : stage.status === "in-progress"
+        ? messages.builder.readinessPartial
+        : messages.builder.readinessMissing;
+
+  return `<article class="card border border-base-300 bg-base-100 shadow-sm">
+    <div class="card-body gap-4">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="space-y-2">
+          <h3 class="card-title text-lg">${escapeHtml(stage.label)}</h3>
+          <p class="text-sm leading-6 text-base-content/72">${escapeHtml(stage.description)}</p>
+        </div>
+        <span class="badge ${statusTone} badge-soft">${escapeHtml(statusLabel)}</span>
+      </div>
+      <div class="rounded-box border border-base-300/80 bg-base-200/55 p-3 text-sm leading-6 text-base-content/72">
+        ${escapeHtml(stage.completionLabel)}
+      </div>
+      <div class="card-actions justify-start gap-2">
+        <a class="btn btn-primary btn-sm" href="${escapeHtml(stage.primaryAction.href)}">${escapeHtml(stage.primaryAction.label)}</a>
+        ${
+          stage.secondaryAction
+            ? `<a class="btn btn-ghost btn-sm" href="${escapeHtml(stage.secondaryAction.href)}">${escapeHtml(stage.secondaryAction.label)}</a>`
+            : ""
+        }
+      </div>
+    </div>
+  </article>`;
+};
+
+const renderCreatorCapabilityCard = (capability: CreatorCapability): string => `<article class="card border border-base-300 bg-base-100 shadow-sm">
+  <div class="card-body gap-3">
+    <div class="flex items-center justify-between gap-3">
+      <h3 class="card-title text-base">${escapeHtml(capability.label)}</h3>
+      <span class="badge ${capability.available ? "badge-success" : "badge-ghost"} badge-soft">${escapeHtml(capability.statusLabel)}</span>
+    </div>
+  </div>
+</article>`;
+
 const findCapability = (
   readiness: BuilderPlatformReadiness,
   capability: BuilderCapabilityKey,
@@ -378,10 +462,31 @@ export const renderBuilderDashboard = (
   published: boolean,
 ): string => {
   const builderHref = withQueryParameters(appRoutes.builderScenes, { lang: locale, projectId });
+  const npcHref = withQueryParameters(appRoutes.builderNpcs, { lang: locale, projectId });
+  const dialogueHref = withQueryParameters(appRoutes.builderDialogue, { lang: locale, projectId });
+  const assetsHref = withQueryParameters(appRoutes.builderAssets, { lang: locale, projectId });
+  const settingsHref = withQueryParameters(appRoutes.builderAi, { lang: locale, projectId });
+  const reviewHref = withQueryParameters(appRoutes.builderAutomation, { lang: locale, projectId });
   const gameHref = withQueryParameters(appRoutes.game, { lang: locale, projectId });
   const docsHref = withLocaleQuery(appConfig.api.docsPath, locale);
-  const providerSummary =
-    stats.providers.length > 0 ? stats.providers.join(", ") : messages.ai.noProviderAvailable;
+  const workflowStages = buildBuilderWorkflowStages(messages, locale, projectId, {
+    scenes: stats.totalScenes,
+    assets: stats.assetCount + stats.animationClipCount,
+    characters: stats.totalNpcs,
+    story: stats.dialogueGraphCount,
+    systems: stats.questCount + stats.triggerCount + stats.flagCount,
+    playtest: stats.activeSessions + (published ? 1 : 0),
+  });
+  const creatorCapabilities = deriveCreatorCapabilities(messages, {
+    providers: stats.providers,
+    richDialogue: stats.aiFeatureDialogue,
+    visionAnalysis: stats.aiFeatureVision,
+    sentimentAnalysis: stats.aiFeatureSentiment,
+    embeddings: stats.aiFeatureEmbeddings,
+    speechToText: stats.aiFeatureSpeechToText,
+    speechSynthesis: stats.aiFeatureSpeechSynthesis,
+    localInference: stats.aiFeatureLocalInference,
+  }, stats.readiness);
   const capabilityCards = (
     [
       "releaseFlow",
@@ -392,13 +497,10 @@ export const renderBuilderDashboard = (
       "mechanics",
       "aiAuthoring",
       "automation",
-      "webgpuRenderer",
-      "aiOnnxGpu",
     ] as const satisfies readonly BuilderCapabilityKey[]
   ).map((key) =>
     renderCapabilityCard(messages, locale, projectId, findCapability(stats.readiness, key), stats),
   );
-
   return `
     <div class="grid gap-4">
       ${renderWorkspaceShell({
@@ -406,7 +508,7 @@ export const renderBuilderDashboard = (
           ? messages.builder.projectStatusPublished
           : messages.builder.projectStatusDraft,
         title: messages.builder.dashboard,
-        description: messages.builder.platformReadinessDescription,
+        description: messages.builder.creatorWorkflowDescription,
         facets: [
           {
             label: `${messages.builder.implementedCountLabel}: ${stats.readiness.implementedCount}`,
@@ -421,8 +523,8 @@ export const renderBuilderDashboard = (
             badgeClassName: "badge-error badge-soft",
           },
           {
-            label: providerSummary,
-            badgeClassName: stats.aiAvailable ? "badge-secondary badge-soft" : "badge-ghost",
+            label: messages.builder.creatorSafeAiDescription,
+            badgeClassName: "badge-outline",
           },
         ],
         metrics: [
@@ -437,109 +539,113 @@ export const renderBuilderDashboard = (
             toneClassName: "text-secondary",
           },
           {
-            label: messages.builder.automation,
-            value: stats.automationRunCount,
+            label: messages.builder.npcs,
+            value: stats.totalNpcs,
             toneClassName: "text-accent",
           },
-          { label: messages.builder.activeSessions, value: stats.activeSessions },
+          { label: messages.builder.playtest, value: stats.activeSessions },
         ],
         actions: `
           <a class="btn btn-primary btn-sm" href="${escapeHtml(published ? gameHref : builderHref)}" aria-label="${escapeHtml(published ? messages.builder.playPublishedBuild : messages.builder.continueAuthoring)}">
             ${escapeHtml(published ? messages.builder.playPublishedBuild : messages.builder.continueAuthoring)}
           </a>
-          <a class="btn btn-ghost btn-sm" href="${escapeHtml(docsHref)}" aria-label="${escapeHtml(messages.builder.docsLabel)}">
-            ${escapeHtml(messages.builder.docsLabel)}
+          <a class="btn btn-ghost btn-sm" href="${escapeHtml(settingsHref)}" aria-label="${escapeHtml(messages.builder.settings)}">
+            ${escapeHtml(messages.builder.settings)}
           </a>
         `,
       })}
 
-      <section class="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">
+      <section class="grid gap-4 xl:grid-cols-[1.25fr_0.95fr]">
         <article class="bg-base-200 card">
           <div class="card-body gap-4">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div class="space-y-2">
-                <h2 class="card-title text-xl">${escapeHtml(messages.builder.flowTitle)}</h2>
-                <p class="max-w-3xl text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.flowDescription)}</p>
+                <h2 class="card-title text-xl">${escapeHtml(messages.builder.creatorWorkflowTitle)}</h2>
+                <p class="max-w-3xl text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.creatorWorkflowDescription)}</p>
               </div>
               <span class="badge ${published ? "badge-success" : "badge-warning"} badge-soft">${escapeHtml(published ? messages.builder.projectStatusPublished : messages.builder.projectStatusDraft)}</span>
             </div>
-            <ul class="steps steps-vertical gap-3 lg:steps-horizontal lg:gap-0" aria-label="${escapeHtml(messages.builder.flowTitle)}">
-              <li class="step step-primary">${escapeHtml(messages.builder.scenes)}</li>
-              <li class="step step-secondary">${escapeHtml(messages.builder.assets)}</li>
-              <li class="step step-accent">${escapeHtml(messages.builder.mechanics)}</li>
-              <li class="step ${published ? "step-success" : ""}">${escapeHtml(messages.builder.playPublishedBuild)}</li>
-            </ul>
-            ${renderMetricStats(
-              [
-                {
-                  label: messages.builder.draftVersionLabel,
-                  value: stats.draftVersion,
-                  tone: "primary",
-                },
-                {
-                  label: messages.builder.latestReleaseLabel,
-                  value: stats.latestReleaseVersion,
-                  tone: "secondary",
-                },
-                {
-                  label: messages.builder.publishedReleaseLabel,
-                  value: releaseValue(
-                    stats.publishedReleaseVersion,
-                    messages.builder.noPublishedRelease,
-                  ),
-                  tone: "accent",
-                },
-              ],
-              "bg-base-200/70 sm:stats-horizontal",
-            )}
+            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              ${workflowStages.map((stage) => renderWorkflowStageCard(stage, messages)).join("")}
+            </div>
           </div>
         </article>
 
         <article class="bg-base-200 card">
           <div class="card-body gap-4">
             <div class="space-y-2">
-              <h2 class="card-title text-xl">${escapeHtml(messages.builder.localRuntimeTitle)}</h2>
-              <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.platformReadinessWarning)}</p>
+              <h2 class="card-title text-xl">${escapeHtml(messages.builder.creatorAssistTitle)}</h2>
+              <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.creatorAssistDescription)}</p>
             </div>
-            ${renderMetricStats(
-              [
-                {
-                  label: messages.builder.providerCountLabel,
-                  value: stats.aiProviderCount,
-                  tone: "primary",
-                },
-                {
-                  label: messages.builder.runtimeLabel,
-                  value: stats.rendererPreference.toUpperCase(),
-                  tone: "secondary",
-                },
-                {
-                  label: messages.builder.modelLabel,
-                  value: stats.onnxDevice.toUpperCase(),
-                  tone: "accent",
-                },
-                {
-                  label: messages.builder.generationJobCountLabel,
-                  value: stats.generationJobCount,
-                },
-              ],
-              "bg-base-200/70 sm:stats-horizontal",
-            )}
+            <div class="grid gap-3">
+              ${creatorCapabilities.items.map((capability) => renderCreatorCapabilityCard(capability)).join("")}
+            </div>
+            <div class="card-actions justify-end">
+              <a class="btn btn-ghost btn-sm" href="${escapeHtml(settingsHref)}">${escapeHtml(messages.builder.settings)}</a>
+              <a class="btn btn-ghost btn-sm" href="${escapeHtml(reviewHref)}">${escapeHtml(messages.builder.automation)}</a>
+            </div>
           </div>
         </article>
       </section>
 
-      <section id="builder-platform-readiness" role="region" aria-label="${escapeHtml(messages.builder.platformReadinessTitle)}">
-      ${renderCollapse({
-        open: true,
-        title: `${escapeHtml(messages.builder.platformReadinessTitle)}`,
-        content: `<p class="max-w-4xl text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.platformReadinessDescription)}</p>
-          <div class="mt-4 grid gap-4 2xl:grid-cols-2">
-            ${capabilityCards.join("")}
-          </div>`,
-        ariaLabel: messages.builder.platformReadinessTitle,
-        className: "rounded-box bg-base-200/70 collapse-arrow",
-      })}
+      <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        ${renderGuidedWorkflowCard(
+          messages.builder.quickActionScene,
+          messages.builder.quickActionSceneDesc,
+          builderHref,
+          messages.builder.scenes,
+          "text-primary",
+        )}
+        ${renderGuidedWorkflowCard(
+          messages.builder.quickActionNpc,
+          messages.builder.quickActionNpcDesc,
+          npcHref,
+          messages.builder.npcs,
+          "text-secondary",
+        )}
+        ${renderGuidedWorkflowCard(
+          messages.builder.quickActionDialogue,
+          messages.builder.quickActionDialogueDesc,
+          dialogueHref,
+          messages.builder.dialogue,
+          "text-accent",
+        )}
+        ${renderGuidedWorkflowCard(
+          messages.builder.assets,
+          messages.builder.assetsWorkspaceDescription,
+          assetsHref,
+          messages.builder.assets,
+          "text-success",
+        )}
+        ${renderGuidedWorkflowCard(
+          messages.builder.mechanics,
+          messages.builder.workflowWireProgressDescription,
+          withQueryParameters(appRoutes.builderMechanics, { lang: locale, projectId }),
+          messages.builder.mechanics,
+          "text-warning",
+        )}
+        ${renderGuidedWorkflowCard(
+          messages.builder.playtest,
+          messages.builder.workflowPlaytestDescription,
+          published ? gameHref : builderHref,
+          published ? messages.builder.playPublishedBuild : messages.builder.continueAuthoring,
+          "text-accent",
+        )}
+      </section>
+
+      <section id="builder-platform-readiness" role="region" aria-label="${escapeHtml(messages.builder.settings)}">
+        <article class="bg-base-200 card">
+          <div class="card-body gap-4">
+            <h2 class="card-title text-xl">${escapeHtml(messages.builder.settings)}</h2>
+            <p class="max-w-4xl text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.platformReadinessDescription)}</p>
+            <div class="grid gap-4 xl:grid-cols-2">${capabilityCards.join("")}</div>
+            <div class="card-actions justify-end gap-2">
+              <a class="btn btn-outline btn-sm" href="${escapeHtml(settingsHref)}">${escapeHtml(messages.builder.settings)}</a>
+              <a class="btn btn-outline btn-sm" href="${escapeHtml(reviewHref)}">${escapeHtml(messages.builder.automation)}</a>
+              <a class="btn btn-ghost btn-sm" href="${escapeHtml(docsHref)}">${escapeHtml(messages.docsLabel)}</a>
+            </div>
+          </div>
+        </article>
       </section>
     </div>`;
 };

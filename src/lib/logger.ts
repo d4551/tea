@@ -16,6 +16,66 @@ export interface JsonObject {
 export type JsonValue = JsonPrimitive | JsonObject | readonly JsonValue[];
 
 /**
+ * Normalizes unknown values into the logger's JSON-safe value contract.
+ *
+ * @param value Unknown input value.
+ * @returns JSON-safe value.
+ */
+export const toJsonValue = (value: unknown): JsonValue => {
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value === "string" || typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : String(value);
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: value.message,
+      stack: value.stack ?? undefined,
+    };
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => toJsonValue(item));
+  }
+
+  if (typeof value === "object") {
+    const normalized: Record<string, JsonValue | undefined> = {};
+    for (const [key, nestedValue] of Object.entries(value)) {
+      normalized[key] = nestedValue === undefined ? undefined : toJsonValue(nestedValue);
+    }
+    return normalized;
+  }
+
+  return String(value);
+};
+
+/**
+ * Normalizes an unknown record into the logger's JSON-safe object contract.
+ *
+ * @param value Record-like input.
+ * @returns JSON-safe object.
+ */
+export const toJsonObject = (value: Record<string, unknown>): JsonObject => {
+  const normalized: Record<string, JsonValue | undefined> = {};
+  for (const [key, nestedValue] of Object.entries(value)) {
+    normalized[key] = nestedValue === undefined ? undefined : toJsonValue(nestedValue);
+  }
+  return normalized;
+};
+
+/**
  * Available log levels.
  */
 export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR";

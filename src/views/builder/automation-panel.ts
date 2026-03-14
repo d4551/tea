@@ -123,8 +123,8 @@ export const renderAutomationPanel = (
   return `<section class="space-y-6 animate-fade-in-up">
     ${renderWorkspaceShell({
       eyebrow: messages.builder.automation,
-      title: messages.builder.automationWorkspaceTitle,
-      description: messages.builder.capabilityAutomationDescription,
+      title: messages.builder.automation,
+      description: messages.builder.advancedAutomationDescription,
       facets: [
         { label: messages.builder.readinessPartial, badgeClassName: "badge-warning" },
         { label: messages.builder.automationArtifactsLabel, badgeClassName: "badge-secondary" },
@@ -148,20 +148,9 @@ export const renderAutomationPanel = (
           <legend class="fieldset-legend">${escapeHtml(messages.builder.automationGoalLabel)}</legend>
           <textarea name="goal" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.automationGoalPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.automationGoalLabel)}"></textarea>
         </fieldset>
-        <fieldset class="fieldset">
-          <legend class="fieldset-legend">${escapeHtml(messages.builder.automationStepsJsonLabel)}</legend>
-          <textarea
-            name="stepsJson"
-            class="textarea w-full font-mono text-xs min-h-40"
-            rows="8"
-            placeholder="${escapeHtml(messages.builder.automationStepsJsonPlaceholder)}"
-            aria-describedby="automation-steps-json-help"
-            aria-label="${escapeHtml(messages.builder.automationStepsJsonLabel)}"
-          ></textarea>
-          <p id="automation-steps-json-help" class="label text-xs text-base-content/60">
-            ${escapeHtml(messages.builder.automationStepsJsonHelp)}
-          </p>
-        </fieldset>
+        <div class="rounded-box border border-base-300/80 bg-base-200/45 p-3 text-xs text-base-content/70">
+          ${escapeHtml(messages.builder.advancedAutomationDescription)}
+        </div>
         <div class="flex items-center gap-2">
           <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.createAutomationRun)}">${escapeHtml(messages.builder.createAutomationRun)}</button>
           <span id="automation-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>

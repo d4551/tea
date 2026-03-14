@@ -31,6 +31,7 @@
     "@prisma/adapter-libsql": "7.5.0",
     "@prisma/client": "7.5.0",
     "elysia": "1.4.27",
+    "htmx-ext-sse": "2.2.4",
     "htmx.org": "2.0.8",
     "lotfk-game-contracts": "workspace:*",
     "lotfk-seeded-prng": "workspace:*",

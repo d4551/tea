@@ -32,12 +32,8 @@ import {
   deriveBuilderReadinessAudit,
   evaluateBuilderPlatformReadiness,
 } from "../domain/builder/platform-readiness.ts";
-import {
-  type AvailableAiFeatures,
-  detectAvailableFeatures,
-  generateNpcDialogue,
-  suggestUserFlowStep,
-} from "../domain/game/ai/game-ai-service.ts";
+import { toCreatorCapabilities } from "../domain/builder/creator-capability-adapter.ts";
+import { detectAvailableFeatures, generateNpcDialogue, suggestUserFlowStep } from "../domain/game/ai/game-ai-service.ts";
 import { gameScenes, gameSpriteManifests } from "../domain/game/data/sprite-data.ts";
 import { gameLoop } from "../domain/game/game-loop.ts";
 import { ensureCorrelationIdHeader } from "../lib/correlation-id.ts";
@@ -627,17 +623,6 @@ const toChromeProject = async (projectId: string) => {
   };
 };
 
-const baselineReadinessFeatures: AvailableAiFeatures = {
-  richDialogue: false,
-  visionAnalysis: false,
-  sentimentAnalysis: false,
-  embeddings: false,
-  speechToText: false,
-  speechSynthesis: false,
-  localInference: false,
-  providers: [],
-};
-
 const createBuilderPatch = (
   operation: "add" | "replace" | "remove",
   value: string,
@@ -652,14 +637,7 @@ const createBuilderPatch = (
 const renderSceneWorkspace = async (locale: LocaleCode, projectId: string): Promise<string> => {
   const project = await builderService.getProject(projectId);
   const scenes = Object.fromEntries(project?.scenes.entries() ?? []);
-  const readiness = evaluateBuilderPlatformReadiness({
-    sceneCount: project?.scenes.size ?? Object.keys(gameScenes).length,
-    spriteManifestCount: project?.spriteAtlases.size ?? 0,
-    aiFeatures: baselineReadinessFeatures,
-    rendererPreference: appConfig.playableGame.rendererPreference,
-    onnxDevice: appConfig.ai.onnxDevice,
-  });
-  return renderSceneEditor(getMessages(locale), scenes, locale, projectId, readiness);
+  return renderSceneEditor(getMessages(locale), scenes, locale, projectId);
 };
 
 const renderNpcWorkspace = async (locale: LocaleCode, projectId: string): Promise<string> => {
@@ -683,13 +661,6 @@ const renderDialogueWorkspace = async (
 
 const renderAssetsWorkspace = async (locale: LocaleCode, projectId: string): Promise<string> => {
   const project = await builderService.getProject(projectId);
-  const readiness = evaluateBuilderPlatformReadiness({
-    sceneCount: project?.scenes.size ?? Object.keys(gameScenes).length,
-    spriteManifestCount: project?.spriteAtlases.size ?? 0,
-    aiFeatures: baselineReadinessFeatures,
-    rendererPreference: appConfig.playableGame.rendererPreference,
-    onnxDevice: appConfig.ai.onnxDevice,
-  });
   return renderAssetsEditor(
     getMessages(locale),
     locale,
@@ -698,7 +669,6 @@ const renderAssetsWorkspace = async (locale: LocaleCode, projectId: string): Pro
     Array.from(project?.animationClips.values() ?? []),
     Array.from(project?.generationJobs.values() ?? []),
     Array.from(project?.artifacts.values() ?? []),
-    readiness,
   );
 };
 
@@ -1196,9 +1166,37 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   })
   .get(
     route(appRoutes.aiBuilderCapabilities),
-    async ({ status }) => {
+    async ({ status, builderLocale, builderProjectId }) => {
+      const messages = getMessages(builderLocale);
       const registry = await ProviderRegistry.getInstance();
       const registryStatus = await registry.getStatus();
+      const aiFeatures = await detectAvailableFeatures();
+      const project = builderProjectId ? await builderService.peekProject(builderProjectId) : null;
+      const readinessAudit = project
+        ? deriveBuilderReadinessAudit({
+            scenes: project.scenes.values(),
+            assets: project.assets.values(),
+            animationClips: project.animationClips.values(),
+            animationTimelines: project.animationTimelines.values(),
+            dialogueGraphs: project.dialogueGraphs.values(),
+            quests: project.quests.values(),
+            triggers: project.triggers.values(),
+            flags: project.flags.values(),
+            generationJobs: project.generationJobs.values(),
+            automationRuns: project.automationRuns.values(),
+            latestReleaseVersion: project.latestReleaseVersion,
+            publishedReleaseVersion: project.publishedReleaseVersion,
+          })
+        : undefined;
+      const readiness = evaluateBuilderPlatformReadiness({
+        sceneCount: project?.scenes.size ?? Object.keys(gameScenes).length,
+        spriteManifestCount: project?.spriteAtlases.size ?? Object.keys(gameSpriteManifests).length,
+        aiFeatures,
+        rendererPreference: appConfig.playableGame.rendererPreference,
+        onnxDevice: appConfig.ai.onnxDevice,
+        audit: readinessAudit,
+      });
+      const creatorCapabilities = toCreatorCapabilities(messages, aiFeatures, readiness);
       const features: FeatureCapability = {
         assist: registryStatus.providers.length > 0,
         test: registryStatus.providers.some((provider) => provider.available),
@@ -1213,17 +1211,19 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         httpStatus.ok,
         successEnvelope({
           features,
+          creatorCapabilities,
+          providerCount: registryStatus.providers.length,
           capabilities: registryStatus.capabilities.map((capability) => ({
-            ...(capability.key ? { key: capability.key } : {}),
-            provider: capability.provider,
-            model: capability.model,
-            capabilities: Array.from(capability.capabilities),
-            maxContextLength: capability.maxContextLength,
-            supportsStreaming: capability.supportsStreaming,
-            runtime: capability.runtime,
-            integration: capability.integration,
-            local: capability.local,
-            configurable: capability.configurable,
+            provider: "creator-safe",
+            model: "creator-safe",
+            capabilities: [],
+            maxContextLength: 0,
+            supportsStreaming: false,
+            runtime: "creator-safe",
+            integration: "",
+            local: false,
+            configurable: false,
+            key: capability.key,
           })),
         }),
       );
@@ -1240,6 +1240,16 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
               streaming: t.Boolean(),
               offlineFallback: t.Boolean(),
             }),
+            creatorCapabilities: t.Object({
+              items: t.Array(
+                t.Object({
+                  key: t.String(),
+                  label: t.String(),
+                  statusLabel: t.String(),
+                  available: t.Boolean(),
+                }),
+              ),
+            }),
             capabilities: t.Array(
               t.Object({
                 provider: t.String(),
@@ -1247,8 +1257,14 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
                 capabilities: t.Array(t.String()),
                 maxContextLength: t.Number(),
                 supportsStreaming: t.Boolean(),
+                runtime: t.String(),
+                integration: t.String(),
+                local: t.Boolean(),
+                configurable: t.Boolean(),
+                key: t.Optional(t.String()),
               }),
             ),
+            providerCount: t.Number(),
           }),
         }),
       },

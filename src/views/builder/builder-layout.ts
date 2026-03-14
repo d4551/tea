@@ -8,11 +8,16 @@ import type { LocaleCode } from "../../config/environment.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml, renderDrawerToggleControl } from "../layout.ts";
+import {
+  type MenuActionItem,
+  type NavigationGroup,
+  type NavigationItem,
+  renderActionDropdown,
+  renderCollapsibleSidebarMenu,
+} from "../shared/navigation.ts";
 import { spinnerClasses } from "../shared/ui-components.ts";
 import {
-  iconAi,
   iconAssets,
-  iconAutomation,
   iconDashboard,
   iconDialogue,
   iconMechanics,
@@ -73,6 +78,7 @@ interface BuilderNavItem {
   readonly label: string;
   readonly href: string;
   readonly icon: () => string;
+  readonly group: "overview" | "authoring" | "runtime";
 }
 
 /**
@@ -83,43 +89,54 @@ interface BuilderNavItem {
  */
 const builderNavItems = (messages: Messages): readonly BuilderNavItem[] => [
   {
-    key: "dashboard",
+    key: "start",
     label: messages.builder.dashboard,
     href: appRoutes.builder,
     icon: iconDashboard,
+    group: "overview",
   },
   {
-    key: "scenes",
+    key: "world",
     label: messages.builder.scenes,
     href: appRoutes.builderScenes,
     icon: iconScenes,
+    group: "authoring",
   },
-  { key: "npcs", label: messages.builder.npcs, href: appRoutes.builderNpcs, icon: iconNpcs },
   {
-    key: "dialogue",
+    key: "characters",
+    label: messages.builder.npcs,
+    href: appRoutes.builderNpcs,
+    icon: iconNpcs,
+    group: "authoring",
+  },
+  {
+    key: "story",
     label: messages.builder.dialogue,
     href: appRoutes.builderDialogue,
     icon: iconDialogue,
+    group: "authoring",
   },
   {
     key: "assets",
     label: messages.builder.assets,
     href: appRoutes.builderAssets,
     icon: iconAssets,
+    group: "authoring",
   },
   {
-    key: "mechanics",
+    key: "systems",
     label: messages.builder.mechanics,
     href: appRoutes.builderMechanics,
     icon: iconMechanics,
+    group: "authoring",
   },
   {
-    key: "automation",
-    label: messages.builder.automation,
-    href: appRoutes.builderAutomation,
-    icon: iconAutomation,
+    key: "playtest",
+    label: messages.builder.playtest,
+    href: appRoutes.game,
+    icon: iconPlay,
+    group: "runtime",
   },
-  { key: "ai", label: messages.builder.ai, href: appRoutes.builderAi, icon: iconAi },
 ];
 
 const withBuilderQuery = (path: string, locale: LocaleCode, projectId: string): string =>
@@ -133,6 +150,66 @@ const _formatProjectTimestamp = (locale: LocaleCode, timestamp: number): string 
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(timestamp));
+
+const toNavigationItem = (
+  item: BuilderNavItem,
+  locale: LocaleCode,
+  projectId: string,
+  activeTab: string,
+  navCounts?: Readonly<Record<string, number>>,
+): NavigationItem => ({
+  key: item.key,
+  label: item.label,
+  shortLabel: item.label,
+  href: withBuilderQuery(item.href, locale, projectId),
+  icon: item.icon(),
+  active:
+    item.key === activeTab
+      || (item.key === "start" && activeTab === "dashboard")
+      || (item.key === "world" && activeTab === "scenes")
+      || (item.key === "characters" && activeTab === "npcs")
+      || (item.key === "story" && activeTab === "dialogue")
+      || (item.key === "systems" && activeTab === "mechanics")
+      || (item.key === "playtest" && activeTab === "play"),
+  badge: navCounts?.[item.key],
+  htmx:
+    item.key === "playtest"
+      ? undefined
+      : {
+          target: "#main-content",
+          swap: "innerHTML",
+          pushUrl: true,
+        },
+});
+
+const buildBuilderNavigationGroups = (
+  messages: Messages,
+  locale: LocaleCode,
+  projectId: string,
+  activeTab: string,
+  navCounts?: Readonly<Record<string, number>>,
+): readonly NavigationGroup[] => {
+  const items = builderNavItems(messages).map((item) =>
+    toNavigationItem(item, locale, projectId, activeTab, navCounts),
+  );
+
+  return [
+    {
+      title: messages.builder.navGroupOverview,
+      items: items.filter((item) => item.key === "start"),
+    },
+    {
+      title: messages.builder.navGroupAuthoring,
+      items: items.filter((item) =>
+        ["world", "characters", "story", "assets", "systems"].includes(item.key),
+      ),
+    },
+    {
+      title: messages.builder.navGroupRuntime,
+      items: items.filter((item) => item.key === "playtest"),
+    },
+  ];
+};
 
 /**
  * Renders a compact project bar for the builder header.
@@ -191,49 +268,75 @@ export const renderBuilderProjectShell = (
       ? ""
       : `<a href="${escapeHtml(playHref)}" class="btn btn-secondary btn-xs" aria-label="${escapeHtml(messages.builder.playPublishedBuild)}">${escapeHtml(messages.builder.playPublishedBuild)}</a>`;
 
-  return `<section id="builder-project-shell" class="border-b border-base-300/80 bg-base-100/80 backdrop-blur">
-    <div class="flex flex-wrap items-center gap-3 px-6 py-2.5">
-      <span class="font-semibold text-sm">${escapeHtml(project?.id ?? projectId)}</span>
-      <span class="badge ${statusTone} badge-soft badge-xs">${escapeHtml(statusLabel)}</span>
-      ${
-        project !== null
-          ? `<span class="text-xs text-base-content/50">${escapeHtml(messages.builder.versionPrefix)}${project.version}</span>`
-          : ""
-      }
-      <div class="flex-1"></div>
-      <div class="flex items-center gap-2">
-        ${publishForm}
-        ${playBtn}
-        <details class="dropdown dropdown-end">
-          <summary class="btn btn-ghost btn-xs" aria-label="${escapeHtml(messages.builder.switchProject)}">
-            <svg xmlns="http://www.w3.org/2000/svg" class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
-          </summary>
-          <div class="dropdown-content z-10 mt-2 w-72 rounded-box border border-base-300 bg-base-100 p-4 shadow-xl">
-            <div class="space-y-4">
-              <form method="get" action="${escapeHtml(switchAction)}" class="space-y-2">
-                <fieldset class="fieldset">
-                  <legend class="fieldset-legend text-xs">${escapeHtml(messages.builder.switchProject)}</legend>
-                  <input name="projectId" type="text" value="${escapeHtml(project?.id ?? projectId)}" class="input w-full input-sm" placeholder="${escapeHtml(messages.builder.projectIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.projectIdLabel)}" />
-                  <input type="hidden" name="lang" value="${escapeHtml(locale)}" />
-                  <button type="submit" class="btn btn-outline btn-xs w-full" aria-label="${escapeHtml(messages.builder.switchProject)}">${escapeHtml(messages.builder.switchProject)}</button>
-                </fieldset>
-              </form>
-              <div class="divider my-0"></div>
-              <form hx-post="${escapeHtml(createAction)}" hx-indicator="#builder-project-create-spinner" hx-disabled-elt="button, input, select, textarea" class="space-y-2">
-                <fieldset class="fieldset">
-                  <legend class="fieldset-legend text-xs">${escapeHtml(messages.builder.createProject)}</legend>
-                  <input name="projectId" type="text" class="input w-full input-sm" required minlength="1" maxlength="64" placeholder="${escapeHtml(messages.builder.projectIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.projectIdLabel)}" />
-                  <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
-                  <input type="hidden" name="redirectPath" value="${escapeHtml(currentPath)}" />
-                  <div class="flex items-center gap-2">
-                    <button type="submit" class="btn btn-primary btn-xs w-full" aria-label="${escapeHtml(messages.builder.createProject)}">${escapeHtml(messages.builder.createProject)}</button>
-                    <span id="builder-project-create-spinner" class="${spinnerClasses.xs}" aria-label="${escapeHtml(messages.common.loading)}"></span>
-                  </div>
-                </fieldset>
-              </form>
-            </div>
+  const projectMenuItems: readonly MenuActionItem[] = [
+    {
+      key: "settings",
+      label: messages.builder.settings,
+      href: withBuilderQuery(appRoutes.builderAi, locale, project?.id ?? projectId),
+    },
+    {
+      key: "review-queue",
+      label: messages.builder.automation,
+      href: withBuilderQuery(appRoutes.builderAutomation, locale, project?.id ?? projectId),
+    },
+    {
+      key: "switch",
+      label: messages.builder.switchProject,
+      contentHtml: `<div class="divider my-1"></div><form method="get" action="${escapeHtml(switchAction)}" class="space-y-2 px-1 py-1">
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend text-xs">${escapeHtml(messages.builder.switchProject)}</legend>
+          <input name="projectId" type="text" value="${escapeHtml(project?.id ?? projectId)}" class="input input-sm w-full" placeholder="${escapeHtml(messages.builder.projectIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.projectIdLabel)}" />
+          <input type="hidden" name="lang" value="${escapeHtml(locale)}" />
+          <button type="submit" class="btn btn-outline btn-xs w-full">${escapeHtml(messages.builder.switchProject)}</button>
+        </fieldset>
+      </form>`,
+    },
+    {
+      key: "create",
+      label: messages.builder.createProject,
+      contentHtml: `<div class="divider my-1"></div><form hx-post="${escapeHtml(createAction)}" hx-indicator="#builder-project-create-spinner" hx-disabled-elt="button, input, select, textarea" class="space-y-2 px-1 py-1">
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend text-xs">${escapeHtml(messages.builder.createProject)}</legend>
+          <input name="projectId" type="text" class="input input-sm w-full" required minlength="1" maxlength="64" placeholder="${escapeHtml(messages.builder.projectIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.projectIdLabel)}" />
+          <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+          <input type="hidden" name="redirectPath" value="${escapeHtml(currentPath)}" />
+          <div class="flex items-center gap-2">
+            <button type="submit" class="btn btn-primary btn-xs w-full">${escapeHtml(messages.builder.createProject)}</button>
+            <span id="builder-project-create-spinner" class="${spinnerClasses.xs}" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
-        </details>
+        </fieldset>
+      </form>`,
+    },
+  ];
+
+  return `<section id="builder-project-shell" class="border-b border-base-300/80 bg-base-100/80 backdrop-blur">
+    <div class="flex flex-col gap-3 px-4 py-3 lg:px-6">
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="space-y-1">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="font-semibold text-sm">${escapeHtml(project?.id ?? projectId)}</span>
+            <span class="badge ${statusTone} badge-soft badge-xs">${escapeHtml(statusLabel)}</span>
+            ${
+              project !== null
+                ? `<span class="text-xs text-base-content/50">${escapeHtml(messages.builder.versionPrefix)}${project.version}</span>`
+                : ""
+            }
+          </div>
+          <p class="text-xs text-base-content/60">${escapeHtml(project?.publishedReleaseVersion !== null ? messages.builder.projectStatusPublished : messages.builder.workspaceJumpBack)}</p>
+        </div>
+        <div class="flex-1"></div>
+        <div class="flex flex-wrap items-center gap-2">
+          ${publishForm}
+          ${playBtn}
+          ${renderActionDropdown(
+            messages.builder.advancedTools,
+            `<span class="btn btn-ghost btn-xs">
+              <svg xmlns="http://www.w3.org/2000/svg" class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
+            </span>`,
+            projectMenuItems,
+            { align: "end", widthClass: "w-72", menuClassName: "p-3" },
+          )}
+        </div>
       </div>
     </div>
   </section>`;
@@ -247,70 +350,54 @@ export const renderBuilderProjectShell = (
  */
 export const renderBuilderSidebar = (props: BuilderLayoutProps): string => {
   const { locale, messages, activeTab, projectId, project, navCounts } = props;
-  const navItems = builderNavItems(messages);
+  const resolvedProjectId = project?.id ?? projectId;
+  const navGroups = buildBuilderNavigationGroups(
+    messages,
+    locale,
+    resolvedProjectId,
+    activeTab,
+    navCounts,
+  );
 
-  const renderNavItem = (item: BuilderNavItem): string => {
-    const isActive = item.key === activeTab;
-    const activeClass = isActive
-      ? "menu-active bg-primary/12 text-primary font-semibold is-drawer-open:bg-primary/10"
-      : "";
-    const ariaCurrent = isActive ? ' aria-current="page"' : "";
-    const href = withBuilderQuery(item.href, locale, project?.id ?? projectId);
-    const count = navCounts?.[item.key];
-    return `<li>
-      <a class="is-drawer-close:tooltip is-drawer-close:tooltip-right${isActive ? " active" : ""} ${activeClass}" href="${escapeHtml(href)}"${ariaCurrent}
-         aria-label="${escapeHtml(item.label)}" data-tip="${escapeHtml(item.label)}"
-         hx-get="${escapeHtml(href)}" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML">
-        ${item.icon()}
-        <span class="menu-item-label is-drawer-close:hidden">${escapeHtml(item.label)}</span>
-        ${count !== undefined ? `<span class="badge badge-xs badge-neutral is-drawer-close:hidden">${count}</span>` : ""}
-      </a>
-    </li>`;
-  };
-
-  const contentItems = navItems.slice(1, 5).map(renderNavItem).join("");
-  const systemsItems = navItems.slice(5).map(renderNavItem).join("");
-  const dashboard = navItems[0];
-  const sidebarItems = `${dashboard ? renderNavItem(dashboard) : ""}<li class="menu-title"><span class="is-drawer-close:hidden">${escapeHtml(messages.builder.navGroupContent)}</span></li>${contentItems}<li class="menu-title"><span class="is-drawer-close:hidden">${escapeHtml(messages.builder.navGroupSystems)}</span></li>${systemsItems}`;
-
-  return `
-    <aside class="flex min-h-full flex-col items-start bg-base-200/85 backdrop-blur is-drawer-close:w-14 is-drawer-open:w-72 is-drawer-close:overflow-visible border-r border-base-300/70" aria-label="${escapeHtml(messages.builder.title)}">
-      <div class="w-full p-3 is-drawer-close:p-2 border-b border-base-300">
-        <a href="${escapeHtml(withQueryParameters(appRoutes.home, { lang: locale }))}" class="is-drawer-close:tooltip is-drawer-close:tooltip-right group flex items-center gap-2 px-2 py-1 text-xl font-bold" data-tip="${escapeHtml(messages.metadata.appName)}" aria-label="${escapeHtml(messages.metadata.appName)}">
-          <span class="inline-flex size-8 items-center justify-center rounded-xl bg-primary/15 text-lg shadow-sm shadow-primary/30" aria-hidden="true">🍵</span>
-          <span class="is-drawer-close:hidden">${escapeHtml(messages.metadata.appName)}</span>
-          <span class="is-drawer-close:hidden ml-auto rounded-full border border-primary/30 px-2 py-1 text-xs uppercase tracking-[0.18em] text-primary/85">v1</span>
-        </a>
+  return renderCollapsibleSidebarMenu(navGroups, {
+    ariaLabel: messages.builder.title,
+    brandHtml: `<a href="${escapeHtml(withQueryParameters(appRoutes.home, { lang: locale }))}" class="is-drawer-close:tooltip is-drawer-close:tooltip-right group flex items-center gap-2 px-2 py-1 text-xl font-bold" data-tip="${escapeHtml(messages.metadata.appName)}" aria-label="${escapeHtml(messages.metadata.appName)}">
+      <span class="inline-flex size-8 items-center justify-center rounded-xl bg-primary/15 text-lg shadow-sm shadow-primary/30" aria-hidden="true">🍵</span>
+      <span class="is-drawer-close:hidden">${escapeHtml(messages.metadata.appName)}</span>
+      <span class="is-drawer-close:hidden ml-auto rounded-full border border-primary/30 px-2 py-1 text-xs uppercase tracking-[0.18em] text-primary/85">v1</span>
+    </a>`,
+    mastheadHtml: `<div class="space-y-2 rounded-lg bg-base-100/60 px-2 py-2 is-drawer-close:px-1 is-drawer-close:py-1">
+      <div class="is-drawer-close:justify-center flex items-center gap-2">
+        <span class="status ${project === null ? "status-warning" : "status-success"} status-xs"></span>
+        <span class="truncate text-sm font-medium is-drawer-close:hidden">${escapeHtml(project === null ? messages.common.noProjectBound : messages.common.projectConfigured)}</span>
       </div>
-
-      <div class="w-full p-3 is-drawer-close:p-2 border-b border-base-300/70">
-        <div class="is-drawer-close:justify-center flex items-center gap-2 rounded-lg bg-base-100/60 px-2 py-2 is-drawer-close:py-1">
-          <span class="status ${project === null ? "status-warning" : "status-success"} status-xs"></span>
-          <span class="text-sm font-medium truncate is-drawer-close:hidden">${escapeHtml(project === null ? messages.common.noProjectBound : messages.common.projectConfigured)}</span>
-        </div>
-      </div>
-
-      <ul class="menu w-full grow gap-1 px-2">
-        ${sidebarItems}
-      </ul>
-
-      <div class="w-full p-3 is-drawer-close:p-2 border-t border-base-300/70">
-        <a href="${escapeHtml(withQueryParameters(appRoutes.home, { lang: locale }))}" class="btn btn-outline btn-block btn-sm gap-2 is-drawer-close:btn-square" aria-label="${escapeHtml(messages.builder.exitBuilder)}">
-          <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-          <span class="is-drawer-close:hidden">${escapeHtml(messages.builder.exitBuilder)}</span>
-        </a>
-      </div>
-    </aside>
-  `;
+      <p class="text-xs leading-5 text-base-content/60 is-drawer-close:hidden">${escapeHtml(messages.builder.creatorSafeAiDescription)}</p>
+    </div>`,
+    footerHtml: `<a href="${escapeHtml(withQueryParameters(appRoutes.home, { lang: locale }))}" class="btn btn-outline btn-block btn-sm gap-2 is-drawer-close:btn-square" aria-label="${escapeHtml(messages.builder.exitBuilder)}">
+      <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+      <span class="is-drawer-close:hidden">${escapeHtml(messages.builder.exitBuilder)}</span>
+    </a>`,
+  });
 };
 
 export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
   const { locale, messages, projectId, project, currentPath, body, activeTab } = props;
+  const resolvedProjectId = project?.id ?? projectId;
+  const navGroups = buildBuilderNavigationGroups(
+    messages,
+    locale,
+    resolvedProjectId,
+    activeTab,
+    props.navCounts,
+  );
+  const dockItems = navGroups
+    .flatMap((group) => group.items)
+    .filter((item) => ["start", "world", "characters", "assets", "story", "systems", "playtest"].includes(item.key));
 
   const playHref =
     project !== null && project.publishedReleaseVersion !== null
       ? withBuilderQuery(appRoutes.game, locale, project.id)
-      : withBuilderQuery(appRoutes.game, locale, project?.id ?? projectId);
+      : withBuilderQuery(appRoutes.game, locale, resolvedProjectId);
 
   return `
     <div class="flex min-h-[calc(100vh-4rem)] flex-col">
@@ -367,26 +454,16 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
           </div>
         </footer>
         <nav class="dock dock-sm bg-base-100/90 border-t border-base-300/80 lg:hidden" aria-label="${escapeHtml(messages.builder.title)}">
-          <a href="${escapeHtml(withBuilderQuery(appRoutes.builder, locale, project?.id ?? projectId))}" class="dock-item ${activeTab === "dashboard" ? "dock-active" : ""}" aria-label="${escapeHtml(messages.builder.dashboard)}">
-            ${iconDashboard()}
-            <span class="dock-label">${escapeHtml(messages.builder.dashboard)}</span>
-          </a>
-          <a href="${escapeHtml(withBuilderQuery(appRoutes.builderScenes, locale, project?.id ?? projectId))}" class="dock-item ${activeTab === "scenes" ? "dock-active" : ""}" aria-label="${escapeHtml(messages.builder.scenes)}">
-            ${iconScenes()}
-            <span class="dock-label">${escapeHtml(messages.builder.scenes)}</span>
-          </a>
-          <a href="${escapeHtml(withBuilderQuery(appRoutes.builderNpcs, locale, project?.id ?? projectId))}" class="dock-item ${activeTab === "npcs" ? "dock-active" : ""}" aria-label="${escapeHtml(messages.builder.npcs)}">
-            ${iconNpcs()}
-            <span class="dock-label">${escapeHtml(messages.builder.npcs)}</span>
-          </a>
-          <a href="${escapeHtml(withBuilderQuery(appRoutes.builderAi, locale, project?.id ?? projectId))}" class="dock-item ${activeTab === "ai" ? "dock-active" : ""}" aria-label="${escapeHtml(messages.builder.ai)}">
-            ${iconAi()}
-            <span class="dock-label">${escapeHtml(messages.builder.ai)}</span>
-          </a>
-          <a href="${escapeHtml(playHref)}" class="dock-item" aria-label="${escapeHtml(messages.navigation.game)}">
-            ${iconPlay()}
-            <span class="dock-label">${escapeHtml(messages.navigation.game)}</span>
-          </a>
+          ${dockItems
+            .map(
+              (
+                item,
+              ) => `<a href="${escapeHtml(item.href)}" class="dock-item ${item.active ? "dock-active" : ""}" aria-label="${escapeHtml(item.label)}">
+            ${item.icon ?? ""}
+            <span class="dock-label">${escapeHtml(item.label)}</span>
+          </a>`,
+            )
+            .join("")}
         </nav>
       </div>
     </div>`;

@@ -87,7 +87,7 @@ const capabilityCopy = (
       return {
         title: messages.builder.capabilityMechanicsTitle,
         description: messages.builder.capabilityMechanicsDescription,
-        href: appRoutes.builderScenes,
+        href: appRoutes.builderMechanics,
       };
     case "aiAuthoring":
       return {
@@ -99,7 +99,7 @@ const capabilityCopy = (
       return {
         title: messages.builder.capabilityAutomationTitle,
         description: messages.builder.capabilityAutomationDescription,
-        href: appRoutes.builderAi,
+        href: appRoutes.builderAutomation,
       };
     case "webgpuRenderer":
       return {

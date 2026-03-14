@@ -29,8 +29,6 @@
 | [本地 AI 运行时（中文）](notes/doc-archive/docs__local-ai-runtime.zh-CN.txt) | 本地 AI 运行时中文版本 |
 | [RMMZ 陪伴包（英文）](notes/doc-archive/docs__rmmz-pack.txt) | RPG Maker MZ 陪伴包说明 |
 | [RMMZ 陪伴包（中文）](notes/doc-archive/docs__rmmz-pack.zh-CN.txt) | 陪伴包中文版本 |
-| [维护审计（英文）](notes/doc-archive/docs__maintenance-audit-2026-03-10.txt) | 架构审计与风险记录 |
-| [维护审计（中文）](notes/doc-archive/docs__maintenance-audit-2026-03-10.zh-CN.txt) | 维护审计中文版本 |
 
 ## 陪伴包文档（英文）
 

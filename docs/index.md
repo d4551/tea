@@ -30,8 +30,6 @@ English and Chinese versions are available for all canonical documents.
 | [Local AI runtime (Chinese)](notes/doc-archive/docs__local-ai-runtime.zh-CN.txt) | 本地 AI 运行时、类型结果与 Provider 适配 |
 | [RMMZ companion pack](notes/doc-archive/docs__rmmz-pack.txt) | Status and maintenance contract for RPG Maker MZ companion pack |
 | [RMMZ companion pack (Chinese)](notes/doc-archive/docs__rmmz-pack.zh-CN.txt) | RPG Maker MZ 陪伴包说明 |
-| [Maintenance audit](notes/doc-archive/docs__maintenance-audit-2026-03-10.txt) | Dependency/version and accessibility audit notes for current stack |
-| [Maintenance audit (Chinese)](notes/doc-archive/docs__maintenance-audit-2026-03-10.zh-CN.txt) | 当前栈依赖与可访问性审计摘要 |
 | [Context7 audit](notes/doc-archive/docs__context7-audit.txt) | Context7 MCP integration and doc coverage for Pixi.js, Three.js, Transformers, Playwright, Biome |
 
 ## Pack docs

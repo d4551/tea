@@ -5,29 +5,13 @@
  * description, and contextual workspace sub-tabs using DaisyUI v5 best practices.
  */
 import { escapeHtml } from "../layout.ts";
+import { renderSecondaryNav, type SecondaryNavItem } from "../shared/navigation.ts";
 import type { ColorToken } from "../shared/ui-components.ts";
 
 /**
  * Single tab descriptor for the workspace header.
  */
-export interface WorkspaceTab {
-  /** Unique key for this tab. */
-  readonly key: string;
-  /** Display label. */
-  readonly label: string;
-  /** SVG icon string. */
-  readonly icon: string;
-  /** Optional badge count. */
-  readonly badge?: number;
-  /** Optional href for navigation. */
-  readonly href?: string;
-  /** Optional HTMX attributes. */
-  readonly htmx?: {
-    readonly get?: string;
-    readonly target?: string;
-    readonly swap?: string;
-  };
-}
+export type WorkspaceTab = SecondaryNavItem;
 
 /**
  * Configuration for the workspace header component.
@@ -66,33 +50,6 @@ export interface WorkspaceHeaderConfig {
  */
 export const renderWorkspaceHeader = (config: WorkspaceHeaderConfig): string => {
   const colorToken = config.colorToken ?? "primary";
-
-  const tabItems = config.tabs
-    .map((tab) => {
-      const isActive = tab.key === config.activeTab;
-      const activeClass = isActive ? `tab-active [--tab-color:var(--color-${colorToken})]` : "";
-
-      const badgeHtml =
-        tab.badge !== undefined && tab.badge > 0
-          ? `<span class="badge badge-${colorToken} badge-xs ml-1">${tab.badge}</span>`
-          : "";
-
-      const iconHtml = tab.icon ? `<span class="icon">${tab.icon}</span>` : "";
-
-      const content = `${iconHtml}<span>${escapeHtml(tab.label)}</span>${badgeHtml}`;
-
-      const htmxAttrs = tab.htmx ? renderTabHtmxAttrs(tab.htmx) : "";
-
-      const disabledAttr = "";
-      const activeAttr = isActive ? ' aria-selected="true"' : ' aria-selected="false"';
-
-      if (tab.href && !tab.htmx) {
-        return `<a href="${escapeHtml(tab.href)}" class="tab ${activeClass}" role="tab"${activeAttr}${disabledAttr} aria-label="${escapeHtml(tab.label)}">${content}</a>`;
-      }
-
-      return `<button type="button" class="tab ${activeClass}" role="tab"${activeAttr}${disabledAttr} aria-label="${escapeHtml(tab.label)}"${htmxAttrs}>${content}</button>`;
-    })
-    .join("");
 
   const descriptionHtml = config.description
     ? `<p class="text-sm text-base-content/60 mt-1">${escapeHtml(config.description)}</p>`
@@ -137,22 +94,9 @@ export const renderWorkspaceHeader = (config: WorkspaceHeaderConfig): string => 
       ${
         config.tabs.length > 0
           ? `
-        <nav class="tabs tabs-lg" role="tablist" aria-label="${escapeHtml(config.title)} tabs">
-          ${tabItems}
-        </nav>
+        ${renderSecondaryNav(config.tabs, config.activeTab, `${config.title} tabs`, colorToken)}
       `
           : ""
       }
     </header>`;
-};
-
-/**
- * Renders HTMX attributes for tab navigation.
- */
-const renderTabHtmxAttrs = (htmx: NonNullable<WorkspaceTab["htmx"]>): string => {
-  const attrs: string[] = [];
-  if (htmx.get) attrs.push(`hx-get="${escapeHtml(htmx.get)}"`);
-  if (htmx.target) attrs.push(`hx-target="${escapeHtml(htmx.target)}"`);
-  if (htmx.swap) attrs.push(`hx-swap="${escapeHtml(htmx.swap)}"`);
-  return attrs.length > 0 ? ` ${attrs.join(" ")}` : "";
 };

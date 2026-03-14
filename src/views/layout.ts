@@ -1,8 +1,19 @@
 import { appConfig, type LocaleCode } from "../config/environment.ts";
 import { assetRelativePaths, joinUrlPath } from "../shared/constants/assets.ts";
-import { appRoutes, withLocaleQuery, withQueryParameters } from "../shared/constants/routes.ts";
+import { appRoutes, withLocaleQuery } from "../shared/constants/routes.ts";
 import type { Messages } from "../shared/i18n/messages.ts";
 import { type OraclePanelState, renderOracleSection } from "./oracle.ts";
+import {
+  buildPublicPrimaryNavigation,
+  type NavigationAction,
+  type NavigationBreadcrumbItem,
+  type NavigationGroup,
+  type NavigationItem,
+  renderActionDropdown,
+  renderBreadcrumbRow,
+  renderHeaderNavbar,
+  renderMobileDrawerMenu,
+} from "./shared/navigation.ts";
 
 /**
  * Escapes raw text for safe HTML interpolation.
@@ -174,6 +185,32 @@ export const renderLayout = (input: LayoutInput): string => {
     })
     .join("");
   const boostEnabled = activeRoute === "game" ? "false" : "true";
+  const publicPrimaryItems = buildPublicPrimaryNavigation(
+    locale,
+    activeRoute,
+    {
+      home: messages.navigation.home,
+      builder: messages.navigation.builder,
+      game: messages.navigation.game,
+    },
+    {
+      home: iconHome(),
+      builder: iconBuilder(),
+      game: iconGame(),
+    },
+    persistentProjectId,
+  );
+  const publicNavigationGroups: readonly NavigationGroup[] = [
+    {
+      title: messages.common.primaryNavigation,
+      items: publicPrimaryItems,
+    },
+  ];
+  const drawerClassName = customSidebarHtml ? "drawer lg:drawer-open flex-1" : "drawer flex-1";
+  const breadcrumbItems: readonly NavigationBreadcrumbItem[] =
+    breadcrumbs && breadcrumbs.length > 0
+      ? breadcrumbs.map((item) => ({ label: item.label, href: item.href }))
+      : [{ label: messages.metadata.appName }];
 
   return `<!doctype html>
 <html lang="${escapeHtml(locale)}" data-theme="${escapeHtml(appConfig.ui.defaultTheme)}">
@@ -207,29 +244,35 @@ export const renderLayout = (input: LayoutInput): string => {
     <div class="drawer drawer-end">
       <input id="ai-chat-drawer" type="checkbox" class="drawer-toggle" aria-label="${escapeHtml(messages.common.openAiAssistant)}" />
       <div class="drawer-content flex flex-col min-h-screen relative">
-        
+
         <!-- Main Nav Wrapper (Left Drawer) -->
-        <div class="drawer lg:drawer-open flex-1">
+        <div class="${escapeHtml(drawerClassName)}">
           <input id="main-nav-drawer" type="checkbox" class="drawer-toggle" aria-label="${escapeHtml(messages.common.openMenu)}" />
           <div class="drawer-content flex flex-col w-full max-w-[100vw]">
-            
-            <!-- Mobile Top Bar & Desktop Breadcrumbs -->
-            ${hideTopBar ? "" : renderTopBar(messages, locale, languageSwitch, currentPathWithQuery, breadcrumbs)}
-            
+
+            ${
+              hideTopBar
+                ? ""
+                : `${renderTopBar(messages, locale, languageSwitch, currentPathWithQuery, publicPrimaryItems)}${renderBreadcrumbRow(messages.common.breadcrumbLabel, breadcrumbItems)}`
+            }
+
             <main id="main-content" tabindex="-1" class="${escapeHtml(containerClass)}">
               ${body}
             </main>
-            
+
             ${hideFooter ? "" : renderFooter(messages, locale)}
           </div>
-          
+
           <!-- Main Nav Sidebar (Left) -->
-          <div class="drawer-side z-40 is-drawer-close:overflow-visible">
+          <div class="drawer-side z-40 ${customSidebarHtml ? "is-drawer-close:overflow-visible" : ""}">
             <label for="main-nav-drawer" aria-label="${escapeHtml(messages.common.closeSidebar)}" class="drawer-overlay"></label>
             ${
               customSidebarHtml
-                ? `${customSidebarHtml}<div class="sr-only">${renderNavigation(messages, activeRoute, locale, persistentProjectId ?? "")}</div>`
-                : renderNavigation(messages, activeRoute, locale, persistentProjectId ?? "")
+                ? customSidebarHtml
+                : renderMobileDrawerMenu(publicNavigationGroups, {
+                    ariaLabel: messages.common.mobileNavigation,
+                    brandHtml: renderBrand(messages, locale),
+                  })
             }
           </div>
         </div>
@@ -278,10 +321,10 @@ export const renderLayout = (input: LayoutInput): string => {
 
 const renderTopBar = (
   messages: Messages,
-  _locale: LocaleCode,
+  locale: LocaleCode,
   languageSwitch: LocaleCode,
   currentPathWithQuery: string,
-  breadcrumbs?: readonly BreadcrumbItem[],
+  navigationItems: readonly NavigationItem[],
 ): string => {
   const localeSwitchButtonText =
     languageSwitch === "en-US"
@@ -292,150 +335,100 @@ const renderTopBar = (
       ? messages.navigation.switchToEnglish
       : messages.navigation.switchToChinese;
   const localeSwitchHref = withLocaleQuery(currentPathWithQuery, languageSwitch);
-
-  const brand = `<a href="${withLocaleQuery(appRoutes.home, _locale)}" class="btn btn-ghost normal-case px-2 text-base font-bold tracking-tight gap-2">
-    <span class="rounded-lg bg-gradient-to-br from-violet-400 to-cyan-300 px-2 py-1 text-lg leading-none" aria-hidden="true">🍵</span>
-    ${escapeHtml(messages.metadata.appName)}
-  </a>`;
-
-  const breadcrumbNav =
-    breadcrumbs && breadcrumbs.length > 0
-      ? renderBreadcrumbs(messages, breadcrumbs)
-      : `<span class="font-semibold">${escapeHtml(messages.metadata.appName)}</span>`;
-
-  return `<nav aria-label="${escapeHtml(messages.common.mobileNavigation)}" class="navbar sticky top-0 z-30 w-full border-b border-base-300/80 bg-base-100/90 backdrop-blur">
-    <div class="navbar-start">
-      ${renderDrawerToggleControl({
-        targetId: "main-nav-drawer",
-        label: messages.common.openMenu,
-        className: "btn btn-square btn-ghost",
-        content:
-          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><path d="M4 4m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"></path><path d="M9 4v16"></path><path d="M14 10l2 2l-2 2"></path></svg>',
-      })}
-      <div class="hidden md:block ml-2">${brand}</div>
-    </div>
-    <div class="navbar-center">
-      ${breadcrumbNav}
-    </div>
-    <div class="navbar-end flex gap-2">
-      ${renderThemeDropdown(messages)}
-      <a href="${escapeHtml(localeSwitchHref)}" class="btn btn-outline btn-sm font-medium" aria-label="${escapeHtml(localeSwitchAriaLabel)}">${escapeHtml(localeSwitchButtonText)}</a>
-    </div>
-  </nav>`;
-};
-
-const renderThemeDropdown = (messages: Messages): string => {
-  return `<details class="dropdown dropdown-end">
-    <summary class="btn btn-ghost btn-sm gap-2" aria-label="${escapeHtml(messages.common.themeLabel)}">
-      <span class="hidden sm:inline">${escapeHtml(messages.common.themeLabel)}</span>
-      <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v2M12 19v2M5.64 5.64l1.41 1.42M16.95 16.96l1.41 1.41M3 12h2M19 12h2M5.64 18.36l1.41-1.41M16.95 7.04l1.41-1.41M12 9a3 3 0 100 6 3 3 0 000-6z" /></svg>
-    </summary>
-    <div class="dropdown-content z-30 mt-3 w-48 rounded-box border border-base-300/80 bg-base-100 p-2 shadow-xl">
-      <label class="btn btn-ghost btn-sm justify-start gap-2">
-        <input type="radio" name="theme-dropdown" class="theme-controller" value="tea-dark" aria-label="${escapeHtml(messages.common.themeTeaDark)}" />
-        <span>${escapeHtml(messages.common.themeTeaDark)}</span>
-      </label>
-      <label class="btn btn-ghost btn-sm justify-start gap-2">
-        <input type="radio" name="theme-dropdown" class="theme-controller" value="tea-light" aria-label="${escapeHtml(messages.common.themeTeaLight)}" />
-        <span>${escapeHtml(messages.common.themeTeaLight)}</span>
-      </label>
-    </div>
-  </details>`;
-};
-
-const renderNavigation = (
-  messages: Messages,
-  activeRoute: keyof typeof appRoutes,
-  locale: LocaleCode,
-  persistentProjectId: string,
-): string => {
-  const projectScopedRoutes = new Set([appRoutes.builder, appRoutes.game]);
-
-  const items: readonly {
-    key: string;
-    label: string;
-    href: string;
-    icon: string;
-  }[] = [
+  const headerActions: readonly NavigationAction[] = [
     {
-      key: "home",
-      label: messages.navigation.home,
-      href: appRoutes.home,
-      icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>',
+      key: "locale",
+      label: localeSwitchAriaLabel,
+      href: localeSwitchHref,
+      className: "btn btn-outline btn-sm font-medium",
+      content: escapeHtml(localeSwitchButtonText),
     },
     {
-      key: "builder",
-      label: messages.builder.scenes,
-      href: appRoutes.builder,
-      icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg>',
+      key: "theme",
+      label: messages.common.themeLabel,
+      html: renderThemeDropdown(messages),
+      content: "",
     },
     {
-      key: "game",
-      label: messages.navigation.game,
-      href: appRoutes.game,
-      icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>',
+      key: "ai",
+      label: messages.common.openAiAssistant,
+      className: "btn btn-primary btn-sm gap-2",
+      hasPopup: "dialog",
+      drawerToggle: {
+        targetId: "ai-chat-drawer",
+      },
+      content: `${iconAiSpark()}<span class="hidden sm:inline">${escapeHtml(messages.common.openAiAssistant)}</span>`,
     },
   ];
 
-  const renderItem = (item: (typeof items)[number]): string => {
-    const isActive = item.key === activeRoute;
-    const activeClass = isActive ? " active" : "";
-    const ariaCurrent = isActive ? ' aria-current="page"' : "";
-    const localizedHref = withLocaleQuery(item.href, locale);
-    const href =
-      persistentProjectId.length > 0 && projectScopedRoutes.has(item.href)
-        ? withQueryParameters(localizedHref, { projectId: persistentProjectId })
-        : localizedHref;
-
-    return `<li>
-      <a class="is-drawer-close:tooltip is-drawer-close:tooltip-right${activeClass}" href="${escapeHtml(href)}" data-tip="${escapeHtml(item.label)}" aria-label="${escapeHtml(item.label)}"${ariaCurrent}>
-        ${item.icon}
-        <span class="is-drawer-close:hidden">${escapeHtml(item.label)}</span>
-      </a>
-    </li>`;
-  };
-
-  const listItems = items.map(renderItem).join("");
-
-  return `<div class="flex min-h-full flex-col items-start bg-base-200/80 is-drawer-close:w-14 is-drawer-open:w-72 is-drawer-close:overflow-visible backdrop-blur" role="navigation" aria-label="${escapeHtml(messages.common.primaryNavigation)}">
-    <div class="w-full border-b border-base-300/70 px-3 py-4 is-drawer-close:p-2">
-      <a href="${withLocaleQuery(appRoutes.home, locale)}" class="is-drawer-close:tooltip is-drawer-close:tooltip-right group flex items-center gap-2 px-2 py-1 text-xl font-bold" data-tip="${escapeHtml(messages.metadata.appName)}" aria-label="${escapeHtml(messages.metadata.appName)}">
-        <span class="inline-flex size-8 items-center justify-center rounded-xl bg-primary/15 text-lg shadow-sm shadow-primary/30" aria-hidden="true">🍵</span>
-        <span class="is-drawer-close:hidden tracking-tight">${escapeHtml(messages.metadata.appName)}</span>
-        <span class="is-drawer-close:hidden ml-auto rounded-full border border-primary/30 px-2 py-1 text-xs text-primary/90 tracking-[0.16em] uppercase">v1</span>
-      </a>
-    </div>
-    <div class="px-3 pt-3 text-xs uppercase tracking-[0.2em] text-base-content/55 is-drawer-close:hidden">${escapeHtml(messages.common.foundationLabel)}</div>
-    <ul class="menu w-full grow gap-1 px-2 pb-2">
-      ${listItems}
-    </ul>
-    <div class="w-full p-3 is-drawer-close:p-2 border-t border-base-300/50">
-      <div class="bg-base-100/60 rounded-box p-3 is-drawer-close:p-1.5 flex flex-col gap-1">
-        <div class="text-xs font-bold uppercase tracking-widest text-primary/70 is-drawer-close:hidden">${escapeHtml(messages.common.contextLabel)}</div>
-        <div class="text-sm font-semibold truncate opacity-80 is-drawer-close:hidden">${persistentProjectId ? escapeHtml(messages.common.projectConfigured) : escapeHtml(messages.common.noProjectBound)}</div>
-        <div class="is-drawer-open:hidden flex justify-center">
-          <span class="status status-${persistentProjectId ? "success" : "warning"}"></span>
-        </div>
-      </div>
-    </div>
+  return `<div class="sticky top-0 z-30">
+    ${renderHeaderNavbar(renderBrand(messages, locale), navigationItems, headerActions, {
+      ariaLabel: messages.common.primaryNavigation,
+      className:
+        "navbar w-full border-b border-base-300/80 bg-base-100/90 px-4 backdrop-blur lg:px-8",
+      mobileLead: `<div class="lg:hidden">${renderDrawerToggleControl({
+        targetId: "main-nav-drawer",
+        label: messages.common.openMenu,
+        className: "btn btn-square btn-ghost",
+        content: iconMenu(),
+      })}</div>`,
+    })}
   </div>`;
 };
 
-const renderBreadcrumbs = (messages: Messages, items: readonly BreadcrumbItem[]): string => {
-  const crumbs = items
-    .map((item, index) => {
-      const isLast = index === items.length - 1;
-      if (isLast || !item.href) {
-        return `<li><span aria-current="page">${escapeHtml(item.label)}</span></li>`;
-      }
-      return `<li><a href="${escapeHtml(item.href)}" aria-label="${escapeHtml(item.label)}">${escapeHtml(item.label)}</a></li>`;
-    })
-    .join("");
-
-  return `<nav aria-label="${escapeHtml(messages.common.breadcrumbLabel)}" class="breadcrumbs text-sm truncate max-w-[180px] sm:max-w-[280px] md:max-w-none">
-    <ul class="m-0 truncate">${crumbs}</ul>
-  </nav>`;
+const renderThemeDropdown = (messages: Messages): string => {
+  return renderActionDropdown(
+    messages.common.themeLabel,
+    `<span class="btn btn-ghost btn-sm gap-2">
+      <span class="hidden sm:inline">${escapeHtml(messages.common.themeLabel)}</span>
+      <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v2M12 19v2M5.64 5.64l1.41 1.42M16.95 16.96l1.41 1.41M3 12h2M19 12h2M5.64 18.36l1.41-1.41M16.95 7.04l1.41-1.41M12 9a3 3 0 100 6 3 3 0 000-6z" /></svg>
+    </span>`,
+    [
+      {
+        key: "tea-dark",
+        label: messages.common.themeTeaDark,
+        contentHtml: `<label class="btn btn-ghost btn-sm justify-start gap-2">
+          <input type="radio" name="theme-dropdown" class="theme-controller" value="tea-dark" aria-label="${escapeHtml(messages.common.themeTeaDark)}" />
+          <span>${escapeHtml(messages.common.themeTeaDark)}</span>
+        </label>`,
+      },
+      {
+        key: "tea-light",
+        label: messages.common.themeTeaLight,
+        contentHtml: `<label class="btn btn-ghost btn-sm justify-start gap-2">
+          <input type="radio" name="theme-dropdown" class="theme-controller" value="tea-light" aria-label="${escapeHtml(messages.common.themeTeaLight)}" />
+          <span>${escapeHtml(messages.common.themeTeaLight)}</span>
+        </label>`,
+      },
+    ],
+    {
+      align: "end",
+      widthClass: "w-48",
+      menuClassName: "p-2",
+    },
+  );
 };
+
+const renderBrand = (messages: Messages, locale: LocaleCode): string =>
+  `<a href="${withLocaleQuery(appRoutes.home, locale)}" class="btn btn-ghost px-2 text-base font-bold tracking-tight gap-2 normal-case">
+    <span class="rounded-lg bg-gradient-to-br from-violet-400 to-cyan-300 px-2 py-1 text-lg leading-none" aria-hidden="true">🍵</span>
+    <span>${escapeHtml(messages.metadata.appName)}</span>
+  </a>`;
+
+const iconMenu = (): string =>
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><path d="M4 4m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"></path><path d="M9 4v16"></path><path d="M14 10l2 2l-2 2"></path></svg>';
+
+const iconHome = (): string =>
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>';
+
+const iconBuilder = (): string =>
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg>';
+
+const iconGame = (): string =>
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>';
+
+const iconAiSpark = (): string =>
+  '<svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>';
 
 const renderFooter = (messages: Messages, locale: LocaleCode): string => {
   const resourceLinks = [

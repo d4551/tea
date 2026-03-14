@@ -1963,6 +1963,27 @@ describe("API contracts", () => {
           readonly streaming: boolean;
           readonly offlineFallback: boolean;
         };
+        readonly creatorCapabilities?: {
+          readonly items?: ReadonlyArray<{
+            readonly key: string;
+            readonly label: string;
+            readonly statusLabel: string;
+            readonly available: boolean;
+          }>;
+        };
+        readonly providerCount?: number;
+        readonly capabilities?: ReadonlyArray<{
+          readonly provider: string;
+          readonly model: string;
+          readonly capabilities: readonly string[];
+          readonly maxContextLength: number;
+          readonly supportsStreaming: boolean;
+          readonly runtime: string;
+          readonly integration: string;
+          readonly local: boolean;
+          readonly configurable: boolean;
+          readonly key?: string;
+        }>;
       };
     }>(response);
 
@@ -1970,6 +1991,13 @@ describe("API contracts", () => {
     expect(payload.ok).toBe(true);
     expect(typeof payload.data?.features?.assist).toBe("boolean");
     expect(typeof payload.data?.features?.test).toBe("boolean");
+    expect(typeof payload.data?.providerCount).toBe("number");
+    expect(Array.isArray(payload.data?.creatorCapabilities?.items)).toBe(true);
+    expect(Array.isArray(payload.data?.capabilities)).toBe(true);
+    if (payload.data?.capabilities) {
+      expect(payload.data.capabilities.every((capability) => capability.provider === "creator-safe")).toBe(true);
+      expect(payload.data.capabilities.every((capability) => capability.model === "creator-safe")).toBe(true);
+    }
   });
 
   test("builder platform readiness endpoint exposes partial and missing capability states", async () => {
@@ -2264,11 +2292,10 @@ describe("HTMX partial rendering", () => {
     expect(html.includes('aria-label="Primary navigation"')).toBe(true);
     expect(html.includes("Skip to main content")).toBe(true);
     expect(html.includes('aria-label="Mobile navigation"')).toBe(true);
+    expect(html.includes('aria-label="Breadcrumb"')).toBe(true);
     expect(html.includes('aria-current="page"')).toBe(true);
     expect(html.includes("/builder?lang=en-US")).toBe(true);
     expect(html.includes("/game?lang=en-US")).toBe(true);
-    expect(html.includes('name="lang" value="en-US"')).toBe(true);
-    expect(html.includes('hx-params="*"')).toBe(true);
     expect(html.includes('aria-label="Switch language to Chinese"')).toBe(true);
     expect(html.includes('data-drawer-toggle-target="main-nav-drawer"')).toBe(true);
     expect(html.includes('for="main-nav-drawer"')).toBe(true);
@@ -2336,6 +2363,7 @@ describe("HTMX partial rendering", () => {
     const html = await response.text();
 
     expect(response.status).toBe(httpStatus.ok);
+    expect(html.includes("Settings")).toBe(true);
     expect(html.includes("Knowledge workspace")).toBe(true);
     expect(html.includes(appRoutes.aiBuilderKnowledgeDocuments)).toBe(true);
     expect(html.includes(appRoutes.aiBuilderKnowledgeSearch)).toBe(true);
@@ -2534,6 +2562,10 @@ describe("HTMX partial rendering", () => {
     expect(html.includes("/public/vendor/htmx-ext/layout-controls.js")).toBe(true);
     expect(html.includes("/public/vendor/builder-scene-editor.js")).toBe(true);
     expect(html.includes('id="builder-project-shell"')).toBe(true);
+    expect(html.includes("概览")).toBe(true);
+    expect(html.includes("创作")).toBe(true);
+    expect(html.includes("运行时")).toBe(true);
+    expect(html.includes("试玩")).toBe(true);
     expect(html.includes(projectId)).toBe(true);
     expect(html.includes('id="builder-platform-readiness"')).toBe(true);
     expect(html.includes('href="#"')).toBe(false);
@@ -2580,9 +2612,8 @@ describe("HTMX partial rendering", () => {
     const html = await response.text();
 
     expect(response.status).toBe(httpStatus.ok);
-    expect(html.includes("Sprite pipeline")).toBe(true);
-    expect(html.includes("Animation pipeline")).toBe(true);
-    expect(html.includes("Platform readiness")).toBe(true);
+    expect(html.includes("Animation authoring")).toBe(true);
+    expect(html.includes("AI actions for the selected item")).toBe(true);
   });
 
   test("builder asset creation preserves OpenUSD source metadata and runtime variant policy", async () => {
@@ -2650,6 +2681,7 @@ describe("HTMX partial rendering", () => {
     const html = await response.text();
 
     expect(response.status).toBe(httpStatus.ok);
+    expect(html.includes("Settings")).toBe(true);
     expect(html.includes("AI authoring")).toBe(true);
     expect(html.includes("Automation / RPA")).toBe(true);
     expect(html.includes("Platform readiness")).toBe(true);
@@ -2907,7 +2939,7 @@ describe("HTMX partial rendering", () => {
     const automationPageHtml = await automationPageResponse.text();
     expect(automationPageResponse.status).toBe(httpStatus.ok);
     expect(automationPageHtml.includes('id="builder-project-shell"')).toBe(true);
-    expect(automationPageHtml.includes("Automation workspace")).toBe(true);
+    expect(automationPageHtml.includes("Review Queue")).toBe(true);
 
     const uploadAssetId = `upload-${crypto.randomUUID().slice(0, 8)}`;
     const uploadPayload = new FormData();

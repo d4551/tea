@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { createLogger, getLoggerWriteFailures } from "../src/lib/logger.ts";
+import {
+  createLogger,
+  getLoggerWriteFailures,
+  toJsonObject,
+  toJsonValue,
+} from "../src/lib/logger.ts";
 
 /**
  * Logger tests.
@@ -14,6 +19,36 @@ describe("createLogger", () => {
   afterEach(() => {
     Bun.stdout.write = originalStdoutWrite;
     Bun.stderr.write = originalStderrWrite;
+  });
+
+  test("normalizes nested unknown values into JSON-safe logger payloads", () => {
+    const normalized = toJsonObject({
+      finite: 42,
+      infinite: Number.POSITIVE_INFINITY,
+      nested: {
+        ok: true,
+        list: [1, new Date("2026-03-14T00:00:00.000Z")],
+      },
+    });
+
+    expect(normalized.finite).toBe(42);
+    expect(normalized.infinite).toBe("Infinity");
+    expect(normalized.nested).toEqual({
+      ok: true,
+      list: [1, "2026-03-14T00:00:00.000Z"],
+    });
+  });
+
+  test("serializes Error instances into structured JSON values", () => {
+    const error = new Error("boom");
+    error.name = "ExampleError";
+
+    const normalized = toJsonValue(error);
+
+    expect(normalized).toMatchObject({
+      name: "ExampleError",
+      message: "boom",
+    });
   });
 
   test("does not throw when stdout sink rejects", async () => {

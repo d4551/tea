@@ -1,7 +1,7 @@
 import type { MutableResponseHeaders } from "../lib/correlation-id.ts";
 import { ensureCorrelationIdHeader } from "../lib/correlation-id.ts";
 import { ApplicationError, type ErrorEnvelope, errorEnvelope } from "../lib/error-envelope.ts";
-import { createLogger } from "../lib/logger.ts";
+import { createLogger, toJsonObject } from "../lib/logger.ts";
 import { httpStatus } from "../shared/constants/http.ts";
 import type { Messages } from "../shared/i18n/messages.ts";
 import { resolveRequestI18n } from "../shared/i18n/translator.ts";
@@ -97,13 +97,20 @@ export const createErrorResponse = (
   const appError =
     error instanceof ApplicationError ? error : mapFrameworkError(code, frameworkMessages);
 
-  requestLogger.error("request.failed", {
+  const logPayload = toJsonObject({
     frameworkCode: String(code),
     code: appError.code,
     status: appError.status,
     retryable: appError.retryable,
     detail: appError.message,
+    ...(appError.code === "INTERNAL_ERROR" && !(error instanceof ApplicationError)
+      ? {
+          originalError: error.message,
+          originalStack: error.stack ?? undefined,
+        }
+      : {}),
   });
+  requestLogger.error("request.failed", logPayload);
 
   return {
     status: appError.status,

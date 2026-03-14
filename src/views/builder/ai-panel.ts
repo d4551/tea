@@ -609,8 +609,8 @@ export const renderAiPanel = (
 ): string => `
     <div class="space-y-6 animate-fade-in-up">
       ${renderWorkspaceHeader({
-        title: messages.builder.ai,
-        description: messages.builder.localRuntimeDescription,
+        title: messages.builder.settings,
+        description: messages.builder.advancedSettingsDescription,
         tabs: [
           {
             key: "status",
@@ -633,7 +633,7 @@ export const renderAiPanel = (
       })}
 
       <div role="alert" class="alert alert-warning alert-soft">
-        <span>${escapeHtml(messages.builder.platformReadinessWarning)}</span>
+        <span>${escapeHtml(messages.builder.creatorSafeAiDescription)}</span>
       </div>
 
       ${renderPlatformReadinessSection({

@@ -328,8 +328,14 @@ export interface Messages {
     readonly mechanics: string;
     readonly automation: string;
     readonly ai: string;
+    readonly playtest: string;
+    readonly settings: string;
+    readonly advancedTools: string;
+    readonly navGroupOverview: string;
+    readonly navGroupAuthoring: string;
     readonly navGroupContent: string;
     readonly navGroupSystems: string;
+    readonly navGroupRuntime: string;
     readonly animations: string;
     readonly addScene: string;
     readonly editScene: string;
@@ -539,6 +545,24 @@ export interface Messages {
     readonly flowTitle: string;
     readonly flowDescription: string;
     readonly flowSteps: readonly string[];
+    readonly workflowGuideTitle: string;
+    readonly workflowGuideDescription: string;
+    readonly workflowStartWithWorldTitle: string;
+    readonly workflowStartWithWorldDescription: string;
+    readonly workflowPopulateWorldTitle: string;
+    readonly workflowPopulateWorldDescription: string;
+    readonly workflowWireProgressTitle: string;
+    readonly workflowWireProgressDescription: string;
+    readonly workflowPlaytestTitle: string;
+    readonly workflowPlaytestDescription: string;
+    readonly modePrimerTitle: string;
+    readonly modePrimerDescription: string;
+    readonly modePrimer2dTitle: string;
+    readonly modePrimer2dDescription: string;
+    readonly modePrimer3dTitle: string;
+    readonly modePrimer3dDescription: string;
+    readonly modePrimerUsdTitle: string;
+    readonly modePrimerUsdDescription: string;
     readonly engineOptionsTitle: string;
     readonly engineOptionsDescription: string;
     readonly runtimeLaneTitle: string;
@@ -560,6 +584,9 @@ export interface Messages {
     readonly runtimeStackValue: string;
     readonly sceneLibraryTitle: string;
     readonly sceneCreateDescription: string;
+    readonly sceneCreationHelp: string;
+    readonly scene2dHelp: string;
+    readonly scene3dHelp: string;
     readonly sceneCreateTitlePlaceholder: string;
     readonly sceneBackgroundPlaceholder: string;
     readonly npcRosterTitle: string;
@@ -568,6 +595,10 @@ export interface Messages {
     readonly npcCreateKeyPlaceholder: string;
     readonly npcCreateLabelPlaceholder: string;
     readonly assetsWorkspaceTitle: string;
+    readonly assetsWorkspaceDescription: string;
+    readonly assets2dGuide: string;
+    readonly assets3dGuide: string;
+    readonly assetsUsdGuide: string;
     readonly assetKindLabel: string;
     readonly assetSourceLabel: string;
     readonly animationClipsTitle: string;
@@ -587,6 +618,57 @@ export interface Messages {
     readonly generationJobKindLabel: string;
     readonly generationPromptLabel: string;
     readonly createGenerationJob: string;
+    readonly creatorWorkflowTitle: string;
+    readonly creatorWorkflowDescription: string;
+    readonly creatorStageStartPrimary: string;
+    readonly creatorStageStartSecondary: string;
+    readonly creatorStageWorldPrimary: string;
+    readonly creatorStageWorldSecondary: string;
+    readonly creatorStageAssetsPrimary: string;
+    readonly creatorStageAssetsSecondary: string;
+    readonly creatorStageCharactersPrimary: string;
+    readonly creatorStageCharactersSecondary: string;
+    readonly creatorStageStoryPrimary: string;
+    readonly creatorStageStorySecondary: string;
+    readonly creatorStageSystemsPrimary: string;
+    readonly creatorStageSystemsSecondary: string;
+    readonly creatorStagePlaytestPrimary: string;
+    readonly creatorStagePlaytestSecondary: string;
+    readonly creatorStageStartCompletion: string;
+    readonly creatorStageWorldCompletion: string;
+    readonly creatorStageAssetsCompletion: string;
+    readonly creatorStageCharactersCompletion: string;
+    readonly creatorStageStoryCompletion: string;
+    readonly creatorStageSystemsCompletion: string;
+    readonly creatorStagePlaytestCompletion: string;
+    readonly creatorCapabilityImageGeneration: string;
+    readonly creatorCapabilityDialogueGeneration: string;
+    readonly creatorCapabilitySpeech: string;
+    readonly creatorCapabilityAutomationReview: string;
+    readonly creatorCapability3dImport: string;
+    readonly creatorCapabilityAnimationAssist: string;
+    readonly creatorAssistTitle: string;
+    readonly creatorAssistDescription: string;
+    readonly generateBackground: string;
+    readonly generateBackgroundDescription: string;
+    readonly generateTileset: string;
+    readonly generateTilesetDescription: string;
+    readonly generatePortrait: string;
+    readonly generatePortraitDescription: string;
+    readonly generateVoiceLine: string;
+    readonly generateVoiceLineDescription: string;
+    readonly generateIdleAnimation: string;
+    readonly generateIdleAnimationDescription: string;
+    readonly generateInteractionDescription: string;
+    readonly animationAuthoringTitle: string;
+    readonly animationAuthoringDescription: string;
+    readonly animationActionIdleLoop: string;
+    readonly animationActionWalkCycle: string;
+    readonly animationActionBindCharacter: string;
+    readonly animationActionPreviewScene: string;
+    readonly creatorSafeAiDescription: string;
+    readonly advancedSettingsDescription: string;
+    readonly advancedAutomationDescription: string;
     readonly dialogueSearchLabel: string;
     readonly dialogueSearchPlaceholder: string;
     readonly dialogueWorkspaceTitle: string;
@@ -1175,19 +1257,25 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         "Animation clip {clipId} does not match asset {assetId}: expected {expectedSceneMode}, got {actualSceneMode}.",
       noDialogues: "No dialogue entries found",
       title: "Game Builder",
-      dashboard: "Dashboard",
+      dashboard: "Start Here",
       workspaceTitle: "Builder Workspace",
       workspaceJumpBack:
         "Jump back into your world or start crafting something new with the help of your AI co-pilot.",
-      scenes: "Scenes",
-      npcs: "NPCs",
-      dialogue: "Dialogue",
-      assets: "Assets",
-      mechanics: "Mechanics",
-      automation: "Automation",
+      scenes: "World",
+      npcs: "Characters",
+      dialogue: "Story",
+      assets: "Art & Audio",
+      mechanics: "Rules & Progress",
+      automation: "Review Queue",
       ai: "AI Tools",
+      playtest: "Playtest",
+      settings: "Settings",
+      advancedTools: "Advanced",
+      navGroupOverview: "Overview",
+      navGroupAuthoring: "Authoring",
       navGroupContent: "Content",
       navGroupSystems: "Systems",
+      navGroupRuntime: "Runtime",
       animations: "Animations",
       addScene: "Add Scene",
       editScene: "Edit Scene",
@@ -1403,14 +1491,42 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       testMessagePlaceholder: "Tell me about the ancient ruins...",
       assistPromptPlaceholder: "How should I balance the quest guide NPC dialogue...",
       flowTitle: "Creation steps",
-      flowDescription: "Follow these steps to bring your game idea to life.",
+      flowDescription:
+        "Use one simple path: build a world, add characters, wire progress, then playtest.",
       flowSteps: [
-        "Pick your game engine",
-        "Add AI-powered characters",
-        "Build worlds and stories",
-        "Preview and polish",
-        "Publish your game",
+        "Create a world",
+        "Add art and characters",
+        "Write story beats",
+        "Wire rules and quests",
+        "Playtest the result",
       ],
+      workflowGuideTitle: "Recommended path",
+      workflowGuideDescription:
+        "If the builder feels fragmented, ignore the internal categories and follow this path. It is the shortest route to a playable prototype.",
+      workflowStartWithWorldTitle: "1. Start with a world",
+      workflowStartWithWorldDescription:
+        "Create one scene first. Pick 2D for sprite or tile-based rooms. Pick 3D only when the scene needs model placement, lights, or Z-space.",
+      workflowPopulateWorldTitle: "2. Populate the world",
+      workflowPopulateWorldDescription:
+        "Add backgrounds, sprites, portraits, audio, and then place characters into the scene that will actually use them.",
+      workflowWireProgressTitle: "3. Wire progress",
+      workflowWireProgressDescription:
+        "Use Story and Rules & Progress to connect dialogue, quests, triggers, and flags after the scene and characters exist.",
+      workflowPlaytestTitle: "4. Playtest early",
+      workflowPlaytestDescription:
+        "Playtest as soon as one scene, one character, and one interaction work. Save the review queue and AI tools for acceleration, not for first setup.",
+      modePrimerTitle: "2D, 3D, and USD",
+      modePrimerDescription:
+        "These are creation lanes, not separate products. Choose the lane that matches the scene you are trying to ship.",
+      modePrimer2dTitle: "2D is the default lane",
+      modePrimer2dDescription:
+        "Use 2D for backgrounds, sprite sheets, portraits, tilemaps, and top-down or side-view scenes. If you are unsure, start here.",
+      modePrimer3dTitle: "3D is for model-based scenes",
+      modePrimer3dDescription:
+        "Use 3D when the scene depends on models, lights, camera movement, or depth placement. It adds complexity, so do not start here unless you need it.",
+      modePrimerUsdTitle: "USD is a model file family",
+      modePrimerUsdDescription:
+        "USD, USDA, USDC, and USDZ are 3D asset formats. In this builder they belong to 3D scenes only, alongside GLB and GLTF.",
       engineOptionsTitle: "Creation paths",
       engineOptionsDescription: "Choose the workspace that fits your current creative goal.",
       runtimeLaneTitle: "Scene Studio",
@@ -1437,6 +1553,12 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       runtimeStackValue: "TEA Engine",
       sceneLibraryTitle: "Scene library",
       sceneCreateDescription: "Create or select a scene, then refine its layout and preview.",
+      sceneCreationHelp:
+        "Start by creating one scene. Choose 2D for sprites and tilemaps. Choose 3D only if you need model placement, lights, or USD/GLB assets.",
+      scene2dHelp:
+        "2D scenes use backgrounds, sprite sheets, portraits, and optional tilemaps. This is the fastest path to a working prototype.",
+      scene3dHelp:
+        "3D scenes use model assets such as GLB, GLTF, USD, USDA, USDC, and USDZ. Use them when depth and camera movement matter.",
       sceneCreateTitlePlaceholder: "enchantedForest",
       sceneBackgroundPlaceholder: "/assets/images/backgrounds/enchanted-forest.png",
       npcRosterTitle: "NPC roster",
@@ -1445,7 +1567,15 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       npcCreateSceneLabel: "Owning scene",
       npcCreateKeyPlaceholder: "forestGuide",
       npcCreateLabelPlaceholder: "npc.forestGuide.label",
-      assetsWorkspaceTitle: "Asset workspace",
+      assetsWorkspaceTitle: "Asset library",
+      assetsWorkspaceDescription:
+        "Add the assets that support the scene you are building now. Keep 2D and 3D assets separate so scene setup stays predictable.",
+      assets2dGuide:
+        "2D assets: backgrounds, sprite sheets, portraits, tiles, and tile sets. Use these for 2D scenes and dialogue surfaces.",
+      assets3dGuide:
+        "3D assets: models and supporting audio used inside 3D scenes. Keep them tied to scenes that actually require model placement.",
+      assetsUsdGuide:
+        "USD formats are 3D model assets. Use USD, USDA, USDC, or USDZ only for 3D scenes; use PNG or sprite sheets for 2D scenes.",
       assetKindLabel: "Asset kind",
       assetSourceLabel: "Asset source",
       animationClipsTitle: "Animation clips",
@@ -1465,6 +1595,63 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       generationJobKindLabel: "Job kind",
       generationPromptLabel: "Prompt",
       createGenerationJob: "Queue generation job",
+      creatorWorkflowTitle: "Create playable slice",
+      creatorWorkflowDescription:
+        "Move through one authoring loop: shape the world, attach visuals, add characters, wire story and rules, then playtest.",
+      creatorStageStartPrimary: "Open world setup",
+      creatorStageStartSecondary: "Open asset library",
+      creatorStageWorldPrimary: "Edit world",
+      creatorStageWorldSecondary: "Prepare visuals",
+      creatorStageAssetsPrimary: "Add art and audio",
+      creatorStageAssetsSecondary: "Place visuals in world",
+      creatorStageCharactersPrimary: "Add characters",
+      creatorStageCharactersSecondary: "Draft story beats",
+      creatorStageStoryPrimary: "Write story",
+      creatorStageStorySecondary: "Tune characters",
+      creatorStageSystemsPrimary: "Wire rules",
+      creatorStageSystemsSecondary: "Review story hooks",
+      creatorStagePlaytestPrimary: "Playtest slice",
+      creatorStagePlaytestSecondary: "Review rules",
+      creatorStageStartCompletion: "A playable slice has a clear next step and one chosen creation lane.",
+      creatorStageWorldCompletion: "At least one scene exists with a clear 2D or 3D direction.",
+      creatorStageAssetsCompletion: "The current slice has the visuals and audio it needs to read on screen.",
+      creatorStageCharactersCompletion: "At least one character is present in the active slice.",
+      creatorStageStoryCompletion: "The slice has dialogue or authored story beats to test.",
+      creatorStageSystemsCompletion: "Rules, quests, triggers, or flags are connected to the slice.",
+      creatorStagePlaytestCompletion: "The slice can be entered and reviewed in the runtime.",
+      creatorCapabilityImageGeneration: "Image generation",
+      creatorCapabilityDialogueGeneration: "Dialogue generation",
+      creatorCapabilitySpeech: "Speech tools",
+      creatorCapabilityAutomationReview: "Review automation",
+      creatorCapability3dImport: "3D import",
+      creatorCapabilityAnimationAssist: "Animation assist",
+      creatorAssistTitle: "AI actions for the selected item",
+      creatorAssistDescription:
+        "Use AI only in context. These actions are attached to the scene, character, or asset you are editing now.",
+      generateBackground: "Generate background",
+      generateBackgroundDescription: "Create a background draft for the active scene.",
+      generateTileset: "Generate tileset",
+      generateTilesetDescription: "Create a tile-ready environment sheet for the active scene.",
+      generatePortrait: "Generate portrait",
+      generatePortraitDescription: "Create a portrait draft for the selected character.",
+      generateVoiceLine: "Generate voice line",
+      generateVoiceLineDescription: "Create a spoken line draft for the selected character or scene.",
+      generateIdleAnimation: "Generate idle animation",
+      generateIdleAnimationDescription: "Draft an idle loop plan for the selected asset.",
+      generateInteractionDescription: "Draft a contextual interaction pass for the selected item.",
+      animationAuthoringTitle: "Animation authoring",
+      animationAuthoringDescription:
+        "Treat animation as part of the selected asset or character, not as a separate hidden pipeline.",
+      animationActionIdleLoop: "Create idle loop",
+      animationActionWalkCycle: "Create walk cycle",
+      animationActionBindCharacter: "Bind animation to character",
+      animationActionPreviewScene: "Preview in scene",
+      creatorSafeAiDescription:
+        "Creator pages only show capability-level AI guidance. Provider names, model IDs, and runtime internals live in Settings.",
+      advancedSettingsDescription:
+        "Settings is the advanced surface for runtime diagnostics, project knowledge, and capability troubleshooting.",
+      advancedAutomationDescription:
+        "Review Queue is the advanced surface for evidence capture, review bundles, and gated automation apply flows.",
       dialogueSearchLabel: "Filter dialogue",
       dialogueSearchPlaceholder: "Search by NPC or dialogue key",
       dialogueWorkspaceTitle: "Dialogue workspace",
@@ -1978,18 +2165,24 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         "动画片段 {clipId} 与资源 {assetId} 的场景模式不一致：期望 {expectedSceneMode}，实际为 {actualSceneMode}。",
       noDialogues: "未找到对话条目",
       title: "游戏构建器",
-      dashboard: "仪表盘",
+      dashboard: "从这里开始",
       workspaceTitle: "构建器工作区",
       workspaceJumpBack: "回到你的世界继续创作，或借助 AI 助手开始新的创作。",
-      scenes: "场景",
-      npcs: "NPC",
-      dialogue: "对话",
-      assets: "资源",
-      mechanics: "机制",
-      automation: "自动化",
+      scenes: "世界",
+      npcs: "角色",
+      dialogue: "剧情",
+      assets: "美术与音频",
+      mechanics: "规则与进度",
+      automation: "审核队列",
       ai: "AI 工具",
+      playtest: "试玩",
+      settings: "设置",
+      advancedTools: "高级",
+      navGroupOverview: "概览",
+      navGroupAuthoring: "创作",
       navGroupContent: "内容",
       navGroupSystems: "系统",
+      navGroupRuntime: "运行时",
       animations: "动画",
       addScene: "添加场景",
       editScene: "编辑场景",
@@ -2200,8 +2393,34 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       testMessagePlaceholder: "请告诉我关于古代遗迹的事情...",
       assistPromptPlaceholder: "如何平衡任务向导 NPC 的对话...",
       flowTitle: "创作步骤",
-      flowDescription: "按照以下步骤，将你的游戏创意变为现实。",
-      flowSteps: ["选择游戏引擎", "添加 AI 角色", "构建世界和故事", "预览和打磨", "发布你的游戏"],
+      flowDescription: "遵循一条简单路径：先做世界，再加角色，接着串联进度，最后尽早试玩。",
+      flowSteps: ["创建世界", "加入美术和角色", "编写剧情节点", "连接规则与任务", "试玩结果"],
+      workflowGuideTitle: "推荐路径",
+      workflowGuideDescription:
+        "如果你觉得构建器太分散，就先忽略内部分类，直接按这条路径做。这是最快得到可玩原型的方式。",
+      workflowStartWithWorldTitle: "1. 先做世界",
+      workflowStartWithWorldDescription:
+        "先创建一个场景。做精灵或瓦片地图就选 2D。只有在确实需要模型、灯光或 Z 轴空间时才选 3D。",
+      workflowPopulateWorldTitle: "2. 填充世界",
+      workflowPopulateWorldDescription:
+        "先补背景、精灵、头像和音频，再把角色放进真正会使用这些资源的场景里。",
+      workflowWireProgressTitle: "3. 串联进度",
+      workflowWireProgressDescription:
+        "等场景和角色存在后，再去剧情与规则页面连接对话、任务、触发器和标记。",
+      workflowPlaytestTitle: "4. 尽早试玩",
+      workflowPlaytestDescription:
+        "只要一个场景、一个角色和一次交互能跑通，就立刻试玩。审核队列和 AI 工具应该用来提速，而不是替代起步流程。",
+      modePrimerTitle: "2D、3D 与 USD",
+      modePrimerDescription: "这些是创作通道，不是三套不同产品。选择与你当前目标场景匹配的那一条。",
+      modePrimer2dTitle: "2D 是默认通道",
+      modePrimer2dDescription:
+        "背景、精灵表、头像、瓦片地图，以及多数俯视或横版场景都应该用 2D。拿不准时先从这里开始。",
+      modePrimer3dTitle: "3D 用于模型场景",
+      modePrimer3dDescription:
+        "只有当场景依赖模型、灯光、相机运动或深度摆放时才用 3D。它更复杂，所以不是默认起点。",
+      modePrimerUsdTitle: "USD 是一组模型格式",
+      modePrimerUsdDescription:
+        "USD、USDA、USDC 和 USDZ 都属于 3D 资产格式。在这个构建器里，它们只应该用于 3D 场景，也可以与 GLB、GLTF 一起使用。",
       engineOptionsTitle: "创作路径",
       engineOptionsDescription: "选择适合当前创作目标的工作区。",
       runtimeLaneTitle: "场景工坊",
@@ -2223,6 +2442,11 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       runtimeStackValue: "TEA 引擎",
       sceneLibraryTitle: "场景库",
       sceneCreateDescription: "先创建或选择场景，再细化布局与预览。",
+      sceneCreationHelp:
+        "先创建一个场景。精灵和瓦片地图选 2D。只有在需要模型摆放、灯光或 USD/GLB 资源时才选 3D。",
+      scene2dHelp: "2D 场景使用背景、精灵表、头像和可选瓦片地图。这是最快得到可玩原型的路径。",
+      scene3dHelp:
+        "3D 场景使用 GLB、GLTF、USD、USDA、USDC、USDZ 等模型资源。只有在深度和镜头运动重要时才使用。",
       sceneCreateTitlePlaceholder: "enchantedForest",
       sceneBackgroundPlaceholder: "/assets/images/backgrounds/enchanted-forest.png",
       npcRosterTitle: "NPC 阵列",
@@ -2230,7 +2454,14 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       npcCreateSceneLabel: "所属场景",
       npcCreateKeyPlaceholder: "forestGuide",
       npcCreateLabelPlaceholder: "npc.forestGuide.label",
-      assetsWorkspaceTitle: "资源工作区",
+      assetsWorkspaceTitle: "资源库",
+      assetsWorkspaceDescription:
+        "只添加当前正在构建的场景真正需要的资源。把 2D 和 3D 资源分开，场景配置才会更稳定。",
+      assets2dGuide: "2D 资源：背景、精灵表、头像、瓦片和瓦片集。它们服务于 2D 场景和对话界面。",
+      assets3dGuide:
+        "3D 资源：模型，以及 3D 场景中要用到的配套音频。只在确实需要模型摆放的场景里使用它们。",
+      assetsUsdGuide:
+        "USD 系列格式属于 3D 模型资源。USD、USDA、USDC、USDZ 只应进入 3D 场景；2D 场景请使用 PNG 或精灵表。",
       assetKindLabel: "资源类型",
       assetSourceLabel: "资源来源",
       animationClipsTitle: "动画片段",
@@ -2250,6 +2481,62 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       generationJobKindLabel: "任务类型",
       generationPromptLabel: "提示词",
       createGenerationJob: "加入生成队列",
+      creatorWorkflowTitle: "创建可试玩切片",
+      creatorWorkflowDescription:
+        "按一条清晰路径创作：搭建世界、补齐视觉、添加角色、连通剧情与规则，然后立即试玩。",
+      creatorStageStartPrimary: "开始世界搭建",
+      creatorStageStartSecondary: "打开素材库",
+      creatorStageWorldPrimary: "编辑世界",
+      creatorStageWorldSecondary: "准备视觉资源",
+      creatorStageAssetsPrimary: "添加美术与音频",
+      creatorStageAssetsSecondary: "把资源放入世界",
+      creatorStageCharactersPrimary: "添加角色",
+      creatorStageCharactersSecondary: "起草剧情节拍",
+      creatorStageStoryPrimary: "编写剧情",
+      creatorStageStorySecondary: "调整角色",
+      creatorStageSystemsPrimary: "连接规则",
+      creatorStageSystemsSecondary: "检查剧情钩子",
+      creatorStagePlaytestPrimary: "试玩切片",
+      creatorStagePlaytestSecondary: "复查规则",
+      creatorStageStartCompletion: "可试玩切片需要一个明确的下一步与一个确定的创作路线。",
+      creatorStageWorldCompletion: "至少存在一个场景，并且已经明确选择 2D 或 3D 方向。",
+      creatorStageAssetsCompletion: "当前切片已经具备阅读画面所需的视觉与音频资源。",
+      creatorStageCharactersCompletion: "当前切片中至少存在一个角色。",
+      creatorStageStoryCompletion: "当前切片已经有可测试的对白或剧情节拍。",
+      creatorStageSystemsCompletion: "任务、触发器、标记或规则已经连到当前切片。",
+      creatorStagePlaytestCompletion: "当前切片已经可以在运行时进入并审查。",
+      creatorCapabilityImageGeneration: "图像生成",
+      creatorCapabilityDialogueGeneration: "对白生成",
+      creatorCapabilitySpeech: "语音工具",
+      creatorCapabilityAutomationReview: "自动化审核",
+      creatorCapability3dImport: "3D 导入",
+      creatorCapabilityAnimationAssist: "动画辅助",
+      creatorAssistTitle: "当前对象的 AI 动作",
+      creatorAssistDescription:
+        "只在上下文中使用 AI。这些动作绑定到你此刻正在编辑的场景、角色或资源。",
+      generateBackground: "生成背景",
+      generateBackgroundDescription: "为当前场景创建背景草稿。",
+      generateTileset: "生成瓦片集",
+      generateTilesetDescription: "为当前场景创建可直接铺设的环境瓦片草稿。",
+      generatePortrait: "生成立绘",
+      generatePortraitDescription: "为当前角色创建立绘草稿。",
+      generateVoiceLine: "生成语音台词",
+      generateVoiceLineDescription: "为当前角色或场景创建语音草稿。",
+      generateIdleAnimation: "生成待机动画",
+      generateIdleAnimationDescription: "为当前资源生成待机循环方案。",
+      generateInteractionDescription: "为当前对象生成上下文交互草稿。",
+      animationAuthoringTitle: "动画创作",
+      animationAuthoringDescription: "把动画视为角色或资源的一部分，而不是隐藏在后台的独立管线。",
+      animationActionIdleLoop: "创建待机循环",
+      animationActionWalkCycle: "创建行走循环",
+      animationActionBindCharacter: "将动画绑定到角色",
+      animationActionPreviewScene: "在场景中预览",
+      creatorSafeAiDescription:
+        "创作者页面只展示能力级别的 AI 引导。提供商名称、模型 ID 与运行时细节统一移到设置页。",
+      advancedSettingsDescription:
+        "设置页用于运行时诊断、项目知识库与能力排障，属于高级工作区。",
+      advancedAutomationDescription:
+        "审核队列用于证据采集、审查包与受控自动化应用，属于高级工作区。",
       dialogueSearchLabel: "筛选对话",
       dialogueSearchPlaceholder: "按 NPC 或对话键搜索",
       dialogueWorkspaceTitle: "对话工作区",

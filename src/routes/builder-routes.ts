@@ -172,7 +172,7 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
         request,
         builderLocale,
         messages,
-        "dashboard",
+      "start",
         builderCurrentPath,
         builderProjectId,
         chromeProject,
@@ -227,6 +227,13 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
       automationRunCount: readinessAudit.automationRunCount,
       automationStepCount: readinessAudit.automationStepCount,
       aiAvailable: features.providers.length > 0,
+      aiFeatureDialogue: features.richDialogue,
+      aiFeatureVision: features.visionAnalysis,
+      aiFeatureSentiment: features.sentimentAnalysis,
+      aiFeatureEmbeddings: features.embeddings,
+      aiFeatureSpeechToText: features.speechToText,
+      aiFeatureSpeechSynthesis: features.speechSynthesis,
+      aiFeatureLocalInference: features.localInference,
       providers: [...features.providers],
       aiProviderCount: features.providers.length,
       draftVersion: project.version,
@@ -255,7 +262,7 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
       request,
       builderLocale,
       messages,
-      "dashboard",
+      "start",
       builderCurrentPath,
       builderProjectId,
       chromeProject,
@@ -271,27 +278,19 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
         request,
         builderLocale,
         messages,
-        "scenes",
+          "world",
         builderCurrentPath,
         builderProjectId,
         chromeProject,
       );
     }
-    const features = await detectAvailableFeatures();
-    const readiness = evaluateBuilderPlatformReadiness({
-      sceneCount: project.scenes.size,
-      spriteManifestCount: project.spriteAtlases.size,
-      aiFeatures: features,
-      rendererPreference: appConfig.playableGame.rendererPreference,
-      onnxDevice: appConfig.ai.onnxDevice,
-    });
     const scenes = toRecord(project.scenes);
-    const body = renderSceneEditor(messages, scenes, builderLocale, builderProjectId, readiness);
+    const body = renderSceneEditor(messages, scenes, builderLocale, builderProjectId);
     return wrapOrPartial(
       request,
       builderLocale,
       messages,
-      "scenes",
+      "world",
       builderCurrentPath,
       builderProjectId,
       chromeProject,
@@ -307,7 +306,7 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
         request,
         builderLocale,
         messages,
-        "npcs",
+          "characters",
         builderCurrentPath,
         builderProjectId,
         chromeProject,
@@ -325,7 +324,7 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
       request,
       builderLocale,
       messages,
-      "npcs",
+      "characters",
       builderCurrentPath,
       builderProjectId,
       chromeProject,
@@ -350,7 +349,7 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
         request,
         builderLocale,
         messages,
-        "dialogue",
+        "story",
         builderCurrentPath,
         builderProjectId,
         chromeProject,
@@ -373,15 +372,6 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
         chromeProject,
       );
     }
-    const features = await detectAvailableFeatures();
-    const readiness = evaluateBuilderPlatformReadiness({
-      sceneCount: project.scenes.size,
-      spriteManifestCount: project.spriteAtlases.size,
-      aiFeatures: features,
-      rendererPreference: appConfig.playableGame.rendererPreference,
-      onnxDevice: appConfig.ai.onnxDevice,
-    });
-
     const body = renderAssetsEditor(
       messages,
       builderLocale,
@@ -390,7 +380,6 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
       Array.from(project.animationClips.values()),
       Array.from(project.generationJobs.values()),
       Array.from(project.artifacts.values()),
-      readiness,
     );
     return wrapOrPartial(
       request,
@@ -412,7 +401,7 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
         request,
         builderLocale,
         messages,
-        "mechanics",
+      "systems",
         builderCurrentPath,
         builderProjectId,
         chromeProject,
@@ -431,7 +420,7 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
       request,
       builderLocale,
       messages,
-      "mechanics",
+      "systems",
       builderCurrentPath,
       builderProjectId,
       chromeProject,

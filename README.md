@@ -85,7 +85,6 @@ Key archives:
 - Operator runbook: `notes/doc-archive/docs__operator-runbook.txt`
 - RMMZ pack: `notes/doc-archive/docs__rmmz-pack.txt`
 - Companion pack status: `notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__STATUS.txt`
-- Maintenance audit: `notes/doc-archive/docs__maintenance-audit-2026-03-10.txt`
 - Context7 audit: `notes/doc-archive/docs__context7-audit.txt` (doc coverage and Context7 MCP usage)
 
 ### 中文
@@ -107,7 +106,6 @@ Key archives:
 - 运维手册：`notes/doc-archive/docs__operator-runbook.txt`
 - RMMZ 包：`notes/doc-archive/docs__rmmz-pack.txt`
 - 陪伴包状态：`notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__STATUS.txt`
-- 维护审计：`notes/doc-archive/docs__maintenance-audit-2026-03-10.txt`
 - Context7 审计：`notes/doc-archive/docs__context7-audit.txt`（文档覆盖与 Context7 MCP 使用）
 
 ---

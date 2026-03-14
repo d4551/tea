@@ -2701,6 +2701,197 @@ export interface GameHudState {
 }
 
 /**
+ * Workflow action descriptor used by creator-facing workflow cards.
+ */
+export interface BuilderWorkflowAction {
+  /** Human-readable action label. */
+  readonly label: string;
+  /** Destination href (absolute or app-relative). */
+  readonly href: string;
+}
+
+/**
+ * Stable workflow stage identifiers for the canonical authoring path.
+ */
+export type BuilderWorkflowStageId =
+  | "start"
+  | "world"
+  | "visuals"
+  | "characters"
+  | "story"
+  | "rules"
+  | "playtest";
+
+/**
+ * Legacy identifiers used by existing views during migration.
+ */
+export type LegacyBuilderWorkflowStageId = "assets" | "mechanics";
+
+/**
+ * Combined stage identifier union.
+ */
+export type BuilderWorkflowStageIdAny = BuilderWorkflowStageId | LegacyBuilderWorkflowStageId;
+
+/**
+ * Creator workflow state for one canonical stage.
+ */
+export type BuilderWorkflowStageStatus = "ready" | "in-progress" | "complete";
+
+/**
+ * Shared creator workflow stage contract.
+ *
+ * `nextAction` and `completionRequirements` are used by the new editor surface,
+ * while the legacy `primaryAction` / `secondaryAction` and `completionLabel`
+ * fields are maintained for backward compatibility with existing builder views.
+ */
+export interface BuilderWorkflowStage {
+  /** Canonical stage identifier. */
+  readonly id: BuilderWorkflowStageIdAny;
+  /** Localized stage label. */
+  readonly label: string;
+  /** Short description for the stage. */
+  readonly description: string;
+  /** Current completion status. */
+  readonly status: BuilderWorkflowStageStatus;
+  /** Human-readable completion requirement line. */
+  readonly completionLabel: string;
+  /** Deterministic completion requirements. */
+  readonly completionRequirements: readonly string[];
+  /** Next recommended action for this stage. */
+  readonly nextAction: BuilderWorkflowAction;
+  /** Primary action for compatibility with existing UI implementations. */
+  readonly primaryAction: BuilderWorkflowAction;
+  /** Optional secondary action for compatibility with existing UI implementations. */
+  readonly secondaryAction?: BuilderWorkflowAction;
+}
+
+/**
+ * Capability keys surfaced on the creator journey.
+ */
+export type CreatorCapabilityKey =
+  | "image-generation"
+  | "dialogue-generation"
+  | "speech"
+  | "automation-review"
+  | "import-3d"
+  | "animation-assist";
+
+/**
+ * Creator capability row in public surface.
+ */
+export interface CreatorCapability {
+  /** Stable capability key. */
+  readonly key: CreatorCapabilityKey;
+  /** Localized capability label. */
+  readonly label: string;
+  /** Localized status label (ready / unavailable). */
+  readonly statusLabel: string;
+  /** Whether capability is available for the current project. */
+  readonly available: boolean;
+}
+
+/**
+ * Aggregate creator capability payload for editor and dashboard surfaces.
+ */
+export interface CreatorCapabilities {
+  /** Ordered capability rows. */
+  readonly items: readonly CreatorCapability[];
+}
+
+/**
+ * AI action attached to one selected builder entity.
+ */
+export interface ContextualAiAction {
+  /** Stable action key. */
+  readonly key: string;
+  /** Button label. */
+  readonly label: string;
+  /** Helper text shown on hover/inline details. */
+  readonly description: string;
+  /** Destination of action form/endpoint link. */
+  readonly href: string;
+  /** Kind mapped to downstream generation or assist path. */
+  readonly kind:
+    | "portrait"
+    | "sprite-sheet"
+    | "background"
+    | "tiles"
+    | "voice-line"
+    | "animation-plan"
+    | "dialogue";
+}
+
+/**
+ * Contextual AI affordances bound to one authoring entity.
+ */
+export interface CreatorAssistContext {
+  /** Entity type the contextual actions apply to. */
+  readonly entityType: "scene" | "character" | "story" | "system" | "asset" | "animation";
+  /** Primary entity identifier. */
+  readonly entityId: string;
+  /** Optional target id used by generation workers. */
+  readonly targetId?: string;
+  /** Context title for assist surfaces. */
+  readonly title: string;
+  /** Ordered actions for that context. */
+  readonly actions: readonly ContextualAiAction[];
+}
+
+/**
+ * Runtime diagnostics contract for the advanced settings surface.
+ */
+export interface RuntimeDiagnosticsContext {
+  /** Whether AI providers are currently available. */
+  readonly aiAvailable: boolean;
+  /** Number of detected AI providers. */
+  readonly providerCount: number;
+  /** Available provider names for advanced surfaces. */
+  readonly providerNames: readonly string[];
+  /** Whether knowledge retrieval is enabled. */
+  readonly projectKnowledgeEnabled: boolean;
+  /** Whether automation review pipeline is currently enabled. */
+  readonly automationReviewEnabled: boolean;
+  /** Renderer preference from runtime configuration. */
+  readonly rendererPreference?: "webgpu" | "webgl";
+  /** ONNX execution preference from runtime configuration. */
+  readonly onnxDevice?: "wasm" | "webgpu" | "cpu";
+}
+
+/**
+ * Automation review context for advanced workflows.
+ */
+export interface AutomationReviewContext {
+  /** Number of runs waiting for operator review. */
+  readonly pendingRunCount: number;
+  /** Reviewable artifact count. */
+  readonly artifactCount: number;
+  /** Deep link for review list surface. */
+  readonly href: string;
+}
+
+/**
+ * Animation authoring action families.
+ */
+export type AnimationAuthoringMode = "sprite" | "timeline" | "model-3d";
+
+/**
+ * Animation authoring context for one selected asset.
+ */
+export interface AnimationAuthoringContext {
+  /** Owning asset identifier. */
+  readonly assetId: string;
+  /** Scene mode for the owning asset. */
+  readonly sceneMode: SceneMode;
+  /** Canonical action labels grouped by animation authoring mode. */
+  readonly workflows: readonly {
+    /** Authoring family. */
+    readonly mode: AnimationAuthoringMode;
+    /** Ordered action labels for that family. */
+    readonly actions: readonly string[];
+  }[];
+}
+
+/**
  * Builder AI request envelope.
  */
 export interface BuilderAIRequest {

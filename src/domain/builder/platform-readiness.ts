@@ -195,8 +195,9 @@ export const evaluateBuilderPlatformReadiness = (
     latestReleaseVersion: input.audit?.latestReleaseVersion ?? 0,
     publishedReleaseVersion: input.audit?.publishedReleaseVersion ?? null,
   };
-  const hasBaselineRuntime = input.sceneCount > 0;
-  const hasInteractiveSimulation = input.sceneCount > 0 || audit.mechanicCount > 0;
+  const hasBaselineRuntime = audit.scenes2dCount > 0;
+  const hasInteractiveSimulation =
+    audit.scenes2dCount > 0 || audit.scenes3dCount > 0 || audit.mechanicCount > 0;
   const hasAiAuthoringAssist =
     input.aiFeatures.richDialogue ||
     input.aiFeatures.visionAnalysis ||
@@ -204,7 +205,6 @@ export const evaluateBuilderPlatformReadiness = (
     input.aiFeatures.speechSynthesis ||
     audit.generationJobCount > 0;
   const has3dRuntimeSurface =
-    input.sceneCount > 0 ||
     audit.scenes3dCount > 0 ||
     audit.modelAssetCount > 0 ||
     audit.openUsdAssetCount > 0;

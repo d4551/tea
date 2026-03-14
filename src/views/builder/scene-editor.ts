@@ -4,7 +4,6 @@
  * Scene library and detail workspace with inline HTMX editing.
  */
 import type { LocaleCode } from "../../config/environment.ts";
-import type { BuilderPlatformReadiness } from "../../domain/builder/platform-readiness.ts";
 import {
   DEFAULT_SCENE_GEOMETRY_HEIGHT,
   DEFAULT_SCENE_GEOMETRY_WIDTH,
@@ -27,7 +26,7 @@ import {
   renderEmptyStateCompact,
   spinnerClasses,
 } from "../shared/ui-components.ts";
-import { renderPlatformReadinessSection } from "./platform-readiness.ts";
+import { buildCreatorAssistContext } from "./builder-flow.ts";
 import { getSceneNodeTypeLabel } from "./view-labels.ts";
 import { renderWorkspaceShell } from "./workspace-shell.ts";
 
@@ -309,7 +308,6 @@ export const renderSceneEditor = (
   scenes: Record<string, SceneDefinition>,
   locale: LocaleCode,
   projectId: string,
-  readiness?: BuilderPlatformReadiness,
 ): string => {
   const sceneIds = Object.keys(scenes);
   const selectedSceneId = sceneIds[0] ?? null;
@@ -318,6 +316,15 @@ export const renderSceneEditor = (
   const scenes2d = sceneValues.filter((scene) => scene.sceneMode !== "3d").length;
   const scenes3d = sceneValues.filter((scene) => scene.sceneMode === "3d").length;
   const nodeCount = sceneValues.reduce((total, scene) => total + (scene.nodes?.length ?? 0), 0);
+  const creatorAssist =
+    selectedScene !== null
+      ? buildCreatorAssistContext(messages, locale, projectId, {
+          entityType: "scene",
+          entityId: selectedScene.id,
+          title: selectedScene.titleKey,
+          targetId: selectedScene.id,
+        })
+      : null;
   const sceneCards = sceneIds
     .map((id) => {
       const scene = scenes[id];
@@ -364,7 +371,7 @@ export const renderSceneEditor = (
       ${renderWorkspaceShell({
         eyebrow: messages.builder.scenes,
         title: messages.builder.sceneLibraryTitle,
-        description: messages.builder.sceneCreateDescription,
+        description: messages.builder.sceneCreationHelp,
         facets: [
           {
             label: `${messages.builder.sceneMode2d}: ${[
@@ -400,15 +407,57 @@ export const renderSceneEditor = (
           { label: messages.builder.sceneNodes, value: nodeCount },
         ],
       })}
+      <section class="grid gap-4 xl:grid-cols-3">
+        <article class="${cardClasses.bordered}">
+          <div class="card-body gap-2">
+            <h2 class="card-title text-base text-primary">${escapeHtml(messages.builder.modePrimer2dTitle)}</h2>
+            <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.scene2dHelp)}</p>
+          </div>
+        </article>
+        <article class="${cardClasses.bordered}">
+          <div class="card-body gap-2">
+            <h2 class="card-title text-base text-secondary">${escapeHtml(messages.builder.modePrimer3dTitle)}</h2>
+            <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.scene3dHelp)}</p>
+          </div>
+        </article>
+        <article class="${cardClasses.bordered}">
+          <div class="card-body gap-2">
+            <h2 class="card-title text-base text-accent">${escapeHtml(messages.builder.modePrimerUsdTitle)}</h2>
+            <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.modePrimerUsdDescription)}</p>
+          </div>
+        </article>
+      </section>
       ${
-        readiness
-          ? renderPlatformReadinessSection({
-              messages,
-              locale,
-              projectId,
-              readiness,
-              keys: ["runtime2d", "runtime3d", "mechanics"],
-            })
+        creatorAssist
+          ? `<section id="creator-ai-actions" class="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+              <article class="${cardClasses.bordered}">
+                <div class="card-body gap-4">
+                  <div class="space-y-2">
+                    <h2 class="card-title">${escapeHtml(messages.builder.creatorAssistTitle)}</h2>
+                    <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.creatorAssistDescription)}</p>
+                  </div>
+                  <div class="grid gap-3 md:grid-cols-2">
+                    ${creatorAssist.actions
+                      .map(
+                        (action) => `<a class="rounded-box border border-base-300 bg-base-200/55 p-4 transition hover:border-primary/50 hover:bg-base-200" href="${escapeHtml(action.href)}">
+                          <div class="font-medium">${escapeHtml(action.label)}</div>
+                          <p class="mt-2 text-sm leading-6 text-base-content/70">${escapeHtml(action.description)}</p>
+                        </a>`,
+                      )
+                      .join("")}
+                  </div>
+                </div>
+              </article>
+              <article class="${cardClasses.bordered}">
+                <div class="card-body gap-3">
+                  <h2 class="card-title">${escapeHtml(messages.builder.modePrimerTitle)}</h2>
+                  <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.modePrimerDescription)}</p>
+                  <div class="rounded-box border border-base-300 bg-base-200/55 p-3 text-sm leading-6 text-base-content/72">
+                    ${escapeHtml(messages.builder.modePrimerUsdDescription)}
+                  </div>
+                </div>
+              </article>
+            </section>`
           : ""
       }
       <section class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
@@ -425,6 +474,9 @@ export const renderSceneEditor = (
             <div class="space-y-1">
               <h1 class="card-title text-2xl">${escapeHtml(messages.builder.sceneLibraryTitle)}</h1>
               <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.sceneCreateDescription)}</p>
+            </div>
+            <div class="rounded-box border border-base-300 bg-base-200/50 p-3 text-sm leading-6 text-base-content/72">
+              ${escapeHtml(messages.builder.sceneCreationHelp)}
             </div>
             ${renderBuilderHiddenFields(projectId, locale)}
             <fieldset class="fieldset">

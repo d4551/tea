@@ -65,7 +65,7 @@ const findPackageRoot = async (
 };
 
 const htmxBundlePath = resolvePackagePath("htmx.org/dist/htmx.min.js");
-const htmxSseExtensionSourcePath = resolveFromDirectory(htmxBundlePath, "../ext/sse.js");
+const htmxSseExtensionSourcePath = resolvePackagePath("htmx-ext-sse/sse.js");
 const transformersPackageRoot = await findPackageRoot(
   resolvePackagePath("@huggingface/transformers"),
   "@huggingface/transformers",

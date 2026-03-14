@@ -24,10 +24,12 @@ import { ApplicationError, errorEnvelope, successEnvelope } from "../lib/error-e
 import { authSessionContextPlugin } from "../plugins/auth-session.ts";
 import { i18nContextPlugin } from "../plugins/i18n-context.ts";
 import { requestScopedContextPlugin } from "../plugins/request-context.ts";
+import { type SseUtils, ssePlugin } from "../plugins/sse-plugin.ts";
 import { defaultGameConfig } from "../shared/config/game-config.ts";
 import { httpStatus } from "../shared/constants/http.ts";
 import { appRoutes } from "../shared/constants/routes.ts";
 import type { FeatureCapability } from "../shared/contracts/game.ts";
+import { getMessages } from "../shared/i18n/translator.ts";
 import {
   encodeMonoWavAudio,
   resampleMonoPcm,
@@ -448,10 +450,77 @@ const toAiRuntimeRecord = () => {
   };
 };
 
+const escapeHtml = (value: string): string =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+
+const delayWithAbort = (signal: AbortSignal, delayMs: number): Promise<void> =>
+  new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+
+    const onAbort = () => {
+      clearTimeout(timeout);
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    };
+    const timeout = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, delayMs);
+
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+
+const renderAiHealthStatusMarkup = (locale: string, providers: RegistryProviders): string => {
+  const messages = getMessages(normalizeLocale(locale));
+  const hasReadyProvider = providers.some((provider) => provider.available);
+  const hasDegradedProvider =
+    !hasReadyProvider && providers.some((provider) => provider.readiness === "degraded");
+  const indicatorClass = hasReadyProvider
+    ? "status-success"
+    : hasDegradedProvider
+      ? "status-warning"
+      : "status-error";
+  const statusLabel = hasReadyProvider
+    ? messages.ai.statusAvailable
+    : messages.ai.statusUnavailable;
+
+  return [
+    `<span class="status ${indicatorClass}"></span>`,
+    `<span class="font-medium">${escapeHtml(messages.builder.statusBarAi)}:</span>`,
+    `<span>${escapeHtml(statusLabel)}</span>`,
+  ].join("");
+};
+
+async function* createAiHealthStream({
+  locale,
+  sse,
+  signal,
+}: {
+  readonly locale: string;
+  readonly sse: SseUtils;
+  readonly signal: AbortSignal;
+}): AsyncGenerator<string> {
+  while (!signal.aborted) {
+    const registry = await ProviderRegistry.getInstance();
+    const status = await registry.getStatus();
+    yield sse.event("health", renderAiHealthStatusMarkup(locale, status.providers));
+    await delayWithAbort(signal, appConfig.ai.capabilityRefreshIntervalMs);
+  }
+}
+
 export const aiRoutes = new Elysia({ name: "ai-routes" })
   .use(i18nContextPlugin)
   .use(requestScopedContextPlugin)
   .use(authSessionContextPlugin)
+  .use(ssePlugin)
   .get(
     appRoutes.aiHealth,
     async () => {
@@ -477,6 +546,30 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
       },
       response: {
         [httpStatus.ok]: aiHealthResponseSchema,
+      },
+    },
+  )
+  .get(
+    appRoutes.aiHealthStream,
+    async function* ({ query, request, set, sse }) {
+      set.headers["cache-control"] = "no-cache, no-transform";
+      set.headers.connection = "keep-alive";
+      set.headers["content-type"] = "text/event-stream; charset=utf-8";
+      yield* createAiHealthStream({
+        locale: normalizeLocale(query.locale),
+        sse,
+        signal: request.signal,
+      });
+    },
+    {
+      query: t.Object({
+        locale: t.Optional(t.String()),
+      }),
+      detail: {
+        tags: ["ai"],
+        summary: "AI provider health stream",
+        description:
+          "Streams localized builder footer updates describing current AI provider readiness.",
       },
     },
   )
