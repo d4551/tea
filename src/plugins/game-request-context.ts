@@ -94,11 +94,11 @@ export const resolveGameRequestContext = (
     gamePrincipalUserId: authSession.principal.actorId,
     gamePrincipalOrganizationId: authSession.principal.organizationId,
     gamePrincipalRoleKeys: authSession.principal.roleKeys,
-  gameRequestLocale: resolveRequestLocale(request),
-  gameRequestedSessionId: resolveTrimmedQueryValue(request, "sessionId"),
-  gameRequestedSceneId: resolveTrimmedQueryValue(request, "sceneId"),
-  gameRequestedProjectId: resolveTrimmedQueryValue(request, "projectId"),
-  gameInviteToken: resolveTrimmedQueryValue(request, "invite"),
+    gameRequestLocale: resolveRequestLocale(request),
+    gameRequestedSessionId: resolveTrimmedQueryValue(request, "sessionId"),
+    gameRequestedSceneId: resolveTrimmedQueryValue(request, "sceneId"),
+    gameRequestedProjectId: resolveTrimmedQueryValue(request, "projectId"),
+    gameInviteToken: resolveTrimmedQueryValue(request, "invite"),
   };
 };
 

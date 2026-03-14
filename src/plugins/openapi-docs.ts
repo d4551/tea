@@ -11,7 +11,7 @@ export const openApiDocsPlugin = openapi({
     info: {
       title: appConfig.applicationName,
       version: appConfig.applicationVersion,
-      description: "Typed API contracts for Game Forge runtime services.",
+      description: "Typed API contracts for the TEA game operations platform.",
     },
     tags: [
       {

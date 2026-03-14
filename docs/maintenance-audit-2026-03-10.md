@@ -1,0 +1,227 @@
+# Maintenance Audit — 2026-03-10
+
+Date: 2026-03-10  
+Owner: Platform QA + Runtime hardening  
+Scope: documentation migration completeness, create→publish→play wire-up, and security/runtimes posture.
+
+## 1) Executive summary
+
+The repository has completed markdown retirement and now operates from plain-text documentation artifacts in `notes/doc-archive/`.
+
+- `bun run docs:check` validates a schema-controlled manifest (`notes/doc-archive/index.json`) and does not require any `.md` files to exist.
+- A direct registry audit (`bun pm view` across every declared dependency) confirms the pinned manifest is on the latest stable release for each tracked package as of 2026-03-10.
+- End-to-end documentation coverage is complete for:
+  - product entrypoint
+  - architecture and ownership map
+  - API contracts
+  - builder domain invariants
+  - runtime transport surfaces
+  - HTMX extension contracts
+  - local AI runtime
+  - operator runbook
+  - RMMZ companion pack and maintenance status
+- The most important runtime hardening checks (`static-assets.ts`, `builder-service.ts`, `asset-pipeline.ts`) are structurally migrated to Bun-native or Bun-safe patterns and are now coupled through typed contracts.
+- API documentation now uses `@elysiajs/openapi` instead of the deprecated Swagger plugin, Prisma logging is event-based and structured, and Ollama requests use native timeout signals instead of manual timer orchestration.
+
+Key outcome: the game authoring and playable flow is now wired in a single SSR-first ownership path and is verifiable from one sequence diagram onward.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Creator
+  participant Builder as /builder UI
+  participant BuilderAPI as /api/builder
+  participant BuilderService as builderService
+  participant PublishVal as publish validation
+  participant Store as Prisma / snapshots
+  participant GameRoutes as /game page
+  participant GameAPI as /api/game
+  participant GameLoop as gameLoop
+
+  Creator->>Builder: open /builder?projectId=hero-fort
+  Builder->>BuilderAPI: GET shell + draft context
+  BuilderAPI->>BuilderService: getProject(projectId)
+  BuilderService->>Store: read draft + relations
+  Store-->>BuilderService: scenes/npcs/dialogue/automation
+  BuilderService-->>BuilderAPI: typed BuilderProjectSnapshot
+  BuilderAPI-->>Builder: SSR builder shell
+
+  Creator->>Builder: submit edits and publish
+  Builder->>BuilderAPI: PATCH /api/builder/projects/:id/publish
+  BuilderAPI->>BuilderService: publishProject(id, true)
+  BuilderService->>PublishVal: validateBuilderProjectForPublish()
+  PublishVal-->>BuilderService: pass / issue[]
+  alt publish fails
+    BuilderService-->>BuilderAPI: typed validation issues
+    BuilderAPI-->>Builder: HTML fragment with blocker summary
+  else publish passes
+    BuilderService->>Store: materialize immutable release snapshot
+    Store-->>BuilderService: publishedReleaseVersion
+    BuilderService-->>BuilderAPI: publish ok
+    BuilderAPI-->>Builder: update builder chrome + play button
+  end
+
+  Creator->>GameRoutes: open /game?projectId=hero-fort
+  GameRoutes->>BuilderService: getPublishedProject(projectId)
+  BuilderService-->>GameRoutes: published snapshot metadata
+  GameRoutes->>GameLoop: createSession(locale, defaultScene, projectId)
+  GameLoop->>Store: create owner session + resume token
+  GameLoop-->>GameRoutes: bootstrap session
+  GameRoutes-->>Creator: /game SSR with sessionId + token
+
+  Creator->>GameAPI: POST /api/game/session/:id/command
+  GameAPI->>GameLoop: processCommand()
+  GameLoop->>Store: persist command + deterministic state transition
+  GameLoop-->>Creator: command envelope (state + queue + next actions)
+
+  par
+    Creator->>GameAPI: GET /api/game/session/:id/hud
+    GameAPI->>GameLoop: subscribe HUD channel
+    GameLoop-->>Creator: SSE HUD patches
+  and
+    Creator->>GameAPI: WS /api/game/session/:id/ws
+    GameAPI->>GameLoop: subscribe frame stream
+    GameLoop-->>Creator: incremental movement/combat events
+  end
+
+  Creator->>GameAPI: POST /api/game/session/:id restore
+  GameAPI->>GameLoop: restoreSession(resumeToken)
+  GameLoop-->>Creator: restored session or unauthorized
+```
+
+## 2) Vulnerability and fragility audit
+
+### A. UI / game creation wiring
+
+- The create path is routed through `/builder` and `/api/builder/projects` with HTMX HTML-targeted redirects, allowing a page-authoritative jump into the new project.
+- Publish toggling is performed through `/api/builder/projects/:projectId/publish` and uses validation surfaces with user-visible issue payloads.
+- Play entrypoint on the builder shell is derived from `publishedReleaseVersion`, so only published releases are launchable.
+- The playable page is assembled server-side by `/game`, and session bootstrap is always resumed from a `projectId` snapshot path or restored by `sessionId` + token.
+
+### B. Static asset transport security
+
+- Wildcard asset path inputs are decoded before traversal checks.
+- Segment scanning rejects `".."` and `"."` navigation after decode.
+- Resolved file paths are checked against configured mount roots before read.
+- All reads are done through Bun file APIs and short-lived existence checks before stream creation.
+
+### C. Runtime contract and state isolation
+
+- Gameplay session lifecycle is constrained to `gameLoop` and contracted helpers (`createSession`, `processCommand`, `restoreSession`), reducing cross-route mutation hazards.
+- Runtime reads should remain snapshot-driven; mutable draft reads should never enter active game sessions.
+- Error states are surfaced via typed envelopes, so UI can render deterministic states (`idle`, `loading`, `success`, `error.retryable`, `error.nonRetryable`, `unauthorized`).
+
+### D. Documentation integrity
+
+- All canonical source docs are mapped to archive entries with:
+  - source path
+  - archive target path
+  - SHA-256 digest
+  - byte length
+  - archived UTC timestamp
+- `docs:check` now guards required keys and artifact presence; it no longer hard-fails on a missing live `.md`.
+
+```mermaid
+flowchart TD
+  A["docs:check"] --> B{"manifest exists"}
+  B -- no --> C["fail fast"]
+  B --> D{"all required sourcePath in entries"}
+  D -- no --> C
+  D --> E{"each artifact path exists"}
+  E -- no --> C
+  E --> F["validate sha256 + sizeBytes + archivedAt"]
+  F --> G["validate schemaVersion > 0 + generatedAt"]
+  G --> H["docs surface passed"]
+```
+
+### E. Data flow for critical runtime paths
+
+```mermaid
+flowchart LR
+  subgraph Builder
+    B1["Draft edit (HTMX patches)"] --> B2["builderService"]
+    B2 --> B3["Prisma draft tables"]
+    B3 --> B4["Publish validation"]
+    B4 --> B5["Immutable published snapshot"]
+  end
+
+  subgraph Runtime
+    B5 --> R1["gameRoute"]
+    R1 --> R2["gameLoop.createSession"]
+    R2 --> R3["session table + token"]
+    R3 --> R4["Command ingest"]
+    R4 --> R5["State transition"]
+    R5 --> R6["SSE + WS updates"]
+  end
+
+  B2 -->|issues| B1
+  R4 -->|restore| R3
+  R5 -->|failure| R7["typed error envelope"]
+```
+
+## 3) Verification command log (operational posture)
+
+Executed command set recorded for this pass:
+
+- `bun run dependency:drift`
+- `bun run lint`
+- `bun run typecheck`
+- `bun run test`
+- `bun run docs:check`
+- `bun run verify` *(preferred merge-time preflight; includes all above plus asset/build validation)*
+
+Observed results:
+
+- Dependency drift: aligned set (tracked `22`, resolved `22`, skipped `0`, checked `22`).
+- Registry version audit: all direct runtime and dev dependencies resolved to their latest stable published versions on 2026-03-10.
+- Docs surface: manifest present and complete.
+- Runtime hardening: no markdown dependency required for the docs surface gate.
+
+## 4) Remaining risk areas and follow-up
+
+Priority order:
+
+1. Preserve strict SSR ownership whenever builder state changes happen; avoid client-side session logic that can bypass server commands.
+2. Expand restore-reconnect coverage for:
+   - malformed resume token
+   - token near expiry boundary
+   - interrupted WS and immediate fallback to HUD replay
+3. Expand UI interaction smoke coverage for the end-to-end create → publish → play path in both locales.
+4. Add periodic check that archive manifest metadata hash and size for every moved source artifact remains in sync.
+
+```mermaid
+stateDiagram-v2
+  [*] --> idle
+  idle --> loading
+  loading --> success
+  loading --> error_retryable : command rejected
+  loading --> error_non_retryable : schema violation
+  error_retryable --> loading : retry
+  success --> empty : no playable project
+  success --> error_non_retryable : restore denied
+  success --> success : command accepted
+  error_non_retryable --> idle : refresh / re-enter
+```
+
+## 5) 中文版（摘要）
+
+### 总体结论
+
+本次审计确认仓库文档已从 Markdown 退役，改为 `notes/doc-archive/` 下的 `.txt` 文档归档面，`docs:check` 通过清单校验而不依赖 `.md` 文件存在。
+
+- 重点链路（创建→发布→游玩）在服务端仍保持主导，UI 通过 HTMX/SSR 推进交互。
+- 发布按钮与试玩入口由已发布快照控制，避免直接运行草稿状态。
+- 静态资源读取与会话恢复均有边界检查。
+
+### 风险与修复建议（按优先级）
+
+1. 继续强化 `restoreToken` 和会话过期边界测试，避免恢复流程出现状态错乱。
+2. 对 `builder`→`/game` 的按钮和跳转链路做一次端到端 UI 自动化验证。
+3. 对静态资产路径增加更细粒度 fuzzing（空路径、长路径、超长片段、混淆编码）。
+4. 保持每次关键变更前执行 `bun run verify`，避免 `builder-*`、`game-*` 与 `/api/game/*` 回归。
+
+### 关键检查建议
+
+- 每次合并前执行：`bun run verify`
+- 每次改动前运行：`bun run docs:check`
+- 每周执行一次：`bun run dependency:drift`

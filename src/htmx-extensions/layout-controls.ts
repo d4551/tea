@@ -173,6 +173,18 @@ const parseThemeValue = (themeInput: unknown): string | null => {
   return value.length > 0 ? value : null;
 };
 
+const normalizeTheme = (value: string): string | null => {
+  const normalized = value.trim().toLowerCase();
+  const teaThemeByLegacyTheme: Record<string, string> = {
+    silk: "tea-light",
+    autumn: "tea-dark",
+    "forge-dark": "tea-dark",
+    "forge-light": "tea-light",
+  };
+
+  return teaThemeByLegacyTheme[normalized] ?? normalized;
+};
+
 const findThemeRadio = (theme: string): HTMLInputElement | null => {
   const escapedTheme = CSS.escape(theme);
   return document.querySelector<HTMLInputElement>(
@@ -181,9 +193,18 @@ const findThemeRadio = (theme: string): HTMLInputElement | null => {
 };
 
 const applyThemeFromStorage = (theme: string): void => {
-  const radio = findThemeRadio(theme);
+  const nextTheme = normalizeTheme(theme);
+  if (nextTheme === null) {
+    return;
+  }
+  if (!["tea-dark", "tea-light"].includes(nextTheme)) {
+    logger.warn("layout.theme.storage.unknown_theme", { theme });
+    return;
+  }
+
+  const radio = findThemeRadio(nextTheme);
   if (!radio) {
-    logger.warn("layout.theme.radio.missing", { theme });
+    logger.warn("layout.theme.radio.missing", { theme: nextTheme });
     return;
   }
 
@@ -206,7 +227,10 @@ const restoreThemeSelection = (): void => {
     return;
   }
 
-  applyThemeFromStorage(storedTheme);
+  const normalized = normalizeTheme(storedTheme);
+  if (normalized !== null) {
+    applyThemeFromStorage(normalized);
+  }
 };
 
 const persistThemeSelection = (event: Event): void => {
@@ -221,8 +245,16 @@ const persistThemeSelection = (event: Event): void => {
   if (!theme) {
     return;
   }
+  const normalized = normalizeTheme(theme);
+  if (!normalized) {
+    return;
+  }
 
-  const result = writeLocalStorageResult(themeStorageKey, theme);
+  if (!["tea-dark", "tea-light"].includes(normalized)) {
+    return;
+  }
+
+  const result = writeLocalStorageResult(themeStorageKey, normalized);
   if (!result.ok) {
     logger.warn("layout.theme.storage.write_failed", {
       key: themeStorageKey,

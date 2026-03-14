@@ -7,11 +7,7 @@ import {
   resolveRequestQueryParam,
 } from "../shared/constants/routes.ts";
 import { resolveRequestLocale } from "../shared/i18n/translator.ts";
-import type {
-  AuthCookieBag,
-  AuthRequestContext,
-  AuthPrincipal,
-} from "./auth-session.ts";
+import type { AuthCookieBag, AuthPrincipal, AuthRequestContext } from "./auth-session.ts";
 import { resolveAuthSession } from "./auth-session.ts";
 
 type ContextSource = Record<string, unknown>;
@@ -219,7 +215,11 @@ export const readBuilderScopedContext = (
     Partial<
       Pick<
         BuilderRequestContext,
-        "builderSearch" | "builderPrincipalType" | "builderPrincipalUserId" | "builderPrincipalOrganizationId" | "builderPrincipalRoleKeys"
+        | "builderSearch"
+        | "builderPrincipalType"
+        | "builderPrincipalUserId"
+        | "builderPrincipalOrganizationId"
+        | "builderPrincipalRoleKeys"
       >
     >,
   input: {

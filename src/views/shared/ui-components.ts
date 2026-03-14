@@ -13,11 +13,11 @@ import { escapeHtml } from "../layout.ts";
 
 /** DaisyUI card variants. Use for article/div wrappers. */
 export const cardClasses = {
-  default: "bg-base-200 card",
-  bordered: "bg-base-200 card",
-  borderedGlass: "bg-base-200 card",
-  borderedGlassNoBlur: "bg-base-200 card",
-  borderedNoShadow: "bg-base-200 card",
+  default: "card card-elevated card-glow-primary bg-base-200/80",
+  bordered: "card card-elevated card-glow-secondary bg-base-200/80",
+  borderedGlass: "card card-elevated card-glow-primary bg-base-100/75 backdrop-blur",
+  borderedGlassNoBlur: "card card-elevated bg-base-200/80",
+  borderedNoShadow: "card bg-base-200/80",
 } as const;
 
 /** DaisyUI loading spinner classes for HTMX indicators. */

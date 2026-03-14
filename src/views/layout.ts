@@ -185,8 +185,8 @@ export const renderLayout = (input: LayoutInput): string => {
     <meta name="description" content="${escapeHtml(messages.metadata.appSubtitle)}" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Syne:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'" />
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Syne:wght@400;500;600;700&display=swap" /></noscript>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&display=swap" media="print" onload="this.media='all'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&display=swap" /></noscript>
     <link rel="stylesheet" href="${escapeHtml(appConfig.stylesheetPath)}" />
     <script src="${escapeHtml(appConfig.htmxScriptPath)}" defer></script>
     <script src="${escapeHtml(joinUrlPath(appConfig.staticAssets.publicPrefix, assetRelativePaths.htmxExtensionSseFile))}" defer></script>
@@ -293,8 +293,8 @@ const renderTopBar = (
       : messages.navigation.switchToChinese;
   const localeSwitchHref = withLocaleQuery(currentPathWithQuery, languageSwitch);
 
-  const brand = `<a href="${withLocaleQuery(appRoutes.home, _locale)}" class="btn btn-ghost normal-case text-lg px-2 gap-2">
-    <svg xmlns="http://www.w3.org/2000/svg" class="size-5 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" /></svg>
+  const brand = `<a href="${withLocaleQuery(appRoutes.home, _locale)}" class="btn btn-ghost normal-case px-2 text-base font-bold tracking-tight gap-2">
+    <span class="rounded-lg bg-gradient-to-br from-violet-400 to-cyan-300 px-2 py-1 text-lg leading-none" aria-hidden="true">🍵</span>
     ${escapeHtml(messages.metadata.appName)}
   </a>`;
 
@@ -303,7 +303,7 @@ const renderTopBar = (
       ? renderBreadcrumbs(messages, breadcrumbs)
       : `<span class="font-semibold">${escapeHtml(messages.metadata.appName)}</span>`;
 
-  return `<nav aria-label="${escapeHtml(messages.common.mobileNavigation)}" class="navbar w-full bg-base-300 px-2">
+  return `<nav aria-label="${escapeHtml(messages.common.mobileNavigation)}" class="navbar sticky top-0 z-30 w-full border-b border-base-300/80 bg-base-100/90 backdrop-blur">
     <div class="navbar-start">
       ${renderDrawerToggleControl({
         targetId: "main-nav-drawer",
@@ -319,37 +319,26 @@ const renderTopBar = (
     </div>
     <div class="navbar-end flex gap-2">
       ${renderThemeDropdown(messages)}
-      <a href="${escapeHtml(localeSwitchHref)}" class="btn btn-outline btn-xs font-medium" aria-label="${escapeHtml(localeSwitchAriaLabel)}">${escapeHtml(localeSwitchButtonText)}</a>
+      <a href="${escapeHtml(localeSwitchHref)}" class="btn btn-outline btn-sm font-medium" aria-label="${escapeHtml(localeSwitchAriaLabel)}">${escapeHtml(localeSwitchButtonText)}</a>
     </div>
   </nav>`;
 };
 
 const renderThemeDropdown = (messages: Messages): string => {
   return `<details class="dropdown dropdown-end">
-    <summary class="btn btn-ghost btn-xs gap-1" aria-label="${escapeHtml(messages.common.themeLabel)}">
-      <svg xmlns="http://www.w3.org/2000/svg" class="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
+    <summary class="btn btn-ghost btn-sm gap-2" aria-label="${escapeHtml(messages.common.themeLabel)}">
       <span class="hidden sm:inline">${escapeHtml(messages.common.themeLabel)}</span>
+      <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v2M12 19v2M5.64 5.64l1.41 1.42M16.95 16.96l1.41 1.41M3 12h2M19 12h2M5.64 18.36l1.41-1.41M16.95 7.04l1.41-1.41M12 9a3 3 0 100 6 3 3 0 000-6z" /></svg>
     </summary>
-    <div class="dropdown-content z-30 mt-4 w-56 rounded-box border border-base-300 bg-base-100 p-3 shadow-xl">
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend">${escapeHtml(messages.common.themeLabel)}</legend>
-        <label class="btn btn-ghost btn-sm justify-start">
-          <input type="radio" name="theme-dropdown" class="theme-controller" value="silk" aria-label="${escapeHtml(messages.common.themeSilk)}" />
-          <span>${escapeHtml(messages.common.themeSilk)}</span>
-        </label>
-        <label class="btn btn-ghost btn-sm justify-start">
-          <input type="radio" name="theme-dropdown" class="theme-controller" value="autumn" aria-label="${escapeHtml(messages.common.themeAutumn)}" />
-          <span>${escapeHtml(messages.common.themeAutumn)}</span>
-        </label>
-        <label class="btn btn-ghost btn-sm justify-start">
-          <input type="radio" name="theme-dropdown" class="theme-controller" value="forge-dark" aria-label="${escapeHtml(messages.common.themeForgeDark)}" />
-          <span>${escapeHtml(messages.common.themeForgeDark)}</span>
-        </label>
-        <label class="btn btn-ghost btn-sm justify-start">
-          <input type="radio" name="theme-dropdown" class="theme-controller" value="forge-light" aria-label="${escapeHtml(messages.common.themeForgeLight)}" />
-          <span>${escapeHtml(messages.common.themeForgeLight)}</span>
-        </label>
-      </fieldset>
+    <div class="dropdown-content z-30 mt-3 w-48 rounded-box border border-base-300/80 bg-base-100 p-2 shadow-xl">
+      <label class="btn btn-ghost btn-sm justify-start gap-2">
+        <input type="radio" name="theme-dropdown" class="theme-controller" value="tea-dark" aria-label="${escapeHtml(messages.common.themeTeaDark)}" />
+        <span>${escapeHtml(messages.common.themeTeaDark)}</span>
+      </label>
+      <label class="btn btn-ghost btn-sm justify-start gap-2">
+        <input type="radio" name="theme-dropdown" class="theme-controller" value="tea-light" aria-label="${escapeHtml(messages.common.themeTeaLight)}" />
+        <span>${escapeHtml(messages.common.themeTeaLight)}</span>
+      </label>
     </div>
   </details>`;
 };
@@ -408,14 +397,16 @@ const renderNavigation = (
 
   const listItems = items.map(renderItem).join("");
 
-  return `<div class="flex min-h-full flex-col items-start bg-base-200 is-drawer-close:w-14 is-drawer-open:w-72" role="navigation" aria-label="${escapeHtml(messages.common.primaryNavigation)}">
-    <div class="w-full p-3 is-drawer-close:p-2">
-      <a href="${withLocaleQuery(appRoutes.home, locale)}" class="is-drawer-close:tooltip is-drawer-close:tooltip-right flex items-center gap-2 px-2 py-1 text-xl font-bold" data-tip="${escapeHtml(messages.metadata.appName)}" aria-label="${escapeHtml(messages.metadata.appName)}">
-        <svg xmlns="http://www.w3.org/2000/svg" class="size-5 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" /></svg>
-        <span class="is-drawer-close:hidden">${escapeHtml(messages.metadata.appName)}</span>
+  return `<div class="flex min-h-full flex-col items-start bg-base-200/80 is-drawer-close:w-14 is-drawer-open:w-72 is-drawer-close:overflow-visible backdrop-blur" role="navigation" aria-label="${escapeHtml(messages.common.primaryNavigation)}">
+    <div class="w-full border-b border-base-300/70 px-3 py-4 is-drawer-close:p-2">
+      <a href="${withLocaleQuery(appRoutes.home, locale)}" class="is-drawer-close:tooltip is-drawer-close:tooltip-right group flex items-center gap-2 px-2 py-1 text-xl font-bold" data-tip="${escapeHtml(messages.metadata.appName)}" aria-label="${escapeHtml(messages.metadata.appName)}">
+        <span class="inline-flex size-8 items-center justify-center rounded-xl bg-primary/15 text-lg shadow-sm shadow-primary/30" aria-hidden="true">🍵</span>
+        <span class="is-drawer-close:hidden tracking-tight">${escapeHtml(messages.metadata.appName)}</span>
+        <span class="is-drawer-close:hidden ml-auto rounded-full border border-primary/30 px-2 py-1 text-xs text-primary/90 tracking-[0.16em] uppercase">v1</span>
       </a>
     </div>
-    <ul class="menu w-full grow">
+    <div class="px-3 pt-3 text-xs uppercase tracking-[0.2em] text-base-content/55 is-drawer-close:hidden">${escapeHtml(messages.common.foundationLabel)}</div>
+    <ul class="menu w-full grow gap-1 px-2 pb-2">
       ${listItems}
     </ul>
     <div class="w-full p-3 is-drawer-close:p-2 border-t border-base-300/50">
@@ -506,8 +497,8 @@ const renderFooter = (messages: Messages, locale: LocaleCode): string => {
         </div>
         <p class="text-xs opacity-70 max-w-xs leading-relaxed">${escapeHtml(messages.footer.copy)}</p>
       </aside>
-      <nav aria-label="resources-links">
-        <h6 class="footer-title">${escapeHtml("Resources")}</h6>
+      <nav aria-label="${escapeHtml(messages.common.resourcesNavLabel)}">
+        <h6 class="footer-title">${escapeHtml(messages.common.resourcesNavLabel)}</h6>
         ${resourceLinks}
       </nav>
       <nav aria-label="${escapeHtml(messages.common.socialNavLabel)}">

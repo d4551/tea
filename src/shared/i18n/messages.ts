@@ -26,16 +26,16 @@ export interface Messages {
     readonly openAiAssistant: string;
     readonly mobileNavigation: string;
     readonly primaryNavigation: string;
+    readonly foundationLabel: string;
     readonly skipToContent: string;
     readonly loading: string;
     readonly retry: string;
     readonly backToTop: string;
     readonly themeLabel: string;
-    readonly themeSilk: string;
-    readonly themeAutumn: string;
-    readonly themeForgeDark: string;
-    readonly themeForgeLight: string;
+    readonly themeTeaDark: string;
+    readonly themeTeaLight: string;
     readonly breadcrumbLabel: string;
+    readonly resourcesNavLabel: string;
     readonly socialNavLabel: string;
     readonly githubLabel: string;
     readonly discordLabel: string;
@@ -821,13 +821,13 @@ export const translateMessage = (
 export const messagesByLocale: Record<LocaleCode, Messages> = {
   "en-US": {
     metadata: {
-      appName: "Game Forge",
-      appSubtitle: "AI-powered video game creator",
+      appName: "TEA 🍵",
+      appSubtitle: "Editorial game-operations platform for playable worlds",
     },
     navigation: {
-      home: "Home",
+      home: "Studio",
       game: "Play",
-      builder: "Create",
+      builder: "Craft",
       localeLabel: "Language",
       localeNameEnglish: "English",
       localeNameChinese: "中文",
@@ -842,16 +842,16 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       openAiAssistant: "Open AI Assistant",
       mobileNavigation: "Mobile navigation",
       primaryNavigation: "Primary navigation",
+      foundationLabel: "Foundation",
       skipToContent: "Skip to main content",
       loading: "Loading",
       retry: "Retry",
       backToTop: "Back to top",
       themeLabel: "Theme",
-      themeSilk: "Silk",
-      themeAutumn: "Autumn",
-      themeForgeDark: "Dark",
-      themeForgeLight: "Light",
+      themeTeaDark: "Tea Dark",
+      themeTeaLight: "Tea Light",
       breadcrumbLabel: "Breadcrumb",
+      resourcesNavLabel: "Resources",
       socialNavLabel: "Social links",
       githubLabel: "GitHub",
       discordLabel: "Discord",
@@ -864,8 +864,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
     },
     pages: {
       home: {
-        title: "AI Game Creator",
-        heroTitle: "Build your world with AI",
+        title: "Tea House Console",
+        heroTitle: "Brew your world, then serve it live",
         heroDescription:
           "Create scenes, characters, and stories — powered by local AI models. Design, publish, and play your game from a single creative workspace.",
         welcomeBack: "Welcome back. Here's an overview of your current project workspace.",
@@ -942,8 +942,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       validationTooLong: "Your prompt is too long. Try shortening it.",
     },
     footer: {
-      title: "Game Forge",
-      copy: "Create video games with AI-powered tools.",
+      title: "TEA 🍵",
+      copy: "Brew ideas into systems, then ship playable worlds.",
       ctaLabel: "API reference",
     },
     api: {
@@ -1434,7 +1434,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       aiConfigOverrideHelp:
         "Override any model through its config-key environment variable, then restart the server.",
       docsLabel: "Docs",
-      runtimeStackValue: "Game Forge Engine",
+      runtimeStackValue: "TEA Engine",
       sceneLibraryTitle: "Scene library",
       sceneCreateDescription: "Create or select a scene, then refine its layout and preview.",
       sceneCreateTitlePlaceholder: "enchantedForest",
@@ -1647,13 +1647,13 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
   },
   "zh-CN": {
     metadata: {
-      appName: "游戏锻造局",
-      appSubtitle: "AI 驱动的电子游戏创作工具",
+      appName: "TEA 🍵",
+      appSubtitle: "茶道般的游戏世界工坊",
     },
     navigation: {
-      home: "首页",
+      home: "工作室",
       game: "游玩",
-      builder: "创作",
+      builder: "创作室",
       localeLabel: "语言",
       localeNameEnglish: "English",
       localeNameChinese: "中文",
@@ -1668,16 +1668,16 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       openAiAssistant: "打开 AI 助手",
       mobileNavigation: "移动端导航",
       primaryNavigation: "主导航",
+      foundationLabel: "基础",
       skipToContent: "跳转到主要内容",
       loading: "加载中",
       retry: "重试",
       backToTop: "返回顶部",
       themeLabel: "主题",
-      themeSilk: "丝绸",
-      themeAutumn: "秋色",
-      themeForgeDark: "深色",
-      themeForgeLight: "浅色",
+      themeTeaDark: "Tea 深",
+      themeTeaLight: "Tea 浅",
       breadcrumbLabel: "面包屑导航",
+      resourcesNavLabel: "资源",
       socialNavLabel: "社交链接",
       githubLabel: "GitHub",
       discordLabel: "Discord",
@@ -1690,8 +1690,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
     },
     pages: {
       home: {
-        title: "AI 游戏创作器",
-        heroTitle: "用 AI 构建你的世界",
+        title: "茶室控制台",
+        heroTitle: "先调制世界，再亲自端上盘桌",
         heroDescription:
           "创建场景、角色和故事 —— 由本地 AI 模型驱动。在同一个创意工作空间中设计、发布并游玩你的游戏。",
         welcomeBack: "欢迎回来。这是你当前项目工作区的概览。",
@@ -1763,8 +1763,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       validationTooLong: "提示文本过长，请缩短内容。",
     },
     footer: {
-      title: "游戏锻造局",
-      copy: "用 AI 工具创建电子游戏。",
+      title: "TEA 🍵",
+      copy: "在静心中酿造世界，再把它们端上舞台供玩家体验。",
       ctaLabel: "API 参考",
     },
     api: {
@@ -2220,7 +2220,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       configKeyLabel: "配置",
       aiConfigOverrideHelp: "可通过对应的配置键环境变量覆盖模型，修改后请重启服务器。",
       docsLabel: "文档",
-      runtimeStackValue: "Game Forge 引擎",
+      runtimeStackValue: "TEA 引擎",
       sceneLibraryTitle: "场景库",
       sceneCreateDescription: "先创建或选择场景，再细化布局与预览。",
       sceneCreateTitlePlaceholder: "enchantedForest",

@@ -117,7 +117,7 @@ const buildSceneSystemPrompt = (sceneId: string, locale: GameLocale): string => 
  */
 const buildAssistSystemPrompt = (): string => {
   return [
-    "You are a game design assistant for Game Forge.",
+    "You are a game design assistant for TEA.",
     "The game uses a Bun/Elysia/HTMX/PixiJS stack with server-driven AI.",
     "Help the game creator with design decisions, balancing, narrative, and implementation.",
     "Be specific, actionable, and reference the game's existing lore and mechanics.",

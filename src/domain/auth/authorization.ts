@@ -44,7 +44,7 @@ const hasGameRole = (roleKeys: readonly string[], action: GameAction): boolean =
 
 const resolveActorLabel = (identity: PrincipalIdentity): string =>
   identity.actorType === "user"
-    ? identity.actorId ?? "user"
+    ? (identity.actorId ?? "user")
     : `anonymous:${identity.actorId ?? "guest"}`;
 
 /**
@@ -102,10 +102,7 @@ export const requireBuilderAction = (
 /**
  * Determines whether the provided principal may perform a game action.
  */
-export const canPerformGameAction = (
-  identity: PrincipalIdentity,
-  action: GameAction,
-): boolean => {
+export const canPerformGameAction = (identity: PrincipalIdentity, action: GameAction): boolean => {
   if (identity.actorType === "anonymous" || identity.roleKeys.length === 0) {
     return true;
   }

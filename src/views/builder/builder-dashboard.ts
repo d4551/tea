@@ -529,6 +529,7 @@ export const renderBuilderDashboard = (
         </article>
       </section>
 
+      <section id="builder-platform-readiness" role="region" aria-label="${escapeHtml(messages.builder.platformReadinessTitle)}">
       ${renderCollapse({
         open: true,
         title: `${escapeHtml(messages.builder.platformReadinessTitle)}`,
@@ -539,5 +540,6 @@ export const renderBuilderDashboard = (
         ariaLabel: messages.builder.platformReadinessTitle,
         className: "rounded-box bg-base-200/70 collapse-arrow",
       })}
+      </section>
     </div>`;
 };

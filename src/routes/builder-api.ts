@@ -6,8 +6,13 @@
 import { Elysia, t } from "elysia";
 import { appConfig, type LocaleCode, normalizeLocale } from "../config/environment.ts";
 import { knowledgeBaseService } from "../domain/ai/knowledge-base-service.ts";
-import { auditService } from "../domain/audit/audit-service.ts";
 import { ProviderRegistry } from "../domain/ai/providers/provider-registry.ts";
+import { auditService } from "../domain/audit/audit-service.ts";
+import {
+  canPerformBuilderAction,
+  type PrincipalIdentity,
+  requireBuilderAction,
+} from "../domain/auth/authorization.ts";
 import { persistBuilderFile } from "../domain/builder/asset-storage.ts";
 import type { BuilderPublishValidationIssue } from "../domain/builder/builder-publish-validation.ts";
 import {
@@ -33,12 +38,11 @@ import {
   generateNpcDialogue,
   suggestUserFlowStep,
 } from "../domain/game/ai/game-ai-service.ts";
-import { gameLoop } from "../domain/game/game-loop.ts";
 import { gameScenes, gameSpriteManifests } from "../domain/game/data/sprite-data.ts";
+import { gameLoop } from "../domain/game/game-loop.ts";
 import { ensureCorrelationIdHeader } from "../lib/correlation-id.ts";
 import type { AppErrorCode } from "../lib/error-envelope.ts";
 import { ApplicationError, errorEnvelope, successEnvelope } from "../lib/error-envelope.ts";
-import { canPerformBuilderAction, type PrincipalIdentity, requireBuilderAction } from "../domain/auth/authorization.ts";
 import {
   builderRequestContextPlugin,
   readBuilderScopedContext,
@@ -98,7 +102,7 @@ const highCostGenerationKinds = new Set<BuilderGenerationJobCreatePayload["kind"
 ]);
 const hasUnsafeAutomationKinds = (stepsJson: string | undefined): boolean =>
   typeof stepsJson === "string" &&
-  (stepsJson.includes("\"kind\":\"request\"") || stepsJson.includes("\"kind\":\"create-asset\""));
+  (stepsJson.includes('"kind":"request"') || stepsJson.includes('"kind":"create-asset"'));
 
 const resolveBuilderPrincipalFromContext = (context: {
   readonly builderPrincipalType: "anonymous" | "user";
@@ -1322,7 +1326,6 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         { body },
       );
       const { builderLocale: actionLocale, builderProjectId: actionProjectId } = actionContext;
-    const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const requestText = body.prompt?.trim();
       if (!requestText) {
         return status(
@@ -1976,7 +1979,11 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const shouldPublish = builderService.resolvePublishState(body.published);
-      const result = await builderService.publishProject(actionProjectId, shouldPublish, actionUpdatedBy);
+      const result = await builderService.publishProject(
+        actionProjectId,
+        shouldPublish,
+        actionUpdatedBy,
+      );
       if (!result) {
         return status(
           httpStatus.notFound,
@@ -2932,7 +2939,12 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         );
       }
 
-      const mutation = await builderService.removeNpc(projectId, owner.id, params.npcId, actionUpdatedBy);
+      const mutation = await builderService.removeNpc(
+        projectId,
+        owner.id,
+        params.npcId,
+        actionUpdatedBy,
+      );
       if (!mutation) {
         return status(
           httpStatus.notFound,
@@ -3439,7 +3451,11 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         playbackFps: body.playbackFps,
         frameCount: body.frameCount,
       };
-      const mutation = await builderService.createAnimationClip(projectId, createPayload, actionUpdatedBy);
+      const mutation = await builderService.createAnimationClip(
+        projectId,
+        createPayload,
+        actionUpdatedBy,
+      );
       if (!mutation) {
         return status(
           httpStatus.notFound,
@@ -4001,7 +4017,10 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const correlationId = ensureCorrelationIdHeader(request, set.headers);
-      if (!appConfig.controls.allowUnsafeAutomationActions && hasUnsafeAutomationKinds(body.stepsJson)) {
+      if (
+        !appConfig.controls.allowUnsafeAutomationActions &&
+        hasUnsafeAutomationKinds(body.stepsJson)
+      ) {
         await auditService.tryRecord({
           correlationId,
           action: "builder.automation-run.create",

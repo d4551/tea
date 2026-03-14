@@ -1,5 +1,4 @@
 import { appConfig, type LocaleCode } from "../../config/environment.ts";
-import { createHash } from "node:crypto";
 import {
   AUTOMATION_STEP_KIND_UNSUPPORTED_ERROR,
   DEFAULT_ANIMATION_FRAME_COUNT,
@@ -42,6 +41,7 @@ import type {
   TilemapDefinition,
   TriggerDefinition,
 } from "../../shared/contracts/game.ts";
+import { sha256Hex } from "../../shared/utils/crypto.ts";
 import { acceptUnknown, safeJsonParse } from "../../shared/utils/safe-json.ts";
 import {
   type BuilderProjectSnapshot,
@@ -889,7 +889,7 @@ const buildAutomationRunSignature = (
   dryRun: boolean,
 ): string => {
   const payload = `${runId}|${goal.trim()}|${stepCount}|${dryRun ? "1" : "0"}|${appConfig.builder.automationSigningSecret}`;
-  return createHash("sha256").update(payload).digest("hex");
+  return sha256Hex(payload);
 };
 
 interface SuggestedAnimationPlanClip {
@@ -1392,19 +1392,20 @@ class PrismaBuilderService implements BuilderService {
       projectId,
       this.resolveUpdatedBy(updatedBy, "builder-editor"),
       (state) => {
-      const nextScene = cloneScene(payload.scene);
-      const action: BuilderMutationResult["action"] = Object.hasOwn(state.scenes, payload.id)
-        ? "updated"
-        : "created";
-      state.scenes[payload.id] = nextScene;
-      return {
-        ok: true,
-        payload: {
-          action,
-          scene: nextScene,
-        },
-      };
-    });
+        const nextScene = cloneScene(payload.scene);
+        const action: BuilderMutationResult["action"] = Object.hasOwn(state.scenes, payload.id)
+          ? "updated"
+          : "created";
+        state.scenes[payload.id] = nextScene;
+        return {
+          ok: true,
+          payload: {
+            action,
+            scene: nextScene,
+          },
+        };
+      },
+    );
     if (!mutation) {
       return null;
     }
@@ -1627,15 +1628,16 @@ class PrismaBuilderService implements BuilderService {
       projectId,
       this.resolveUpdatedBy(updatedBy, "builder-editor"),
       (state) => {
-      if (!Object.hasOwn(state.scenes, sceneId)) {
-        return { ok: false };
-      }
-      delete state.scenes[sceneId];
-      return {
-        ok: true,
-        payload: null,
-      };
-    });
+        if (!Object.hasOwn(state.scenes, sceneId)) {
+          return { ok: false };
+        }
+        delete state.scenes[sceneId];
+        return {
+          ok: true,
+          payload: null,
+        };
+      },
+    );
     if (!mutation) {
       return null;
     }
@@ -1842,19 +1844,20 @@ class PrismaBuilderService implements BuilderService {
       projectId,
       this.resolveUpdatedBy(updatedBy, "builder-editor"),
       (state) => {
-      const catalog = state.dialogues[locale];
-      const action: BuilderMutationResult["action"] = Object.hasOwn(catalog, payload.key)
-        ? "updated"
-        : "created";
-      catalog[payload.key] = payload.text;
-      return {
-        ok: true,
-        payload: {
-          action,
-          text: payload.text,
-        },
-      };
-    });
+        const catalog = state.dialogues[locale];
+        const action: BuilderMutationResult["action"] = Object.hasOwn(catalog, payload.key)
+          ? "updated"
+          : "created";
+        catalog[payload.key] = payload.text;
+        return {
+          ok: true,
+          payload: {
+            action,
+            text: payload.text,
+          },
+        };
+      },
+    );
     if (!mutation) {
       return null;
     }
@@ -1877,17 +1880,18 @@ class PrismaBuilderService implements BuilderService {
       projectId,
       this.resolveUpdatedBy(updatedBy, "builder-editor"),
       (state) => {
-      const catalog = state.dialogues[normalizedLocale];
-      if (!Object.hasOwn(catalog, key)) {
-        return { ok: false };
-      }
+        const catalog = state.dialogues[normalizedLocale];
+        if (!Object.hasOwn(catalog, key)) {
+          return { ok: false };
+        }
 
-      delete catalog[key];
-      return {
-        ok: true,
-        payload: null,
-      };
-    });
+        delete catalog[key];
+        return {
+          ok: true,
+          payload: null,
+        };
+      },
+    );
     if (!mutation) {
       return null;
     }
@@ -2001,19 +2005,20 @@ class PrismaBuilderService implements BuilderService {
       projectId,
       this.resolveUpdatedBy(updatedBy, "builder-assets"),
       (state) => {
-      const nextAsset = structuredClone(payload.asset);
-      const action: BuilderMutationResult["action"] = Object.hasOwn(state.assets, payload.id)
-        ? "updated"
-        : "created";
-      state.assets[payload.id] = nextAsset;
-      return {
-        ok: true,
-        payload: {
-          action,
-          asset: nextAsset,
-        },
-      };
-    });
+        const nextAsset = structuredClone(payload.asset);
+        const action: BuilderMutationResult["action"] = Object.hasOwn(state.assets, payload.id)
+          ? "updated"
+          : "created";
+        state.assets[payload.id] = nextAsset;
+        return {
+          ok: true,
+          payload: {
+            action,
+            asset: nextAsset,
+          },
+        };
+      },
+    );
     if (!mutation) {
       return null;
     }
@@ -2044,23 +2049,27 @@ class PrismaBuilderService implements BuilderService {
     const sourceMimeType = inferAssetMimeType(sourceFormat, payload.sourceMimeType);
     const now = Date.now();
 
-    return this.saveAsset(projectId, {
-      id,
-      asset: {
+    return this.saveAsset(
+      projectId,
+      {
         id,
-        kind,
-        label,
-        sceneMode,
-        source,
-        sourceFormat,
-        sourceMimeType,
-        tags: [kind, sceneMode],
-        variants: buildAssetVariants(id, source, sourceFormat, sourceMimeType),
-        approved: false,
-        createdAtMs: now,
-        updatedAtMs: now,
+        asset: {
+          id,
+          kind,
+          label,
+          sceneMode,
+          source,
+          sourceFormat,
+          sourceMimeType,
+          tags: [kind, sceneMode],
+          variants: buildAssetVariants(id, source, sourceFormat, sourceMimeType),
+          approved: false,
+          createdAtMs: now,
+          updatedAtMs: now,
+        },
       },
-    }, updatedBy);
+      updatedBy,
+    );
   }
 
   public async removeAsset(
@@ -2072,15 +2081,16 @@ class PrismaBuilderService implements BuilderService {
       projectId,
       this.resolveUpdatedBy(updatedBy, "builder-assets"),
       (state) => {
-      if (!Object.hasOwn(state.assets, assetId)) {
-        return { ok: false };
-      }
-      delete state.assets[assetId];
-      return {
-        ok: true,
-        payload: null,
-      };
-    });
+        if (!Object.hasOwn(state.assets, assetId)) {
+          return { ok: false };
+        }
+        delete state.assets[assetId];
+        return {
+          ok: true,
+          payload: null,
+        };
+      },
+    );
     if (!mutation) {
       return null;
     }
@@ -2108,22 +2118,23 @@ class PrismaBuilderService implements BuilderService {
       projectId,
       this.resolveUpdatedBy(updatedBy, "builder-assets"),
       (state) => {
-      const nextClip = structuredClone(payload.clip);
-      const action: BuilderMutationResult["action"] = Object.hasOwn(
-        state.animationClips,
-        payload.id,
-      )
-        ? "updated"
-        : "created";
-      state.animationClips[payload.id] = nextClip;
-      return {
-        ok: true,
-        payload: {
-          action,
-          clip: nextClip,
-        },
-      };
-    });
+        const nextClip = structuredClone(payload.clip);
+        const action: BuilderMutationResult["action"] = Object.hasOwn(
+          state.animationClips,
+          payload.id,
+        )
+          ? "updated"
+          : "created";
+        state.animationClips[payload.id] = nextClip;
+        return {
+          ok: true,
+          payload: {
+            action,
+            clip: nextClip,
+          },
+        };
+      },
+    );
     if (!mutation) {
       return null;
     }
@@ -2153,29 +2164,33 @@ class PrismaBuilderService implements BuilderService {
     const asset = entry.state.assets[assetId];
     const now = Date.now();
 
-    return this.saveAnimationClip(projectId, {
-      id: clipId,
-      clip: {
+    return this.saveAnimationClip(
+      projectId,
+      {
         id: clipId,
-        assetId,
-        label: clipId,
-        sceneMode: asset?.sceneMode ?? "2d",
-        stateTag,
-        playbackFps: Math.max(
-          1,
-          parseBuilderInteger(payload.playbackFps, DEFAULT_ANIMATION_PLAYBACK_FPS),
-        ),
-        startFrame: 0,
-        frameCount: Math.max(
-          1,
-          parseBuilderInteger(payload.frameCount, DEFAULT_ANIMATION_FRAME_COUNT),
-        ),
-        loop: true,
-        direction: inferClipDirection(stateTag),
-        createdAtMs: now,
-        updatedAtMs: now,
+        clip: {
+          id: clipId,
+          assetId,
+          label: clipId,
+          sceneMode: asset?.sceneMode ?? "2d",
+          stateTag,
+          playbackFps: Math.max(
+            1,
+            parseBuilderInteger(payload.playbackFps, DEFAULT_ANIMATION_PLAYBACK_FPS),
+          ),
+          startFrame: 0,
+          frameCount: Math.max(
+            1,
+            parseBuilderInteger(payload.frameCount, DEFAULT_ANIMATION_FRAME_COUNT),
+          ),
+          loop: true,
+          direction: inferClipDirection(stateTag),
+          createdAtMs: now,
+          updatedAtMs: now,
+        },
       },
-    }, updatedBy);
+      updatedBy,
+    );
   }
 
   public async removeAnimationClip(
@@ -2187,15 +2202,16 @@ class PrismaBuilderService implements BuilderService {
       projectId,
       this.resolveUpdatedBy(updatedBy, "builder-assets"),
       (state) => {
-      if (!Object.hasOwn(state.animationClips, clipId)) {
-        return { ok: false };
-      }
-      delete state.animationClips[clipId];
-      return {
-        ok: true,
-        payload: null,
-      };
-    });
+        if (!Object.hasOwn(state.animationClips, clipId)) {
+          return { ok: false };
+        }
+        delete state.animationClips[clipId];
+        return {
+          ok: true,
+          payload: null,
+        };
+      },
+    );
     if (!mutation) {
       return null;
     }
@@ -2223,22 +2239,23 @@ class PrismaBuilderService implements BuilderService {
       projectId,
       this.resolveUpdatedBy(updatedBy, "builder-mechanics"),
       (state) => {
-      const nextGraph = structuredClone(payload.graph);
-      const action: BuilderMutationResult["action"] = Object.hasOwn(
-        state.dialogueGraphs,
-        payload.id,
-      )
-        ? "updated"
-        : "created";
-      state.dialogueGraphs[payload.id] = nextGraph;
-      return {
-        ok: true,
-        payload: {
-          action,
-          graph: nextGraph,
-        },
-      };
-    });
+        const nextGraph = structuredClone(payload.graph);
+        const action: BuilderMutationResult["action"] = Object.hasOwn(
+          state.dialogueGraphs,
+          payload.id,
+        )
+          ? "updated"
+          : "created";
+        state.dialogueGraphs[payload.id] = nextGraph;
+        return {
+          ok: true,
+          payload: {
+            action,
+            graph: nextGraph,
+          },
+        };
+      },
+    );
     if (!mutation) {
       return null;
     }
@@ -2260,24 +2277,28 @@ class PrismaBuilderService implements BuilderService {
     const npcId = trimOptionalField(payload.npcId);
     const now = Date.now();
 
-    return this.saveDialogueGraph(projectId, {
-      id: graphId,
-      graph: {
+    return this.saveDialogueGraph(
+      projectId,
+      {
         id: graphId,
-        title,
-        npcId,
-        rootNodeId: "root",
-        nodes: [
-          {
-            id: "root",
-            line,
-            edges: [],
-          },
-        ],
-        createdAtMs: now,
-        updatedAtMs: now,
+        graph: {
+          id: graphId,
+          title,
+          npcId,
+          rootNodeId: "root",
+          nodes: [
+            {
+              id: "root",
+              line,
+              edges: [],
+            },
+          ],
+          createdAtMs: now,
+          updatedAtMs: now,
+        },
       },
-    }, updatedBy);
+      updatedBy,
+    );
   }
 
   public async removeDialogueGraph(
@@ -2289,15 +2310,16 @@ class PrismaBuilderService implements BuilderService {
       projectId,
       this.resolveUpdatedBy(updatedBy, "builder-mechanics"),
       (state) => {
-      if (!Object.hasOwn(state.dialogueGraphs, graphId)) {
-        return { ok: false };
-      }
-      delete state.dialogueGraphs[graphId];
-      return {
-        ok: true,
-        payload: null,
-      };
-    });
+        if (!Object.hasOwn(state.dialogueGraphs, graphId)) {
+          return { ok: false };
+        }
+        delete state.dialogueGraphs[graphId];
+        return {
+          ok: true,
+          payload: null,
+        };
+      },
+    );
     if (!mutation) {
       return null;
     }
@@ -2321,20 +2343,24 @@ class PrismaBuilderService implements BuilderService {
     payload: BuilderQuestPayload,
     updatedBy?: string,
   ): Promise<BuilderMutation<QuestDefinition> | null> {
-    const mutation = await this.mutateProject(projectId, this.resolveUpdatedBy(updatedBy, "builder-mechanics"), (state) => {
-      const nextQuest = structuredClone(payload.quest);
-      const action: BuilderMutationResult["action"] = Object.hasOwn(state.quests, payload.id)
-        ? "updated"
-        : "created";
-      state.quests[payload.id] = nextQuest;
-      return {
-        ok: true,
-        payload: {
-          action,
-          quest: nextQuest,
-        },
-      };
-    });
+    const mutation = await this.mutateProject(
+      projectId,
+      this.resolveUpdatedBy(updatedBy, "builder-mechanics"),
+      (state) => {
+        const nextQuest = structuredClone(payload.quest);
+        const action: BuilderMutationResult["action"] = Object.hasOwn(state.quests, payload.id)
+          ? "updated"
+          : "created";
+        state.quests[payload.id] = nextQuest;
+        return {
+          ok: true,
+          payload: {
+            action,
+            quest: nextQuest,
+          },
+        };
+      },
+    );
     if (!mutation) {
       return null;
     }
@@ -2355,22 +2381,26 @@ class PrismaBuilderService implements BuilderService {
     const description = payload.description.trim();
     const triggerId = payload.triggerId.trim();
 
-    return this.saveQuest(projectId, {
-      id: questId,
-      quest: {
+    return this.saveQuest(
+      projectId,
+      {
         id: questId,
-        title,
-        description,
-        steps: [
-          {
-            id: `${questId}.step.1`,
-            title,
-            description,
-            triggerId,
-          },
-        ],
+        quest: {
+          id: questId,
+          title,
+          description,
+          steps: [
+            {
+              id: `${questId}.step.1`,
+              title,
+              description,
+              triggerId,
+            },
+          ],
+        },
       },
-    }, updatedBy);
+      updatedBy,
+    );
   }
 
   public async saveQuestForm(
@@ -2434,16 +2464,20 @@ class PrismaBuilderService implements BuilderService {
     questId: string,
     updatedBy?: string,
   ): Promise<BuilderMutation<null> | null> {
-    const mutation = await this.mutateProject(projectId, this.resolveUpdatedBy(updatedBy, "builder-mechanics"), (state) => {
-      if (!Object.hasOwn(state.quests, questId)) {
-        return { ok: false };
-      }
-      delete state.quests[questId];
-      return {
-        ok: true,
-        payload: null,
-      };
-    });
+    const mutation = await this.mutateProject(
+      projectId,
+      this.resolveUpdatedBy(updatedBy, "builder-mechanics"),
+      (state) => {
+        if (!Object.hasOwn(state.quests, questId)) {
+          return { ok: false };
+        }
+        delete state.quests[questId];
+        return {
+          ok: true,
+          payload: null,
+        };
+      },
+    );
     if (!mutation) {
       return null;
     }
@@ -2471,19 +2505,20 @@ class PrismaBuilderService implements BuilderService {
       projectId,
       this.resolveUpdatedBy(updatedBy, "builder-mechanics"),
       (state) => {
-      const nextTrigger = structuredClone(payload.trigger);
-      const action: BuilderMutationResult["action"] = Object.hasOwn(state.triggers, payload.id)
-        ? "updated"
-        : "created";
-      state.triggers[payload.id] = nextTrigger;
-      return {
-        ok: true,
-        payload: {
-          action,
-          trigger: nextTrigger,
-        },
-      };
-    });
+        const nextTrigger = structuredClone(payload.trigger);
+        const action: BuilderMutationResult["action"] = Object.hasOwn(state.triggers, payload.id)
+          ? "updated"
+          : "created";
+        state.triggers[payload.id] = nextTrigger;
+        return {
+          ok: true,
+          payload: {
+            action,
+            trigger: nextTrigger,
+          },
+        };
+      },
+    );
     if (!mutation) {
       return null;
     }
@@ -2501,16 +2536,20 @@ class PrismaBuilderService implements BuilderService {
   ): Promise<BuilderMutation<TriggerDefinition> | null> {
     const triggerId = payload.id.trim();
 
-    return this.saveTrigger(projectId, {
-      id: triggerId,
-      trigger: {
+    return this.saveTrigger(
+      projectId,
+      {
         id: triggerId,
-        label: payload.label.trim(),
-        event: payload.event,
-        sceneId: trimOptionalField(payload.sceneId),
-        npcId: trimOptionalField(payload.npcId),
+        trigger: {
+          id: triggerId,
+          label: payload.label.trim(),
+          event: payload.event,
+          sceneId: trimOptionalField(payload.sceneId),
+          npcId: trimOptionalField(payload.npcId),
+        },
       },
-    }, updatedBy);
+      updatedBy,
+    );
   }
 
   public async removeTrigger(
@@ -2522,15 +2561,16 @@ class PrismaBuilderService implements BuilderService {
       projectId,
       this.resolveUpdatedBy(updatedBy, "builder-mechanics"),
       (state) => {
-      if (!Object.hasOwn(state.triggers, triggerId)) {
-        return { ok: false };
-      }
-      delete state.triggers[triggerId];
-      return {
-        ok: true,
-        payload: null,
-      };
-    });
+        if (!Object.hasOwn(state.triggers, triggerId)) {
+          return { ok: false };
+        }
+        delete state.triggers[triggerId];
+        return {
+          ok: true,
+          payload: null,
+        };
+      },
+    );
     if (!mutation) {
       return null;
     }
@@ -2566,22 +2606,23 @@ class PrismaBuilderService implements BuilderService {
       projectId,
       this.resolveUpdatedBy(updatedBy, "builder-ai"),
       (state) => {
-      const nextJob = structuredClone(payload.job);
-      const action: BuilderMutationResult["action"] = Object.hasOwn(
-        state.generationJobs,
-        payload.id,
-      )
-        ? "updated"
-        : "queued";
-      state.generationJobs[payload.id] = nextJob;
-      return {
-        ok: true,
-        payload: {
-          action,
-          job: nextJob,
-        },
-      };
-    });
+        const nextJob = structuredClone(payload.job);
+        const action: BuilderMutationResult["action"] = Object.hasOwn(
+          state.generationJobs,
+          payload.id,
+        )
+          ? "updated"
+          : "queued";
+        state.generationJobs[payload.id] = nextJob;
+        return {
+          ok: true,
+          payload: {
+            action,
+            job: nextJob,
+          },
+        };
+      },
+    );
     if (!mutation) {
       return null;
     }
@@ -2599,20 +2640,24 @@ class PrismaBuilderService implements BuilderService {
   ): Promise<BuilderMutation<GenerationJob> | null> {
     const jobId = `job.${crypto.randomUUID()}`;
     const now = Date.now();
-    return this.saveGenerationJob(projectId, {
-      id: jobId,
-      job: {
+    return this.saveGenerationJob(
+      projectId,
+      {
         id: jobId,
-        kind: payload.kind,
-        status: "queued",
-        prompt: payload.prompt.trim(),
-        targetId: trimOptionalField(payload.targetId),
-        artifactIds: [],
-        statusMessage: "job.queued-for-processing",
-        createdAtMs: now,
-        updatedAtMs: now,
+        job: {
+          id: jobId,
+          kind: payload.kind,
+          status: "queued",
+          prompt: payload.prompt.trim(),
+          targetId: trimOptionalField(payload.targetId),
+          artifactIds: [],
+          statusMessage: "job.queued-for-processing",
+          createdAtMs: now,
+          updatedAtMs: now,
+        },
       },
-    }, updatedBy);
+      updatedBy,
+    );
   }
 
   public async approveGenerationJob(
@@ -2646,103 +2691,105 @@ class PrismaBuilderService implements BuilderService {
       projectId,
       this.resolveUpdatedBy(updatedBy, "builder-ai"),
       (state) => {
-      const job = state.generationJobs[jobId];
-      if (!job) {
-        return { ok: false };
-      }
-
-      let nextStatus: GenerationJob["status"] = approved ? "succeeded" : "canceled";
-      let nextStatusMessage = approved ? "job.approved-and-attached" : "job.canceled-by-review";
-
-      if (approved) {
-        const primaryArtifact = job.artifactIds
-          .map((artifactId) => state.artifacts[artifactId])
-          .find((artifact): artifact is GenerationArtifact => artifact !== undefined);
-        for (const artifactId of job.artifactIds) {
-          const artifact = state.artifacts[artifactId];
-          if (artifact) {
-            state.artifacts[artifactId] = {
-              ...artifact,
-              approved: true,
-            };
-          }
+        const job = state.generationJobs[jobId];
+        if (!job) {
+          return { ok: false };
         }
-        if (job.kind === "animation-plan" && primaryArtifact?.previewSource) {
-          const targetAssetId =
-            trimOptionalField(job.targetId) ?? trimOptionalField(preParsedAnimationPlan?.targetId);
-          const targetAsset = targetAssetId ? state.assets[targetAssetId] : undefined;
 
-          if (!preParsedAnimationPlan || !targetAssetId || !targetAsset) {
-            nextStatus = "failed";
-            nextStatusMessage = "job.animation-plan-target-missing";
-          } else {
-            const now = Date.now();
-            for (const clip of preParsedAnimationPlan.suggestedClips) {
-              if (state.animationClips[clip.id]) {
-                continue;
-              }
+        let nextStatus: GenerationJob["status"] = approved ? "succeeded" : "canceled";
+        let nextStatusMessage = approved ? "job.approved-and-attached" : "job.canceled-by-review";
 
-              state.animationClips[clip.id] = {
-                id: clip.id,
-                assetId: targetAssetId,
-                label: clip.id,
-                sceneMode: targetAsset.sceneMode,
-                stateTag: clip.stateTag,
-                playbackFps: Math.max(1, Math.floor(clip.playbackFps)),
-                startFrame: 0,
-                frameCount: Math.max(1, Math.floor(clip.frameCount)),
-                loop: true,
-                direction: inferClipDirection(clip.stateTag),
-                createdAtMs: now,
-                updatedAtMs: now,
+        if (approved) {
+          const primaryArtifact = job.artifactIds
+            .map((artifactId) => state.artifacts[artifactId])
+            .find((artifact): artifact is GenerationArtifact => artifact !== undefined);
+          for (const artifactId of job.artifactIds) {
+            const artifact = state.artifacts[artifactId];
+            if (artifact) {
+              state.artifacts[artifactId] = {
+                ...artifact,
+                approved: true,
               };
             }
           }
-        } else if (
-          job.kind !== "voice-line" &&
-          job.kind !== "animation-plan" &&
-          primaryArtifact?.previewSource
-        ) {
-          const generatedAssetId = `asset.generated.${job.id}`;
-          if (!state.assets[generatedAssetId]) {
-            state.assets[generatedAssetId] = {
-              id: generatedAssetId,
-              kind: toGeneratedAssetKind(job.kind),
-              label: `generation.asset.label.generated:${job.kind}:${job.id}`,
-              sceneMode: "2d",
-              source: primaryArtifact.previewSource,
-              sourceFormat: primaryArtifact.mimeType?.split("/")[1] ?? "dat",
-              sourceMimeType: primaryArtifact.mimeType,
-              tags: ["generated", job.kind],
-              variants: [
-                {
-                  id: `${generatedAssetId}.runtime`,
-                  format: primaryArtifact.mimeType?.split("/")[1] ?? "dat",
-                  source: primaryArtifact.previewSource,
-                  usage: "runtime",
-                  mimeType: primaryArtifact.mimeType,
-                },
-              ],
-              approved: true,
-              createdAtMs: job.createdAtMs,
-              updatedAtMs: Date.now(),
-            };
+          if (job.kind === "animation-plan" && primaryArtifact?.previewSource) {
+            const targetAssetId =
+              trimOptionalField(job.targetId) ??
+              trimOptionalField(preParsedAnimationPlan?.targetId);
+            const targetAsset = targetAssetId ? state.assets[targetAssetId] : undefined;
+
+            if (!preParsedAnimationPlan || !targetAssetId || !targetAsset) {
+              nextStatus = "failed";
+              nextStatusMessage = "job.animation-plan-target-missing";
+            } else {
+              const now = Date.now();
+              for (const clip of preParsedAnimationPlan.suggestedClips) {
+                if (state.animationClips[clip.id]) {
+                  continue;
+                }
+
+                state.animationClips[clip.id] = {
+                  id: clip.id,
+                  assetId: targetAssetId,
+                  label: clip.id,
+                  sceneMode: targetAsset.sceneMode,
+                  stateTag: clip.stateTag,
+                  playbackFps: Math.max(1, Math.floor(clip.playbackFps)),
+                  startFrame: 0,
+                  frameCount: Math.max(1, Math.floor(clip.frameCount)),
+                  loop: true,
+                  direction: inferClipDirection(clip.stateTag),
+                  createdAtMs: now,
+                  updatedAtMs: now,
+                };
+              }
+            }
+          } else if (
+            job.kind !== "voice-line" &&
+            job.kind !== "animation-plan" &&
+            primaryArtifact?.previewSource
+          ) {
+            const generatedAssetId = `asset.generated.${job.id}`;
+            if (!state.assets[generatedAssetId]) {
+              state.assets[generatedAssetId] = {
+                id: generatedAssetId,
+                kind: toGeneratedAssetKind(job.kind),
+                label: `generation.asset.label.generated:${job.kind}:${job.id}`,
+                sceneMode: "2d",
+                source: primaryArtifact.previewSource,
+                sourceFormat: primaryArtifact.mimeType?.split("/")[1] ?? "dat",
+                sourceMimeType: primaryArtifact.mimeType,
+                tags: ["generated", job.kind],
+                variants: [
+                  {
+                    id: `${generatedAssetId}.runtime`,
+                    format: primaryArtifact.mimeType?.split("/")[1] ?? "dat",
+                    source: primaryArtifact.previewSource,
+                    usage: "runtime",
+                    mimeType: primaryArtifact.mimeType,
+                  },
+                ],
+                approved: true,
+                createdAtMs: job.createdAtMs,
+                updatedAtMs: Date.now(),
+              };
+            }
           }
         }
-      }
 
-      state.generationJobs[jobId] = {
-        ...job,
-        status: nextStatus,
-        statusMessage: nextStatusMessage,
-        updatedAtMs: Date.now(),
-      };
+        state.generationJobs[jobId] = {
+          ...job,
+          status: nextStatus,
+          statusMessage: nextStatusMessage,
+          updatedAtMs: Date.now(),
+        };
 
-      return {
-        ok: true,
-        payload: structuredClone(state.generationJobs[jobId]),
-      };
-    });
+        return {
+          ok: true,
+          payload: structuredClone(state.generationJobs[jobId]),
+        };
+      },
+    );
     if (!mutation) {
       return null;
     }
@@ -2778,22 +2825,23 @@ class PrismaBuilderService implements BuilderService {
       projectId,
       this.resolveUpdatedBy(updatedBy, "builder-automation"),
       (state) => {
-      const nextRun = structuredClone(payload.run);
-      const action: BuilderMutationResult["action"] = Object.hasOwn(
-        state.automationRuns,
-        payload.id,
-      )
-        ? "updated"
-        : "queued";
-      state.automationRuns[payload.id] = nextRun;
-      return {
-        ok: true,
-        payload: {
-          action,
-          run: nextRun,
-        },
-      };
-    });
+        const nextRun = structuredClone(payload.run);
+        const action: BuilderMutationResult["action"] = Object.hasOwn(
+          state.automationRuns,
+          payload.id,
+        )
+          ? "updated"
+          : "queued";
+        state.automationRuns[payload.id] = nextRun;
+        return {
+          ok: true,
+          payload: {
+            action,
+            run: nextRun,
+          },
+        };
+      },
+    );
     if (!mutation) {
       return null;
     }
@@ -2837,30 +2885,37 @@ class PrismaBuilderService implements BuilderService {
     );
     const maxSteps = Math.max(
       1,
-      Math.min(payload.maxSteps ?? appConfig.builder.automationMaxSteps, appConfig.builder.automationMaxSteps),
+      Math.min(
+        payload.maxSteps ?? appConfig.builder.automationMaxSteps,
+        appConfig.builder.automationMaxSteps,
+      ),
     );
     const signature = buildAutomationRunSignature(runId, payload.goal, steps.length, dryRun);
 
-    return this.saveAutomationRun(projectId, {
-      id: runId,
-      run: {
+    return this.saveAutomationRun(
+      projectId,
+      {
         id: runId,
-        status: "queued",
-        goal: payload.goal.trim(),
-        steps,
-        artifactIds: [],
-        statusMessage: "automation.queued-for-processing",
-        dryRun,
-        signature,
-        signedBy: this.resolveUpdatedBy(updatedBy, "builder-automation"),
-        signedAtMs: now,
-        maxRuntimeMs,
-        maxSteps,
-        allowedRequestPathPrefixes: appConfig.builder.automationAllowedRequestPathPrefixes,
-        createdAtMs: now,
-        updatedAtMs: now,
+        run: {
+          id: runId,
+          status: "queued",
+          goal: payload.goal.trim(),
+          steps,
+          artifactIds: [],
+          statusMessage: "automation.queued-for-processing",
+          dryRun,
+          signature,
+          signedBy: this.resolveUpdatedBy(updatedBy, "builder-automation"),
+          signedAtMs: now,
+          maxRuntimeMs,
+          maxSteps,
+          allowedRequestPathPrefixes: appConfig.builder.automationAllowedRequestPathPrefixes,
+          createdAtMs: now,
+          updatedAtMs: now,
+        },
       },
-    }, updatedBy);
+      updatedBy,
+    );
   }
 
   public async approveAutomationRun(
@@ -2883,7 +2938,9 @@ class PrismaBuilderService implements BuilderService {
           statusMessage: approved
             ? "automation.approved-for-apply"
             : "automation.canceled-by-review",
-          approvedBy: approved ? this.resolveUpdatedBy(updatedBy, "builder-automation") : run.approvedBy,
+          approvedBy: approved
+            ? this.resolveUpdatedBy(updatedBy, "builder-automation")
+            : run.approvedBy,
           approvedAtMs: approved ? Date.now() : run.approvedAtMs,
           updatedAtMs: Date.now(),
         };
@@ -3124,46 +3181,47 @@ class PrismaBuilderService implements BuilderService {
       projectId,
       this.resolveUpdatedBy(updatedBy, "builder-ai"),
       (nextState) => {
-      for (const operation of operations) {
-        const target = parsePatchTarget(operation.path);
-        if (!target) {
-          continue;
-        }
+        for (const operation of operations) {
+          const target = parsePatchTarget(operation.path);
+          if (!target) {
+            continue;
+          }
 
-        if (target.kind === "dialogue") {
+          if (target.kind === "dialogue") {
+            if (operation.op === "remove") {
+              delete nextState.dialogues[target.locale][target.key];
+              continue;
+            }
+
+            const parsed = parsePatchValue(operation.value);
+            nextState.dialogues[target.locale][target.key] =
+              typeof parsed === "string" ? parsed : JSON.stringify(parsed);
+            continue;
+          }
+
           if (operation.op === "remove") {
-            delete nextState.dialogues[target.locale][target.key];
+            delete nextState.scenes[target.sceneId];
             continue;
           }
 
           const parsed = parsePatchValue(operation.value);
-          nextState.dialogues[target.locale][target.key] =
-            typeof parsed === "string" ? parsed : JSON.stringify(parsed);
-          continue;
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            continue;
+          }
+
+          nextState.scenes[target.sceneId] = parseScenePatch(
+            target.sceneId,
+            parsed,
+            nextState.scenes[target.sceneId],
+          );
         }
 
-        if (operation.op === "remove") {
-          delete nextState.scenes[target.sceneId];
-          continue;
-        }
-
-        const parsed = parsePatchValue(operation.value);
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-          continue;
-        }
-
-        nextState.scenes[target.sceneId] = parseScenePatch(
-          target.sceneId,
-          parsed,
-          nextState.scenes[target.sceneId],
-        );
-      }
-
-      return {
-        ok: true,
-        payload: operations.length,
-      };
-    });
+        return {
+          ok: true,
+          payload: operations.length,
+        };
+      },
+    );
     if (!mutation) {
       return null;
     }

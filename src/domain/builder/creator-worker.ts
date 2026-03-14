@@ -1,6 +1,5 @@
 import { chromium } from "playwright";
 import sharp from "sharp";
-import { createHash } from "node:crypto";
 import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
 import {
@@ -19,6 +18,7 @@ import type {
   GenerationJob,
 } from "../../shared/contracts/game.ts";
 import { settleAsync } from "../../shared/utils/async-result.ts";
+import { sha256Hex } from "../../shared/utils/crypto.ts";
 import { ProviderRegistry } from "../ai/providers/provider-registry.ts";
 import { AiAuthoringService } from "./ai-authoring.ts";
 import { persistBuilderFile } from "./asset-storage.ts";
@@ -389,7 +389,7 @@ const buildAutomationRunSignature = (
   dryRun: boolean,
 ): string => {
   const payload = `${runId}|${goal.trim()}|${stepCount}|${dryRun ? "1" : "0"}|${appConfig.builder.automationSigningSecret}`;
-  return createHash("sha256").update(payload).digest("hex");
+  return sha256Hex(payload);
 };
 
 const validateAutomationRunPolicy = (run: AutomationRun): WorkerResult<null> => {
@@ -443,7 +443,12 @@ const validateAutomationRunPolicy = (run: AutomationRun): WorkerResult<null> => 
   }
 
   if (run.signature) {
-    const expected = buildAutomationRunSignature(run.id, run.goal, run.steps.length, run.dryRun === true);
+    const expected = buildAutomationRunSignature(
+      run.id,
+      run.goal,
+      run.steps.length,
+      run.dryRun === true,
+    );
     if (run.signature !== expected) {
       return {
         ok: false,
@@ -856,7 +861,10 @@ export const executeAutomationRun = async (
   };
   const completedSteps: AutomationRunStep[] = [];
   const startedAtMs = Date.now();
-  const maxRuntimeMs = Math.max(1_000, run.maxRuntimeMs ?? appConfig.builder.automationMaxRuntimeMs);
+  const maxRuntimeMs = Math.max(
+    1_000,
+    run.maxRuntimeMs ?? appConfig.builder.automationMaxRuntimeMs,
+  );
 
   if (run.steps.some((step) => step.action === "browser")) {
     const targetUrl = buildAutomationUrl(withQueryParameters(appRoutes.builder, { projectId }));

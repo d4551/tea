@@ -135,8 +135,9 @@ export const registerAuthSessionMigrationSeed = (
     organizationId:
       typeof seed.organizationId === "string" ? seed.organizationId.trim() : undefined,
     roleKeys:
-      seed.roleKeys?.filter((role): role is string => typeof role === "string" && role.trim().length > 0) ??
-      [],
+      seed.roleKeys?.filter(
+        (role): role is string => typeof role === "string" && role.trim().length > 0,
+      ) ?? [],
   };
 
   const expiresAtMs = Date.now() + Math.max(1000 * 60, Math.min(ttlMs, 1000 * 60 * 60 * 24));
@@ -159,7 +160,10 @@ const resolveUserPrincipalFromSeed = (seed: AuthPrincipalSeed | undefined): Auth
     actorType: "user",
     actorId: seed.actorId.trim(),
     organizationId: seed.organizationId?.trim() ? seed.organizationId.trim() : null,
-    roleKeys: seed.roleKeys?.filter((role): role is string => typeof role === "string" && role.trim().length > 0) ?? [],
+    roleKeys:
+      seed.roleKeys?.filter(
+        (role): role is string => typeof role === "string" && role.trim().length > 0,
+      ) ?? [],
   };
 };
 

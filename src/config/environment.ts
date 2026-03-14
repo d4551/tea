@@ -304,8 +304,7 @@ const DEFAULT_BUILDER_WORKER_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_BUILDER_AUTOMATION_PROBE_TIMEOUT_MS = 500;
 const DEFAULT_BUILDER_AUTOMATION_MAX_STEPS = 32;
 const DEFAULT_BUILDER_AUTOMATION_MAX_RUNTIME_MS = 120_000;
-const DEFAULT_BUILDER_AUTOMATION_ALLOWED_PATH_PREFIXES =
-  "/api/builder,/builder,/api/game/session";
+const DEFAULT_BUILDER_AUTOMATION_ALLOWED_PATH_PREFIXES = "/api/builder,/builder,/api/game/session";
 const DEFAULT_BUILDER_AUTOMATION_SIGNING_SECRET = "local-dev-automation-secret";
 const DEFAULT_ALLOW_UNSAFE_AUTOMATION_ACTIONS = false;
 const DEFAULT_RPA_EXECUTION_KILL_SWITCH_ENABLED = false;
@@ -315,7 +314,7 @@ const DEFAULT_COMPLIANCE_ARTIFACT_RETENTION_DAYS = 30;
 const DEFAULT_COMPLIANCE_EXPORT_DIRECTORY = "uploads/compliance-exports";
 const DEFAULT_PLAYABLE_GAME_MOUNT_PATH = defaultAppRouteRoots.game;
 const DEFAULT_PLAYABLE_GAME_SOURCE_DIRECTORY = "public/game";
-const DEFAULT_THEME = "silk";
+const DEFAULT_THEME = "tea-dark";
 const DEFAULT_MAX_CONTENT_WIDTH_CLASS = "max-w-6xl";
 const DEFAULT_SESSION_COOKIE_NAME = "lotfk_session";
 const DEFAULT_SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
@@ -659,7 +658,7 @@ export const matchLocale = (value: string | undefined | null): LocaleCode | null
 /**
  * Fully resolved application configuration from environment variables.
  */
-const resolvedApplicationName = Bun.env.APP_NAME ?? "Game Forge";
+const resolvedApplicationName = Bun.env.APP_NAME ?? "TEA 🍵";
 const resolvedApplicationVersion = Bun.env.APP_VERSION ?? "1.0.0";
 
 export const appConfig: AppConfig = {
@@ -1030,10 +1029,7 @@ export const appConfig: AppConfig = {
       50,
       "AI_RETRY_BACKOFF_BASE_MS",
     ),
-    providerAllowlist: parseCsvValues(
-      Bun.env.AI_PROVIDER_ALLOWLIST,
-      DEFAULT_AI_PROVIDER_ALLOWLIST,
-    ),
+    providerAllowlist: parseCsvValues(Bun.env.AI_PROVIDER_ALLOWLIST, DEFAULT_AI_PROVIDER_ALLOWLIST),
     allowHighCostGeneration: parseBoolean(
       Bun.env.AI_ALLOW_HIGH_COST_GENERATION,
       DEFAULT_AI_ALLOW_HIGH_COST_GENERATION,

@@ -2,6 +2,18 @@ import type { GameSession } from "../../../shared/contracts/game.ts";
 import { prismaBase } from "../../../shared/services/db.ts";
 import { safeJsonParse } from "../../../shared/utils/safe-json.ts";
 
+/** Minimal guard for legacy save-slot format where session was stored directly. */
+const isLegacyGameSession = (v: unknown): v is GameSession => {
+  if (typeof v !== "object" || v === null) return false;
+  const r = v as Record<string, unknown>;
+  return (
+    typeof r.id === "string" && "scene" in r && typeof r.scene === "object" && r.scene !== null
+  );
+};
+
+const isSaveSlotSnapshot = (v: SaveSlotSnapshot | GameSession): v is SaveSlotSnapshot =>
+  "session" in v && typeof v.session === "object";
+
 export interface SaveSlotSnapshot {
   readonly session: GameSession;
   readonly progress?: { readonly xp: number; readonly level: number };
@@ -122,24 +134,20 @@ export class SaveSlotStore {
       return null;
     }
 
-    type SnapshotOrNull = SaveSlotSnapshot | null;
-    const parsed = safeJsonParse<SnapshotOrNull>(
+    type SnapshotOrLegacy = SaveSlotSnapshot | GameSession;
+    const parsed = safeJsonParse<SnapshotOrLegacy | null>(
       row.sessionSnapshot,
-      null as SnapshotOrNull,
-      (v): v is SnapshotOrNull =>
+      null as SnapshotOrLegacy | null,
+      (v): v is SnapshotOrLegacy | null =>
         v === null ||
         (typeof v === "object" &&
           v !== null &&
           (("session" in v && typeof (v as SaveSlotSnapshot).session === "object") ||
-            (typeof (v as GameSession).scene === "object" &&
-              typeof (v as GameSession).id === "string"))),
+            isLegacyGameSession(v))),
     );
 
-    if (!parsed) return null;
-    const session: GameSession =
-      "session" in parsed && typeof (parsed as SaveSlotSnapshot).session === "object"
-        ? (parsed as SaveSlotSnapshot).session
-        : (parsed as unknown as GameSession);
+    if (parsed === null) return null;
+    const session: GameSession = isSaveSlotSnapshot(parsed) ? parsed.session : parsed;
     const progress =
       "progress" in parsed && parsed?.progress && typeof parsed.progress === "object"
         ? { xp: parsed.progress.xp, level: parsed.progress.level }

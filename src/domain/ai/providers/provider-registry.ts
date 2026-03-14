@@ -16,10 +16,10 @@ import type {
   AiCapability,
   AiChatParams,
   AiClassificationResult,
-  AiGovernanceContext,
   AiGenerationResult,
-  AiModelProvenance,
+  AiGovernanceContext,
   AiModelCapabilities,
+  AiModelProvenance,
   AiProvider,
   AiSpeechSynthesisParams,
   AiSpeechSynthesisResult,
@@ -625,9 +625,7 @@ export class ProviderRegistry {
       return null;
     }
 
-    const allowlist = new Set(
-      appConfig.ai.providerAllowlist.map((entry) => entry.toLowerCase()),
-    );
+    const allowlist = new Set(appConfig.ai.providerAllowlist.map((entry) => entry.toLowerCase()));
     if (allowlist.size === 0) {
       return candidate;
     }

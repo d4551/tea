@@ -2728,7 +2728,12 @@ export class BuilderProjectStateStore {
     const actor = this.resolveUpdatedBy(updatedBy, "builder-publish");
 
     if (!published) {
-      const updated = await prisma.builderProject.publishStateSnapshot(sanitized, false, undefined, actor);
+      const updated = await prisma.builderProject.publishStateSnapshot(
+        sanitized,
+        false,
+        undefined,
+        actor,
+      );
       if (!updated) {
         return null;
       }
@@ -2775,12 +2780,12 @@ export class BuilderProjectStateStore {
       sanitized,
       true,
       {
-      state: safeJsonParse<Prisma.InputJsonValue>(
-        JSON.stringify(entry.state),
-        {},
-        (v): v is Prisma.InputJsonValue => true,
-      ),
-      checksum: checksumOf(entry.state),
+        state: safeJsonParse<Prisma.InputJsonValue>(
+          JSON.stringify(entry.state),
+          {},
+          (v): v is Prisma.InputJsonValue => true,
+        ),
+        checksum: checksumOf(entry.state),
       },
       actor,
     );

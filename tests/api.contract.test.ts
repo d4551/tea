@@ -108,7 +108,7 @@ const readResponsePayload = async <TPayload>(response: Response): Promise<TPaylo
   return parsed.value;
 };
 const sceneModeHtmlIncludes = (source: string, mode: "2D" | "3D"): boolean =>
-  new RegExp(`id="game-scene-mode-value"[^>]*>\\s*${mode}\\s*<\\/span>`).test(source);
+  new RegExp(`id="game-scene-mode-value"[^>]*>\\s*${mode}\\s*<\\/div>`).test(source);
 const readSessionCookieHeader = (response: Response): string | null => {
   const setCookie = response.headers.get("set-cookie");
   if (!setCookie) {

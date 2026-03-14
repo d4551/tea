@@ -1921,7 +1921,7 @@ const withBuilderCoreExtensions = (base: PrismaClient) =>
                 data: {
                   latestReleaseVersion: nextReleaseVersion,
                   publishedReleaseVersion: nextReleaseVersion,
-                updatedBy: actor,
+                  updatedBy: actor,
                   version: {
                     increment: 1,
                   },

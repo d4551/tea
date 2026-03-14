@@ -1,209 +1,209 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-03-10T00:00:00.000Z",
+  "generatedAt": "2026-03-14T15:16:40.089Z",
   "entries": [
     {
       "sourcePath": "README.md",
       "archivePath": "notes/doc-archive/README.txt",
-      "sha256": "7572ee9d293bb243ee6f73f6b07ad388243507e064f29046591c4bc2069b869b",
-      "sizeBytes": 26280,
-      "archivedAt": "2026-03-10T06:26:45Z"
+      "sha256": "f9a5e125d58ac4bc43ef8aa1c9c3fb7fb5f4d3794988169f90b5057c1f0a64e6",
+      "sizeBytes": 25781,
+      "archivedAt": "2026-03-14T15:16:40.082Z"
     },
     {
       "sourcePath": "ARCHITECTURE.md",
       "archivePath": "notes/doc-archive/ARCHITECTURE.txt",
-      "sha256": "2dd7e0db0b48837e4a7be47592026c07924625b1929eacafba8125cbec10b938",
-      "sizeBytes": 9162,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "sha256": "eebdccbb1db62c7e0225c220e031120bfd05e8c06dd508f69803da806d323b72",
+      "sizeBytes": 9149,
+      "archivedAt": "2026-03-14T15:16:40.083Z"
     },
     {
       "sourcePath": "ARCHITECTURE.zh-CN.md",
       "archivePath": "notes/doc-archive/ARCHITECTURE.zh-CN.txt",
-      "sha256": "4f9202d82efca9a229b926b6cf28ccdc267f322c17a3af5babbd12726980524a",
-      "sizeBytes": 7015,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "sha256": "d40f9e36a4fac841fa065db0448d31670403c98c86de90d531b8c011c7727850",
+      "sizeBytes": 7010,
+      "archivedAt": "2026-03-14T15:16:40.083Z"
     },
     {
       "sourcePath": "docs/index.md",
       "archivePath": "notes/doc-archive/docs__index.txt",
-      "sha256": "3e770a622903258f01273379dd9c6ad02c7b8d06bdb3967141251b357d958f8c",
-      "sizeBytes": 4275,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "sha256": "808aab3d6e781fa5ec664069b850af794cfe3cd26f2fb47a449d37201f49a6d6",
+      "sizeBytes": 4439,
+      "archivedAt": "2026-03-14T15:16:40.084Z"
     },
     {
       "sourcePath": "docs/index.zh-CN.md",
       "archivePath": "notes/doc-archive/docs__index.zh-CN.txt",
       "sha256": "a06c0d8d5faac4320f2fb6f9ac115f6a10fba1fab3d069c08a03727c1a22ebb9",
       "sizeBytes": 2896,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.084Z"
     },
     {
       "sourcePath": "docs/htmx-extensions.md",
       "archivePath": "notes/doc-archive/docs__htmx-extensions.txt",
-      "sha256": "8bb7ba7af0cd85c7d249abca315fd974327e037f113abd546781b7855e438c09",
-      "sizeBytes": 4801,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "sha256": "1a37bb1bca5f7e7232f4018457b54c8fb6bc163de5b47c0d9c1480b0cd87816b",
+      "sizeBytes": 4593,
+      "archivedAt": "2026-03-14T15:16:40.084Z"
     },
     {
       "sourcePath": "docs/htmx-extensions.zh-CN.md",
       "archivePath": "notes/doc-archive/docs__htmx-extensions.zh-CN.txt",
-      "sha256": "48c81f9488223999a6c95bdc5d50a07d5d525316cc6d7e0461b57d1e4981d1dc",
-      "sizeBytes": 2644,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "sha256": "e2412446c9f256ae38e7217a6a73c90dbfc4cb3e9ebab6fe266858cf9318c15f",
+      "sizeBytes": 2499,
+      "archivedAt": "2026-03-14T15:16:40.085Z"
     },
     {
       "sourcePath": "docs/playable-runtime.md",
       "archivePath": "notes/doc-archive/docs__playable-runtime.txt",
       "sha256": "6904d299904526891ac4a83b5803a438c340078d52b4563d69625c98c01332b0",
       "sizeBytes": 5095,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.085Z"
     },
     {
       "sourcePath": "docs/playable-runtime.zh-CN.md",
       "archivePath": "notes/doc-archive/docs__playable-runtime.zh-CN.txt",
       "sha256": "720d855061343b1abd93ac5f46804800c569e97c09d12d4623d4968f4d502a13",
       "sizeBytes": 3299,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.085Z"
     },
     {
       "sourcePath": "docs/local-ai-runtime.md",
       "archivePath": "notes/doc-archive/docs__local-ai-runtime.txt",
       "sha256": "829b41bc7e48da1110f7faac4c4bc18eba3dd3fe7c79f29a63cd8bf0bce0819d",
       "sizeBytes": 4089,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.085Z"
     },
     {
       "sourcePath": "docs/local-ai-runtime.zh-CN.md",
       "archivePath": "notes/doc-archive/docs__local-ai-runtime.zh-CN.txt",
       "sha256": "372a4d7ceb4885ed5871e3da402043684e090438ccb7f9a20f4b80cb430e2136",
       "sizeBytes": 2244,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.085Z"
     },
     {
       "sourcePath": "docs/operator-runbook.md",
       "archivePath": "notes/doc-archive/docs__operator-runbook.txt",
       "sha256": "a37a3ceb14b3d1bf585e4c576e23c39c1de1cd3242a45bef13b4cf1725e0883b",
       "sizeBytes": 4586,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.086Z"
     },
     {
       "sourcePath": "docs/operator-runbook.zh-CN.md",
       "archivePath": "notes/doc-archive/docs__operator-runbook.zh-CN.txt",
       "sha256": "68866f72f87f43322aab2d2b80de3fd92041743d7c9028f34c7bc77a2a4e9e77",
       "sizeBytes": 2208,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.086Z"
     },
     {
       "sourcePath": "docs/api-contracts.md",
       "archivePath": "notes/doc-archive/docs__api-contracts.txt",
       "sha256": "308416ce1133f983bffc05df24aaece59338e4bf473ce8028aee9ddddc6803cd",
       "sizeBytes": 5657,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.086Z"
     },
     {
       "sourcePath": "docs/api-contracts.zh-CN.md",
       "archivePath": "notes/doc-archive/docs__api-contracts.zh-CN.txt",
       "sha256": "ae2642d6fb55d25736fa0cc7af4631abb34dbbead0fa8fcbfd6408cd2539008a",
       "sizeBytes": 3924,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.086Z"
     },
     {
       "sourcePath": "docs/builder-domain.md",
       "archivePath": "notes/doc-archive/docs__builder-domain.txt",
       "sha256": "06f7857ebcbaab0bac318c96ea49a826cc8ad5acaf095ec740987a5f07b3f60f",
       "sizeBytes": 5652,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.087Z"
     },
     {
       "sourcePath": "docs/builder-domain.zh-CN.md",
       "archivePath": "notes/doc-archive/docs__builder-domain.zh-CN.txt",
       "sha256": "cbdbef865d89b0311e341281a18408902a2d88e67fd432ffae2af0b3aad22f29",
       "sizeBytes": 3755,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.087Z"
     },
     {
       "sourcePath": "docs/rmmz-pack.md",
       "archivePath": "notes/doc-archive/docs__rmmz-pack.txt",
       "sha256": "fbcb023289339b4d9e27566fef5f7c92c3efa744ef0047e498ff37293f744cd6",
       "sizeBytes": 3170,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.087Z"
     },
     {
       "sourcePath": "docs/rmmz-pack.zh-CN.md",
       "archivePath": "notes/doc-archive/docs__rmmz-pack.zh-CN.txt",
       "sha256": "5370aec78fe12766f8e107aab607266c4061da696da73e3470bed441bb1fd93c",
       "sizeBytes": 1568,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.088Z"
     },
     {
       "sourcePath": "docs/maintenance-audit-2026-03-10.md",
       "archivePath": "notes/doc-archive/docs__maintenance-audit-2026-03-10.txt",
-      "sha256": "b8085f3051fdfc96cb3fa19216a22a5c3966cc8348cd9454c7a6ffc988c926a0",
-      "sizeBytes": 8650,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "sha256": "a416290044369dee49a1a379fda0c9997bb5d59855bc4151d60454816e462c3f",
+      "sizeBytes": 9184,
+      "archivedAt": "2026-03-14T15:16:40.088Z"
     },
     {
       "sourcePath": "docs/maintenance-audit-2026-03-10.zh-CN.md",
       "archivePath": "notes/doc-archive/docs__maintenance-audit-2026-03-10.zh-CN.txt",
-      "sha256": "92bd40bb31999b6c296408eb6662d0b3761cde6dd8f243fe839b6cc2f40aab81",
-      "sizeBytes": 3205,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "sha256": "d79741d87aa85461edeb51c657f9bdde5e74b9f87e0ff88b765d0187ec66625c",
+      "sizeBytes": 3388,
+      "archivedAt": "2026-03-14T15:16:40.088Z"
     },
     {
       "sourcePath": "LOTFK_RMMZ_Agentic_Pack/README.md",
       "archivePath": "notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__README.txt",
       "sha256": "13d74b01772f0838a234a836cd43b8f0a6a8814b849b4ff5c283f40d770262f9",
       "sizeBytes": 4548,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.088Z"
     },
     {
       "sourcePath": "LOTFK_RMMZ_Agentic_Pack/README.zh-CN.md",
       "archivePath": "notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__README.zh-CN.txt",
       "sha256": "3a08580c422da158ca851418fd7789877b83be338bbf5b123cb5e379ea611838",
       "sizeBytes": 1041,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.088Z"
     },
     {
       "sourcePath": "LOTFK_RMMZ_Agentic_Pack/PLUGIN_SPEC.md",
       "archivePath": "notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__PLUGIN_SPEC.txt",
       "sha256": "d3ed866f7962f5efb4015644d62a0a20e3085ffd890ce2afe22ce617c990d8ee",
       "sizeBytes": 6094,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.089Z"
     },
     {
       "sourcePath": "LOTFK_RMMZ_Agentic_Pack/PLUGIN_SPEC.zh-CN.md",
       "archivePath": "notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__PLUGIN_SPEC.zh-CN.txt",
       "sha256": "376b76b692ffdadf227d2c76cdb6bc355ec55ffa330e00af8efe92dbf86247ad",
       "sizeBytes": 2233,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.089Z"
     },
     {
       "sourcePath": "LOTFK_RMMZ_Agentic_Pack/EVENT_HOOKUPS.md",
       "archivePath": "notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__EVENT_HOOKUPS.txt",
       "sha256": "f897f46b303f5994190cc4877fb487c2912adbc3ee37996f0d644859e794571b",
       "sizeBytes": 4800,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.089Z"
     },
     {
       "sourcePath": "LOTFK_RMMZ_Agentic_Pack/EVENT_HOOKUPS.zh-CN.md",
       "archivePath": "notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__EVENT_HOOKUPS.zh-CN.txt",
       "sha256": "15938a86aa6359b70842fc5bd1e271a1288b3e25219b07d859852c44fd45d626",
       "sizeBytes": 1888,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.089Z"
     },
     {
       "sourcePath": "LOTFK_RMMZ_Agentic_Pack/STATUS.md",
       "archivePath": "notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__STATUS.txt",
       "sha256": "3cc06b511ffaf07488935c02d7c60660e9d1de25847174ebfe7588e2a68a4ccd",
       "sizeBytes": 1501,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.089Z"
     },
     {
       "sourcePath": "LOTFK_RMMZ_Agentic_Pack/STATUS.zh-CN.md",
       "archivePath": "notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__STATUS.zh-CN.txt",
       "sha256": "ae1c4951b676d638c123b6a594a9416351ceaa3affed7c5ee25a095b45ef1c5d",
       "sizeBytes": 644,
-      "archivedAt": "2026-03-10T00:00:00.000Z"
+      "archivedAt": "2026-03-14T15:16:40.089Z"
     }
   ]
 }

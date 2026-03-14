@@ -191,7 +191,7 @@ export const renderBuilderProjectShell = (
       ? ""
       : `<a href="${escapeHtml(playHref)}" class="btn btn-secondary btn-xs" aria-label="${escapeHtml(messages.builder.playPublishedBuild)}">${escapeHtml(messages.builder.playPublishedBuild)}</a>`;
 
-  return `<section id="builder-project-shell" class="border-b border-base-300 bg-base-200">
+  return `<section id="builder-project-shell" class="border-b border-base-300/80 bg-base-100/80 backdrop-blur">
     <div class="flex flex-wrap items-center gap-3 px-6 py-2.5">
       <span class="font-semibold text-sm">${escapeHtml(project?.id ?? projectId)}</span>
       <span class="badge ${statusTone} badge-soft badge-xs">${escapeHtml(statusLabel)}</span>
@@ -252,7 +252,7 @@ export const renderBuilderSidebar = (props: BuilderLayoutProps): string => {
   const renderNavItem = (item: BuilderNavItem): string => {
     const isActive = item.key === activeTab;
     const activeClass = isActive
-      ? "menu-active bg-primary/10 text-primary font-semibold is-drawer-open:bg-primary/10"
+      ? "menu-active bg-primary/12 text-primary font-semibold is-drawer-open:bg-primary/10"
       : "";
     const ariaCurrent = isActive ? ' aria-current="page"' : "";
     const href = withBuilderQuery(item.href, locale, project?.id ?? projectId);
@@ -274,32 +274,33 @@ export const renderBuilderSidebar = (props: BuilderLayoutProps): string => {
   const sidebarItems = `${dashboard ? renderNavItem(dashboard) : ""}<li class="menu-title"><span class="is-drawer-close:hidden">${escapeHtml(messages.builder.navGroupContent)}</span></li>${contentItems}<li class="menu-title"><span class="is-drawer-close:hidden">${escapeHtml(messages.builder.navGroupSystems)}</span></li>${systemsItems}`;
 
   return `
-    <div class="flex min-h-full flex-col items-start bg-base-200 is-drawer-close:w-14 is-drawer-open:w-72 is-drawer-close:overflow-visible" aria-label="${escapeHtml(messages.builder.title)}">
+    <aside class="flex min-h-full flex-col items-start bg-base-200/85 backdrop-blur is-drawer-close:w-14 is-drawer-open:w-72 is-drawer-close:overflow-visible border-r border-base-300/70" aria-label="${escapeHtml(messages.builder.title)}">
       <div class="w-full p-3 is-drawer-close:p-2 border-b border-base-300">
-        <a href="${escapeHtml(withQueryParameters(appRoutes.home, { lang: locale }))}" class="is-drawer-close:tooltip is-drawer-close:tooltip-right flex items-center gap-2 px-2 py-1 text-xl font-bold" data-tip="${escapeHtml(messages.metadata.appName)}" aria-label="${escapeHtml(messages.metadata.appName)}">
-          <svg xmlns="http://www.w3.org/2000/svg" class="size-5 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+        <a href="${escapeHtml(withQueryParameters(appRoutes.home, { lang: locale }))}" class="is-drawer-close:tooltip is-drawer-close:tooltip-right group flex items-center gap-2 px-2 py-1 text-xl font-bold" data-tip="${escapeHtml(messages.metadata.appName)}" aria-label="${escapeHtml(messages.metadata.appName)}">
+          <span class="inline-flex size-8 items-center justify-center rounded-xl bg-primary/15 text-lg shadow-sm shadow-primary/30" aria-hidden="true">🍵</span>
           <span class="is-drawer-close:hidden">${escapeHtml(messages.metadata.appName)}</span>
+          <span class="is-drawer-close:hidden ml-auto rounded-full border border-primary/30 px-2 py-1 text-xs uppercase tracking-[0.18em] text-primary/85">v1</span>
         </a>
       </div>
 
-      <div class="w-full p-3 is-drawer-close:p-2 border-b border-base-300">
-        <div class="flex items-center gap-2 px-1 is-drawer-close:justify-center">
+      <div class="w-full p-3 is-drawer-close:p-2 border-b border-base-300/70">
+        <div class="is-drawer-close:justify-center flex items-center gap-2 rounded-lg bg-base-100/60 px-2 py-2 is-drawer-close:py-1">
           <span class="status ${project === null ? "status-warning" : "status-success"} status-xs"></span>
           <span class="text-sm font-medium truncate is-drawer-close:hidden">${escapeHtml(project === null ? messages.common.noProjectBound : messages.common.projectConfigured)}</span>
         </div>
       </div>
 
-      <ul class="menu w-full grow">
+      <ul class="menu w-full grow gap-1 px-2">
         ${sidebarItems}
       </ul>
 
-      <div class="w-full p-3 is-drawer-close:p-2 border-t border-base-300">
+      <div class="w-full p-3 is-drawer-close:p-2 border-t border-base-300/70">
         <a href="${escapeHtml(withQueryParameters(appRoutes.home, { lang: locale }))}" class="btn btn-outline btn-block btn-sm gap-2 is-drawer-close:btn-square" aria-label="${escapeHtml(messages.builder.exitBuilder)}">
           <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
           <span class="is-drawer-close:hidden">${escapeHtml(messages.builder.exitBuilder)}</span>
         </a>
       </div>
-    </div>
+    </aside>
   `;
 };
 
@@ -316,7 +317,7 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
 
       <!-- Mobile Builder Top Bar -->
       <div class="flex flex-col flex-1 w-full max-w-[100vw]">
-        <nav class="navbar bg-base-300 lg:hidden" role="navigation" aria-label="${escapeHtml(messages.builder.title)}">
+        <nav class="navbar bg-base-100/90 border-b border-base-300/80 lg:hidden backdrop-blur" role="navigation" aria-label="${escapeHtml(messages.builder.title)}">
           <div class="flex-none">
             ${renderDrawerToggleControl({
               targetId: "main-nav-drawer",
@@ -340,7 +341,7 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
           ${body}
         </div>
 
-        <footer class="sticky bottom-0 z-40 border-t border-base-300 bg-base-200 px-4 py-2" role="status" aria-label="${escapeHtml(messages.builder.statusBarProject)}">
+        <footer class="sticky bottom-0 z-40 border-t border-base-300/80 bg-base-100/90 backdrop-blur px-4 py-2" role="status" aria-label="${escapeHtml(messages.builder.statusBarProject)}">
           <div class="flex flex-wrap items-center gap-4 text-xs text-base-content/70">
             <div class="flex items-center gap-1.5">
               <span class="status status-primary"></span>
@@ -365,7 +366,7 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
             </div>
           </div>
         </footer>
-        <nav class="dock dock-sm bg-base-200 lg:hidden" aria-label="${escapeHtml(messages.builder.title)}">
+        <nav class="dock dock-sm bg-base-100/90 border-t border-base-300/80 lg:hidden" aria-label="${escapeHtml(messages.builder.title)}">
           <a href="${escapeHtml(withBuilderQuery(appRoutes.builder, locale, project?.id ?? projectId))}" class="dock-item ${activeTab === "dashboard" ? "dock-active" : ""}" aria-label="${escapeHtml(messages.builder.dashboard)}">
             ${iconDashboard()}
             <span class="dock-label">${escapeHtml(messages.builder.dashboard)}</span>

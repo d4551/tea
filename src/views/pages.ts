@@ -36,7 +36,7 @@ const activityEmptyIcon =
   '<svg xmlns="http://www.w3.org/2000/svg" class="size-10 text-accent/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6v6l4 2"/><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>';
 
 /**
- * Renders the Game Forge home page.
+ * Renders the TEA home page.
  *
  * @param input Shared page input values.
  * @returns Complete HTML document.
@@ -87,7 +87,7 @@ export const renderHomePage = (input: PageRenderInput): string => {
         ${escapeHtml(messages.pages.home.openUnifiedBuilder)}
         <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
       </a>`,
-    media: `<article class="card card-border bg-base-100/75" role="status" aria-label="${escapeHtml(messages.common.noProjectBound)}">
+    media: `<article class="card card-elevated border-base-300/70 bg-base-100/75" role="status" aria-label="${escapeHtml(messages.common.noProjectBound)}">
       <div class="card-body">
         ${renderEmptyState(
           workspaceStatusIcon,
@@ -142,7 +142,7 @@ export const renderHomePage = (input: PageRenderInput): string => {
     <div class="grid lg:grid-cols-2 gap-4">
 
       <!-- Create: Builder Workspace -->
-      <article role="group" aria-label="${escapeHtml(messages.navigation.builder)}" class="card card-border bg-base-200">
+      <article role="group" aria-label="${escapeHtml(messages.navigation.builder)}" class="card card-elevated card-glow-primary bg-base-200/75">
         <div class="card-body gap-3">
           <div class="flex items-start justify-between">
             <div class="rounded-xl w-11 h-11 flex items-center justify-center bg-primary/15 text-primary">
@@ -171,7 +171,7 @@ export const renderHomePage = (input: PageRenderInput): string => {
       </article>
 
       <!-- Play: Playtest + Scene Launchers -->
-      <article role="group" aria-label="${escapeHtml(messages.navigation.game)}" class="card card-border bg-base-200">
+      <article role="group" aria-label="${escapeHtml(messages.navigation.game)}" class="card card-elevated card-glow-secondary bg-base-200/75">
         <div class="card-body gap-3">
           <div class="flex items-start justify-between">
             <div class="rounded-xl w-11 h-11 flex items-center justify-center bg-secondary/15 text-secondary">
@@ -201,7 +201,7 @@ export const renderHomePage = (input: PageRenderInput): string => {
       </article>
 
       <!-- Activity -->
-      <article role="group" aria-label="${escapeHtml(messages.pages.home.projectActivity)}" class="card card-border bg-base-200 lg:col-span-2">
+        <article role="group" aria-label="${escapeHtml(messages.pages.home.projectActivity)}" class="card card-elevated card-glow-primary bg-base-200/85 lg:col-span-2">
         <div class="card-body gap-3">
           <div class="flex items-center gap-2">
             <div class="rounded-lg w-8 h-8 flex items-center justify-center bg-accent/15 text-accent">

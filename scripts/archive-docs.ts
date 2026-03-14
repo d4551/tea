@@ -31,23 +31,33 @@ interface ArchiveManifest {
 const logger = createLogger("script.archive-docs");
 const repositoryRootUrl = new URL("../", import.meta.url);
 
-const sourceMarkdownPaths: readonly string[] = [
-  "README.md",
-  "ARCHITECTURE.md",
-  "docs/index.md",
-  "docs/htmx-extensions.md",
-  "docs/playable-runtime.md",
-  "docs/local-ai-runtime.md",
-  "docs/operator-runbook.md",
-  "docs/api-contracts.md",
-  "docs/builder-domain.md",
-  "docs/rmmz-pack.md",
-  "docs/maintenance-audit-2026-03-10.md",
-  "LOTFK_RMMZ_Agentic_Pack/README.md",
-  "LOTFK_RMMZ_Agentic_Pack/PLUGIN_SPEC.md",
-  "LOTFK_RMMZ_Agentic_Pack/EVENT_HOOKUPS.md",
-  "LOTFK_RMMZ_Agentic_Pack/STATUS.md",
+const DOCUMENT_PAIRS: readonly { readonly en: string; readonly zh?: string }[] = [
+  { en: "README.md" },
+  { en: "ARCHITECTURE.md", zh: "ARCHITECTURE.zh-CN.md" },
+  { en: "docs/index.md", zh: "docs/index.zh-CN.md" },
+  { en: "docs/htmx-extensions.md", zh: "docs/htmx-extensions.zh-CN.md" },
+  { en: "docs/playable-runtime.md", zh: "docs/playable-runtime.zh-CN.md" },
+  { en: "docs/local-ai-runtime.md", zh: "docs/local-ai-runtime.zh-CN.md" },
+  { en: "docs/operator-runbook.md", zh: "docs/operator-runbook.zh-CN.md" },
+  { en: "docs/api-contracts.md", zh: "docs/api-contracts.zh-CN.md" },
+  { en: "docs/builder-domain.md", zh: "docs/builder-domain.zh-CN.md" },
+  { en: "docs/rmmz-pack.md", zh: "docs/rmmz-pack.zh-CN.md" },
+  { en: "docs/maintenance-audit-2026-03-10.md", zh: "docs/maintenance-audit-2026-03-10.zh-CN.md" },
+  { en: "LOTFK_RMMZ_Agentic_Pack/README.md", zh: "LOTFK_RMMZ_Agentic_Pack/README.zh-CN.md" },
+  {
+    en: "LOTFK_RMMZ_Agentic_Pack/PLUGIN_SPEC.md",
+    zh: "LOTFK_RMMZ_Agentic_Pack/PLUGIN_SPEC.zh-CN.md",
+  },
+  {
+    en: "LOTFK_RMMZ_Agentic_Pack/EVENT_HOOKUPS.md",
+    zh: "LOTFK_RMMZ_Agentic_Pack/EVENT_HOOKUPS.zh-CN.md",
+  },
+  { en: "LOTFK_RMMZ_Agentic_Pack/STATUS.md", zh: "LOTFK_RMMZ_Agentic_Pack/STATUS.zh-CN.md" },
 ];
+
+const sourceMarkdownPaths: readonly string[] = DOCUMENT_PAIRS.flatMap((p) =>
+  p.zh === undefined ? [p.en] : [p.en, p.zh],
+);
 
 const archiveRoot = "notes/doc-archive";
 const manifestPath = `${archiveRoot}/index.json`;

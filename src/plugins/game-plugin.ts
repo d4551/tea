@@ -1,6 +1,7 @@
 import { Elysia, t } from "elysia";
 import { appConfig, type LocaleCode, normalizeLocale } from "../config/environment.ts";
 import { auditService } from "../domain/audit/audit-service.ts";
+import { type PrincipalIdentity, requireGameAction } from "../domain/auth/authorization.ts";
 import { gameTextByLocale } from "../domain/game/data/game-text.ts";
 import { gameLoop } from "../domain/game/game-loop.ts";
 import { playerProgressStore } from "../domain/game/services/player-progress-store.ts";
@@ -9,7 +10,6 @@ import { ensureCorrelationIdHeader } from "../lib/correlation-id.ts";
 import { ApplicationError, errorEnvelope } from "../lib/error-envelope.ts";
 import { createLogger } from "../lib/logger.ts";
 import { authSessionGuard } from "../plugins/auth-session.ts";
-import { requireGameAction, type PrincipalIdentity } from "../domain/auth/authorization.ts";
 import { defaultGameConfig } from "../shared/config/game-config.ts";
 import { httpStatus } from "../shared/constants/http.ts";
 import {
@@ -1279,23 +1279,23 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
     app
       .post(
         route.create,
-            async ({
-              body,
-              gameParticipantSessionId,
-              gameRequestLocale,
-              gamePrincipalType,
-              gamePrincipalUserId,
-              gamePrincipalOrganizationId,
-              gamePrincipalRoleKeys,
-            }) => {
+        async ({
+          body,
+          gameParticipantSessionId,
+          gameRequestLocale,
+          gamePrincipalType,
+          gamePrincipalUserId,
+          gamePrincipalOrganizationId,
+          gamePrincipalRoleKeys,
+        }) => {
           const ownerSessionId = gameParticipantSessionId;
-              const principal = resolveGamePrincipalIdentity({
-                gamePrincipalType,
-                gamePrincipalUserId,
-                gamePrincipalOrganizationId,
-                gamePrincipalRoleKeys,
-              });
-              requireGameAction(principal, "create");
+          const principal = resolveGamePrincipalIdentity({
+            gamePrincipalType,
+            gamePrincipalUserId,
+            gamePrincipalOrganizationId,
+            gamePrincipalRoleKeys,
+          });
+          requireGameAction(principal, "create");
           const requestedLocale =
             typeof body?.locale === "string" && body.locale.length > 0 ? body.locale : undefined;
           const sceneId =

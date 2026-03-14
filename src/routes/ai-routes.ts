@@ -11,9 +11,9 @@ import {
   type KnowledgeSearchMatch,
   knowledgeBaseService,
 } from "../domain/ai/knowledge-base-service.ts";
-import { auditService } from "../domain/audit/audit-service.ts";
 import { getAiRuntimeProfile } from "../domain/ai/local-runtime-profile.ts";
 import { ProviderRegistry } from "../domain/ai/providers/provider-registry.ts";
+import { auditService } from "../domain/audit/audit-service.ts";
 import {
   detectAvailableFeatures,
   generateNpcDialogue,

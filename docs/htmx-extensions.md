@@ -1,0 +1,151 @@
+# HTMX lifecycle and extension architecture
+
+This document defines ownership and contracts for all HTMX enhancement behavior in TEA.  
+The goal is deterministic UX for incremental navigation, validation, focus management, and toasts across builder and game surfaces.
+
+## 1) Why centralized extensions exist
+
+Centralized extensions prevent duplicated behavior across many routes and guarantee identical state transitions for busy/loading and focus/validation behavior.
+
+Benefits:
+
+- One owner for request lifecycle UX.
+- One path for validation fragment replacement.
+- Consistent toast/error UX.
+- More reliable accessibility behavior across route boundaries.
+
+## 2) Lifecycle ownership model
+
+```mermaid
+flowchart LR
+  subgraph BrowserEvents["Browser events"]
+    Evt["htmx:* event stream"]
+  end
+
+  subgraph ExtensionLayer["Shared extension layer"]
+    L1["layout-controls"]
+    L2["focus-panel"]
+    L3["oracle-indicator"]
+    L4["server-toast"]
+  end
+
+  subgraph Routes["Route surfaces"]
+    R1["page-routes.ts"]
+    R2["builder-routes.ts"]
+    R3["game-routes.ts"]
+    R4["builder-api.ts"]
+  end
+
+  Evt --> L1
+  Evt --> L2
+  Evt --> L3
+  Evt --> L4
+  Evt --> L5
+
+  L1 --> R1
+  L1 --> R2
+  L1 --> R3
+  L1 --> R4
+  L2 --> R2
+  L2 --> R3
+  L3 --> R1
+  L4 --> R1
+```
+
+## 3) Event to owner map
+
+| Event | Owner | Action |
+| --- | --- | --- |
+| `htmx:configRequest` | `layout-controls` | attach request metadata and CSRF/session markers |
+| `htmx:beforeRequest` | `layout-controls` | busy state + request trace |
+| `htmx:afterRequest` | `layout-controls` | clear busy + baseline UI state |
+| `htmx:beforeSwap` | `layout-controls` | allow approved fragment swaps only |
+| `htmx:afterSwap` | `layout-controls` / `focus-panel` | hydrate extension state and focus |
+| `htmx:afterSettle` | `layout-controls` | focus, a11y checks, toast refresh |
+| `htmx:sendError`/`responseError` | `layout-controls` / `server-toast` | clear busy and emit structured message |
+| `htmx:load` | `focus-panel` | enforce focus order after fragment load |
+
+## 4) Extension contracts
+
+### 4.1 `layout-controls`
+
+- Scope: shell-level UX state across route swaps.
+- Contracts:
+  - per-target busy counters,
+  - deterministic aria toggles,
+  - focus restoration policy,
+  - theme preference persistence,
+  - `422` validation fragment handling.
+
+### 4.2 `focus-panel`
+
+- Scope: focus ownership after swaps.
+- Contracts:
+  - fragments may declare `[data-focus-panel="true"]`,
+  - focus target must exist before restoring,
+  - fallback target defaults to `#main-content`.
+
+### 4.3 `oracle-indicator`
+
+- Scope: Oracle request loading UX.
+- Contracts:
+  - clone the server-rendered loading-panel template before request,
+  - clear indicator on completion,
+  - keep panel markup owned by `renderOraclePanel`.
+
+### 4.4 `server-toast`
+
+- Scope: shared toast rendering from envelope-driven signals.
+- Contracts:
+  - single container owner in shared layout,
+  - localized messages before render,
+  - stable renderer with multiple producers.
+
+## 5) Progressive enhancement policy
+
+- Do not add route-local handlers for busy/focus/validation when shared extensions already own them.
+- Avoid duplicate request scripts inside pages.
+- Prefer `hx-*` primitives over manual fetch for normal submit/swap flows.
+- Route scripts should only implement behavior not covered by shared contracts.
+
+## 6) Dataflow: builder validation
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Form as builder form
+  participant Layout as layout-controls
+  participant API as /api/builder
+  participant Focus as focus-panel
+
+  Form->>Layout: hx-post submit
+  Layout->>Layout: set busy + metadata
+  Layout->>API: request dispatch
+  API-->>Layout: 422 validation fragment
+  Layout->>Layout: allow swap
+  Layout->>Focus: afterSettle restore focus
+  Focus-->>Form: focus first actionable field
+  Layout-->>Form: clear busy, keep toast stack
+```
+
+## 7) Dataflow: game HUD stream
+
+```mermaid
+flowchart LR
+  S["/api/game/session/:id/hud"] --> C["SSE consumer"]
+  C --> P["server-rendered HUD fragments"]
+  P --> A["layout-controls aria + status updates"]
+```
+
+## 8) Accessibility requirements
+
+- Preserve keyboard order after swaps.
+- Use `aria-live` and semantic toast semantics for transient status.
+- Never shift focus to hidden or detached nodes.
+- Keep focus restoration deterministic by target selector.
+
+## 9) Operational checks
+
+- Verify extension init and ownership in `bun run verify`.
+- Add integration test around busy/focus/validation lifecycle in builder flows.
+- Confirm no page-level duplicate listener remains for events owned by shared layer.
