@@ -12,7 +12,7 @@ describe("renderButton", () => {
       label: "Action",
       type: "button",
       htmx: {
-        get: "/builder",
+        get: "/projects/new",
         params: {
           goal: "review",
           locale: "en-US",
@@ -20,7 +20,7 @@ describe("renderButton", () => {
       },
     });
 
-    expect(html).toContain('hx-get="/builder"');
+    expect(html).toContain('hx-get="/projects/new"');
     expect(html).toContain('hx-params="goal,locale"');
     expect(html).toContain(
       'hx-vals="{&quot;goal&quot;:&quot;review&quot;,&quot;locale&quot;:&quot;en-US&quot;}"',
@@ -31,7 +31,7 @@ describe("renderButton", () => {
     const html = renderButton({
       label: "Action",
       htmx: {
-        post: "/builder",
+        post: "/projects/new",
       },
     });
 

@@ -14,6 +14,7 @@ import {
   requireBuilderAction,
 } from "../domain/auth/authorization.ts";
 import { persistBuilderFile } from "../domain/builder/asset-storage.ts";
+import { deriveNpcIdentity, deriveSceneIdentity } from "../domain/builder/builder-display.ts";
 import type { BuilderPublishValidationIssue } from "../domain/builder/builder-publish-validation.ts";
 import {
   type BuilderAnimationClipCreatePayload,
@@ -28,13 +29,17 @@ import {
   type BuilderSceneNodePayload,
   builderService,
 } from "../domain/builder/builder-service.ts";
+import { toCreatorCapabilities } from "../domain/builder/creator-capability-adapter.ts";
 import {
   deriveBuilderReadinessAudit,
   evaluateBuilderPlatformReadiness,
 } from "../domain/builder/platform-readiness.ts";
-import { toCreatorCapabilities } from "../domain/builder/creator-capability-adapter.ts";
-import { detectAvailableFeatures, generateNpcDialogue, suggestUserFlowStep } from "../domain/game/ai/game-ai-service.ts";
-import { gameScenes, gameSpriteManifests } from "../domain/game/data/sprite-data.ts";
+import {
+  detectAvailableFeatures,
+  generateNpcDialogue,
+  suggestUserFlowStep,
+} from "../domain/game/ai/game-ai-service.ts";
+import { gameSpriteManifests } from "../domain/game/data/sprite-data.ts";
 import { gameLoop } from "../domain/game/game-loop.ts";
 import { ensureCorrelationIdHeader } from "../lib/correlation-id.ts";
 import type { AppErrorCode } from "../lib/error-envelope.ts";
@@ -57,6 +62,7 @@ import {
 } from "../shared/constants/builder-defaults.ts";
 import { httpStatus } from "../shared/constants/http.ts";
 import { appRoutes, withQueryParameters } from "../shared/constants/routes.ts";
+import { interpolateRoutePath } from "../shared/constants/route-patterns.ts";
 import type {
   BuilderAIRequest,
   BuilderAIResponse,
@@ -156,6 +162,7 @@ const builderNpcAiSchema = t.Object({
 
 const builderNpcSchema = t.Object({
   characterKey: t.String(),
+  displayName: t.String(),
   x: t.Number(),
   y: t.Number(),
   labelKey: t.String(),
@@ -232,6 +239,7 @@ const builderSceneNode3dSchema = t.Object({
 
 const builderSceneSchema = t.Object({
   id: t.String(),
+  displayTitle: t.String(),
   titleKey: t.String(),
   background: t.String(),
   sceneMode: t.Optional(t.Union([t.Literal("2d"), t.Literal("3d")])),
@@ -389,8 +397,11 @@ const builderAiPlanDataSchema = t.Object({
   correlationId: t.String(),
 });
 
+const starterProjectTemplateIdSchema = t.Union([t.Literal("blank"), t.Literal("tea-house-story")]);
+
 const builderProjectDataSchema = t.Object({
   id: t.String(),
+  starterTemplateId: starterProjectTemplateIdSchema,
   createdBy: t.String(),
   updatedBy: t.String(),
   source: t.String(),
@@ -543,6 +554,7 @@ const toIdlePauseMs = (x: readonly [number, number]): [number, number] => [x[0],
 
 const toBuilderNpc = (npc: SceneNpcDefinition) => ({
   characterKey: npc.characterKey,
+  displayName: npc.displayName,
   x: npc.x,
   y: npc.y,
   labelKey: npc.labelKey,
@@ -559,6 +571,7 @@ const toBuilderNpc = (npc: SceneNpcDefinition) => ({
 
 const toBuilderScene = (scene: SceneDefinition) => ({
   id: scene.id,
+  displayTitle: scene.displayTitle,
   titleKey: scene.titleKey,
   background: scene.background,
   sceneMode: scene.sceneMode,
@@ -634,10 +647,24 @@ const createBuilderPatch = (
   confidence,
 });
 
-const renderSceneWorkspace = async (locale: LocaleCode, projectId: string): Promise<string> => {
+const renderSceneWorkspace = async (
+  locale: LocaleCode,
+  projectId: string,
+  search = "",
+  page = 1,
+  selectedSceneId = "",
+): Promise<string> => {
   const project = await builderService.getProject(projectId);
   const scenes = Object.fromEntries(project?.scenes.entries() ?? []);
-  return renderSceneEditor(getMessages(locale), scenes, locale, projectId);
+  return renderSceneEditor(
+    getMessages(locale),
+    scenes,
+    locale,
+    projectId,
+    search,
+    page,
+    selectedSceneId,
+  );
 };
 
 const renderNpcWorkspace = async (locale: LocaleCode, projectId: string): Promise<string> => {
@@ -659,7 +686,13 @@ const renderDialogueWorkspace = async (
     search,
   );
 
-const renderAssetsWorkspace = async (locale: LocaleCode, projectId: string): Promise<string> => {
+const renderAssetsWorkspace = async (
+  locale: LocaleCode,
+  projectId: string,
+  search = "",
+  page = 1,
+  selectedAssetId = "",
+): Promise<string> => {
   const project = await builderService.getProject(projectId);
   return renderAssetsEditor(
     getMessages(locale),
@@ -667,8 +700,9 @@ const renderAssetsWorkspace = async (locale: LocaleCode, projectId: string): Pro
     projectId,
     Array.from(project?.assets.values() ?? []),
     Array.from(project?.animationClips.values() ?? []),
-    Array.from(project?.generationJobs.values() ?? []),
-    Array.from(project?.artifacts.values() ?? []),
+    search,
+    page,
+    selectedAssetId,
   );
 };
 
@@ -727,29 +761,44 @@ const withProjectChromeRefresh = async (
 const toBuilderRedirectPath = (path: string): string => {
   const candidate = path.trim();
   if (!candidate) {
-    return appRoutes.builder;
+    return appRoutes.builderStart;
   }
 
   const pathOnly = candidate.split("#", 1)[0]?.split("?", 1)[0] ?? "";
   if (!pathOnly.startsWith("/")) {
-    return appRoutes.builder;
+    return appRoutes.builderStart;
   }
 
   const decodedPath = safeDecodeUri(pathOnly);
 
   if (decodedPath.includes("..")) {
-    return appRoutes.builder;
+    return appRoutes.builderStart;
   }
 
-  if (decodedPath !== appRoutes.builder && !decodedPath.startsWith(`${appRoutes.builder}/`)) {
-    return appRoutes.builder;
+  if (decodedPath === appRoutes.builder) {
+    return appRoutes.builderStart;
+  }
+
+  if (!decodedPath.startsWith("/projects/")) {
+    return appRoutes.builderStart;
   }
 
   if (decodedPath.includes("//")) {
-    return appRoutes.builder;
+    return appRoutes.builderStart;
   }
 
-  return candidate;
+  const projectPathMatch = decodedPath.match(/^\/projects\/([^/?#]+)(\/.*)?$/);
+  if (!projectPathMatch) {
+    return appRoutes.builderStart;
+  }
+
+  const genericPath =
+    `/projects/:projectId${projectPathMatch[2] ?? ""}`.replace(/\/$/, "");
+  if (genericPath === "/projects/:projectId") {
+    return appRoutes.builderStart;
+  }
+
+  return genericPath;
 };
 
 const renderErrorHtml = (message: string): string =>
@@ -1093,8 +1142,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
             publishedReleaseVersion: project.publishedReleaseVersion,
           });
     const readiness = evaluateBuilderPlatformReadiness({
-      sceneCount: project?.scenes.size ?? Object.keys(gameScenes).length,
-      spriteManifestCount: Object.keys(gameSpriteManifests).length,
+      sceneCount: project?.scenes.size ?? 0,
+      spriteManifestCount: project?.spriteAtlases.size ?? 0,
       aiFeatures: features,
       rendererPreference: appConfig.playableGame.rendererPreference,
       onnxDevice: appConfig.ai.onnxDevice,
@@ -1125,8 +1174,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
             publishedReleaseVersion: project.publishedReleaseVersion,
           });
     const readiness = evaluateBuilderPlatformReadiness({
-      sceneCount: project?.scenes.size ?? Object.keys(gameScenes).length,
-      spriteManifestCount: Object.keys(gameSpriteManifests).length,
+      sceneCount: project?.scenes.size ?? 0,
+      spriteManifestCount: project?.spriteAtlases.size ?? 0,
       aiFeatures: await detectAvailableFeatures(),
       rendererPreference: appConfig.playableGame.rendererPreference,
       onnxDevice: appConfig.ai.onnxDevice,
@@ -1189,8 +1238,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
           })
         : undefined;
       const readiness = evaluateBuilderPlatformReadiness({
-        sceneCount: project?.scenes.size ?? Object.keys(gameScenes).length,
-        spriteManifestCount: project?.spriteAtlases.size ?? Object.keys(gameSpriteManifests).length,
+        sceneCount: project?.scenes.size ?? 0,
+        spriteManifestCount: project?.spriteAtlases.size ?? 0,
         aiFeatures,
         rendererPreference: appConfig.playableGame.rendererPreference,
         onnxDevice: appConfig.ai.onnxDevice,
@@ -1211,7 +1260,9 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         httpStatus.ok,
         successEnvelope({
           features,
-          creatorCapabilities,
+          creatorCapabilities: {
+            items: [...creatorCapabilities.items],
+          },
           providerCount: registryStatus.providers.length,
           capabilities: registryStatus.capabilities.map((capability) => ({
             provider: "creator-safe",
@@ -1607,6 +1658,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       }),
       response: {
         [httpStatus.ok]: t.String(),
+        [httpStatus.badRequest]: builderErrorResponse,
         [httpStatus.notFound]: builderErrorResponse,
         [httpStatus.forbidden]: builderErrorResponse,
       },
@@ -1665,6 +1717,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       }),
       response: {
         [httpStatus.ok]: t.String(),
+        [httpStatus.badRequest]: builderErrorResponse,
         [httpStatus.notFound]: builderErrorResponse,
         [httpStatus.forbidden]: builderErrorResponse,
       },
@@ -1853,7 +1906,11 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         builderCurrentPath: actionCurrentPath,
       } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
-      const project = await builderService.createProject(actionProjectId, actionUpdatedBy);
+      const project = await builderService.createProject(
+        actionProjectId,
+        body.starterTemplateId,
+        actionUpdatedBy,
+      );
       if (!project) {
         return status(
           httpStatus.notFound,
@@ -1870,16 +1927,19 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       }
       if (wantsHtml(request.headers.get("accept"))) {
         const redirectPath = toBuilderRedirectPath(actionCurrentPath);
-        set.headers["HX-Redirect"] = withQueryParameters(redirectPath, {
+        set.headers["HX-Redirect"] = withQueryParameters(
+          interpolateRoutePath(redirectPath, { projectId: project.id }),
+          {
           lang: actionLocale,
-          projectId: project.id,
-        });
+          },
+        );
         return status(httpStatus.ok, "");
       }
       return status(
         httpStatus.ok,
         successEnvelope({
           id: project.id,
+          starterTemplateId: project.starterTemplateId,
           createdBy: project.createdBy,
           updatedBy: project.updatedBy,
           source: project.source,
@@ -1899,6 +1959,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     {
       body: t.Object({
         projectId: t.Optional(t.String()),
+        starterTemplateId: starterProjectTemplateIdSchema,
         locale: t.Optional(t.String()),
         redirectPath: t.Optional(t.String()),
       }),
@@ -1948,6 +2009,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         httpStatus.ok,
         successEnvelope({
           id: project.id,
+          starterTemplateId: project.starterTemplateId,
           published: project.published,
           latestReleaseVersion: project.latestReleaseVersion,
           publishedReleaseVersion: project.publishedReleaseVersion,
@@ -2023,7 +2085,9 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       const project = result.snapshot;
 
       if (wantsHtml(request.headers.get("accept"))) {
-        const redirectPath = toBuilderRedirectPath(actionCurrentPath);
+        const redirectPath = interpolateRoutePath(toBuilderRedirectPath(actionCurrentPath), {
+          projectId: project.id,
+        });
         return renderBuilderProjectShell(
           getMessages(actionLocale),
           actionLocale,
@@ -2074,9 +2138,27 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
-      const createPayload: BuilderSceneCreatePayload = {
+      const identity = deriveSceneIdentity({
         id: body.id,
+        displayTitle: body.displayTitle,
         titleKey: body.titleKey,
+      });
+      if (identity.id.length === 0 || identity.titleKey.length === 0) {
+        return status(
+          httpStatus.badRequest,
+          buildError(
+            request,
+            set.headers,
+            "VALIDATION_ERROR",
+            httpStatus.badRequest,
+            getBuilderMessages(locale).sceneTitleRequired,
+          ),
+        );
+      }
+      const createPayload: BuilderSceneCreatePayload = {
+        id: identity.id,
+        displayTitle: body.displayTitle,
+        titleKey: identity.titleKey,
         background: body.background,
         sceneMode: body.sceneMode,
         geometryWidth: body.geometryWidth,
@@ -2096,15 +2178,16 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         locale,
         projectId,
         appRoutes.builderScenes,
-        await renderSceneWorkspace(locale, projectId),
+        await renderSceneWorkspace(locale, projectId, "", 1, result.payload.id),
       );
     },
     {
       body: t.Object({
         projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
-        id: t.String(),
-        titleKey: t.String(),
+        id: t.Optional(t.String()),
+        displayTitle: t.Optional(t.String()),
+        titleKey: t.Optional(t.String()),
         background: t.String(),
         sceneMode: t.Optional(t.String()),
         geometryWidth: t.Optional(t.String()),
@@ -2114,6 +2197,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       }),
       response: {
         [httpStatus.ok]: t.String(),
+        [httpStatus.badRequest]: builderErrorResponse,
         [httpStatus.notFound]: builderErrorResponse,
         [httpStatus.forbidden]: builderErrorResponse,
       },
@@ -2158,6 +2242,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         locale: t.Optional(t.String()),
         scene: t.Object({
           id: t.String(),
+          displayTitle: t.String(),
           titleKey: t.String(),
           background: t.String(),
           sceneMode: t.Optional(t.Union([t.Literal("2d"), t.Literal("3d")])),
@@ -2166,6 +2251,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
           npcs: t.Array(
             t.Object({
               characterKey: t.String(),
+              displayName: t.String(),
               x: t.Number(),
               y: t.Number(),
               labelKey: t.String(),
@@ -2246,6 +2332,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
       const payload: BuilderSceneFormPayload = {
         sceneId: params.sceneId,
+        displayTitle: body.displayTitle,
         titleKey: body.titleKey,
         background: body.background,
         sceneMode: body.sceneMode,
@@ -2276,6 +2363,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       body: t.Object({
         projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
+        displayTitle: t.Optional(t.String()),
         titleKey: t.Optional(t.String()),
         background: t.Optional(t.String()),
         sceneMode: t.Optional(t.String()),
@@ -2339,6 +2427,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
         scene: t.Object({
+          displayTitle: t.String(),
           titleKey: t.String(),
           background: t.String(),
           sceneMode: t.Optional(t.Union([t.Literal("2d"), t.Literal("3d")])),
@@ -2347,6 +2436,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
           npcs: t.Array(
             t.Object({
               characterKey: t.String(),
+              displayName: t.String(),
               x: t.Number(),
               y: t.Number(),
               labelKey: t.String(),
@@ -2583,15 +2673,33 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
+      const identity = deriveNpcIdentity({
+        characterKey: body.characterKey,
+        displayName: body.displayName,
+        labelKey: body.labelKey,
+      });
+      if (identity.characterKey.length === 0 || identity.labelKey.length === 0) {
+        return status(
+          httpStatus.badRequest,
+          buildError(
+            request,
+            set.headers,
+            "VALIDATION_ERROR",
+            httpStatus.badRequest,
+            getBuilderMessages(locale).npcNameRequired,
+          ),
+        );
+      }
       const mutation = await builderService.saveNpc(
         projectId,
         {
           sceneId: body.sceneId,
           npc: {
-            characterKey: body.characterKey.trim(),
+            characterKey: identity.characterKey,
+            displayName: body.displayName?.trim() || identity.labelKey,
             x: DEFAULT_NPC_SPAWN_X,
             y: DEFAULT_NPC_SPAWN_Y,
-            labelKey: body.labelKey.trim(),
+            labelKey: identity.labelKey,
             dialogueKeys: [],
             interactRadius: DEFAULT_NPC_INTERACT_RADIUS,
             ai: {
@@ -2599,7 +2707,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
               wanderSpeed: DEFAULT_NPC_WANDER_SPEED,
               idlePauseMs: [...DEFAULT_NPC_IDLE_PAUSE_MS],
               greetOnApproach: false,
-              greetLineKey: `${body.characterKey.trim()}.greet`,
+              greetLineKey: identity.greetLineKey,
             },
           },
         },
@@ -2624,11 +2732,13 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
         sceneId: t.String(),
-        characterKey: t.String(),
-        labelKey: t.String(),
+        characterKey: t.Optional(t.String()),
+        displayName: t.Optional(t.String()),
+        labelKey: t.Optional(t.String()),
       }),
       response: {
         [httpStatus.ok]: t.String(),
+        [httpStatus.badRequest]: builderErrorResponse,
         [httpStatus.notFound]: builderErrorResponse,
       },
     },
@@ -2671,6 +2781,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         sceneId: t.String(),
         npc: t.Object({
           characterKey: t.String(),
+          displayName: t.String(),
           x: t.Number(),
           y: t.Number(),
           labelKey: t.String(),
@@ -2790,6 +2901,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         {
           sceneId,
           npcId: params.npcId,
+          displayName: body.displayName,
           labelKey: body.labelKey,
           x: body.x,
           y: body.y,
@@ -2831,6 +2943,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
         sceneId: t.Optional(t.String()),
+        displayName: t.Optional(t.String()),
         labelKey: t.Optional(t.String()),
         x: t.Optional(t.String()),
         y: t.Optional(t.String()),
@@ -2904,6 +3017,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         sceneId: t.String(),
         npc: t.Object({
           characterKey: t.Optional(t.String()),
+          displayName: t.String(),
           x: t.Number(),
           y: t.Number(),
           labelKey: t.String(),
@@ -3354,7 +3468,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
           locale,
           projectId,
           appRoutes.builderAssets,
-          await renderAssetsWorkspace(locale, projectId),
+          await renderAssetsWorkspace(locale, projectId, "", 1, mutation.payload.id),
         );
       }
 
@@ -3423,7 +3537,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         locale,
         projectId,
         appRoutes.builderAssets,
-        await renderAssetsWorkspace(locale, projectId),
+        await renderAssetsWorkspace(locale, projectId, "", 1, mutation.payload.id),
       );
     },
     {

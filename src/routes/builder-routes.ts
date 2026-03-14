@@ -9,37 +9,41 @@ import { Elysia } from "elysia";
 import { appConfig } from "../config/environment.ts";
 import { knowledgeBaseService } from "../domain/ai/knowledge-base-service.ts";
 import { getAiRuntimeProfile } from "../domain/ai/local-runtime-profile.ts";
-import { builderService } from "../domain/builder/builder-service.ts";
+import { builderService, defaultBuilderProjectId } from "../domain/builder/builder-service.ts";
 import {
   deriveBuilderReadinessAudit,
   evaluateBuilderPlatformReadiness,
 } from "../domain/builder/platform-readiness.ts";
 import { detectAvailableFeatures } from "../domain/game/ai/game-ai-service.ts";
-import { gameScenes, gameSpriteManifests } from "../domain/game/data/sprite-data.ts";
+import { gameSpriteManifests } from "../domain/game/data/sprite-data.ts";
 import { gameLoop } from "../domain/game/game-loop.ts";
 import { builderRequestContextPlugin } from "../plugins/builder-request-context.ts";
 import { assetRelativePaths, toPublicAssetUrl } from "../shared/constants/assets.ts";
-import { resolveRequestPathWithQuery } from "../shared/constants/routes.ts";
+import {
+  BUILDER_QUERY_PARAM_ASSET_ID,
+  BUILDER_QUERY_PARAM_PAGE,
+  BUILDER_QUERY_PARAM_SCENE_ID,
+} from "../shared/constants/builder-query.ts";
+import { appRoutes, resolveRequestPathWithQuery } from "../shared/constants/routes.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
 import { renderAiPanel } from "../views/builder/ai-panel.ts";
 import { renderAssetsEditor } from "../views/builder/assets-editor.ts";
 import { renderAutomationPanel } from "../views/builder/automation-panel.ts";
-import { type DashboardStats, renderBuilderDashboard } from "../views/builder/builder-dashboard.ts";
+import { renderBuilderDashboard } from "../views/builder/builder-dashboard.ts";
+import { deriveCreatorCapabilities } from "../views/builder/builder-flow.ts";
 import {
   type BuilderChromeProject,
   renderBuilderLayout,
   renderBuilderSidebar,
+  renderConsoleLayout,
+  renderConsoleSidebar,
 } from "../views/builder/builder-layout.ts";
+import { renderBuilderStarterWorkspace } from "../views/builder/builder-starter.ts";
 import { renderDialogueEditor } from "../views/builder/dialogue-editor.ts";
 import { renderMechanicsEditor } from "../views/builder/mechanics-editor.ts";
 import { renderNpcEditor } from "../views/builder/npc-editor.ts";
 import { renderSceneEditor } from "../views/builder/scene-editor.ts";
-import {
-  escapeHtml,
-  type LayoutContext,
-  type LayoutScript,
-  renderDocument,
-} from "../views/layout.ts";
+import { type LayoutContext, type LayoutScript, renderDocument } from "../views/layout.ts";
 
 /**
  * Wraps builder content in the full page layout or returns partial for HTMX.
@@ -120,11 +124,59 @@ const wrapOrPartial = (
   return renderDocument(layout, messages.builder.title, builderBody, mergedScripts);
 };
 
+/**
+ * Wraps console content in the console layout or returns partial for HTMX.
+ */
+const wrapOrPartialConsole = (
+  request: Request,
+  locale: LayoutContext["locale"],
+  messages: ReturnType<typeof getMessages>,
+  activeTab: string,
+  currentPath: string,
+  projectId: string,
+  project: BuilderChromeProject | null,
+  body: string,
+): string => {
+  const isHtmx = request.headers.get("HX-Request") === "true";
+
+  const consoleBody = renderConsoleLayout({
+    locale,
+    messages,
+    activeTab,
+    currentPath,
+    projectId,
+    project,
+    body,
+  });
+
+  if (isHtmx) return consoleBody;
+
+  const currentPathWithQuery = resolveRequestPathWithQuery(request);
+  const customSidebarHtml = renderConsoleSidebar({
+    locale,
+    messages,
+    activeTab,
+    currentPath,
+    projectId,
+    project,
+    body,
+  });
+
+  const layout: LayoutContext = {
+    locale,
+    messages,
+    activeRoute: "builder",
+    currentPathWithQuery,
+    persistentProjectId: projectId,
+    customSidebarHtml,
+    hideTopBar: true,
+    hideFooter: true,
+  };
+  return renderDocument(layout, messages.builder.advancedTools, consoleBody, []);
+};
+
 const toRecord = <T>(records: ReadonlyMap<string, T>): Record<string, T> =>
   Object.fromEntries(Array.from(records.entries()));
-
-const renderBuilderWarningAlert = (message: string): string =>
-  `<div role="alert" class="alert alert-warning alert-soft"><span>${escapeHtml(message)}</span></div>`;
 
 const wrapMissingProject = (
   request: Request,
@@ -143,7 +195,7 @@ const wrapMissingProject = (
     currentPath,
     projectId,
     project,
-    renderBuilderWarningAlert(messages.builder.projectNotFound),
+    renderBuilderStarterWorkspace(messages, locale, projectId, currentPath),
   );
 
 const toChromeProject = (
@@ -160,11 +212,34 @@ const toChromeProject = (
       }
     : null;
 
-export const builderRoutes = new Elysia({ prefix: "/builder" })
+const resolveBuilderPage = (request: Request): number => {
+  const rawPage = new URL(request.url).searchParams.get(BUILDER_QUERY_PARAM_PAGE) ?? "";
+  const page = Number.parseInt(rawPage, 10);
+  return Number.isFinite(page) && page > 0 ? page : 1;
+};
+
+export const builderRoutes = new Elysia({ prefix: "/projects" })
   .use(builderRequestContextPlugin)
-  .get("/", async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
+  .get("/new", async ({ request, builderLocale, builderCurrentPath }) => {
     const messages = getMessages(builderLocale);
-    const features = await detectAvailableFeatures();
+    return wrapOrPartial(
+      request,
+      builderLocale,
+      messages,
+      "start",
+      builderCurrentPath,
+      defaultBuilderProjectId,
+      null,
+      renderBuilderStarterWorkspace(
+        messages,
+        builderLocale,
+        defaultBuilderProjectId,
+        appRoutes.builderStart,
+      ),
+    );
+  })
+  .get("/:projectId/start", async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
+    const messages = getMessages(builderLocale);
     const project = await builderService.getProject(builderProjectId);
     const chromeProject = toChromeProject(project);
     if (!project) {
@@ -172,15 +247,15 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
         request,
         builderLocale,
         messages,
-      "start",
+        "start",
         builderCurrentPath,
         builderProjectId,
         chromeProject,
       );
     }
+    const features = await detectAvailableFeatures();
     const totalScenes = project.scenes.size;
     const sceneValues = Array.from(project.scenes.values());
-    const assetValues = Array.from(project.assets.values());
     const readinessAudit = deriveBuilderReadinessAudit({
       scenes: project.scenes.values(),
       assets: project.assets.values(),
@@ -195,66 +270,34 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
       latestReleaseVersion: project.latestReleaseVersion,
       publishedReleaseVersion: project.publishedReleaseVersion,
     });
-    const scenes2d = sceneValues.filter((scene) => scene.sceneMode !== "3d").length;
-    const scenes3d = sceneValues.filter((scene) => scene.sceneMode === "3d").length;
     const totalNpcs = sceneValues.reduce((acc, scene) => acc + scene.npcs.length, 0);
-    const sceneNodeCount = sceneValues.reduce((acc, scene) => acc + (scene.nodes?.length ?? 0), 0);
-    const collisionMaskCount = sceneValues.reduce((acc, scene) => acc + scene.collisions.length, 0);
+    const readiness = evaluateBuilderPlatformReadiness({
+      sceneCount: totalScenes,
+      spriteManifestCount: project.spriteAtlases.size,
+      aiFeatures: features,
+      rendererPreference: appConfig.playableGame.rendererPreference,
+      onnxDevice: appConfig.ai.onnxDevice,
+      audit: readinessAudit,
+    });
 
-    const stats: DashboardStats = {
+    const dashboard = {
       activeSessions: await gameLoop.countActiveSessions(),
       totalScenes,
-      scenes2d,
-      scenes3d,
       totalNpcs,
-      sceneNodeCount,
-      collisionMaskCount,
       assetCount: readinessAudit.assetCount,
-      spriteAssetCount: assetValues.filter((asset) =>
-        ["background", "sprite-sheet", "portrait", "tiles", "tile-set"].includes(asset.kind),
-      ).length,
-      modelAssetCount: readinessAudit.modelAssetCount,
-      openUsdAssetCount: readinessAudit.openUsdAssetCount,
-      spriteAtlasCount: project.spriteAtlases.size,
       animationClipCount: readinessAudit.animationClipCount,
-      animationTimelineCount: readinessAudit.animationTimelineCount,
       dialogueGraphCount: project.dialogueGraphs.size,
       questCount: project.quests.size,
-      triggerCount: project.triggers.size,
-      flagCount: project.flags.size,
-      generationJobCount: readinessAudit.generationJobCount,
-      artifactCount: project.artifacts.size,
-      automationRunCount: readinessAudit.automationRunCount,
-      automationStepCount: readinessAudit.automationStepCount,
-      aiAvailable: features.providers.length > 0,
-      aiFeatureDialogue: features.richDialogue,
-      aiFeatureVision: features.visionAnalysis,
-      aiFeatureSentiment: features.sentimentAnalysis,
-      aiFeatureEmbeddings: features.embeddings,
-      aiFeatureSpeechToText: features.speechToText,
-      aiFeatureSpeechSynthesis: features.speechSynthesis,
-      aiFeatureLocalInference: features.localInference,
-      providers: [...features.providers],
-      aiProviderCount: features.providers.length,
       draftVersion: project.version,
       latestReleaseVersion: project.latestReleaseVersion,
       publishedReleaseVersion: project.publishedReleaseVersion,
       published: project.published,
-      rendererPreference: appConfig.playableGame.rendererPreference,
-      onnxDevice: appConfig.ai.onnxDevice,
-      readiness: evaluateBuilderPlatformReadiness({
-        sceneCount: totalScenes,
-        spriteManifestCount: Object.keys(gameSpriteManifests).length,
-        aiFeatures: features,
-        rendererPreference: appConfig.playableGame.rendererPreference,
-        onnxDevice: appConfig.ai.onnxDevice,
-        audit: readinessAudit,
-      }),
+      creatorCapabilities: deriveCreatorCapabilities(messages, features, readiness),
     };
     const body = renderBuilderDashboard(
       messages,
       builderLocale,
-      stats,
+      dashboard,
       builderProjectId,
       project.published,
     );
@@ -269,35 +312,47 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
       body,
     );
   })
-  .get("/scenes", async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
-    const messages = getMessages(builderLocale);
-    const project = await builderService.getProject(builderProjectId);
-    const chromeProject = toChromeProject(project);
-    if (!project) {
-      return wrapMissingProject(
+  .get(
+    "/:projectId/world",
+    async ({ request, builderLocale, builderProjectId, builderCurrentPath, builderSearch }) => {
+      const messages = getMessages(builderLocale);
+      const project = await builderService.getProject(builderProjectId);
+      const chromeProject = toChromeProject(project);
+      if (!project) {
+        return wrapMissingProject(
+          request,
+          builderLocale,
+          messages,
+          "world",
+          builderCurrentPath,
+          builderProjectId,
+          chromeProject,
+        );
+      }
+      const searchParams = new URL(request.url).searchParams;
+      const scenes = toRecord(project.scenes);
+      const body = renderSceneEditor(
+        messages,
+        scenes,
+        builderLocale,
+        builderProjectId,
+        builderSearch,
+        resolveBuilderPage(request),
+        searchParams.get(BUILDER_QUERY_PARAM_SCENE_ID) ?? "",
+      );
+      return wrapOrPartial(
         request,
         builderLocale,
         messages,
-          "world",
+        "world",
         builderCurrentPath,
         builderProjectId,
         chromeProject,
+        body,
       );
-    }
-    const scenes = toRecord(project.scenes);
-    const body = renderSceneEditor(messages, scenes, builderLocale, builderProjectId);
-    return wrapOrPartial(
-      request,
-      builderLocale,
-      messages,
-      "world",
-      builderCurrentPath,
-      builderProjectId,
-      chromeProject,
-      body,
-    );
-  })
-  .get("/npcs", async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
+    },
+  )
+  .get("/:projectId/characters", async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
     const messages = getMessages(builderLocale);
     const project = await builderService.getProject(builderProjectId);
     const chromeProject = toChromeProject(project);
@@ -306,7 +361,7 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
         request,
         builderLocale,
         messages,
-          "characters",
+        "characters",
         builderCurrentPath,
         builderProjectId,
         chromeProject,
@@ -332,11 +387,22 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
     );
   })
   .get(
-    "/dialogue",
+    "/:projectId/story",
     async ({ request, builderLocale, builderProjectId, builderCurrentPath, builderSearch }) => {
       const messages = getMessages(builderLocale);
       const project = await builderService.getProject(builderProjectId);
       const chromeProject = toChromeProject(project);
+      if (!project) {
+        return wrapMissingProject(
+          request,
+          builderLocale,
+          messages,
+          "story",
+          builderCurrentPath,
+          builderProjectId,
+          chromeProject,
+        );
+      }
       const catalog = await builderService.getDialogues(builderProjectId, builderLocale);
       const body = renderDialogueEditor(
         messages,
@@ -357,12 +423,35 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
       );
     },
   )
-  .get("/assets", async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
-    const messages = getMessages(builderLocale);
-    const project = await builderService.getProject(builderProjectId);
-    const chromeProject = toChromeProject(project);
-    if (!project) {
-      return wrapMissingProject(
+  .get(
+    "/:projectId/assets",
+    async ({ request, builderLocale, builderProjectId, builderCurrentPath, builderSearch }) => {
+      const messages = getMessages(builderLocale);
+      const project = await builderService.getProject(builderProjectId);
+      const chromeProject = toChromeProject(project);
+      if (!project) {
+        return wrapMissingProject(
+          request,
+          builderLocale,
+          messages,
+          "assets",
+          builderCurrentPath,
+          builderProjectId,
+          chromeProject,
+        );
+      }
+      const searchParams = new URL(request.url).searchParams;
+      const body = renderAssetsEditor(
+        messages,
+        builderLocale,
+        builderProjectId,
+        Array.from(project.assets.values()),
+        Array.from(project.animationClips.values()),
+        builderSearch,
+        resolveBuilderPage(request),
+        searchParams.get(BUILDER_QUERY_PARAM_ASSET_ID) ?? "",
+      );
+      return wrapOrPartial(
         request,
         builderLocale,
         messages,
@@ -370,29 +459,11 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
         builderCurrentPath,
         builderProjectId,
         chromeProject,
+        body,
       );
-    }
-    const body = renderAssetsEditor(
-      messages,
-      builderLocale,
-      builderProjectId,
-      Array.from(project.assets.values()),
-      Array.from(project.animationClips.values()),
-      Array.from(project.generationJobs.values()),
-      Array.from(project.artifacts.values()),
-    );
-    return wrapOrPartial(
-      request,
-      builderLocale,
-      messages,
-      "assets",
-      builderCurrentPath,
-      builderProjectId,
-      chromeProject,
-      body,
-    );
-  })
-  .get("/mechanics", async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
+    },
+  )
+  .get("/:projectId/systems", async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
     const messages = getMessages(builderLocale);
     const project = await builderService.getProject(builderProjectId);
     const chromeProject = toChromeProject(project);
@@ -401,7 +472,7 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
         request,
         builderLocale,
         messages,
-      "systems",
+        "systems",
         builderCurrentPath,
         builderProjectId,
         chromeProject,
@@ -427,7 +498,7 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
       body,
     );
   })
-  .get("/automation", async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
+  .get("/:projectId/operations", async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
     const messages = getMessages(builderLocale);
     const project = await builderService.getProject(builderProjectId);
     const chromeProject = toChromeProject(project);
@@ -436,7 +507,7 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
         request,
         builderLocale,
         messages,
-        "automation",
+        "operations",
         builderCurrentPath,
         builderProjectId,
         chromeProject,
@@ -449,25 +520,36 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
       Array.from(project.automationRuns.values()),
       Array.from(project.artifacts.values()),
     );
-    return wrapOrPartial(
+    return wrapOrPartialConsole(
       request,
       builderLocale,
       messages,
-      "automation",
+      "operations",
       builderCurrentPath,
       builderProjectId,
       chromeProject,
       body,
     );
   })
-  .get("/ai", async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
+  .get("/:projectId/settings", async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
     const messages = getMessages(builderLocale);
     const project = await builderService.getProject(builderProjectId);
     const chromeProject = toChromeProject(project);
+    if (!project) {
+      return wrapMissingProject(
+        request,
+        builderLocale,
+        messages,
+        "settings",
+        builderCurrentPath,
+        builderProjectId,
+        chromeProject,
+      );
+    }
     const features = await detectAvailableFeatures();
     const readiness = evaluateBuilderPlatformReadiness({
-      sceneCount: project?.scenes.size ?? Object.keys(gameScenes).length,
-      spriteManifestCount: Object.keys(gameSpriteManifests).length,
+      sceneCount: project.scenes.size,
+      spriteManifestCount: project.spriteAtlases.size,
       aiFeatures: features,
       rendererPreference: appConfig.playableGame.rendererPreference,
       onnxDevice: appConfig.ai.onnxDevice,
@@ -481,11 +563,11 @@ export const builderRoutes = new Elysia({ prefix: "/builder" })
       readiness,
       await knowledgeBaseService.listDocuments(builderProjectId),
     );
-    return wrapOrPartial(
+    return wrapOrPartialConsole(
       request,
       builderLocale,
       messages,
-      "ai",
+      "settings",
       builderCurrentPath,
       builderProjectId,
       chromeProject,

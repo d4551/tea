@@ -537,6 +537,7 @@ model BuilderProjectScene {
   id             String
   project        BuilderProject                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
   sceneMode      String?
+  displayTitle   String                         @default("")
   titleKey       String
   background     String
   geometryWidth  Int
@@ -574,6 +575,7 @@ model BuilderProjectSceneNpc {
   ordinal         Int
   x               Int
   y               Int
+  displayName     String
   labelKey        String
   interactRadius  Int
   wanderRadius    Int

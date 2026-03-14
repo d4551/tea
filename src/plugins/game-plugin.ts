@@ -1599,11 +1599,15 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
             );
           }
           const locale = normalizeLocale(body.locale ?? gameRequestLocale);
-          const joinPath = withQueryParameters(appRoutes.game, {
-            lang: locale,
-            invite: inviteToken,
-            sessionId: params.id,
-          });
+          const currentSession = await gameLoop.getSessionState(params.id, ownerSessionId);
+          const joinPath = currentSession?.projectId
+            ? withQueryParameters(appRoutes.game, {
+                lang: locale,
+                invite: inviteToken,
+                sessionId: params.id,
+                projectId: currentSession.projectId,
+              })
+            : withQueryParameters(appRoutes.builder, { lang: locale });
           if (wantsHtml(request.headers.get("accept"))) {
             const messages = getMessages(locale);
             return renderInviteResult(

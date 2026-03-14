@@ -75,6 +75,13 @@ const normalizeTransportString = (value: unknown): string | null => {
 const resolveTrimmedQueryValue = (request: Request, key: string): string | null =>
   normalizeTransportString(resolveRequestQueryParam(request, key));
 
+const resolveTrimmedParamValue = (params: unknown, key: string): string | null => {
+  if (!params || typeof params !== "object") {
+    return null;
+  }
+  return normalizeTransportString((params as Record<string, unknown>)[key]);
+};
+
 /**
  * Resolves canonical game request context from one HTTP request.
  *
@@ -85,6 +92,7 @@ const resolveTrimmedQueryValue = (request: Request, key: string): string | null 
 export const resolveGameRequestContext = (
   request: Request,
   cookie: AuthCookieBag,
+  params?: unknown,
 ): GameRequestContext => {
   const authSession = resolveAuthSession(cookie);
 
@@ -97,7 +105,8 @@ export const resolveGameRequestContext = (
     gameRequestLocale: resolveRequestLocale(request),
     gameRequestedSessionId: resolveTrimmedQueryValue(request, "sessionId"),
     gameRequestedSceneId: resolveTrimmedQueryValue(request, "sceneId"),
-    gameRequestedProjectId: resolveTrimmedQueryValue(request, "projectId"),
+    gameRequestedProjectId:
+      resolveTrimmedParamValue(params, "projectId") ?? resolveTrimmedQueryValue(request, "projectId"),
     gameInviteToken: resolveTrimmedQueryValue(request, "invite"),
   };
 };
@@ -130,8 +139,8 @@ export const resolveGameWebSocketContext = (input: {
  */
 export const gameRequestContextPlugin = new Elysia({ name: "game-request-context" }).derive(
   { as: "scoped" },
-  ({ request, cookie }) => {
-    const context = resolveGameRequestContext(request, cookie);
+  ({ request, cookie, params }) => {
+    const context = resolveGameRequestContext(request, cookie, params);
 
     return {
       gameParticipantSessionId: context.gameParticipantSessionId,

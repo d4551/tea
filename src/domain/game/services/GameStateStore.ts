@@ -1,6 +1,10 @@
 import { appConfig, normalizeLocale } from "../../../config/environment.ts";
 import { createLogger } from "../../../lib/logger.ts";
-import { defaultGameConfig, resolveScene } from "../../../shared/config/game-config.ts";
+import {
+  createFallbackSceneDefinition,
+  defaultGameConfig,
+  resolveScene,
+} from "../../../shared/config/game-config.ts";
 import { gameAssetUrls } from "../../../shared/constants/game-assets.ts";
 import type {
   AssetVariant,
@@ -734,23 +738,7 @@ const defaultSceneDefinition = (): SceneDefinition => {
     return scene;
   }
 
-  return {
-    id: defaultGameConfig.defaultSceneId,
-    sceneMode: "2d",
-    titleKey: "scene.teaHouse.title",
-    background: gameAssetUrls.teaHouseBackground,
-    geometry: {
-      width: 640,
-      height: 640,
-    },
-    spawn: {
-      x: 300,
-      y: 380,
-    },
-    nodes: [],
-    npcs: [],
-    collisions: [],
-  };
+  return createFallbackSceneDefinition(defaultGameConfig.defaultSceneId);
 };
 
 const toPersistedSceneStateRow = (

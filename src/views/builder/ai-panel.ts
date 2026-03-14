@@ -1,7 +1,7 @@
 /**
- * AI Tools Panel View
+ * Settings Panel View
  *
- * Provider status, local runtime inventory, and builder-facing AI actions.
+ * Runtime diagnostics, project knowledge, and advanced creator-assistance tooling.
  * Decomposed into sub-sections for maintainability.
  */
 import type { LocaleCode } from "../../config/environment.ts";
@@ -17,8 +17,9 @@ import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 import { cardClasses, renderBuilderHiddenFields, spinnerClasses } from "../shared/ui-components.ts";
+import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { renderPlatformReadinessSection } from "./platform-readiness.ts";
-import { renderWorkspaceHeader } from "./workspace-header.ts";
+import { renderWorkspaceFrame, renderWorkspaceShell } from "./workspace-shell.ts";
 
 /**
  * Formats a knowledge document timestamp for display.
@@ -168,31 +169,32 @@ export const renderToolPlanPreview = (
 /* ------------------------------------------------------------------ */
 
 /**
- * Renders the AI status hero section with provider badges.
+ * Renders the settings status hero section with provider badges.
  *
  * @param messages Locale-resolved messages.
  * @param runtimeProfile Local runtime profile.
  * @param features Available AI features.
- * @returns HTML string for the AI status hero.
+ * @returns HTML string for the settings status hero.
  */
 const renderAiStatusHero = (
   messages: Messages,
   runtimeProfile: AiRuntimeProfile,
   features: AvailableAiFeatures,
 ): string => {
+  const providerCount = features.providers.length;
   const providerList =
-    features.providers.length > 0
+    providerCount > 0
       ? features.providers
           .map((p) => `<span class="badge badge-outline badge-sm">${escapeHtml(p)}</span>`)
           .join(" ")
       : `<span class="text-base-content/60">${escapeHtml(messages.ai.noProviderAvailable)}</span>`;
 
-  return `<section class="hero rounded-[2rem] border border-base-300 bg-gradient-to-br from-base-200 via-base-100 to-base-200 shadow-sm">
-    <div class="hero-content w-full px-0">
+  return `<section class="rounded-[1.5rem] border border-base-300 bg-base-100 shadow-sm">
+    <div class="p-5">
       <div class="grid w-full gap-6 lg:grid-cols-[1.3fr_0.7fr] lg:items-end">
         <div class="space-y-4">
           <div class="space-y-2">
-            <span class="badge badge-secondary badge-soft">${escapeHtml(messages.builder.ai)}</span>
+            <span class="badge badge-secondary badge-soft">${escapeHtml(messages.builder.settings)}</span>
             <h1 class="text-2xl font-semibold lg:text-3xl">${escapeHtml(messages.builder.localRuntimeTitle)}</h1>
             <p class="text-base-content/75">${escapeHtml(messages.builder.localRuntimeDescription)}</p>
           </div>
@@ -208,17 +210,37 @@ const renderAiStatusHero = (
             <h2 class="card-title">${escapeHtml(messages.builder.providerStatus)}</h2>
             <div>${providerList}</div>
             <p class="text-sm text-base-content/70">
-              <code>${escapeHtml(runtimeProfile.transformers.cacheDirectory)}</code>
+              ${escapeHtml(messages.builder.creatorSafeAiDescription)}
             </p>
-            <p class="text-sm text-base-content/70">
-              <code>${escapeHtml(runtimeProfile.onnx.wasmPath)}</code>
-            </p>
+            <div class="stats stats-vertical rounded-box border border-base-300 bg-base-200/60 shadow-none sm:stats-horizontal">
+              <div class="stat px-4 py-3">
+                <div class="stat-title">${escapeHtml(messages.builder.providerStatus)}</div>
+                <div class="stat-value text-secondary text-2xl">${providerCount}</div>
+                <div class="stat-desc">${escapeHtml(messages.builder.localRuntimeTitle)}</div>
+              </div>
+              <div class="stat px-4 py-3">
+                <div class="stat-title">${escapeHtml(messages.builder.runtimeLabel)}</div>
+                <div class="stat-value text-primary text-lg">${escapeHtml(runtimeProfile.transformers.integration)}</div>
+                <div class="stat-desc">${escapeHtml(runtimeProfile.onnx.backend)}</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </section>`;
 };
+
+const countAvailableCapabilities = (features: AvailableAiFeatures): number =>
+  [
+    features.richDialogue,
+    features.visionAnalysis,
+    features.sentimentAnalysis,
+    features.embeddings,
+    features.speechToText,
+    features.speechSynthesis,
+    features.localInference,
+  ].filter(Boolean).length;
 
 /**
  * Renders the AI capability feature matrix table.
@@ -606,140 +628,165 @@ export const renderAiPanel = (
   projectId: string,
   readiness: BuilderPlatformReadiness,
   documents: readonly KnowledgeDocumentRecord[],
-): string => `
+): string => {
+  const capabilityCount = countAvailableCapabilities(features);
+  const reviewQueueHref = withQueryParameters(
+    interpolateRoutePath(appRoutes.builderAutomation, { projectId }),
+    { lang: locale },
+  );
+  const playtestHref = withQueryParameters(
+    interpolateRoutePath(appRoutes.game, { projectId }),
+    { lang: locale },
+  );
+
+  return `
     <div class="space-y-6 animate-fade-in-up">
-      ${renderWorkspaceHeader({
-        title: messages.builder.settings,
+      ${renderWorkspaceShell({
+        eyebrow: messages.builder.advancedTools,
+        title: messages.builder.projectSettings,
         description: messages.builder.advancedSettingsDescription,
-        tabs: [
+        facets: [
+          { label: messages.builder.providerStatus, badgeClassName: "badge-secondary badge-soft" },
+          { label: messages.builder.creatorSafeAiDescription, badgeClassName: "badge-outline" },
+        ],
+        metrics: [
           {
-            key: "status",
             label: messages.builder.providerStatus,
-            icon: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />',
+            value: features.providers.length,
+            toneClassName: "text-secondary",
           },
           {
-            key: "tools",
-            label: messages.builder.assistantReviewTitle,
-            icon: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />',
-          },
-          {
-            key: "knowledge",
             label: messages.builder.knowledgeWorkspaceTitle,
-            icon: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />',
+            value: documents.length,
+            toneClassName: "text-primary",
+          },
+          {
+            label: messages.builder.capabilityHeader,
+            value: capabilityCount,
+            toneClassName: "text-accent",
           },
         ],
-        activeTab: "status",
-        colorToken: "secondary",
+        actions: `
+          <a class="btn btn-outline btn-sm" href="${escapeHtml(playtestHref)}" aria-label="${escapeHtml(messages.builder.playtest)}">
+            ${escapeHtml(messages.builder.playtest)}
+          </a>
+          <a class="btn btn-primary btn-sm" href="${escapeHtml(reviewQueueHref)}" aria-label="${escapeHtml(messages.builder.operations)}">
+            ${escapeHtml(messages.builder.operations)}
+          </a>
+        `,
       })}
-
-      <div role="alert" class="alert alert-warning alert-soft">
-        <span>${escapeHtml(messages.builder.creatorSafeAiDescription)}</span>
-      </div>
-
-      ${renderPlatformReadinessSection({
-        messages,
-        locale,
-        projectId,
-        readiness,
-        keys: ["aiAuthoring", "automation"],
-      })}
-
-      <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box" open>
-        <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.providerStatus)}">${escapeHtml(messages.builder.providerStatus)}</summary>
-        <div class="collapse-content space-y-4">
+      ${renderWorkspaceFrame({
+        navigatorTitle: messages.builder.providerStatus,
+        navigatorDescription: messages.builder.advancedSettingsDescription,
+        navigatorBody: `<div role="alert" class="alert alert-warning alert-soft">
+            <span>${escapeHtml(messages.builder.creatorSafeAiDescription)}</span>
+          </div>
           ${renderAiStatusHero(messages, runtimeProfile, features)}
-          <div class="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+          <div class="grid gap-4">
             ${renderAiCapabilityTable(messages, features)}
             ${renderAiModelInventory(messages, runtimeProfile)}
-          </div>
-        </div>
-      </details>
+          </div>`,
+        mainBody: `<div class="space-y-4">
+          <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box" open>
+            <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.platformReadinessTitle)}">${escapeHtml(messages.builder.platformReadinessTitle)}</summary>
+            <div class="collapse-content">
+              ${renderPlatformReadinessSection({
+                messages,
+                locale,
+                projectId,
+                readiness,
+                keys: ["aiAuthoring", "automation"],
+              })}
+            </div>
+          </details>
 
-      <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
-        <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.assistantReviewTitle)}">${escapeHtml(messages.builder.assistantReviewTitle)}</summary>
-        <div class="collapse-content">
-          <div class="grid gap-4 xl:grid-cols-2">
-            ${renderAiAssistForm(messages, locale, projectId)}
-            ${renderAiTestForm(messages, locale, projectId)}
-          </div>
-        </div>
-      </details>
-
-      <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
-        <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.voicePreviewTitle)}">${escapeHtml(messages.builder.voicePreviewTitle)}</summary>
-        <div class="collapse-content">
-          <p class="text-sm text-base-content/70 mb-4">${escapeHtml(messages.builder.voicePreviewDescription)}</p>
-          <div class="grid gap-4 xl:grid-cols-2">
-            <div class="${cardClasses.bordered}">
-              <div class="card-body">
-                <h2 class="card-title">${escapeHtml(messages.builder.speechSynthesisLabel)}</h2>
-                <form
-                  hx-post="${escapeHtml(withQueryParameters(appRoutes.aiSynthesize, { projectId, locale }))}"
-                  hx-target="#voice-synthesize-result"
-                  hx-swap="innerHTML"
-                  hx-indicator="#voice-synthesize-spinner"
-                  hx-disabled-elt="button, input, select, textarea"
-                  class="space-y-3"
-                >
-                  <fieldset class="fieldset">
-                    <legend class="fieldset-legend">${escapeHtml(messages.builder.promptLabel)}</legend>
-                <textarea id="voice-synthesize-text" name="text" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.synthesizeTextPlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.promptLabel)}"></textarea>
-                  </fieldset>
-                  <div class="flex items-center gap-2">
-                    <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.synthesizeSubmit)}">
-                      ${escapeHtml(messages.builder.synthesizeSubmit)}
-                    </button>
-                    <span id="voice-synthesize-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
-                  </div>
-                </form>
-                <div id="voice-synthesize-result" class="mt-3" aria-live="polite"></div>
+          <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
+            <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.assistantReviewTitle)}">${escapeHtml(messages.builder.assistantReviewTitle)}</summary>
+            <div class="collapse-content">
+              <div class="grid gap-4 xl:grid-cols-2">
+                ${renderAiAssistForm(messages, locale, projectId)}
+                ${renderAiTestForm(messages, locale, projectId)}
               </div>
             </div>
+          </details>
 
-            <div class="${cardClasses.bordered}">
-              <div class="card-body">
-                <h2 class="card-title">${escapeHtml(messages.builder.speechToTextLabel)}</h2>
-                <form
-                  hx-post="${escapeHtml(withQueryParameters(appRoutes.aiTranscribe, { projectId, locale }))}"
-                  hx-target="#voice-transcribe-result"
-                  hx-swap="innerHTML"
-                  hx-indicator="#voice-transcribe-spinner"
-                  hx-disabled-elt="button, input, select, textarea"
-                  hx-encoding="multipart/form-data"
-                  class="space-y-3"
-                >
-                  <fieldset class="fieldset">
-                    <legend class="fieldset-legend">${escapeHtml(messages.builder.transcribeFileLabel)}</legend>
-                <input id="voice-transcribe-file" name="file" type="file" class="file-input file-input-sm w-full" accept="audio/*" required aria-required="true" aria-label="${escapeHtml(messages.builder.transcribeFileLabel)}" />
-                  </fieldset>
-                  <div class="flex items-center gap-2">
-                    <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.transcribeSubmit)}">
-                      ${escapeHtml(messages.builder.transcribeSubmit)}
-                    </button>
-                    <span id="voice-transcribe-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
-                  </div>
-                </form>
-                <div id="voice-transcribe-result" class="mt-3" aria-live="polite"></div>
+          <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
+            <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.knowledgeWorkspaceTitle)}">${escapeHtml(messages.builder.knowledgeWorkspaceTitle)}</summary>
+            <div class="collapse-content">
+              <div class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+                ${renderAiKnowledgeWorkspace(messages, locale, projectId, documents)}
+                ${renderAiRetrievalAndToolPlan(messages, locale, projectId)}
               </div>
             </div>
-          </div>
-        </div>
-      </details>
+          </details>
 
-      <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
-        <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.knowledgeWorkspaceTitle)}">${escapeHtml(messages.builder.knowledgeWorkspaceTitle)}</summary>
-        <div class="collapse-content">
-          <div class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-            ${renderAiKnowledgeWorkspace(messages, locale, projectId, documents)}
-            ${renderAiRetrievalAndToolPlan(messages, locale, projectId)}
-          </div>
-        </div>
-      </details>
-
-      <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
-        <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.previewChanges)}">${escapeHtml(messages.builder.previewChanges)}</summary>
-        <div class="collapse-content">
-          ${renderAiPatchAndApiSurface(messages, locale, projectId)}
-        </div>
-      </details>
+          <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
+            <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.previewChanges)}">${escapeHtml(messages.builder.previewChanges)}</summary>
+            <div class="collapse-content">
+              ${renderAiPatchAndApiSurface(messages, locale, projectId)}
+            </div>
+          </details>
+        </div>`,
+        sideSections: [
+          {
+            title: messages.builder.voicePreviewTitle,
+            description: messages.builder.voicePreviewDescription,
+            body: `<p class="text-sm text-base-content/70">${escapeHtml(messages.builder.voicePreviewDescription)}</p>
+              <div class="grid gap-4">
+                <div class="${cardClasses.bordered}">
+                  <div class="card-body">
+                    <h2 class="card-title">${escapeHtml(messages.builder.speechSynthesisLabel)}</h2>
+                    <form
+                      hx-post="${escapeHtml(withQueryParameters(appRoutes.aiSynthesize, { projectId, locale }))}"
+                      hx-target="#voice-synthesize-result"
+                      hx-swap="innerHTML"
+                      hx-indicator="#voice-synthesize-spinner"
+                      hx-disabled-elt="button, input, select, textarea"
+                      class="space-y-3"
+                    >
+                      <fieldset class="fieldset">
+                        <legend class="fieldset-legend">${escapeHtml(messages.builder.promptLabel)}</legend>
+                        <textarea id="voice-synthesize-text" name="text" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.synthesizeTextPlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.promptLabel)}"></textarea>
+                      </fieldset>
+                      <div class="flex items-center gap-2">
+                        <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.synthesizeSubmit)}">
+                          ${escapeHtml(messages.builder.synthesizeSubmit)}
+                        </button>
+                        <span id="voice-synthesize-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
+                      </div>
+                    </form>
+                    <div id="voice-synthesize-result" class="mt-3" aria-live="polite"></div>
+                  </div>
+                </div>
+                <div class="${cardClasses.bordered}">
+                  <div class="card-body">
+                    <h2 class="card-title">${escapeHtml(messages.builder.speechToTextLabel)}</h2>
+                    <form
+                      hx-post="${escapeHtml(withQueryParameters(appRoutes.aiTranscribe, { projectId, locale }))}"
+                      hx-target="#voice-transcribe-result"
+                      hx-swap="innerHTML"
+                      hx-indicator="#voice-transcribe-spinner"
+                      hx-disabled-elt="button, input, select, textarea"
+                      hx-encoding="multipart/form-data"
+                      class="space-y-3"
+                    >
+                      <fieldset class="fieldset">
+                        <legend class="fieldset-legend">${escapeHtml(messages.builder.transcribeFileLabel)}</legend>
+                        <input id="voice-transcribe-file" name="file" type="file" class="file-input file-input-sm w-full" accept="audio/*" required aria-required="true" aria-label="${escapeHtml(messages.builder.transcribeFileLabel)}" />
+                      </fieldset>
+                      <div class="flex items-center gap-2">
+                        <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.transcribeSubmit)}">
+                          ${escapeHtml(messages.builder.transcribeSubmit)}
+                        </button>
+                        <span id="voice-transcribe-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
+                      </div>
+                    </form>
+                    <div id="voice-transcribe-result" class="mt-3" aria-live="polite"></div>
+                  </div>
+                </div>
+              </div>`,
+          },
+        ],
+      })}
     </div>`;
+};

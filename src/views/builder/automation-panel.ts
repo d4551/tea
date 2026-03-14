@@ -1,5 +1,6 @@
 import type { LocaleCode } from "../../config/environment.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
+import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import type { AutomationRun, GenerationArtifact } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
@@ -12,7 +13,7 @@ import {
   getAutomationStepSummaryLabel,
   getLongRunningStatusLabel,
 } from "./view-labels.ts";
-import { renderWorkspaceShell } from "./workspace-shell.ts";
+import { renderWorkspaceFrame, renderWorkspaceShell } from "./workspace-shell.ts";
 
 /**
  * Renders the automation review and orchestration workspace.
@@ -32,6 +33,12 @@ export const renderAutomationPanel = (
   artifacts: readonly GenerationArtifact[],
 ): string => {
   const createRunAction = `${appRoutes.builderApiAutomationRuns}/create/form`;
+  const settingsHref = withQueryParameters(interpolateRoutePath(appRoutes.builderAi, { projectId }), {
+    lang: locale,
+  });
+  const playtestHref = withQueryParameters(interpolateRoutePath(appRoutes.game, { projectId }), {
+    lang: locale,
+  });
   const artifactLookup = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
   const blockedRuns = runs.filter((run) => run.status === "blocked_for_approval").length;
   const completedRuns = runs.filter((run) => run.status === "succeeded").length;
@@ -122,48 +129,68 @@ export const renderAutomationPanel = (
 
   return `<section class="space-y-6 animate-fade-in-up">
     ${renderWorkspaceShell({
-      eyebrow: messages.builder.automation,
-      title: messages.builder.automation,
+      eyebrow: messages.builder.advancedTools,
+      title: messages.builder.operations,
       description: messages.builder.advancedAutomationDescription,
       facets: [
-        { label: messages.builder.readinessPartial, badgeClassName: "badge-warning" },
+        { label: messages.builder.advancedAutomationDescription, badgeClassName: "badge-outline" },
         { label: messages.builder.automationArtifactsLabel, badgeClassName: "badge-secondary" },
       ],
       metrics: [
         { label: messages.builder.automation, value: runs.length, toneClassName: "text-primary" },
         { label: messages.builder.automationArtifactsLabel, value: artifacts.length },
         {
-          label: messages.builder.readinessPartial,
+          label: messages.builder.jobStatusBlockedForApproval,
           value: blockedRuns,
           toneClassName: blockedRuns > 0 ? "text-warning" : "text-base-content",
         },
-        { label: messages.builder.readinessImplemented, value: completedRuns },
+        { label: messages.builder.jobStatusSucceeded, value: completedRuns },
+      ],
+      actions: `
+        <a class="btn btn-outline btn-sm" href="${escapeHtml(settingsHref)}" aria-label="${escapeHtml(messages.builder.projectSettings)}">
+          ${escapeHtml(messages.builder.projectSettings)}
+        </a>
+        <a class="btn btn-primary btn-sm" href="${escapeHtml(playtestHref)}" aria-label="${escapeHtml(messages.builder.playtest)}">
+          ${escapeHtml(messages.builder.playtest)}
+        </a>
+        `,
+    })}
+    ${renderWorkspaceFrame({
+      navigatorTitle: messages.builder.createAutomationRun,
+      navigatorDescription: messages.builder.advancedAutomationDescription,
+      navigatorBody: `<article class="${cardClasses.bordered}">
+          <form class="card-body gap-3" hx-post="${escapeHtml(createRunAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#automation-create-spinner" hx-disabled-elt="button, input, select, textarea">
+            ${renderBuilderHiddenFields(projectId, locale)}
+            <fieldset class="fieldset">
+              <legend class="fieldset-legend">${escapeHtml(messages.builder.automationGoalLabel)}</legend>
+              <textarea name="goal" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.automationGoalPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.automationGoalLabel)}"></textarea>
+            </fieldset>
+            <div class="rounded-box border border-base-300/80 bg-base-200/45 p-3 text-xs text-base-content/70">
+              ${escapeHtml(messages.builder.advancedAutomationDescription)}
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.createAutomationRun)}">${escapeHtml(messages.builder.createAutomationRun)}</button>
+              <span id="automation-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
+            </div>
+          </form>
+        </article>`,
+      mainBody: `<section class="space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-2xl font-semibold">${escapeHtml(messages.builder.operations)}</h2>
+            <span class="badge badge-outline">${runs.length}</span>
+          </div>
+          <div class="grid gap-4 xl:grid-cols-2">${runs.length === 0 ? emptyRunAlert : runCards}</div>
+        </section>`,
+      sideSections: [
+        {
+          title: messages.builder.reviewLabelPrefix,
+          description: messages.builder.previewReady,
+          body: `<div class="space-y-3 text-sm leading-6 text-base-content/72">
+            <div class="rounded-box border border-base-300 bg-base-200/55 p-3">${escapeHtml(messages.builder.advancedAutomationDescription)}</div>
+            <div class="rounded-box border border-base-300 bg-base-200/55 p-3">${escapeHtml(messages.builder.automationArtifactsLabel)}: ${artifacts.length}</div>
+          </div>`,
+        },
       ],
     })}
-    <article class="${cardClasses.bordered}">
-      <form class="card-body gap-3" hx-post="${escapeHtml(createRunAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#automation-create-spinner" hx-disabled-elt="button, input, select, textarea">
-        ${renderBuilderHiddenFields(projectId, locale)}
-        <h2 class="card-title text-2xl">${escapeHtml(messages.builder.createAutomationRun)}</h2>
-        <fieldset class="fieldset">
-          <legend class="fieldset-legend">${escapeHtml(messages.builder.automationGoalLabel)}</legend>
-          <textarea name="goal" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.automationGoalPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.automationGoalLabel)}"></textarea>
-        </fieldset>
-        <div class="rounded-box border border-base-300/80 bg-base-200/45 p-3 text-xs text-base-content/70">
-          ${escapeHtml(messages.builder.advancedAutomationDescription)}
-        </div>
-        <div class="flex items-center gap-2">
-          <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.createAutomationRun)}">${escapeHtml(messages.builder.createAutomationRun)}</button>
-          <span id="automation-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
-        </div>
-      </form>
-    </article>
-
-    <section class="space-y-3">
-      <div class="flex items-center justify-between gap-3">
-        <h2 class="text-2xl font-semibold">${escapeHtml(messages.builder.automation)}</h2>
-        <span class="badge badge-outline">${runs.length}</span>
-      </div>
-      <div class="grid gap-4 xl:grid-cols-2">${runs.length === 0 ? emptyRunAlert : runCards}</div>
-    </section>
   </section>`;
 };

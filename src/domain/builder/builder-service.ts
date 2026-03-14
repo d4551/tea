@@ -9,7 +9,7 @@ import {
   DEFAULT_SCENE_SPAWN_X,
   DEFAULT_SCENE_SPAWN_Y,
 } from "../../shared/constants/builder-defaults.ts";
-import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
+import { appRoutes } from "../../shared/constants/routes.ts";
 import type {
   AnimationClip,
   AutomationRun,
@@ -38,11 +38,14 @@ import type {
   SceneDefinition,
   SceneNodeDefinition,
   SceneNpcDefinition,
+  StarterProjectTemplateId,
   TilemapDefinition,
   TriggerDefinition,
 } from "../../shared/contracts/game.ts";
+import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { sha256Hex } from "../../shared/utils/crypto.ts";
 import { acceptUnknown, safeJsonParse } from "../../shared/utils/safe-json.ts";
+import { deriveSceneIdentity, resolveCreatorFacingText } from "./builder-display.ts";
 import {
   type BuilderProjectSnapshot,
   type BuilderProjectState,
@@ -180,6 +183,8 @@ export interface BuilderSceneNodePayload {
 export interface BuilderSceneFormPayload {
   /** Stable scene identifier. */
   readonly sceneId: string;
+  /** Optional creator-facing scene title. */
+  readonly displayTitle?: string;
   /** Optional localized title key. */
   readonly titleKey?: string;
   /** Optional background asset path. */
@@ -206,6 +211,8 @@ export interface BuilderNpcFormPayload {
   readonly sceneId: string;
   /** Stable NPC identifier. */
   readonly npcId: string;
+  /** Optional creator-facing NPC display name. */
+  readonly displayName?: string;
   /** Optional label-key update. */
   readonly labelKey?: string;
   /** Optional X coordinate update. */
@@ -248,10 +255,12 @@ export interface BuilderQuestFormPayload {
  * Form-style payload used to create one authored scene with canonical defaults.
  */
 export interface BuilderSceneCreatePayload {
-  /** Stable scene identifier. */
-  readonly id: string;
-  /** Localized title key. */
-  readonly titleKey: string;
+  /** Optional stable scene identifier. */
+  readonly id?: string;
+  /** Optional creator-facing scene title. */
+  readonly displayTitle?: string;
+  /** Optional localized title key. */
+  readonly titleKey?: string;
   /** Background asset path or key. */
   readonly background: string;
   /** Optional scene mode override. */
@@ -378,8 +387,12 @@ export interface BuilderDialogueGraphCreatePayload {
  * Service contract for builder persistence operations.
  */
 export interface BuilderService {
-  /** Creates a fresh project from game baseline data. */
-  createProject(projectId: string, updatedBy?: string): Promise<BuilderProjectSnapshot | null>;
+  /** Creates a fresh project from one starter template. */
+  createProject(
+    projectId: string,
+    starterTemplateId: StarterProjectTemplateId,
+    updatedBy?: string,
+  ): Promise<BuilderProjectSnapshot | null>;
   /** Returns one builder project snapshot by id. */
   getProject(projectId: string): Promise<BuilderProjectSnapshot | null>;
   /** Returns one existing project snapshot without implicitly creating it. */
@@ -800,6 +813,7 @@ const isAutomationStepSpec = (value: unknown): value is AutomationStepSpec => {
     case "create-scene":
       return (
         typeof value.id === "string" &&
+        typeof value.displayTitle === "string" &&
         typeof value.titleKey === "string" &&
         typeof value.background === "string" &&
         (value.sceneMode === "2d" || value.sceneMode === "3d")
@@ -865,7 +879,7 @@ const parseAutomationStepSpecs = (value: string | undefined): readonly Automatio
 const buildDefaultAutomationStepSpecs = (projectId: string): readonly AutomationStepSpec[] => [
   {
     kind: "goto",
-    path: withQueryParameters(appRoutes.builder, { projectId }),
+    path: interpolateRoutePath(appRoutes.builderStart, { projectId }),
   },
   {
     kind: "assert-text",
@@ -1309,6 +1323,7 @@ const parsePatchTarget = (path: string): PatchTarget | null => {
 
 const buildScenePatchFallback = (sceneId: string): SceneDefinition => ({
   id: sceneId,
+  displayTitle: "",
   titleKey: "",
   background: "",
   geometry: {
@@ -1366,9 +1381,10 @@ class PrismaBuilderService implements BuilderService {
 
   public async createProject(
     projectId: string,
+    starterTemplateId: StarterProjectTemplateId,
     updatedBy?: string,
   ): Promise<BuilderProjectSnapshot | null> {
-    return this.stateStore.createProject(projectId, updatedBy);
+    return this.stateStore.createProject(projectId, starterTemplateId, updatedBy);
   }
 
   public async getProject(projectId: string): Promise<BuilderProjectSnapshot | null> {
@@ -1392,7 +1408,24 @@ class PrismaBuilderService implements BuilderService {
       projectId,
       this.resolveUpdatedBy(updatedBy, "builder-editor"),
       (state) => {
-        const nextScene = cloneScene(payload.scene);
+        const nextScene = cloneScene({
+          ...payload.scene,
+          displayTitle:
+            payload.scene.displayTitle.trim().length > 0
+              ? payload.scene.displayTitle
+              : resolveCreatorFacingText(
+                  payload.scene.titleKey,
+                  payload.scene.titleKey,
+                  payload.id,
+                ),
+          npcs: payload.scene.npcs.map((npc) => ({
+            ...npc,
+            displayName:
+              npc.displayName.trim().length > 0
+                ? npc.displayName
+                : resolveCreatorFacingText(npc.labelKey, npc.labelKey, npc.characterKey),
+          })),
+        });
         const action: BuilderMutationResult["action"] = Object.hasOwn(state.scenes, payload.id)
           ? "updated"
           : "created";
@@ -1424,12 +1457,20 @@ class PrismaBuilderService implements BuilderService {
     projectId: string,
     payload: BuilderSceneCreatePayload,
   ): Promise<BuilderMutation<SceneDefinition> | null> {
-    const sceneId = payload.id.trim();
+    const identity = deriveSceneIdentity(payload);
+    if (identity.id.length === 0 || identity.titleKey.length === 0) {
+      return null;
+    }
+
+    const sceneId = identity.id;
     return this.saveScene(projectId, {
       id: sceneId,
       scene: {
         id: sceneId,
-        titleKey: payload.titleKey.trim(),
+        displayTitle:
+          payload.displayTitle?.trim() ||
+          resolveCreatorFacingText(identity.titleKey, identity.titleKey, sceneId),
+        titleKey: identity.titleKey,
         background: payload.background.trim(),
         sceneMode: payload.sceneMode === "3d" ? "3d" : "2d",
         geometry: {
@@ -1470,6 +1511,11 @@ class PrismaBuilderService implements BuilderService {
         let updatedScene: SceneDefinition = {
           ...current,
           id: payload.sceneId,
+          displayTitle: trimOrFallback(
+            payload.displayTitle,
+            current.displayTitle ||
+              resolveCreatorFacingText(current.titleKey, current.titleKey, payload.sceneId),
+          ),
           titleKey: trimOrFallback(payload.titleKey, current.titleKey),
           background: trimOrFallback(payload.background, current.background),
           sceneMode:
@@ -1666,7 +1712,13 @@ class PrismaBuilderService implements BuilderService {
       const existingIndex = scene.npcs.findIndex(
         (candidate) => candidate.characterKey === payload.npc.characterKey,
       );
-      const nextNpc = structuredClone(payload.npc);
+      const nextNpc = structuredClone({
+        ...payload.npc,
+        displayName:
+          payload.npc.displayName.trim().length > 0
+            ? payload.npc.displayName
+            : payload.npc.labelKey,
+      });
       const nextNpcs = [...scene.npcs];
       if (existingIndex === -1) {
         nextNpcs.push(nextNpc);
@@ -1731,6 +1783,11 @@ class PrismaBuilderService implements BuilderService {
       const nextNpc: SceneNpcDefinition = {
         ...currentNpc,
         characterKey: payload.npcId,
+        displayName: trimOrFallback(
+          payload.displayName,
+          currentNpc.displayName ||
+            resolveCreatorFacingText(currentNpc.labelKey, currentNpc.labelKey, payload.npcId),
+        ),
         labelKey: trimOrFallback(payload.labelKey, currentNpc.labelKey),
         x: parseBuilderInteger(payload.x, currentNpc.x),
         y: parseBuilderInteger(payload.y, currentNpc.y),

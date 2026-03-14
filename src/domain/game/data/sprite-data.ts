@@ -115,6 +115,7 @@ export const gameScenes: Record<string, SceneDefinition> = {
   teaHouse: {
     id: "teaHouse",
     sceneMode: "2d",
+    displayTitle: "Yangtze Tea House",
     titleKey: "scene.teaHouse.title",
     background: gameAssetUrls.teaHouseBackground,
     geometry: {
@@ -145,6 +146,7 @@ export const gameScenes: Record<string, SceneDefinition> = {
     npcs: [
       {
         characterKey: "teaMonk",
+        displayName: "Tea Monk",
         x: 180,
         y: 200,
         labelKey: "npc.teaMonk.label",
@@ -159,6 +161,7 @@ export const gameScenes: Record<string, SceneDefinition> = {
       },
       {
         characterKey: "merchant",
+        displayName: "Silk Merchant",
         x: 450,
         y: 260,
         labelKey: "npc.merchant.label",
@@ -178,6 +181,7 @@ export const gameScenes: Record<string, SceneDefinition> = {
       },
       {
         characterKey: "riverPilot",
+        displayName: "River Pilot",
         x: 340,
         y: 180,
         labelKey: "npc.riverPilot.label",
@@ -197,6 +201,7 @@ export const gameScenes: Record<string, SceneDefinition> = {
   crystalCavern: {
     id: "crystalCavern",
     sceneMode: "3d",
+    displayTitle: "Crystal Cavern",
     titleKey: "scene.crystalCavern.title",
     background: gameAssetUrls.teaHouseBackground,
     geometry: {

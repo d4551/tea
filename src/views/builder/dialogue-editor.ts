@@ -13,7 +13,8 @@ import {
   renderEmptyStateCompact,
   spinnerClasses,
 } from "../shared/ui-components.ts";
-import { renderWorkspaceShell } from "./workspace-shell.ts";
+import { buildBuilderJourneyConfig } from "./builder-journey.ts";
+import { renderWorkspaceFrame, renderWorkspaceShell } from "./workspace-shell.ts";
 
 /**
  * Renders the dialogue editor panel.
@@ -60,6 +61,7 @@ export const renderDialogueEditor = (
     locale,
     projectId,
   });
+  const creatorJourney = buildBuilderJourneyConfig(messages, locale, projectId, "story");
   const totalLines = Array.from(npcGroups.values()).reduce(
     (total, lines) => total + lines.length,
     0,
@@ -130,6 +132,7 @@ export const renderDialogueEditor = (
         eyebrow: messages.builder.dialogue,
         title: messages.builder.dialogueWorkspaceTitle,
         description: messages.builder.dialogueCreateDescription,
+        journey: creatorJourney,
         facets: [
           { label: locale, badgeClassName: "badge-secondary" },
           { label: messages.builder.generateDialogue, badgeClassName: "badge-accent" },
@@ -140,71 +143,90 @@ export const renderDialogueEditor = (
           { label: messages.navigation.localeLabel, value: locale },
         ],
       })}
-      <section class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-      <div class="space-y-4">
-        <article class="${cardClasses.bordered}">
-          <div class="card-body gap-4">
-            <div class="space-y-1">
-              <h1 class="card-title text-2xl">${escapeHtml(messages.builder.dialogueWorkspaceTitle)}</h1>
-              <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.dialogueCreateDescription)}</p>
+      ${renderWorkspaceFrame({
+        navigatorTitle: messages.builder.dialogueWorkspaceTitle,
+        navigatorDescription: messages.builder.dialogueCreateDescription,
+        navigatorBody: `<article class="${cardClasses.bordered}">
+            <div class="card-body gap-4">
+              <form method="get" action="${escapeHtml(searchAction)}" class="space-y-3" hx-get="${escapeHtml(searchAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-push-url="true">
+                <input type="hidden" name="lang" value="${escapeHtml(locale)}" />
+                <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueSearchLabel)}</legend>
+                  <input name="search" type="text" class="input w-full" value="${escapeHtml(search)}" placeholder="${escapeHtml(messages.builder.dialogueSearchPlaceholder)}" aria-label="${escapeHtml(messages.builder.dialogueSearchLabel)}" />
+                </fieldset>
+                <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.filterAction)}">${escapeHtml(messages.builder.filterAction)}</button>
+              </form>
+
+              <form
+                class="space-y-3"
+                hx-post="${escapeHtml(createAction)}"
+                hx-target="#builder-content"
+                hx-swap="innerHTML"
+                hx-indicator="#dialogue-create-spinner"
+                hx-disabled-elt="button, input, select, textarea"
+              >
+                ${renderBuilderHiddenFields(projectId, locale)}
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueKey)}</legend>
+                  <input name="key" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.dialogueKeyPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.dialogueKey)}" />
+                </fieldset>
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueLine)}</legend>
+                  <textarea name="text" class="textarea w-full" rows="3" placeholder="${escapeHtml(messages.builder.addLinePlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.dialogueLine)}"></textarea>
+                </fieldset>
+                <div class="flex items-center gap-2">
+                  <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.addDialogue)}">${escapeHtml(messages.builder.addDialogue)}</button>
+                  <span id="dialogue-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
+                </div>
+              </form>
             </div>
+          </article>
 
-            <form method="get" action="${escapeHtml(searchAction)}" class="space-y-3">
-              <input type="hidden" name="lang" value="${escapeHtml(locale)}" />
-              <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
-              <fieldset class="fieldset">
-                <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueSearchLabel)}</legend>
-                <input name="search" type="text" class="input w-full" value="${escapeHtml(search)}" placeholder="${escapeHtml(messages.builder.dialogueSearchPlaceholder)}" aria-label="${escapeHtml(messages.builder.dialogueSearchLabel)}" />
-              </fieldset>
-              <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.filterAction)}">${escapeHtml(messages.builder.filterAction)}</button>
-            </form>
-
-            <form
-              class="space-y-3"
-              hx-post="${escapeHtml(createAction)}"
-              hx-target="#builder-content"
-              hx-swap="innerHTML"
-              hx-indicator="#dialogue-create-spinner"
-              hx-disabled-elt="button, input, select, textarea"
-            >
-              ${renderBuilderHiddenFields(projectId, locale)}
-              <fieldset class="fieldset">
-                <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueKey)}</legend>
-                <input name="key" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.dialogueKeyPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.dialogueKey)}" />
-              </fieldset>
-              <fieldset class="fieldset">
-                <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueLine)}</legend>
-            <textarea name="text" class="textarea w-full" rows="3" placeholder="${escapeHtml(messages.builder.addLinePlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.dialogueLine)}"></textarea>
-              </fieldset>
-              <div class="flex items-center gap-2">
-                <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.addDialogue)}">${escapeHtml(messages.builder.addDialogue)}</button>
-                <span id="dialogue-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
-              </div>
-            </form>
-          </div>
-        </article>
-
-        ${
-          groupHtml.length > 0
-            ? `<div class="space-y-4">${groupHtml}</div>`
-            : renderEmptyStateCompact(
-                messages.builder.noDialogues,
-                messages.builder.dialogueCreateDescription,
-              )
-        }
-      </div>
-
-      <div id="dialogue-detail" class="space-y-4" aria-live="polite" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
-        ${
-          selectedLine
-            ? renderDialogueDetail(messages, selectedLine.key, selectedLine.text, locale, projectId)
-            : renderEmptyStateCompact(
-                messages.builder.noDialogues,
-                messages.builder.dialogueCreateDescription,
-              )
-        }
-      </div>
-    </section>
+          ${
+            groupHtml.length > 0
+              ? `<div class="space-y-4">${groupHtml}</div>`
+              : renderEmptyStateCompact(
+                  messages.builder.noDialogues,
+                  messages.builder.dialogueCreateDescription,
+                )
+          }`,
+        mainBody: `<div id="dialogue-detail" class="space-y-4" aria-live="polite" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
+          ${
+            selectedLine
+              ? renderDialogueDetail(
+                  messages,
+                  selectedLine.key,
+                  selectedLine.text,
+                  locale,
+                  projectId,
+                )
+              : renderEmptyStateCompact(
+                  messages.builder.noDialogues,
+                  messages.builder.dialogueCreateDescription,
+                )
+          }
+        </div>`,
+        sideSections: [
+          {
+            title: messages.builder.preview,
+            description: selectedLine?.key ?? messages.builder.dialogueCreateDescription,
+            body: `<div class="rounded-box border border-base-300 bg-base-200/55 p-4 text-sm leading-6 text-base-content/72">${
+              selectedLine
+                ? escapeHtml(selectedLine.text)
+                : escapeHtml(messages.builder.noDialogues)
+            }</div>`,
+          },
+          {
+            title: messages.builder.creatorSupportTitle,
+            description: messages.builder.dialogueCreateDescription,
+            body: `<div class="space-y-3 text-sm leading-6 text-base-content/72">
+              <div class="rounded-box border border-base-300 bg-base-200/55 p-3">${escapeHtml(messages.builder.assistantReviewDescription)}</div>
+              <div class="rounded-box border border-base-300 bg-base-200/55 p-3">${escapeHtml(messages.builder.assistantReviewDescription)}</div>
+            </div>`,
+          },
+        ],
+      })}
     </section>`;
 };
 

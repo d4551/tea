@@ -299,6 +299,8 @@ export interface SceneGeometry {
 export interface SceneNpcDefinition {
   /** NPC key in the character registry. */
   readonly characterKey: string;
+  /** Creator-facing NPC display name. */
+  readonly displayName: string;
   /** Spawn position X in scene space. */
   readonly x: number;
   /** Spawn position Y in scene space. */
@@ -365,6 +367,8 @@ export interface SceneDefinition {
   readonly id: string;
   /** Scene runtime mode. */
   readonly sceneMode?: SceneMode;
+  /** Creator-facing scene title. */
+  readonly displayTitle: string;
   /** Human-readable scene title key. */
   readonly titleKey: string;
   /** Scene background path. */
@@ -2838,6 +2842,139 @@ export interface CreatorAssistContext {
 }
 
 /**
+ * Canonical starter template identifiers for first-run builder bootstrapping.
+ */
+export type StarterProjectTemplateId = "blank" | "tea-house-story";
+
+/**
+ * Creator-visible starter template metadata used by the first-run project picker.
+ */
+export interface StarterProjectTemplate {
+  /** Stable template identifier. */
+  readonly id: StarterProjectTemplateId;
+  /** Human-facing template label. */
+  readonly label: string;
+  /** Human-facing template summary. */
+  readonly description: string;
+  /** Recommended visual mode for the first authored slice. */
+  readonly defaultSceneMode: SceneMode;
+  /** Whether this template should be preselected in the picker. */
+  readonly recommended: boolean;
+}
+
+/**
+ * Project creation selection recorded when bootstrapping a starter project.
+ */
+export interface StarterProjectSelection {
+  /** New project identifier. */
+  readonly projectId: string;
+  /** Selected starter template. */
+  readonly templateId: StarterProjectTemplateId;
+}
+
+/**
+ * Creator-safe dashboard payload used by the project start workspace.
+ */
+export interface CreatorDashboardContext {
+  /** Active gameplay sessions tied to the current draft or published build. */
+  readonly activeSessions: number;
+  /** Total authored scenes. */
+  readonly totalScenes: number;
+  /** Total authored assets. */
+  readonly assetCount: number;
+  /** Total authored animation clips. */
+  readonly animationClipCount: number;
+  /** Total authored NPCs. */
+  readonly totalNpcs: number;
+  /** Total authored dialogue graphs. */
+  readonly dialogueGraphCount: number;
+  /** Total authored quests. */
+  readonly questCount: number;
+  /** Whether the project currently has a published release. */
+  readonly published: boolean;
+  /** Current draft version. */
+  readonly draftVersion: number;
+  /** Latest immutable release version. */
+  readonly latestReleaseVersion: number;
+  /** Published immutable release version, if any. */
+  readonly publishedReleaseVersion: number | null;
+  /** Creator-safe capability summaries. */
+  readonly creatorCapabilities: CreatorCapabilities;
+}
+
+/**
+ * Creator-safe workspace payload for the world authoring section.
+ */
+export interface CreatorWorldContext {
+  /** Active project identifier. */
+  readonly projectId: string;
+  /** Total authored scenes in the project. */
+  readonly totalScenes: number;
+  /** Selected scene identifier, if any. */
+  readonly selectedSceneId?: string;
+  /** Human-readable label for the selected scene. */
+  readonly selectedSceneTitle?: string;
+}
+
+/**
+ * Creator-safe workspace payload for character authoring.
+ */
+export interface CreatorCharactersContext {
+  /** Active project identifier. */
+  readonly projectId: string;
+  /** Total authored characters in the project. */
+  readonly totalCharacters: number;
+  /** Selected character identifier, if any. */
+  readonly selectedCharacterId?: string;
+  /** Human-readable label for the selected character. */
+  readonly selectedCharacterName?: string;
+}
+
+/**
+ * Creator-safe workspace payload for story authoring.
+ */
+export interface CreatorStoryContext {
+  /** Active project identifier. */
+  readonly projectId: string;
+  /** Total dialogue graph definitions. */
+  readonly totalDialogueGraphs: number;
+  /** Total dialogue entries across all graphs. */
+  readonly totalDialogueEntries: number;
+  /** Selected story item identifier, if any. */
+  readonly selectedStoryId?: string;
+}
+
+/**
+ * Creator-safe workspace payload for mechanics authoring.
+ */
+export interface CreatorSystemsContext {
+  /** Active project identifier. */
+  readonly projectId: string;
+  /** Total custom mechanics entries authored by the creator. */
+  readonly totalSystems: number;
+  /** Total condition/action entries currently defined. */
+  readonly totalRules: number;
+  /** Selected system identifier, if any. */
+  readonly selectedSystemId?: string;
+}
+
+/**
+ * Creator-safe workspace payload for asset and media authoring.
+ */
+export interface CreatorAssetsContext {
+  /** Active project identifier. */
+  readonly projectId: string;
+  /** Total assets across all media kinds. */
+  readonly totalAssets: number;
+  /** Total animation assets with clips or timelines available. */
+  readonly totalAnimations: number;
+  /** Total audio assets available. */
+  readonly totalAudioAssets: number;
+  /** Selected asset identifier, if any. */
+  readonly selectedAssetId?: string;
+}
+
+/**
  * Runtime diagnostics contract for the advanced settings surface.
  */
 export interface RuntimeDiagnosticsContext {
@@ -2855,6 +2992,16 @@ export interface RuntimeDiagnosticsContext {
   readonly rendererPreference?: "webgpu" | "webgl";
   /** ONNX execution preference from runtime configuration. */
   readonly onnxDevice?: "wasm" | "webgpu" | "cpu";
+}
+
+/**
+ * Diagnostics payload reserved for the project settings surface.
+ */
+export interface ProjectSettingsDiagnosticsContext extends RuntimeDiagnosticsContext {
+  /** Number of stored project-knowledge documents. */
+  readonly projectKnowledgeDocumentCount: number;
+  /** Number of creator-facing capabilities currently available. */
+  readonly capabilityCount: number;
 }
 
 /**

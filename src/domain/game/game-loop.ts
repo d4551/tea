@@ -1,6 +1,10 @@
 import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
-import { defaultGameConfig, resolveScene } from "../../shared/config/game-config.ts";
+import {
+  createFallbackSceneDefinition,
+  defaultGameConfig,
+  resolveScene,
+} from "../../shared/config/game-config.ts";
 import type {
   BuilderAsset,
   CutsceneStep,
@@ -648,25 +652,11 @@ export class GameLoopService {
         new Map<string, string>()
       ).entries(),
     );
-    const resolvedScene = publishedProject?.scenes.get(sceneId) ??
+    const resolvedScene =
+      publishedProject?.scenes.get(sceneId) ??
       resolveScene(sceneId) ??
-      resolveScene(defaultGameConfig.defaultSceneId) ?? {
-        id: defaultGameConfig.defaultSceneId,
-        sceneMode: "2d",
-        titleKey: "scene.teaHouse.title",
-        background: "",
-        geometry: {
-          width: defaultGameConfig.viewportWidth,
-          height: defaultGameConfig.viewportHeight,
-        },
-        spawn: {
-          x: Math.round(defaultGameConfig.viewportWidth / 2),
-          y: Math.round(defaultGameConfig.viewportHeight / 2),
-        },
-        nodes: [],
-        npcs: [],
-        collisions: [],
-      };
+      resolveScene(defaultGameConfig.defaultSceneId) ??
+      createFallbackSceneDefinition(defaultGameConfig.defaultSceneId);
 
     const scene = buildSessionSceneState(
       resolvedScene,

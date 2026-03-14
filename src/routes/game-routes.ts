@@ -6,7 +6,6 @@ import { gameLoop } from "../domain/game/game-loop.ts";
 import { authSessionGuard } from "../plugins/auth-session.ts";
 import { gameRequestContextPlugin } from "../plugins/game-request-context.ts";
 import { defaultGameConfig } from "../shared/config/game-config.ts";
-import { appRoutes } from "../shared/constants/routes.ts";
 import type { GameSessionState } from "../shared/contracts/game.ts";
 import { GamePage, type GamePageProps } from "../views/game-page.ts";
 
@@ -74,13 +73,14 @@ const hydrateGameSession = async (
   return gameLoop.getSessionState(created.sessionId, ownerSessionId);
 };
 
-export const gameRoutes = new Elysia({ prefix: appRoutes.game })
+export const gameRoutes = new Elysia({ prefix: "/projects" })
   .use(gameRequestContextPlugin)
   .guard(authSessionGuard, (app) =>
     app.get(
-      "/",
+      "/:projectId/playtest",
       async ({
         request,
+        params,
         gameRequestLocale,
         gameParticipantSessionId,
         gameRequestedSessionId,
@@ -90,7 +90,7 @@ export const gameRoutes = new Elysia({ prefix: appRoutes.game })
       }) => {
         const locale = gameRequestLocale;
         const sessionId = gameRequestedSessionId;
-        const projectId = gameRequestedProjectId;
+        const projectId = params.projectId?.trim() || gameRequestedProjectId;
         const inviteToken = gameInviteToken;
         const ownerSessionId = gameParticipantSessionId;
         const requestOrigin = new URL(request.url).origin;

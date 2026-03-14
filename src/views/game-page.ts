@@ -9,6 +9,7 @@ type PageScript = {
 import {
   appRoutes,
   interpolateRoutePath,
+  withLocaleQuery,
   withQueryParameters,
 } from "../shared/constants/routes.ts";
 import type {
@@ -21,7 +22,9 @@ import {
 } from "../shared/contracts/game-client-bootstrap.ts";
 import type { Messages } from "../shared/i18n/messages.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
+import { buildBuilderJourneyConfig } from "./builder/builder-journey.ts";
 import { escapeHtml, type LayoutContext, renderDocument } from "./layout.ts";
+import { renderBreadcrumbRow, renderSecondaryNav } from "./shared/navigation.ts";
 import { spinnerClasses } from "./shared/ui-components.ts";
 
 /**
@@ -86,10 +89,9 @@ const renderInactiveState = (
   projectId: string | undefined,
   state: InactiveGamePageProps["state"],
 ): string => {
-  const builderHref = withQueryParameters(appRoutes.builder, {
-    lang: locale,
-    projectId,
-  });
+  const builderHref = projectId
+    ? withQueryParameters(interpolateRoutePath(appRoutes.builderStart, { projectId }), { lang: locale })
+    : withLocaleQuery(appRoutes.builder, locale);
   const title =
     state === "invalid-invite"
       ? messages.game.invalidInviteTitle
@@ -140,10 +142,11 @@ const renderInactiveState = (
 export function GamePage(props: GamePageProps) {
   const messages: Messages = getMessages(props.locale);
   if (props.state !== "playable") {
-    const currentPathWithQuery = withQueryParameters(appRoutes.game, {
-      lang: props.locale,
-      projectId: props.projectId,
-    });
+    const currentPathWithQuery = props.projectId
+      ? withQueryParameters(interpolateRoutePath(appRoutes.game, { projectId: props.projectId }), {
+          lang: props.locale,
+        })
+      : withLocaleQuery(appRoutes.builder, props.locale);
     const layout: LayoutContext = {
       locale: props.locale,
       messages,
@@ -175,11 +178,13 @@ export function GamePage(props: GamePageProps) {
     locale,
     clientRuntimeConfig,
   } = props;
-  const currentPathWithQuery = withQueryParameters(appRoutes.game, {
-    lang: locale,
-    sessionId,
-    projectId,
-  });
+  const currentPathWithQuery =
+    projectId === undefined
+      ? withLocaleQuery(appRoutes.builder, locale)
+      : withQueryParameters(interpolateRoutePath(appRoutes.game, { projectId }), {
+          lang: locale,
+          sessionId,
+        });
   const layout: LayoutContext = {
     locale,
     messages,
@@ -196,7 +201,9 @@ export function GamePage(props: GamePageProps) {
       ? `${origin.replace(/\/$/, "")}${gameHudStreamPath}`
       : gameHudStreamPath;
   const gameHudStreamUrl = withQueryParameters(gameHudStreamBaseUrl, { locale });
-  const builderHref = withQueryParameters(appRoutes.builder, { lang: locale, projectId });
+  const builderHref = withQueryParameters(interpolateRoutePath(appRoutes.builderStart, { projectId: projectId ?? "" }), {
+    lang: locale,
+  });
   const inviteAction = interpolateRoutePath(appRoutes.gameApiSessionInvite, { id: sessionId });
   const saveSlotAction = interpolateRoutePath(appRoutes.gameApiSessionSaveSlot, { id: sessionId });
   const saveSlotsAction = interpolateRoutePath(appRoutes.gameApiSessionSaveSlots, {
@@ -239,10 +246,57 @@ export function GamePage(props: GamePageProps) {
       type: "module",
     },
   ];
+  const creatorJourney =
+    projectId === undefined
+      ? null
+      : buildBuilderJourneyConfig(messages, locale, projectId, "playtest");
+  const playtestJourney =
+    creatorJourney === null
+      ? ""
+      : `<section class="rounded-[1.5rem] border border-base-300 bg-base-100/92 p-4 shadow-sm">
+          <div class="flex flex-col gap-4">
+            <div class="space-y-3">
+              ${renderBreadcrumbRow(
+                messages.builder.creatorWorkflowTitle,
+                creatorJourney.breadcrumbs ?? [],
+                {
+                  className: "border-none bg-transparent px-0 py-0",
+                },
+              )}
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div class="space-y-2">
+                  <span class="badge badge-primary badge-soft">${escapeHtml(messages.builder.playtest)}</span>
+                  <div class="space-y-1">
+                    <h2 class="text-lg font-semibold tracking-tight">${escapeHtml(messages.builder.creatorWorkflowTitle)}</h2>
+                    <p class="text-sm leading-6 text-base-content/72">${escapeHtml(creatorJourney.description ?? messages.builder.workflowPlaytestDescription)}</p>
+                  </div>
+                </div>
+                ${
+                  creatorJourney.previousStep
+                    ? `<a class="btn btn-outline btn-sm" href="${escapeHtml(creatorJourney.previousStep.href)}" aria-label="${escapeHtml(creatorJourney.previousStep.label)}">
+                        <span aria-hidden="true">←</span>
+                        <span>${escapeHtml(creatorJourney.previousStep.label)}</span>
+                      </a>`
+                    : ""
+                }
+              </div>
+            </div>
+            ${renderSecondaryNav(
+              creatorJourney.steps.map((step) => ({
+                key: step.key,
+                label: step.label,
+                href: step.href,
+              })),
+              creatorJourney.activeStepKey,
+              creatorJourney.ariaLabel,
+            )}
+          </div>
+        </section>`;
 
   const content = `
     <script id="game-client-bootstrap" type="application/json">${serializeGameClientBootstrap(clientBootstrap)}</script>
     <div class="game-page-grid gap-5 font-serif stagger-children animate-fade-in-up" hx-boost="false" hx-ext="sse" sse-connect="${escapeHtml(gameHudStreamUrl)}" data-sse-url="${escapeHtml(gameHudStreamUrl)}" data-builder-href="${escapeHtml(builderHref)}" data-back-to-builder-label="${escapeHtml(messages.game.builderReturn)}" data-connecting-to-realm="${escapeHtml(messages.game.connectingToRealm)}">
+      ${playtestJourney}
       <!-- Game Header Bar -->
       <header class="bg-base-200 card shadow">
         <div class="card-body p-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

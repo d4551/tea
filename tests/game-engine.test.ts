@@ -93,7 +93,7 @@ const publishProjectWithNpcAtSpawn = async (
   sceneId: string,
   characterKey: string,
 ): Promise<void> => {
-  const project = await builderService.createProject(projectId);
+  const project = await builderService.createProject(projectId, "tea-house-story");
   expect(project).not.toBeNull();
   if (!project) {
     return;
@@ -261,7 +261,7 @@ describe("game engine runtime", () => {
 
   test("published builder projects seed runtime scene overrides and dialogue text", async () => {
     const projectId = `runtime-${crypto.randomUUID()}`;
-    const project = await builderService.createProject(projectId);
+    const project = await builderService.createProject(projectId, "tea-house-story");
     expect(project).not.toBeNull();
     if (!project) {
       return;
@@ -307,7 +307,7 @@ describe("game engine runtime", () => {
 
   test("published builder projects seed authored flags and quest state", async () => {
     const projectId = `mechanics-seed-${crypto.randomUUID()}`;
-    const project = await builderService.createProject(projectId);
+    const project = await builderService.createProject(projectId, "tea-house-story");
     expect(project).not.toBeNull();
     if (!project) {
       return;
@@ -356,7 +356,7 @@ describe("game engine runtime", () => {
 
   test("published mechanics remain immutable until republish", async () => {
     const projectId = `mechanics-release-${crypto.randomUUID()}`;
-    const created = await builderService.createProject(projectId);
+    const created = await builderService.createProject(projectId, "tea-house-story");
     expect(created).not.toBeNull();
     if (!created) {
       return;
@@ -394,7 +394,7 @@ describe("game engine runtime", () => {
 
   test("published builder releases remain immutable until republish", async () => {
     const projectId = `release-${crypto.randomUUID()}`;
-    const created = await builderService.createProject(projectId);
+    const created = await builderService.createProject(projectId, "tea-house-story");
     expect(created).not.toBeNull();
     if (!created) {
       return;
@@ -705,15 +705,21 @@ describe("game engine HTTP contracts", () => {
     expect(body.includes("&lt;img src=x onerror=alert(&#39;line&#39;)&gt;")).toBe(true);
   });
 
-  test("builder assets page renders the authored asset and generation workspace", async () => {
-    const response = await app.handle(new Request(toUrl(appRoutes.builderAssets)));
+  test("builder assets page renders the authored asset and AI draft workspace", async () => {
+    const projectId = `assets-http-${crypto.randomUUID()}`;
+    await builderService.createProject(projectId, "tea-house-story");
+    const response = await app.handle(
+      new Request(toUrl(`${appRoutes.builderAssets}?lang=en-US&projectId=${projectId}`)),
+    );
     const body = await response.text();
 
     expect(response.status).toBe(httpStatus.ok);
     expect(body.includes('id="builder-project-shell"')).toBe(true);
     expect(body.includes('hx-post="/api/builder/assets/create/form"')).toBe(true);
     expect(body.includes("Animation clips")).toBe(true);
-    expect(body.includes("Queue generation job")).toBe(true);
+    expect(body.includes("AI actions for the selected item")).toBe(true);
+    expect(body.includes('id="creator-ai-actions"')).toBe(true);
+    expect(body.includes('name="prompt"')).toBe(true);
   });
 
   test("state route rejects requests from a different session owner", async () => {

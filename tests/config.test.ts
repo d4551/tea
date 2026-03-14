@@ -3,6 +3,7 @@ import {
   appConfig,
   matchLocale,
   normalizeLocale,
+  normalizeUiTheme,
   parseBoolean,
   parseInteger,
 } from "../src/config/environment.ts";
@@ -47,6 +48,13 @@ describe("environment parsing", () => {
     expect(matchLocale("fr-FR")).toBeNull();
   });
 
+  test("ui theme normalization maps legacy aliases to supported tea themes", () => {
+    expect(normalizeUiTheme("silk")).toBe("tea-light");
+    expect(normalizeUiTheme("autumn")).toBe("tea-dark");
+    expect(normalizeUiTheme("forge-light")).toBe("tea-light");
+    expect(normalizeUiTheme("unknown-theme")).toBe("tea-dark");
+  });
+
   test("auth and oracle numeric controls are config-driven", () => {
     expect(["development", "test", "production"]).toContain(appConfig.runtime.nodeEnv);
     expect(appConfig.auth.sessionCookieName.length).toBeGreaterThan(0);
@@ -71,7 +79,7 @@ describe("environment parsing", () => {
     expect(typeof configuredAutomationOrigin).toBe("string");
     expect(appConfig.builder.localAutomationOrigin).toBe(configuredAutomationOrigin ?? "");
     expect(appConfig.builder.automationProbeTimeoutMs).toBeGreaterThanOrEqual(100);
-    expect(appConfig.ui.defaultTheme.length).toBeGreaterThan(0);
+    expect(["tea-dark", "tea-light"]).toContain(appConfig.ui.defaultTheme);
     expect(
       typeof appConfig.ui.socialLinks.githubUrl === "string" ||
         appConfig.ui.socialLinks.githubUrl === null,
@@ -169,10 +177,10 @@ describe("environment parsing", () => {
 
   test("query parameter helper upserts values without losing hash", () => {
     expect(
-      withQueryParameters("/builder/scenes#detail", { locale: "en-US", projectId: "demo" }),
-    ).toBe("/builder/scenes?locale=en-US&projectId=demo#detail");
-    expect(withQueryParameters("/builder/scenes?projectId=demo", { projectId: undefined })).toBe(
-      "/builder/scenes",
+      withQueryParameters("/projects/:projectId/world#detail", { locale: "en-US", projectId: "demo" }),
+    ).toBe("/projects/demo/world?locale=en-US#detail");
+    expect(withQueryParameters("/projects/:projectId/world?projectId=demo", { projectId: undefined })).toBe(
+      "/projects/:projectId/world",
     );
   });
 });

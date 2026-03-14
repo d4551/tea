@@ -300,6 +300,8 @@ export interface Messages {
     readonly dialogueNotFound: string;
     readonly missingPrompt: string;
     readonly sceneIdRequired: string;
+    readonly sceneTitleRequired: string;
+    readonly npcNameRequired: string;
     readonly invalidPatchPlan: string;
     readonly publishValidationFailed: string;
     readonly publishValidationNoScenes: string;
@@ -370,6 +372,7 @@ export interface Messages {
     readonly delete: string;
     readonly preview: string;
     readonly sceneId: string;
+    readonly stableIdLabel: string;
     readonly sceneIdPlaceholder: string;
     readonly sceneTitle: string;
     readonly sceneBackgroundLabel: string;
@@ -438,6 +441,16 @@ export interface Messages {
     readonly unpublishProject: string;
     readonly playPublishedBuild: string;
     readonly createProjectHelp: string;
+    readonly starterProjectTitle: string;
+    readonly starterProjectDescription: string;
+    readonly starterProjectTemplateLegend: string;
+    readonly starterProjectRecommendedLabel: string;
+    readonly starterProjectTemplateBlankLabel: string;
+    readonly starterProjectTemplateBlankDescription: string;
+    readonly starterProjectTemplateStoryLabel: string;
+    readonly starterProjectTemplateStoryDescription: string;
+    readonly projectSettings: string;
+    readonly operations: string;
     readonly projectPlayHint: string;
     readonly capabilityHeader: string;
     readonly statusHeader: string;
@@ -508,6 +521,10 @@ export interface Messages {
     readonly tilemapTileSetLabel: string;
     readonly tilemapBrushLabel: string;
     readonly tilemapFillLabel: string;
+    readonly tilemapToolsLabel: string;
+    readonly tilePaletteLabel: string;
+    readonly tileCellLabel: string;
+    readonly tilemapInstructions: string;
     readonly modelPathLabel: string;
     readonly assetKindPortrait: string;
     readonly assetKindSpriteSheet: string;
@@ -647,8 +664,17 @@ export interface Messages {
     readonly creatorCapabilityAutomationReview: string;
     readonly creatorCapability3dImport: string;
     readonly creatorCapabilityAnimationAssist: string;
+    readonly creatorSupportTitle: string;
+    readonly creatorSupportDescription: string;
     readonly creatorAssistTitle: string;
     readonly creatorAssistDescription: string;
+    readonly workflowStatusReady: string;
+    readonly workflowStatusInProgress: string;
+    readonly workflowStatusStart: string;
+    readonly resultsLabel: string;
+    readonly previousPage: string;
+    readonly nextPage: string;
+    readonly pageLabel: string;
     readonly generateBackground: string;
     readonly generateBackgroundDescription: string;
     readonly generateTileset: string;
@@ -671,6 +697,10 @@ export interface Messages {
     readonly advancedAutomationDescription: string;
     readonly dialogueSearchLabel: string;
     readonly dialogueSearchPlaceholder: string;
+    readonly sceneSearchLabel: string;
+    readonly sceneSearchPlaceholder: string;
+    readonly assetSearchLabel: string;
+    readonly assetSearchPlaceholder: string;
     readonly dialogueWorkspaceTitle: string;
     readonly dialogueCreateDescription: string;
     readonly dialogueKeyPlaceholder: string;
@@ -1226,6 +1256,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       dialogueNotFound: "Dialogue key not found",
       missingPrompt: "Prompt is required",
       sceneIdRequired: "Scene id is required",
+      sceneTitleRequired: "Scene title is required",
+      npcNameRequired: "Character name is required",
       invalidPatchPlan: "Patch plan contains invalid operations",
       publishValidationFailed: "Publish blocked until builder validation passes.",
       publishValidationNoScenes: "Add at least one scene before publishing.",
@@ -1267,7 +1299,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       assets: "Art & Audio",
       mechanics: "Rules & Progress",
       automation: "Review Queue",
-      ai: "AI Tools",
+      ai: "AI Settings",
       playtest: "Playtest",
       settings: "Settings",
       advancedTools: "Advanced",
@@ -1297,7 +1329,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       noNpcs: "No NPCs defined yet.",
       noAssets: "No assets created yet.",
       noAnimationClips: "No animation clips created yet.",
-      noGenerationJobs: "No generation jobs queued yet.",
+      noGenerationJobs: "No AI drafts queued yet.",
       noQuests: "No quests created yet.",
       noTriggers: "No triggers created yet.",
       noDialogueGraphs: "No dialogue graphs created yet.",
@@ -1310,7 +1342,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       delete: "Delete",
       preview: "Preview",
       sceneId: "Scene ID",
-      sceneIdPlaceholder: "scene.teaHouse.annex",
+      stableIdLabel: "Stable ID",
+      sceneIdPlaceholder: "yangtzeTeaHouse",
       sceneTitle: "Scene Title",
       sceneBackgroundLabel: "Background asset",
       scenePreviewTitle: "Scene preview",
@@ -1335,7 +1368,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       greetOnApproach: "Greet on approach",
       dialogueKey: "Dialogue Key",
       dialogueLine: "Dialogue Line",
-      providerStatus: "Provider Status",
+      providerStatus: "Provider inventory",
       availableModels: "Available Models",
       knowledgeWorkspaceTitle: "Knowledge workspace",
       knowledgeWorkspaceDescription:
@@ -1384,7 +1417,20 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       unpublishProject: "Unpublish release",
       playPublishedBuild: "Play published build",
       createProjectHelp:
-        "Create a new project from the current baseline or switch to an existing project by ID.",
+        "Create a new project from a starter template or switch to an existing project by ID.",
+      starterProjectTitle: "Choose a starter",
+      starterProjectDescription:
+        "Start with a blank project or a guided sample you can immediately inspect and reshape.",
+      starterProjectTemplateLegend: "Starter template",
+      starterProjectRecommendedLabel: "Recommended",
+      starterProjectTemplateBlankLabel: "Blank workspace",
+      starterProjectTemplateBlankDescription:
+        "Begin with an empty project and build your first scene, assets, and story from scratch.",
+      starterProjectTemplateStoryLabel: "Tea house story sample",
+      starterProjectTemplateStoryDescription:
+        "Load a curated 2D/3D sample project with scenes, characters, dialogue, assets, and starter progression.",
+      projectSettings: "Project Settings",
+      operations: "Operations",
       projectPlayHint: "Only published releases can be launched in the player.",
       capabilityHeader: "Capability",
       statusHeader: "Status",
@@ -1456,6 +1502,11 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       tilemapTileSetLabel: "Tile set",
       tilemapBrushLabel: "Brush",
       tilemapFillLabel: "Fill",
+      tilemapToolsLabel: "Tilemap tools",
+      tilePaletteLabel: "Tile palette",
+      tileCellLabel: "Tile cell",
+      tilemapInstructions:
+        "Choose a tile set, paint with Brush, or use Fill to flood one connected area.",
       modelPathLabel: "Model path (glb/usdz)",
       assetKindPortrait: "Portrait",
       assetKindSpriteSheet: "Sprite sheet",
@@ -1540,7 +1591,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         "AI-powered tools for generating dialogue, sprites, voices, and game assets.",
       apiSurfaceTitle: "Capabilities",
       apiSurfaceDescription: "Check which AI features are available and view integration details.",
-      localRuntimeTitle: "AI Engine",
+      localRuntimeTitle: "Local runtime",
       localRuntimeDescription:
         "Your local AI engine powers characters, generates assets, and assists with game design.",
       runtimeLabel: "Engine",
@@ -1559,14 +1610,14 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         "2D scenes use backgrounds, sprite sheets, portraits, and optional tilemaps. This is the fastest path to a working prototype.",
       scene3dHelp:
         "3D scenes use model assets such as GLB, GLTF, USD, USDA, USDC, and USDZ. Use them when depth and camera movement matter.",
-      sceneCreateTitlePlaceholder: "enchantedForest",
+      sceneCreateTitlePlaceholder: "Moonlit Harbor",
       sceneBackgroundPlaceholder: "/assets/images/backgrounds/enchanted-forest.png",
       npcRosterTitle: "NPC roster",
       npcCreateDescription:
         "Add NPCs into a scene, then tune movement, dialogue, and greeting behavior.",
       npcCreateSceneLabel: "Owning scene",
-      npcCreateKeyPlaceholder: "forestGuide",
-      npcCreateLabelPlaceholder: "npc.forestGuide.label",
+      npcCreateKeyPlaceholder: "harborGuide",
+      npcCreateLabelPlaceholder: "Harbor Guide",
       assetsWorkspaceTitle: "Asset library",
       assetsWorkspaceDescription:
         "Add the assets that support the scene you are building now. Keep 2D and 3D assets separate so scene setup stays predictable.",
@@ -1591,10 +1642,10 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       clipFrameStart: "0",
       fpsUnit: "FPS",
       clipIdLabel: "Clip ID",
-      generationJobsTitle: "Generation jobs",
-      generationJobKindLabel: "Job kind",
-      generationPromptLabel: "Prompt",
-      createGenerationJob: "Queue generation job",
+      generationJobsTitle: "AI drafts",
+      generationJobKindLabel: "Draft type",
+      generationPromptLabel: "Draft brief",
+      createGenerationJob: "Create AI draft",
       creatorWorkflowTitle: "Create playable slice",
       creatorWorkflowDescription:
         "Move through one authoring loop: shape the world, attach visuals, add characters, wire story and rules, then playtest.",
@@ -1612,12 +1663,15 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       creatorStageSystemsSecondary: "Review story hooks",
       creatorStagePlaytestPrimary: "Playtest slice",
       creatorStagePlaytestSecondary: "Review rules",
-      creatorStageStartCompletion: "A playable slice has a clear next step and one chosen creation lane.",
+      creatorStageStartCompletion:
+        "A playable slice has a clear next step and one chosen creation lane.",
       creatorStageWorldCompletion: "At least one scene exists with a clear 2D or 3D direction.",
-      creatorStageAssetsCompletion: "The current slice has the visuals and audio it needs to read on screen.",
+      creatorStageAssetsCompletion:
+        "The current slice has the visuals and audio it needs to read on screen.",
       creatorStageCharactersCompletion: "At least one character is present in the active slice.",
       creatorStageStoryCompletion: "The slice has dialogue or authored story beats to test.",
-      creatorStageSystemsCompletion: "Rules, quests, triggers, or flags are connected to the slice.",
+      creatorStageSystemsCompletion:
+        "Rules, quests, triggers, or flags are connected to the slice.",
       creatorStagePlaytestCompletion: "The slice can be entered and reviewed in the runtime.",
       creatorCapabilityImageGeneration: "Image generation",
       creatorCapabilityDialogueGeneration: "Dialogue generation",
@@ -1625,9 +1679,19 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       creatorCapabilityAutomationReview: "Review automation",
       creatorCapability3dImport: "3D import",
       creatorCapabilityAnimationAssist: "Animation assist",
+      creatorSupportTitle: "Creator support",
+      creatorSupportDescription:
+        "Stay in the main authoring flow while these guides show what assistance is ready for the selected scene, character, or asset.",
       creatorAssistTitle: "AI actions for the selected item",
       creatorAssistDescription:
         "Use AI only in context. These actions are attached to the scene, character, or asset you are editing now.",
+      workflowStatusReady: "Ready",
+      workflowStatusInProgress: "In progress",
+      workflowStatusStart: "Start here",
+      resultsLabel: "Results",
+      previousPage: "Previous",
+      nextPage: "Next",
+      pageLabel: "Page",
       generateBackground: "Generate background",
       generateBackgroundDescription: "Create a background draft for the active scene.",
       generateTileset: "Generate tileset",
@@ -1635,7 +1699,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       generatePortrait: "Generate portrait",
       generatePortraitDescription: "Create a portrait draft for the selected character.",
       generateVoiceLine: "Generate voice line",
-      generateVoiceLineDescription: "Create a spoken line draft for the selected character or scene.",
+      generateVoiceLineDescription:
+        "Create a spoken line draft for the selected character or scene.",
       generateIdleAnimation: "Generate idle animation",
       generateIdleAnimationDescription: "Draft an idle loop plan for the selected asset.",
       generateInteractionDescription: "Draft a contextual interaction pass for the selected item.",
@@ -1654,10 +1719,14 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         "Review Queue is the advanced surface for evidence capture, review bundles, and gated automation apply flows.",
       dialogueSearchLabel: "Filter dialogue",
       dialogueSearchPlaceholder: "Search by NPC or dialogue key",
+      sceneSearchLabel: "Filter scenes",
+      sceneSearchPlaceholder: "Search by title or scene reference",
+      assetSearchLabel: "Filter assets",
+      assetSearchPlaceholder: "Search by label, type, or scene mode",
       dialogueWorkspaceTitle: "Dialogue workspace",
       dialogueCreateDescription:
         "Keep dialogue grouped by NPC and use AI to draft new lines before saving.",
-      dialogueKeyPlaceholder: "npc.forestGuide.greet",
+      dialogueKeyPlaceholder: "riverPilot.greeting",
       addLinePlaceholder: "Welcome, traveler. The leaves have been expecting you.",
       mechanicsWorkspaceTitle: "Mechanics workspace",
       questsTitle: "Quests",
@@ -1678,13 +1747,13 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       editDialogueGraph: "Edit dialogue graph",
       graphIdLabel: "Graph ID",
       graphTitlePlaceholder: "Guide intro graph",
-      assetLabelPlaceholder: "Hero Portrait",
-      assetIdPlaceholder: "asset.custom.hero",
-      clipIdPlaceholder: "clip.hero.idle",
-      questIdPlaceholder: "quest.new",
-      triggerIdPlaceholder: "trigger.new",
-      graphIdPlaceholder: "graph.npc.guide",
-      nodeIdPlaceholder: "node.hero.spawn",
+      assetLabelPlaceholder: "Harbor Backdrop",
+      assetIdPlaceholder: "moonlit-harbor-backdrop",
+      clipIdPlaceholder: "clip.harbor-guide.idle",
+      questIdPlaceholder: "harbor-introduction",
+      triggerIdPlaceholder: "talk-to-harbor-guide",
+      graphIdPlaceholder: "guide-introduction",
+      nodeIdPlaceholder: "hero-spawn-point",
       layerPlaceholder: "foreground",
       stateTagPlaceholder: "idle-down",
       sourcePathPlaceholder: "/assets/images/custom.png",
@@ -1703,7 +1772,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         "Collect review evidence for the current scene, queue attachments, and prepare a draft apply plan.",
       automationStepsJsonLabel: "Executable steps JSON",
       automationStepsJsonPlaceholder:
-        '[{"kind":"goto","path":"/builder?projectId=demo"},{"kind":"screenshot","fileStem":"demo-review","fullPage":true},{"kind":"attach-generated-artifact","sourceStepId":"step.capture-workspace"}]',
+        '[{"kind":"goto","path":"/projects/:projectId/start"},{"kind":"screenshot","fileStem":"demo-review","fullPage":true},{"kind":"attach-generated-artifact","sourceStepId":"step.capture-workspace"}]',
       automationStepsJsonHelp:
         "Provide an optional JSON array of executable browser, HTTP, builder, or attach-file steps. Leave blank to use the default workspace review run.",
       createAutomationRun: "Queue automation run",
@@ -1795,7 +1864,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       questCountLabel: "Quests",
       triggerCountLabel: "Triggers",
       flagCountLabel: "Flags",
-      generationJobCountLabel: "Generation jobs",
+      generationJobCountLabel: "AI drafts",
       automationRunCountLabel: "Automation runs",
       automationStepCountLabel: "Automation steps",
       artifactCountLabel: "Artifacts",
@@ -1818,12 +1887,12 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       capabilityMechanicsTitle: "Mechanics systems",
       capabilityMechanicsDescription:
         "Movement, collisions, authored quests, dialogue graphs, and trigger evaluation exist, but combat, inventory, cutscenes, and richer event orchestration are still partial.",
-      capabilityAiAuthoringTitle: "AI authoring",
+      capabilityAiAuthoringTitle: "Creator assistance",
       capabilityAiAuthoringDescription:
-        "Dialogue, scene description, critique, and patch review are wired, but AI-driven asset generation and mechanics authoring are only partial today.",
-      capabilityAutomationTitle: "Automation / RPA",
+        "Contextual drafting, grounded guidance, and review tooling are available, but creator-facing generation still needs deeper scene, asset, and mechanics integration.",
+      capabilityAutomationTitle: "Review automation",
       capabilityAutomationDescription:
-        "A lifecycle-managed worker now executes real review-context capture, structured planning, and execution-bundle attachment steps, but broader browser and tool orchestration are still partial.",
+        "Evidence capture, review bundles, and gated apply flows are available, but broader orchestration still belongs in advanced review rather than the core creation path.",
       capabilityWebgpuRendererTitle: "WebGPU Renderer",
       capabilityWebgpuRendererDescription:
         "PixiJS can auto-detect and prefer WebGPU for 2D rendering when supported, falling back to WebGL seamlessly.",
@@ -2138,6 +2207,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       dialogueNotFound: "对话键未找到",
       missingPrompt: "必须提供提示词",
       sceneIdRequired: "必须提供场景 ID",
+      sceneTitleRequired: "必须提供场景标题",
+      npcNameRequired: "必须提供角色名称",
       invalidPatchPlan: "补丁方案包含无效操作",
       publishValidationFailed: "发布已被阻止，必须先通过构建器校验。",
       publishValidationNoScenes: "发布前至少需要一个场景。",
@@ -2174,7 +2245,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       assets: "美术与音频",
       mechanics: "规则与进度",
       automation: "审核队列",
-      ai: "AI 工具",
+      ai: "AI 设置",
       playtest: "试玩",
       settings: "设置",
       advancedTools: "高级",
@@ -2204,7 +2275,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       noNpcs: "尚未定义 NPC。",
       noAssets: "尚未创建资源。",
       noAnimationClips: "尚未创建动画片段。",
-      noGenerationJobs: "尚未加入生成任务。",
+      noGenerationJobs: "尚未创建 AI 草稿。",
       noQuests: "尚未创建任务。",
       noTriggers: "尚未创建触发器。",
       noDialogueGraphs: "尚未创建对话图。",
@@ -2217,7 +2288,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       delete: "删除",
       preview: "预览",
       sceneId: "场景 ID",
-      sceneIdPlaceholder: "scene.teaHouse.annex",
+      stableIdLabel: "稳定 ID",
+      sceneIdPlaceholder: "yangtzeTeaHouse",
       sceneTitle: "场景标题",
       sceneBackgroundLabel: "背景资源",
       scenePreviewTitle: "场景预览",
@@ -2242,7 +2314,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       greetOnApproach: "接近时问候",
       dialogueKey: "对话键",
       dialogueLine: "对话内容",
-      providerStatus: "提供商状态",
+      providerStatus: "提供器清单",
       availableModels: "可用模型",
       knowledgeWorkspaceTitle: "知识工作区",
       knowledgeWorkspaceDescription:
@@ -2287,7 +2359,18 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       publishProject: "发布版本",
       unpublishProject: "取消发布",
       playPublishedBuild: "游玩已发布版本",
-      createProjectHelp: "按 ID 创建新项目，或切换到现有项目。",
+      createProjectHelp: "从启动模板创建新项目，或按 ID 切换到现有项目。",
+      starterProjectTitle: "选择起步模板",
+      starterProjectDescription: "从空白工作区开始，或载入一个可以立即查看与改造的示例项目。",
+      starterProjectTemplateLegend: "起步模板",
+      starterProjectRecommendedLabel: "推荐",
+      starterProjectTemplateBlankLabel: "空白工作区",
+      starterProjectTemplateBlankDescription: "从空项目开始，自行创建第一个场景、素材与故事流程。",
+      starterProjectTemplateStoryLabel: "茶馆故事示例",
+      starterProjectTemplateStoryDescription:
+        "载入一个包含场景、角色、对话、素材与初始流程的 2D/3D 示例项目。",
+      projectSettings: "项目设置",
+      operations: "操作中心",
       projectPlayHint: "只有已发布版本才能在玩家视图中启动。",
       capabilityHeader: "能力",
       statusHeader: "状态",
@@ -2358,6 +2441,10 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       tilemapTileSetLabel: "瓦片集",
       tilemapBrushLabel: "画笔",
       tilemapFillLabel: "填充",
+      tilemapToolsLabel: "瓦片工具",
+      tilePaletteLabel: "瓦片调色板",
+      tileCellLabel: "瓦片格",
+      tilemapInstructions: "选择瓦片集后可用画笔绘制，或使用填充一次性填满连通区域。",
       modelPathLabel: "模型路径 (glb/usdz)",
       assetKindPortrait: "立绘",
       assetKindSpriteSheet: "精灵表",
@@ -2431,7 +2518,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       aiLaneDescription: "AI 驱动的工具，用于生成对话、精灵、语音和游戏素材。",
       apiSurfaceTitle: "功能面板",
       apiSurfaceDescription: "检查哪些 AI 功能可用，查看集成详情。",
-      localRuntimeTitle: "AI 引擎",
+      localRuntimeTitle: "本地运行时",
       localRuntimeDescription: "本地 AI 引擎为角色赋能，生成素材，并协助游戏设计。",
       runtimeLabel: "引擎",
       modelLabel: "AI 模型",
@@ -2447,13 +2534,13 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       scene2dHelp: "2D 场景使用背景、精灵表、头像和可选瓦片地图。这是最快得到可玩原型的路径。",
       scene3dHelp:
         "3D 场景使用 GLB、GLTF、USD、USDA、USDC、USDZ 等模型资源。只有在深度和镜头运动重要时才使用。",
-      sceneCreateTitlePlaceholder: "enchantedForest",
+      sceneCreateTitlePlaceholder: "月色港湾",
       sceneBackgroundPlaceholder: "/assets/images/backgrounds/enchanted-forest.png",
       npcRosterTitle: "NPC 阵列",
       npcCreateDescription: "先把 NPC 放进场景，再调节移动、对话与接近问候行为。",
       npcCreateSceneLabel: "所属场景",
-      npcCreateKeyPlaceholder: "forestGuide",
-      npcCreateLabelPlaceholder: "npc.forestGuide.label",
+      npcCreateKeyPlaceholder: "harborGuide",
+      npcCreateLabelPlaceholder: "港湾向导",
       assetsWorkspaceTitle: "资源库",
       assetsWorkspaceDescription:
         "只添加当前正在构建的场景真正需要的资源。把 2D 和 3D 资源分开，场景配置才会更稳定。",
@@ -2477,10 +2564,10 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       clipFrameStart: "0",
       fpsUnit: "FPS",
       clipIdLabel: "片段 ID",
-      generationJobsTitle: "生成任务",
-      generationJobKindLabel: "任务类型",
-      generationPromptLabel: "提示词",
-      createGenerationJob: "加入生成队列",
+      generationJobsTitle: "AI 草稿",
+      generationJobKindLabel: "草稿类型",
+      generationPromptLabel: "草稿说明",
+      createGenerationJob: "创建 AI 草稿",
       creatorWorkflowTitle: "创建可试玩切片",
       creatorWorkflowDescription:
         "按一条清晰路径创作：搭建世界、补齐视觉、添加角色、连通剧情与规则，然后立即试玩。",
@@ -2511,9 +2598,19 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       creatorCapabilityAutomationReview: "自动化审核",
       creatorCapability3dImport: "3D 导入",
       creatorCapabilityAnimationAssist: "动画辅助",
+      creatorSupportTitle: "创作支持",
+      creatorSupportDescription:
+        "保持在主要创作流程中，同时通过这些提示了解当前场景、角色或资源可用的辅助能力。",
       creatorAssistTitle: "当前对象的 AI 动作",
       creatorAssistDescription:
         "只在上下文中使用 AI。这些动作绑定到你此刻正在编辑的场景、角色或资源。",
+      workflowStatusReady: "已就绪",
+      workflowStatusInProgress: "进行中",
+      workflowStatusStart: "从这里开始",
+      resultsLabel: "结果",
+      previousPage: "上一页",
+      nextPage: "下一页",
+      pageLabel: "第",
       generateBackground: "生成背景",
       generateBackgroundDescription: "为当前场景创建背景草稿。",
       generateTileset: "生成瓦片集",
@@ -2533,15 +2630,18 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       animationActionPreviewScene: "在场景中预览",
       creatorSafeAiDescription:
         "创作者页面只展示能力级别的 AI 引导。提供商名称、模型 ID 与运行时细节统一移到设置页。",
-      advancedSettingsDescription:
-        "设置页用于运行时诊断、项目知识库与能力排障，属于高级工作区。",
+      advancedSettingsDescription: "设置页用于运行时诊断、项目知识库与能力排障，属于高级工作区。",
       advancedAutomationDescription:
         "审核队列用于证据采集、审查包与受控自动化应用，属于高级工作区。",
       dialogueSearchLabel: "筛选对话",
       dialogueSearchPlaceholder: "按 NPC 或对话键搜索",
+      sceneSearchLabel: "筛选场景",
+      sceneSearchPlaceholder: "按标题或场景引用搜索",
+      assetSearchLabel: "筛选资源",
+      assetSearchPlaceholder: "按名称、类型或场景模式搜索",
       dialogueWorkspaceTitle: "对话工作区",
       dialogueCreateDescription: "按 NPC 管理对话，并先用 AI 起草再保存。",
-      dialogueKeyPlaceholder: "npc.forestGuide.greet",
+      dialogueKeyPlaceholder: "riverPilot.greeting",
       addLinePlaceholder: "旅人，欢迎你。茶叶早已预见你的到来。",
       mechanicsWorkspaceTitle: "机制工作区",
       questsTitle: "任务",
@@ -2562,13 +2662,13 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       editDialogueGraph: "编辑对话图",
       graphIdLabel: "对话图 ID",
       graphTitlePlaceholder: "向导介绍对话图",
-      assetLabelPlaceholder: "英雄肖像",
-      assetIdPlaceholder: "asset.custom.hero",
-      clipIdPlaceholder: "clip.hero.idle",
-      questIdPlaceholder: "quest.new",
-      triggerIdPlaceholder: "trigger.new",
-      graphIdPlaceholder: "graph.npc.guide",
-      nodeIdPlaceholder: "node.hero.spawn",
+      assetLabelPlaceholder: "港湾背景",
+      assetIdPlaceholder: "moonlit-harbor-backdrop",
+      clipIdPlaceholder: "clip.harbor-guide.idle",
+      questIdPlaceholder: "harbor-introduction",
+      triggerIdPlaceholder: "talk-to-harbor-guide",
+      graphIdPlaceholder: "guide-introduction",
+      nodeIdPlaceholder: "hero-spawn-point",
       layerPlaceholder: "foreground",
       stateTagPlaceholder: "idle-down",
       sourcePathPlaceholder: "/assets/images/custom.png",
@@ -2586,7 +2686,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       automationGoalPlaceholder: "收集当前场景的审查证据，排队附件，并准备草稿应用计划。",
       automationStepsJsonLabel: "可执行步骤 JSON",
       automationStepsJsonPlaceholder:
-        '[{"kind":"goto","path":"/builder?projectId=demo"},{"kind":"screenshot","fileStem":"demo-review","fullPage":true},{"kind":"attach-generated-artifact","sourceStepId":"step.capture-workspace"}]',
+        '[{"kind":"goto","path":"/projects/:projectId/start"},{"kind":"screenshot","fileStem":"demo-review","fullPage":true},{"kind":"attach-generated-artifact","sourceStepId":"step.capture-workspace"}]',
       automationStepsJsonHelp:
         "可选填写可执行的 JSON 步骤数组，支持浏览器、HTTP、构建器与附加文件步骤；留空则使用默认工作区审查流程。",
       createAutomationRun: "加入自动化队列",
@@ -2675,7 +2775,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       questCountLabel: "任务",
       triggerCountLabel: "触发器",
       flagCountLabel: "标记",
-      generationJobCountLabel: "生成任务",
+      generationJobCountLabel: "AI 草稿",
       automationRunCountLabel: "自动化运行",
       automationStepCountLabel: "自动化步骤",
       artifactCountLabel: "产物",
@@ -2698,12 +2798,12 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       capabilityMechanicsTitle: "机制系统",
       capabilityMechanicsDescription:
         "移动、碰撞、任务、对话图与触发器求值已经接通，但战斗、背包、过场与更丰富的事件编排仍只是部分实现。",
-      capabilityAiAuthoringTitle: "AI 创作",
+      capabilityAiAuthoringTitle: "创作辅助",
       capabilityAiAuthoringDescription:
-        "对话、场景描述、资源评审与补丁审查已经接通，但 AI 驱动的资源生成与机制创作目前仍只是部分实现。",
-      capabilityAutomationTitle: "自动化 / RPA",
+        "上下文草稿、知识辅助和审查工具已经可用，但面向创作者的生成能力仍需要更深的场景、资源与机制整合。",
+      capabilityAutomationTitle: "审查自动化",
       capabilityAutomationDescription:
-        "系统现在已有生命周期托管的后台 worker，会执行真实的审查上下文采集、结构化规划与执行包附加步骤，但更广泛的浏览器与工具编排仍只是部分实现。",
+        "证据捕获、审查包和受控应用流程已经可用，但更广泛的编排仍应停留在高级审查流程中。",
       capabilityWebgpuRendererTitle: "WebGPU 渲染器",
       capabilityWebgpuRendererDescription:
         "PixiJS 可在支持 WebGPU 时自动检测并优先使用 WebGPU 进行 2D 渲染，否则无缝回退至 WebGL。",

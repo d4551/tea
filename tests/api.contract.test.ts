@@ -12,14 +12,23 @@ import { gameAssetUrls } from "../src/shared/constants/game-assets.ts";
 import { contentType, httpStatus } from "../src/shared/constants/http.ts";
 import { defaultOracleMode } from "../src/shared/constants/oracle.ts";
 import { appRoutes, withLocaleQuery, withQueryParameters } from "../src/shared/constants/routes.ts";
+import { interpolateRoutePath } from "../src/shared/constants/route-patterns.ts";
 import { prisma, prismaBase } from "../src/shared/services/db.ts";
 import { readJsonResponse, settleAsync } from "../src/shared/utils/async-result.ts";
+import { GamePage } from "../src/views/game-page.ts";
 
 let app: Awaited<ReturnType<typeof createApp>>;
 const baseUrl = "http://localhost";
 const managedSessionIds = new Set<string>();
 
 const toUrl = (path: string): string => `${baseUrl}${path}`;
+const withProjectPagePath = (
+  path: string,
+  projectId: string,
+  locale = "en-US",
+  params: Readonly<Record<string, string | undefined>> = {},
+): string => withQueryParameters(path, { lang: locale, projectId, ...params });
+const htmlHref = (path: string): string => path.replaceAll("&", "&amp;");
 const withSessionId = (pattern: string, sessionId: string): string =>
   pattern.replace(":id", encodeURIComponent(sessionId));
 const countOccurrences = (source: string, fragment: string): number =>
@@ -156,7 +165,7 @@ const createBuilderProject = async (projectId = `contract-${Date.now()}`) => {
         "content-type": "application/json",
         accept: "application/json",
       },
-      body: JSON.stringify({ projectId }),
+      body: JSON.stringify({ projectId, starterTemplateId: "tea-house-story" }),
     }),
   );
 
@@ -1260,7 +1269,7 @@ describe("API contracts", () => {
 
   test("scene node form updates preserve unspecified authored fields", async () => {
     const projectId = `scene-node-${Date.now()}`;
-    const project = await builderService.createProject(projectId);
+    const project = await builderService.createProject(projectId, "tea-house-story");
     expect(project).not.toBeNull();
     if (!project) {
       return;
@@ -1322,7 +1331,7 @@ describe("API contracts", () => {
 
   test("scene form updates preserve authored collisions npcs and nodes", async () => {
     const projectId = `scene-form-${crypto.randomUUID()}`;
-    const project = await builderService.createProject(projectId);
+    const project = await builderService.createProject(projectId, "tea-house-story");
     expect(project).not.toBeNull();
     if (!project) {
       return;
@@ -1360,7 +1369,7 @@ describe("API contracts", () => {
         body: JSON.stringify({
           projectId,
           locale: "en-US",
-          titleKey: "scene.teaHouse.updated",
+          displayTitle: "Yangtze Tea House",
           geometryWidth: "800",
         }),
       }),
@@ -1369,7 +1378,8 @@ describe("API contracts", () => {
     const updatedScene = await builderService.getScene(projectId, teaHouse.id);
 
     expect(response.status).toBe(httpStatus.ok);
-    expect(updatedScene?.titleKey).toBe("scene.teaHouse.updated");
+    expect(updatedScene?.titleKey).toBe(teaHouse.titleKey);
+    expect(updatedScene?.displayTitle).toBe("Yangtze Tea House");
     expect(updatedScene?.geometry.width).toBe(800);
     expect(updatedScene?.geometry.height).toBe(teaHouse.geometry.height);
     expect(updatedScene?.npcs).toEqual(teaHouse.npcs);
@@ -1393,6 +1403,7 @@ describe("API contracts", () => {
       id: "scene.repertoire.2d",
       scene: {
         id: "scene.repertoire.2d",
+        displayTitle: "Repertoire 2D",
         titleKey: "scene.repertoire.2d",
         background: "/images/repertoire-2d.png",
         sceneMode: "2d",
@@ -1423,6 +1434,7 @@ describe("API contracts", () => {
       id: "scene.repertoire.3d",
       scene: {
         id: "scene.repertoire.3d",
+        displayTitle: "Repertoire 3D",
         titleKey: "scene.repertoire.3d",
         background: "/images/repertoire-3d.png",
         sceneMode: "3d",
@@ -1488,7 +1500,7 @@ describe("API contracts", () => {
 
   test("npc form updates preserve unspecified dialogue keys and AI tuning", async () => {
     const projectId = `npc-form-${crypto.randomUUID()}`;
-    const project = await builderService.createProject(projectId);
+    const project = await builderService.createProject(projectId, "tea-house-story");
     expect(project).not.toBeNull();
     if (!project) {
       return;
@@ -1504,6 +1516,7 @@ describe("API contracts", () => {
       sceneId: teaHouse.id,
       npc: {
         characterKey: "guide",
+        displayName: "Tea Guide",
         labelKey: "npc.guide.name",
         x: 40,
         y: 50,
@@ -1539,6 +1552,7 @@ describe("API contracts", () => {
     expect(response.status).toBe(httpStatus.ok);
     expect(updatedNpc).toEqual({
       characterKey: "guide",
+      displayName: "Tea Guide",
       labelKey: "npc.guide.name",
       x: 77,
       y: 50,
@@ -1821,7 +1835,7 @@ describe("API contracts", () => {
             status: "pending",
             spec: {
               kind: "goto",
-              path: `/builder?projectId=${projectId}`,
+              path: `/projects/${projectId}/start`,
             },
           },
         ],
@@ -1995,8 +2009,12 @@ describe("API contracts", () => {
     expect(Array.isArray(payload.data?.creatorCapabilities?.items)).toBe(true);
     expect(Array.isArray(payload.data?.capabilities)).toBe(true);
     if (payload.data?.capabilities) {
-      expect(payload.data.capabilities.every((capability) => capability.provider === "creator-safe")).toBe(true);
-      expect(payload.data.capabilities.every((capability) => capability.model === "creator-safe")).toBe(true);
+      expect(
+        payload.data.capabilities.every((capability) => capability.provider === "creator-safe"),
+      ).toBe(true);
+      expect(
+        payload.data.capabilities.every((capability) => capability.model === "creator-safe"),
+      ).toBe(true);
     }
   });
 
@@ -2294,8 +2312,8 @@ describe("HTMX partial rendering", () => {
     expect(html.includes('aria-label="Mobile navigation"')).toBe(true);
     expect(html.includes('aria-label="Breadcrumb"')).toBe(true);
     expect(html.includes('aria-current="page"')).toBe(true);
-    expect(html.includes("/builder?lang=en-US")).toBe(true);
-    expect(html.includes("/game?lang=en-US")).toBe(true);
+    expect(html.includes(`${withLocaleQuery(appRoutes.builder, "en-US")}`)).toBe(true);
+    expect(html.includes("/projects/default/playtest?lang=en-US")).toBe(true);
     expect(html.includes('aria-label="Switch language to Chinese"')).toBe(true);
     expect(html.includes('data-drawer-toggle-target="main-nav-drawer"')).toBe(true);
     expect(html.includes('for="main-nav-drawer"')).toBe(true);
@@ -2357,13 +2375,14 @@ describe("HTMX partial rendering", () => {
   });
 
   test("builder AI page renders knowledge and tool-planning workspaces", async () => {
+    await createBuilderProject("default");
     const response = await app.handle(
-      new Request(toUrl(`${appRoutes.builderAi}?projectId=default`)),
+      new Request(toUrl(`${interpolateRoutePath(appRoutes.builderAi, { projectId: "default" })}`)),
     );
     const html = await response.text();
 
     expect(response.status).toBe(httpStatus.ok);
-    expect(html.includes("Settings")).toBe(true);
+    expect(html.includes("Project Settings")).toBe(true);
     expect(html.includes("Knowledge workspace")).toBe(true);
     expect(html.includes(appRoutes.aiBuilderKnowledgeDocuments)).toBe(true);
     expect(html.includes(appRoutes.aiBuilderKnowledgeSearch)).toBe(true);
@@ -2548,16 +2567,14 @@ describe("HTMX partial rendering", () => {
   test("builder dashboard preserves locale-aware navigation links", async () => {
     const projectId = `builder-${crypto.randomUUID()}`;
     await createBuilderProject(projectId);
-    const response = await app.handle(
-      new Request(toUrl(`${appRoutes.builder}?lang=zh-CN&projectId=${projectId}`)),
-    );
+    const response = await app.handle(new Request(toUrl(`${appRoutes.builder}?lang=zh-CN`)));
     const html = await response.text();
 
     expect(response.status).toBe(httpStatus.ok);
-    expect(html.includes(`/game?lang=zh-CN&amp;projectId=${projectId}`)).toBe(true);
-    expect(html.includes(`/builder/scenes?lang=zh-CN&amp;projectId=${projectId}`)).toBe(true);
-    expect(html.includes(`/builder/npcs?lang=zh-CN&amp;projectId=${projectId}`)).toBe(true);
-    expect(html.includes(`/builder/ai?lang=zh-CN&amp;projectId=${projectId}`)).toBe(true);
+    expect(html.includes(`/projects/${projectId}/playtest?lang=zh-CN`)).toBe(true);
+    expect(html.includes(`/projects/${projectId}/world?lang=zh-CN`)).toBe(true);
+    expect(html.includes(`/projects/${projectId}/characters?lang=zh-CN`)).toBe(true);
+    expect(html.includes(`/projects/${projectId}/settings?lang=zh-CN`)).toBe(true);
     expect(html.includes("/public/vendor/htmx-ext/focus-panel.js")).toBe(true);
     expect(html.includes("/public/vendor/htmx-ext/layout-controls.js")).toBe(true);
     expect(html.includes("/public/vendor/builder-scene-editor.js")).toBe(true);
@@ -2567,9 +2584,47 @@ describe("HTMX partial rendering", () => {
     expect(html.includes("运行时")).toBe(true);
     expect(html.includes("试玩")).toBe(true);
     expect(html.includes(projectId)).toBe(true);
-    expect(html.includes('id="builder-platform-readiness"')).toBe(true);
+    expect(html.includes("创建可试玩切片")).toBe(true);
+    expect(html.includes("构建器工作区")).toBe(true);
     expect(html.includes('href="#"')).toBe(false);
     expect(html.includes("退出构建器")).toBe(true);
+  });
+
+  test("creator workspace pages render a shared end-to-end journey strip", async () => {
+    const projectId = `journey-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+
+    const pages = [
+      appRoutes.builderScenes,
+      appRoutes.builderAssets,
+      appRoutes.builderNpcs,
+      appRoutes.builderDialogue,
+      appRoutes.builderMechanics,
+    ] as const;
+
+    for (const path of pages) {
+      const response = await app.handle(
+        new Request(toUrl(`${interpolateRoutePath(path, { projectId })}?lang=en-US`)),
+      );
+      const html = await response.text();
+
+      expect(response.status).toBe(httpStatus.ok);
+      expect(html.includes('aria-label="Create playable slice"')).toBe(true);
+      expect(html.includes(`/projects/${projectId}/start?lang=en-US`)).toBe(true);
+      expect(html.includes(`/projects/${projectId}/world?lang=en-US`)).toBe(true);
+      expect(html.includes(`/projects/${projectId}/assets?lang=en-US`)).toBe(true);
+      expect(html.includes(`/projects/${projectId}/characters?lang=en-US`)).toBe(true);
+      expect(html.includes(`/projects/${projectId}/story?lang=en-US`)).toBe(true);
+      expect(html.includes(`/projects/${projectId}/systems?lang=en-US`)).toBe(true);
+      expect(html.includes(`/projects/${projectId}/playtest?lang=en-US`)).toBe(true);
+      expect(html.includes("tabs tabs-lg tabs-box")).toBe(true);
+      expect(html.includes("breadcrumbs")).toBe(true);
+      expect(
+        html.includes(
+          `href="/projects/${projectId}/start?lang=en-US" role="tab" class="tab " aria-selected="false" aria-label="Start Here"`,
+        ),
+      ).toBe(true);
+    }
   });
 
   test("mechanics workspace detail pane uses the shared focus-panel contract", async () => {
@@ -2590,8 +2645,30 @@ describe("HTMX partial rendering", () => {
   test("scene editor preview avoids inline style attributes", async () => {
     const projectId = `scene-preview-${crypto.randomUUID()}`;
     await createBuilderProject(projectId);
+    await builderService.createScene(projectId, {
+      id: "forest-crossing",
+      displayTitle: "Forest Crossing",
+      background: "/assets/images/backgrounds/forest-crossing.png",
+      sceneMode: "2d",
+      geometryWidth: "640",
+      geometryHeight: "360",
+      spawnX: "320",
+      spawnY: "180",
+    });
+    await builderService.createScene(projectId, {
+      id: "port-market",
+      displayTitle: "Port Market",
+      background: "/assets/images/backgrounds/port-market.png",
+      sceneMode: "3d",
+      geometryWidth: "640",
+      geometryHeight: "360",
+      spawnX: "320",
+      spawnY: "180",
+    });
     const response = await app.handle(
-      new Request(toUrl(`${appRoutes.builderScenes}?lang=en-US&projectId=${projectId}`)),
+      new Request(
+        toUrl(`${appRoutes.builderScenes}?lang=en-US&projectId=${projectId}&search=yangtze&page=1`),
+      ),
     );
     const html = await response.text();
 
@@ -2601,19 +2678,42 @@ describe("HTMX partial rendering", () => {
     expect(html.includes("data-scene-editor")).toBe(true);
     expect(html.includes("data-scene-node-form")).toBe(true);
     expect(html.includes("data-scene-selected-node")).toBe(true);
+    expect(html.includes('aria-label="Filter scenes"')).toBe(true);
+    expect(html.includes("Results: 1-1 / 1")).toBe(true);
+    expect(html.includes("Yangtze Tea House")).toBe(true);
+    expect(html.includes("Port Market")).toBe(false);
   });
 
   test("builder assets page makes sprite and animation pipeline gaps explicit", async () => {
     const projectId = `assets-${crypto.randomUUID()}`;
     await createBuilderProject(projectId);
+    await builderService.createAsset(projectId, {
+      id: "harbor-theme",
+      label: "Harbor Theme",
+      kind: "audio",
+      sceneMode: "2d",
+      source: "/assets/audio/harbor-theme.ogg",
+    });
     const response = await app.handle(
-      new Request(toUrl(`${appRoutes.builderAssets}?lang=en-US&projectId=${projectId}`)),
+      new Request(
+        toUrl(
+          `${appRoutes.builderAssets}?lang=en-US&projectId=${projectId}&search=harbor&assetId=harbor-theme`,
+        ),
+      ),
     );
     const html = await response.text();
 
     expect(response.status).toBe(httpStatus.ok);
     expect(html.includes("Animation authoring")).toBe(true);
     expect(html.includes("AI actions for the selected item")).toBe(true);
+    expect(html.includes('aria-label="Filter assets"')).toBe(true);
+    expect(html.includes("Harbor Theme")).toBe(true);
+    expect(html.includes("Results: 1-1 / 1")).toBe(true);
+    expect(html.includes('id="creator-ai-actions"')).toBe(true);
+    expect(html.includes('name="prompt"')).toBe(true);
+    expect(html.includes('name="targetId"')).toBe(true);
+    expect(html.includes('name="kind"')).toBe(true);
+    expect(html.includes("Create AI draft")).toBe(false);
   });
 
   test("builder asset creation preserves OpenUSD source metadata and runtime variant policy", async () => {
@@ -2672,7 +2772,7 @@ describe("HTMX partial rendering", () => {
     expect(usdAsset?.variants.every((variant) => variant.usage === "source")).toBe(true);
   });
 
-  test("builder AI page exposes AI authoring and automation readiness", async () => {
+  test("builder settings page exposes creator assistance and review automation readiness", async () => {
     const projectId = `ai-${crypto.randomUUID()}`;
     await createBuilderProject(projectId);
     const response = await app.handle(
@@ -2681,10 +2781,42 @@ describe("HTMX partial rendering", () => {
     const html = await response.text();
 
     expect(response.status).toBe(httpStatus.ok);
-    expect(html.includes("Settings")).toBe(true);
-    expect(html.includes("AI authoring")).toBe(true);
-    expect(html.includes("Automation / RPA")).toBe(true);
+    expect(html.includes("Project Settings")).toBe(true);
+    expect(html.includes("Creator assistance")).toBe(true);
+    expect(html.includes("Review automation")).toBe(true);
     expect(html.includes("Platform readiness")).toBe(true);
+  });
+
+  test("builder dashboard keeps the creator journey free of provider and readiness jargon", async () => {
+    const projectId = `dashboard-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+    const response = await app.handle(
+      new Request(toUrl(`${appRoutes.builder}?lang=en-US&projectId=${projectId}`)),
+    );
+    const html = await response.text();
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(html.includes("Create playable slice")).toBe(true);
+    expect(html.includes("Creator support")).toBe(true);
+    expect(html.includes("Providers")).toBe(false);
+    expect(html.includes("Generation jobs")).toBe(false);
+    expect(html.includes("AI authoring")).toBe(false);
+    expect(html.includes("Automation / RPA")).toBe(false);
+    expect(html.includes(">Implemented<")).toBe(false);
+    expect(html.includes(">Partial<")).toBe(false);
+    expect(html.includes(">Missing<")).toBe(false);
+    expect(html.includes(`/projects/${projectId}/start?lang=en-US`)).toBe(true);
+  });
+
+  test("missing builder project renders the starter template picker", async () => {
+    const response = await app.handle(new Request(toUrl(`${appRoutes.builder}?lang=en-US`)));
+    const html = await response.text();
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(html.includes("Choose a starter")).toBe(true);
+    expect(html.includes('name="starterTemplateId"')).toBe(true);
+    expect(html.includes("Blank workspace")).toBe(true);
+    expect(html.includes("Tea house story sample")).toBe(true);
   });
 
   test("builder publish shell exposes play link for published projects", async () => {
@@ -2710,7 +2842,7 @@ describe("HTMX partial rendering", () => {
 
     expect(publishResponse.status).toBe(httpStatus.ok);
     expect(publishHtml.includes('id="builder-project-shell"')).toBe(true);
-    expect(publishHtml.includes(`/game?lang=en-US&amp;projectId=${projectId}`)).toBe(true);
+    expect(publishHtml.includes(`/projects/${projectId}/playtest?lang=en-US`)).toBe(true);
     expect(publishHtml.includes("/api/builder/projects/")).toBe(true);
   });
 
@@ -2735,7 +2867,7 @@ describe("HTMX partial rendering", () => {
 
     expect(publishResponse.status).toBe(httpStatus.ok);
     expect(publishHtml.includes('id="builder-project-shell"')).toBe(true);
-    expect(publishHtml.includes("/builder?lang=en-US")).toBe(true);
+    expect(publishHtml.includes("/projects/" + projectId + "/start?lang=en-US")).toBe(true);
   });
 
   test("builder project create HTML action redirects to a builder path", async () => {
@@ -2750,6 +2882,7 @@ describe("HTMX partial rendering", () => {
         body: new URLSearchParams({
           projectId,
           locale: "en-US",
+          starterTemplateId: "blank",
           redirectPath: `${appRoutes.builderAssets}?lang=fr`,
         }).toString(),
       }),
@@ -2757,7 +2890,7 @@ describe("HTMX partial rendering", () => {
 
     expect(response.status).toBe(httpStatus.ok);
     expect(response.headers.get("HX-Redirect")).toBe(
-      `/builder/assets?lang=en-US&projectId=${projectId}`,
+      `/projects/${projectId}/assets?lang=en-US`,
     );
     expect((await response.text()).length).toBe(0);
   });
@@ -2774,14 +2907,42 @@ describe("HTMX partial rendering", () => {
         body: new URLSearchParams({
           projectId,
           locale: "en-US",
+          starterTemplateId: "blank",
           redirectPath: "https://example.com/",
         }).toString(),
       }),
     );
 
     expect(response.status).toBe(httpStatus.ok);
-    expect(response.headers.get("HX-Redirect")).toBe(`/builder?lang=en-US&projectId=${projectId}`);
+    expect(response.headers.get("HX-Redirect")).toBe(`/projects/${projectId}/start?lang=en-US`);
     expect((await response.text()).length).toBe(0);
+  });
+
+  test("builder project creation requires starter template selection", async () => {
+    const projectId = `create-${crypto.randomUUID()}`;
+    const response = await app.handle(
+      new Request(toUrl("/api/builder/projects"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json",
+        },
+        body: JSON.stringify({
+          projectId,
+          locale: "en-US",
+        }),
+      }),
+    );
+    const payload = await readResponsePayload<{
+      readonly ok: boolean;
+      readonly error?: {
+        readonly code: string;
+      };
+    }>(response);
+
+    expect(response.status).toBe(httpStatus.unprocessableEntity);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("VALIDATION_ERROR");
   });
 
   test("builder publish rejects invalid scene node asset references", async () => {
@@ -2860,7 +3021,7 @@ describe("HTMX partial rendering", () => {
           projectId,
           locale: "en-US",
           id: sceneId,
-          titleKey: `${sceneId}.title`,
+          displayTitle: "Harbor Tea House",
           background: gameAssetUrls.teaHouseBackground,
           geometryWidth: "640",
           geometryHeight: "360",
@@ -2874,6 +3035,8 @@ describe("HTMX partial rendering", () => {
     expect(sceneResponse.status).toBe(httpStatus.ok);
     expect(sceneHtml.includes('hx-swap-oob="outerHTML"')).toBe(true);
     expect(sceneHtml.includes(sceneId)).toBe(true);
+    expect(sceneHtml.includes('name="displayTitle"')).toBe(true);
+    expect(sceneHtml.includes('name="titleKey"')).toBe(true);
     expect(sceneHtml.includes("style=")).toBe(false);
     expect(sceneHtml.includes('data-focus-panel="true"')).toBe(true);
 
@@ -2889,7 +3052,7 @@ describe("HTMX partial rendering", () => {
           locale: "en-US",
           sceneId,
           characterKey: npcId,
-          labelKey: `${npcId}.label`,
+          displayName: "River Pilot",
         }).toString(),
       }),
     );
@@ -2898,6 +3061,8 @@ describe("HTMX partial rendering", () => {
     expect(npcResponse.status).toBe(httpStatus.ok);
     expect(npcHtml.includes('hx-swap-oob="outerHTML"')).toBe(true);
     expect(npcHtml.includes(npcId)).toBe(true);
+    expect(npcHtml.includes('name="displayName"')).toBe(true);
+    expect(npcHtml.includes('name="labelKey"')).toBe(true);
 
     const dialogueResponse = await app.handle(
       new Request(toUrl("/api/builder/dialogue/create/form"), {
@@ -3039,9 +3204,14 @@ describe("HTMX partial rendering", () => {
     expect(generationHtml.includes("Generated draft for")).toBe(true);
     expect(generationHtml.includes("generation.artifact.label.review:portrait")).toBe(false);
     expect(generationHtml.includes("generation.artifact.summary.target:")).toBe(false);
-    const generationJobIdMatch = generationHtml.match(/generation-jobs\/([^/"?]+)\/approve/);
-    expect(generationJobIdMatch).not.toBeNull();
-    const generationJobId = generationJobIdMatch?.[1];
+    const projectAfterGeneration = await builderService.getProject(projectId);
+    const generationJobId =
+      [...(projectAfterGeneration?.generationJobs.values() ?? [])].find(
+        (job) =>
+          job.kind === "portrait" &&
+          job.targetId === assetId &&
+          job.prompt === "Generate a review-ready tea trader portrait.",
+      )?.id ?? null;
     expect(generationJobId).toBeDefined();
     if (!generationJobId) {
       return;
@@ -3298,13 +3468,13 @@ describe("HTMX partial rendering", () => {
   test("game route renders explicit missing and unpublished project states", async () => {
     const missingProjectId = `missing-${crypto.randomUUID()}`;
     const missingResponse = await app.handle(
-      new Request(toUrl(`${appRoutes.game}?projectId=${missingProjectId}`)),
+      new Request(toUrl(`${interpolateRoutePath(appRoutes.game, { projectId: missingProjectId })}?lang=en-US`)),
     );
     const missingHtml = await missingResponse.text();
 
     expect(missingResponse.status).toBe(httpStatus.ok);
     expect(missingHtml.includes(missingProjectId)).toBe(true);
-    expect(missingHtml.includes(`/builder?lang=en-US&amp;projectId=${missingProjectId}`)).toBe(
+    expect(missingHtml.includes(`/projects/${missingProjectId}/start?lang=en-US`)).toBe(
       true,
     );
     expect(missingHtml.includes('id="game-canvas-wrapper"')).toBe(false);
@@ -3312,14 +3482,14 @@ describe("HTMX partial rendering", () => {
     const unpublishedProjectId = `unpublished-${crypto.randomUUID()}`;
     await createBuilderProject(unpublishedProjectId);
     const unpublishedResponse = await app.handle(
-      new Request(toUrl(`${appRoutes.game}?projectId=${unpublishedProjectId}`)),
+      new Request(toUrl(`${interpolateRoutePath(appRoutes.game, { projectId: unpublishedProjectId })}?lang=en-US`)),
     );
     const unpublishedHtml = await unpublishedResponse.text();
 
     expect(unpublishedResponse.status).toBe(httpStatus.ok);
     expect(unpublishedHtml.includes(unpublishedProjectId)).toBe(true);
     expect(
-      unpublishedHtml.includes(`/builder?lang=en-US&amp;projectId=${unpublishedProjectId}`),
+      unpublishedHtml.includes(`/projects/${unpublishedProjectId}/start?lang=en-US`),
     ).toBe(true);
     expect(unpublishedHtml.includes('id="game-canvas-wrapper"')).toBe(false);
   });
@@ -3330,7 +3500,7 @@ describe("HTMX partial rendering", () => {
     gameLoop.getSessionState = async () => null;
     const hydrationStateResult = await settleAsync(
       (async () => {
-        const response = await app.handle(new Request(toUrl(`${appRoutes.game}?lang=en-US`)));
+        const response = await app.handle(new Request(toUrl(`/projects/default/playtest?lang=en-US`)));
         return {
           response,
           html: await response.text(),
@@ -3347,6 +3517,41 @@ describe("HTMX partial rendering", () => {
     expect(hydrationStateResult.value.response.status).toBe(httpStatus.ok);
     expect(hydrationStateResult.value.html.includes("Session could not be restored")).toBe(true);
     expect(hydrationStateResult.value.html.includes('id="game-canvas-wrapper"')).toBe(false);
+  });
+
+  test("playtest route keeps the creator journey visible in the runtime shell", async () => {
+    const html = GamePage({
+      state: "playable",
+      locale: "en-US",
+      sessionId: "journey-session",
+      participantSessionId: "journey-participant",
+      projectId: "default",
+      sceneTitle: "Yangtze Tea House",
+      sceneMode: "2d",
+      activeQuestTitle: "Meet the tea monk",
+      resumeToken: "resume-token",
+      resumeTokenExpiresAtMs: Date.UTC(2026, 2, 15, 12, 0, 0),
+      commandQueueDepth: 0,
+      version: 1,
+      participantRole: "owner",
+      participants: [],
+      clientRuntimeConfig: {
+        commandSendIntervalMs: appConfig.game.commandSendIntervalMs,
+        commandTtlMs: appConfig.game.commandTtlMs,
+        socketReconnectDelayMs: appConfig.game.socketReconnectDelayMs,
+        restoreRequestTimeoutMs: appConfig.game.restoreRequestTimeoutMs,
+        restoreMaxAttempts: appConfig.game.restoreMaxAttempts,
+        rendererPreference: "webgl",
+      },
+      appOrigin: baseUrl,
+    });
+
+    expect(html.includes('aria-label="Create playable slice"')).toBe(true);
+    expect(html.includes("/projects/default/world?lang=en-US")).toBe(true);
+    expect(html.includes("/projects/default/assets?lang=en-US")).toBe(true);
+    expect(html.includes("/projects/default/systems?lang=en-US")).toBe(true);
+    expect(html.includes("/projects/default/playtest?lang=en-US")).toBe(true);
+    expect(html.includes("breadcrumbs")).toBe(true);
   });
 
   test("tool planning route returns structured steps", async () => {

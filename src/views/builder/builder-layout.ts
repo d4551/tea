@@ -7,6 +7,7 @@
 import type { LocaleCode } from "../../config/environment.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
+import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { escapeHtml, renderDrawerToggleControl } from "../layout.ts";
 import {
   type MenuActionItem,
@@ -18,6 +19,8 @@ import {
 import { spinnerClasses } from "../shared/ui-components.ts";
 import {
   iconAssets,
+  iconAi,
+  iconAutomation,
   iconDashboard,
   iconDialogue,
   iconMechanics,
@@ -26,6 +29,7 @@ import {
   iconPlay,
   iconScenes,
 } from "./builder-icons.ts";
+import { renderStarterProjectPicker } from "./starter-project-picker.ts";
 
 /**
  * Project summary used by the persistent builder chrome.
@@ -81,6 +85,8 @@ interface BuilderNavItem {
   readonly group: "overview" | "authoring" | "runtime";
 }
 
+
+
 /**
  * Builds the ordered list of sidebar navigation items.
  *
@@ -91,7 +97,7 @@ const builderNavItems = (messages: Messages): readonly BuilderNavItem[] => [
   {
     key: "start",
     label: messages.builder.dashboard,
-    href: appRoutes.builder,
+    href: appRoutes.builderStart,
     icon: iconDashboard,
     group: "overview",
   },
@@ -140,10 +146,38 @@ const builderNavItems = (messages: Messages): readonly BuilderNavItem[] => [
 ];
 
 const withBuilderQuery = (path: string, locale: LocaleCode, projectId: string): string =>
-  withQueryParameters(path, {
+  withQueryParameters(interpolateRoutePath(path, { projectId }), {
     lang: locale,
-    projectId,
   });
+
+const buildProjectConsoleNavigationGroups = (
+  messages: Messages,
+  locale: LocaleCode,
+  projectId: string,
+  activeTab: string,
+): readonly NavigationGroup[] => [
+  {
+    title: messages.builder.projectSettings,
+    items: [
+      {
+        key: "settings",
+        label: messages.builder.projectSettings,
+        shortLabel: messages.builder.projectSettings,
+        href: withBuilderQuery(appRoutes.builderAi, locale, projectId),
+        icon: iconAi(),
+        active: activeTab === "ai" || activeTab === "settings",
+      },
+      {
+        key: "operations",
+        label: messages.builder.operations,
+        shortLabel: messages.builder.operations,
+        href: withBuilderQuery(appRoutes.builderAutomation, locale, projectId),
+        icon: iconAutomation(),
+        active: activeTab === "automation" || activeTab === "operations",
+      },
+    ],
+  },
+];
 
 const _formatProjectTimestamp = (locale: LocaleCode, timestamp: number): string =>
   new Intl.DateTimeFormat(locale, {
@@ -164,13 +198,13 @@ const toNavigationItem = (
   href: withBuilderQuery(item.href, locale, projectId),
   icon: item.icon(),
   active:
-    item.key === activeTab
-      || (item.key === "start" && activeTab === "dashboard")
-      || (item.key === "world" && activeTab === "scenes")
-      || (item.key === "characters" && activeTab === "npcs")
-      || (item.key === "story" && activeTab === "dialogue")
-      || (item.key === "systems" && activeTab === "mechanics")
-      || (item.key === "playtest" && activeTab === "play"),
+    item.key === activeTab ||
+    (item.key === "start" && activeTab === "dashboard") ||
+    (item.key === "world" && activeTab === "scenes") ||
+    (item.key === "characters" && activeTab === "npcs") ||
+    (item.key === "story" && activeTab === "dialogue") ||
+    (item.key === "systems" && activeTab === "mechanics") ||
+    (item.key === "playtest" && activeTab === "play"),
   badge: navCounts?.[item.key],
   htmx:
     item.key === "playtest"
@@ -212,6 +246,45 @@ const buildBuilderNavigationGroups = (
 };
 
 /**
+ * Resolves the human-readable workspace label for the creator mobile nav bar.
+ *
+ * @param messages Localized messages.
+ * @param locale Active locale.
+ * @param projectId Active project identifier.
+ * @param activeTab Active tab key.
+ * @returns Localized workspace label.
+ */
+const resolveCreatorWorkspaceLabel = (
+  messages: Messages,
+  locale: LocaleCode,
+  projectId: string,
+  activeTab: string,
+): string => {
+  const items = builderNavItems(messages).map((item) =>
+    toNavigationItem(item, locale, projectId, activeTab),
+  );
+  const activeItem = items.find((item) => item.active);
+  return activeItem?.label ?? messages.builder.title;
+};
+
+/**
+ * Resolves the human-readable workspace label for the console mobile nav bar.
+ *
+ * @param messages Localized messages.
+ * @param activeTab Active tab key.
+ * @returns Localized workspace label.
+ */
+const resolveConsoleWorkspaceLabel = (
+  messages: Messages,
+  activeTab: string,
+): string => {
+  if (activeTab === "automation" || activeTab === "operations") {
+    return messages.builder.operations;
+  }
+  return messages.builder.projectSettings;
+};
+
+/**
  * Renders a compact project bar for the builder header.
  *
  * Replaces the old full-page project shell with a single-line bar showing
@@ -233,7 +306,6 @@ export const renderBuilderProjectShell = (
   project: BuilderChromeProject | null,
 ): string => {
   const switchAction = withQueryParameters(currentPath, { lang: locale });
-  const createAction = appRoutes.builderApiProjects;
   const playHref =
     project && project.publishedReleaseVersion !== null
       ? withBuilderQuery(appRoutes.game, locale, project.id)
@@ -271,12 +343,12 @@ export const renderBuilderProjectShell = (
   const projectMenuItems: readonly MenuActionItem[] = [
     {
       key: "settings",
-      label: messages.builder.settings,
+      label: messages.builder.projectSettings,
       href: withBuilderQuery(appRoutes.builderAi, locale, project?.id ?? projectId),
     },
     {
       key: "review-queue",
-      label: messages.builder.automation,
+      label: messages.builder.operations,
       href: withBuilderQuery(appRoutes.builderAutomation, locale, project?.id ?? projectId),
     },
     {
@@ -294,18 +366,12 @@ export const renderBuilderProjectShell = (
     {
       key: "create",
       label: messages.builder.createProject,
-      contentHtml: `<div class="divider my-1"></div><form hx-post="${escapeHtml(createAction)}" hx-indicator="#builder-project-create-spinner" hx-disabled-elt="button, input, select, textarea" class="space-y-2 px-1 py-1">
-        <fieldset class="fieldset">
-          <legend class="fieldset-legend text-xs">${escapeHtml(messages.builder.createProject)}</legend>
-          <input name="projectId" type="text" class="input input-sm w-full" required minlength="1" maxlength="64" placeholder="${escapeHtml(messages.builder.projectIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.projectIdLabel)}" />
-          <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
-          <input type="hidden" name="redirectPath" value="${escapeHtml(currentPath)}" />
-          <div class="flex items-center gap-2">
-            <button type="submit" class="btn btn-primary btn-xs w-full">${escapeHtml(messages.builder.createProject)}</button>
-            <span id="builder-project-create-spinner" class="${spinnerClasses.xs}" aria-label="${escapeHtml(messages.common.loading)}"></span>
-          </div>
-        </fieldset>
-      </form>`,
+      contentHtml: `<div class="divider my-1"></div>${renderStarterProjectPicker({
+        messages,
+        locale,
+        redirectPath: currentPath,
+        compact: true,
+      })}`,
     },
   ];
 
@@ -348,38 +414,81 @@ export const renderBuilderProjectShell = (
  * @param props Layout inputs.
  * @returns HTML string with DaisyUI drawer and sidebar navigation.
  */
+/**
+ * Renders the creator-shell sidebar navigation.
+ *
+ * @param props Layout inputs.
+ * @returns HTML string for the creator sidebar.
+ */
 export const renderBuilderSidebar = (props: BuilderLayoutProps): string => {
   const { locale, messages, activeTab, projectId, project, navCounts } = props;
   const resolvedProjectId = project?.id ?? projectId;
-  const navGroups = buildBuilderNavigationGroups(
-    messages,
-    locale,
-    resolvedProjectId,
-    activeTab,
-    navCounts,
-  );
+  const navGroups = buildBuilderNavigationGroups(messages, locale, resolvedProjectId, activeTab, navCounts);
 
-  return renderCollapsibleSidebarMenu(navGroups, {
-    ariaLabel: messages.builder.title,
-    brandHtml: `<a href="${escapeHtml(withQueryParameters(appRoutes.home, { lang: locale }))}" class="is-drawer-close:tooltip is-drawer-close:tooltip-right group flex items-center gap-2 px-2 py-1 text-xl font-bold" data-tip="${escapeHtml(messages.metadata.appName)}" aria-label="${escapeHtml(messages.metadata.appName)}">
-      <span class="inline-flex size-8 items-center justify-center rounded-xl bg-primary/15 text-lg shadow-sm shadow-primary/30" aria-hidden="true">🍵</span>
-      <span class="is-drawer-close:hidden">${escapeHtml(messages.metadata.appName)}</span>
-      <span class="is-drawer-close:hidden ml-auto rounded-full border border-primary/30 px-2 py-1 text-xs uppercase tracking-[0.18em] text-primary/85">v1</span>
-    </a>`,
-    mastheadHtml: `<div class="space-y-2 rounded-lg bg-base-100/60 px-2 py-2 is-drawer-close:px-1 is-drawer-close:py-1">
-      <div class="is-drawer-close:justify-center flex items-center gap-2">
-        <span class="status ${project === null ? "status-warning" : "status-success"} status-xs"></span>
-        <span class="truncate text-sm font-medium is-drawer-close:hidden">${escapeHtml(project === null ? messages.common.noProjectBound : messages.common.projectConfigured)}</span>
-      </div>
-      <p class="text-xs leading-5 text-base-content/60 is-drawer-close:hidden">${escapeHtml(messages.builder.creatorSafeAiDescription)}</p>
-    </div>`,
-    footerHtml: `<a href="${escapeHtml(withQueryParameters(appRoutes.home, { lang: locale }))}" class="btn btn-outline btn-block btn-sm gap-2 is-drawer-close:btn-square" aria-label="${escapeHtml(messages.builder.exitBuilder)}">
-      <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-      <span class="is-drawer-close:hidden">${escapeHtml(messages.builder.exitBuilder)}</span>
-    </a>`,
-  });
+  return renderSidebarShell(messages, locale, project, navGroups, messages.builder.title, messages.builder.creatorSafeAiDescription);
 };
 
+/**
+ * Renders the console-shell sidebar navigation.
+ *
+ * @param props Layout inputs.
+ * @returns HTML string for the console sidebar.
+ */
+export const renderConsoleSidebar = (props: BuilderLayoutProps): string => {
+  const { locale, messages, activeTab, projectId, project } = props;
+  const resolvedProjectId = project?.id ?? projectId;
+  const navGroups = buildProjectConsoleNavigationGroups(messages, locale, resolvedProjectId, activeTab);
+
+  return renderSidebarShell(messages, locale, project, navGroups, messages.builder.advancedTools, messages.builder.advancedAutomationDescription);
+};
+
+/**
+ * Shared sidebar chrome used by both creator and console shells.
+ *
+ * @param messages Localized messages.
+ * @param locale Active locale.
+ * @param project Current project snapshot.
+ * @param navGroups Ordered navigation groups.
+ * @param shellLabel Shell name shown under brand.
+ * @param shellDescription Shell description in masthead.
+ * @returns HTML string for the sidebar.
+ */
+const renderSidebarShell = (
+  messages: Messages,
+  locale: LocaleCode,
+  project: BuilderChromeProject | null,
+  navGroups: readonly NavigationGroup[],
+  shellLabel: string,
+  shellDescription: string,
+): string =>
+  renderCollapsibleSidebarMenu(navGroups, {
+    ariaLabel: shellLabel,
+    brandHtml: `<a href="${escapeHtml(withQueryParameters(appRoutes.home, { lang: locale }))}" class="group flex items-center gap-3" aria-label="${escapeHtml(messages.metadata.appName)}">
+      <span class="inline-flex size-10 items-center justify-center rounded-2xl bg-primary text-primary-content text-lg shadow-sm" aria-hidden="true">🍵</span>
+      <span class="min-w-0">
+        <span class="block truncate text-lg font-bold">${escapeHtml(messages.metadata.appName)}</span>
+        <span class="block text-xs uppercase tracking-[0.22em] text-primary/80">${escapeHtml(shellLabel)}</span>
+      </span>
+    </a>`,
+    mastheadHtml: `<div class="space-y-3 rounded-[1.25rem] border border-base-300 bg-base-100 p-3">
+      <div class="flex items-center gap-2">
+        <span class="status ${project === null ? "status-warning" : "status-success"} status-xs"></span>
+        <span class="truncate text-sm font-medium">${escapeHtml(project === null ? messages.common.noProjectBound : messages.common.projectConfigured)}</span>
+      </div>
+      <p class="text-xs leading-5 text-base-content/60">${escapeHtml(shellDescription)}</p>
+    </div>`,
+    footerHtml: `<a href="${escapeHtml(withQueryParameters(appRoutes.home, { lang: locale }))}" class="btn btn-outline btn-block btn-sm gap-2" aria-label="${escapeHtml(messages.builder.exitBuilder)}">
+      <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+      <span>${escapeHtml(messages.builder.exitBuilder)}</span>
+    </a>`,
+  });
+
+/**
+ * Renders the creator-shell layout wrapping authoring content.
+ *
+ * @param props Layout inputs.
+ * @returns HTML string with DaisyUI drawer and creator-only navigation.
+ */
 export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
   const { locale, messages, projectId, project, currentPath, body, activeTab } = props;
   const resolvedProjectId = project?.id ?? projectId;
@@ -392,19 +501,107 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
   );
   const dockItems = navGroups
     .flatMap((group) => group.items)
-    .filter((item) => ["start", "world", "characters", "assets", "story", "systems", "playtest"].includes(item.key));
+    .filter((item) =>
+      ["start", "world", "characters", "assets", "story", "systems", "playtest"].includes(item.key),
+    );
 
   const playHref =
     project !== null && project.publishedReleaseVersion !== null
       ? withBuilderQuery(appRoutes.game, locale, project.id)
       : withBuilderQuery(appRoutes.game, locale, resolvedProjectId);
+  const activeWorkspaceLabel = resolveCreatorWorkspaceLabel(
+    messages,
+    locale,
+    resolvedProjectId,
+    activeTab,
+  );
+
+  return renderShellFrame({
+    messages,
+    locale,
+    projectId,
+    project,
+    currentPath,
+    body,
+    shellLabel: messages.builder.title,
+    activeWorkspaceLabel,
+    playHref,
+    dockHtml: `<nav class="dock dock-sm fixed inset-x-0 bottom-0 z-30 border-t border-base-300/80 bg-base-100/95 px-2 pb-[env(safe-area-inset-bottom)] shadow-2xl backdrop-blur lg:hidden" aria-label="${escapeHtml(messages.builder.title)}">
+      ${dockItems
+        .map(
+          (
+            item,
+          ) => `<a href="${escapeHtml(item.href)}" class="dock-item min-h-16 ${item.active ? "dock-active" : ""}" aria-label="${escapeHtml(item.label)}">
+        ${item.icon ?? ""}
+        <span class="dock-label">${escapeHtml(item.label)}</span>
+      </a>`,
+        )
+        .join("")}
+    </nav>`,
+  });
+};
+
+/**
+ * Renders the console-shell layout wrapping settings/operations content.
+ *
+ * @param props Layout inputs.
+ * @returns HTML string with DaisyUI drawer and console-only navigation.
+ */
+export const renderConsoleLayout = (props: BuilderLayoutProps): string => {
+  const { locale, messages, projectId, project, currentPath, body, activeTab } = props;
+  const resolvedProjectId = project?.id ?? projectId;
+
+  const playHref =
+    project !== null && project.publishedReleaseVersion !== null
+      ? withBuilderQuery(appRoutes.game, locale, project.id)
+      : withBuilderQuery(appRoutes.game, locale, resolvedProjectId);
+  const activeWorkspaceLabel = resolveConsoleWorkspaceLabel(messages, activeTab);
+
+  return renderShellFrame({
+    messages,
+    locale,
+    projectId,
+    project,
+    currentPath,
+    body,
+    shellLabel: messages.builder.advancedTools,
+    activeWorkspaceLabel,
+    playHref,
+    dockHtml: "",
+  });
+};
+
+/**
+ * Shared frame chrome used by both creator and console shells.
+ */
+interface ShellFrameConfig {
+  readonly messages: Messages;
+  readonly locale: LocaleCode;
+  readonly projectId: string;
+  readonly project: BuilderChromeProject | null;
+  readonly currentPath: string;
+  readonly body: string;
+  readonly shellLabel: string;
+  readonly activeWorkspaceLabel: string;
+  readonly playHref: string;
+  readonly dockHtml: string;
+}
+
+/**
+ * Renders the shared builder frame used by both creator and console shells.
+ *
+ * @param config Shell frame configuration.
+ * @returns HTML string for the builder frame.
+ */
+const renderShellFrame = (config: ShellFrameConfig): string => {
+  const { messages, locale, projectId, project, currentPath, body, shellLabel, activeWorkspaceLabel, playHref, dockHtml } = config;
 
   return `
-    <div class="flex min-h-[calc(100vh-4rem)] flex-col">
+    <div class="isolate flex min-h-[calc(100vh-4rem)] flex-col overflow-hidden rounded-[1.75rem] border border-base-300/80 bg-base-100/85 shadow-xl backdrop-blur">
 
       <!-- Mobile Builder Top Bar -->
       <div class="flex flex-col flex-1 w-full max-w-[100vw]">
-        <nav class="navbar bg-base-100/90 border-b border-base-300/80 lg:hidden backdrop-blur" role="navigation" aria-label="${escapeHtml(messages.builder.title)}">
+        <nav class="navbar border-b border-base-300/80 bg-base-100 lg:hidden" role="navigation" aria-label="${escapeHtml(shellLabel)}">
           <div class="flex-none">
             ${renderDrawerToggleControl({
               targetId: "main-nav-drawer",
@@ -414,7 +611,10 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
             })}
           </div>
           <div class="flex-1">
-            <span class="text-heading-3 font-semibold">${escapeHtml(messages.builder.title)}</span>
+            <div class="flex flex-col">
+              <span class="text-[11px] font-medium uppercase tracking-[0.22em] text-base-content/45">${escapeHtml(shellLabel)}</span>
+              <span class="text-base font-semibold tracking-wide">${escapeHtml(activeWorkspaceLabel)}</span>
+            </div>
           </div>
           <div class="flex-none">
             <a href="${escapeHtml(playHref)}" class="btn btn-ghost btn-sm" aria-label="${escapeHtml(messages.navigation.game)}">
@@ -424,11 +624,11 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
         </nav>
 
         ${renderBuilderProjectShell(messages, locale, projectId, currentPath, project)}
-        <div id="builder-content" class="flex-1 p-4" role="region" aria-live="polite">
+        <div id="builder-content" class="flex-1 overflow-x-clip px-4 py-4 pb-[calc(8.5rem+env(safe-area-inset-bottom))] md:pb-36 lg:px-6 lg:py-6 lg:pb-6" role="region" aria-live="polite">
           ${body}
         </div>
 
-        <footer class="sticky bottom-0 z-40 border-t border-base-300/80 bg-base-100/90 backdrop-blur px-4 py-2" role="status" aria-label="${escapeHtml(messages.builder.statusBarProject)}">
+        <footer class="hidden border-t border-base-300/80 bg-base-100 px-4 py-3 lg:block" role="status" aria-label="${escapeHtml(messages.builder.statusBarProject)}">
           <div class="flex flex-wrap items-center gap-4 text-xs text-base-content/70">
             <div class="flex items-center gap-1.5">
               <span class="status status-primary"></span>
@@ -453,18 +653,7 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
             </div>
           </div>
         </footer>
-        <nav class="dock dock-sm bg-base-100/90 border-t border-base-300/80 lg:hidden" aria-label="${escapeHtml(messages.builder.title)}">
-          ${dockItems
-            .map(
-              (
-                item,
-              ) => `<a href="${escapeHtml(item.href)}" class="dock-item ${item.active ? "dock-active" : ""}" aria-label="${escapeHtml(item.label)}">
-            ${item.icon ?? ""}
-            <span class="dock-label">${escapeHtml(item.label)}</span>
-          </a>`,
-            )
-            .join("")}
-        </nav>
+        ${dockHtml}
       </div>
     </div>`;
 };

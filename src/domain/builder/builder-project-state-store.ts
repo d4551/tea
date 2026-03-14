@@ -23,6 +23,7 @@ import type {
   SceneNodeDefinition,
   SceneNpcDefinition,
   SpriteAtlasManifest,
+  StarterProjectTemplateId,
   TilemapDefinition,
   TriggerDefinition,
 } from "../../shared/contracts/game.ts";
@@ -46,6 +47,7 @@ import {
 import { acceptUnknown, safeJsonParse } from "../../shared/utils/safe-json.ts";
 import { gameTextByLocale } from "../game/data/game-text.ts";
 import { gameScenes, gameSpriteManifests } from "../game/data/sprite-data.ts";
+import { resolveStarterProjectTemplateId, toStarterProjectSource } from "./starter-projects.ts";
 
 /**
  * Shared default project identifier for builder routes and API defaults.
@@ -95,6 +97,8 @@ export interface BuilderProjectState {
 export interface BuilderProjectSnapshot {
   /** Logical project identifier. */
   readonly id: string;
+  /** Starter template provenance for this project. */
+  readonly starterTemplateId: StarterProjectTemplateId;
   /** Scene registry by stable scene id. */
   readonly scenes: Map<string, SceneDefinition>;
   /** Dialogue registry by locale -> key -> value. */
@@ -587,6 +591,33 @@ const createBaselineState = (): BuilderProjectState => {
   };
 };
 
+const createBlankStarterState = (): BuilderProjectState => ({
+  scenes: {},
+  dialogues: {
+    "en-US": {},
+    "zh-CN": {},
+  },
+  assets: {},
+  animationClips: {},
+  animationTimelines: {},
+  spriteAtlases: {},
+  dialogueGraphs: {},
+  quests: {},
+  triggers: {},
+  flags: {},
+  generationJobs: {},
+  artifacts: {},
+  automationRuns: {},
+});
+
+const createStarterProjectState = (templateId: StarterProjectTemplateId): BuilderProjectState => {
+  if (templateId === "tea-house-story") {
+    return createBaselineState();
+  }
+
+  return createBlankStarterState();
+};
+
 const toDraftStateInput = (state: BuilderProjectState): Prisma.InputJsonValue => {
   const {
     scenes: _scenes,
@@ -689,6 +720,10 @@ const _toSceneNpcs = (value: unknown): SceneDefinition["npcs"] =>
         return [
           {
             characterKey: record.characterKey,
+            displayName:
+              typeof record.displayName === "string" && record.displayName.trim().length > 0
+                ? record.displayName
+                : record.labelKey,
             x,
             y,
             labelKey: record.labelKey,
@@ -914,6 +949,10 @@ const toScenesFromRows = (
             return [
               {
                 characterKey: npc.characterKey,
+                displayName:
+                  typeof npc.displayName === "string" && npc.displayName.trim().length > 0
+                    ? npc.displayName
+                    : npc.labelKey,
                 x: npc.x,
                 y: npc.y,
                 labelKey: npc.labelKey,
@@ -1000,6 +1039,10 @@ const toScenesFromRows = (
           {
             id: row.id,
             sceneMode,
+            displayTitle:
+              typeof row.displayTitle === "string" && row.displayTitle.trim().length > 0
+                ? row.displayTitle
+                : row.titleKey,
             titleKey: row.titleKey,
             background: row.background,
             geometry,
@@ -1854,6 +1897,10 @@ const parseSceneDefinitionRecord = (sceneId: string, value: unknown): SceneDefin
   return {
     id: sceneId,
     sceneMode,
+    displayTitle:
+      typeof record.displayTitle === "string" && record.displayTitle.trim().length > 0
+        ? record.displayTitle
+        : titleKey,
     titleKey,
     background,
     geometry,
@@ -2313,6 +2360,7 @@ const toProjectSnapshot = (
   published: boolean,
 ): BuilderProjectSnapshot => ({
   id: row.id,
+  starterTemplateId: resolveStarterProjectTemplateId(row.source),
   scenes: new Map(
     Object.entries(state.scenes).map(([sceneId, scene]) => [sceneId, structuredClone(scene)]),
   ),
@@ -2376,39 +2424,11 @@ export const normalizeBuilderLocale = (value: string | undefined): LocaleCode =>
  * Shared typed persistence boundary for loading, mutating, and publishing builder project state.
  */
 export class BuilderProjectStateStore {
-  private readonly initPromise = this.ensureDefaultProject();
+  private readonly initPromise = Promise.resolve();
 
   private resolveUpdatedBy(updatedBy: string | undefined, fallback: string): string {
     const trimmed = (updatedBy ?? "").trim();
     return trimmed.length > 0 ? trimmed : fallback;
-  }
-
-  private async ensureDefaultProject(): Promise<void> {
-    const existing = await prisma.builderProject.findStateRow(defaultBuilderProjectId);
-    if (existing) {
-      return;
-    }
-
-    const baseline = createBaselineState();
-    await prisma.builderProject.createStateProject(
-      defaultBuilderProjectId,
-      toDraftStateInput(baseline),
-      checksumOf(baseline),
-      undefined,
-      {
-        scenes: Object.values(baseline.scenes),
-        dialogues: baseline.dialogues,
-        assets: Object.values(baseline.assets),
-        animationClips: Object.values(baseline.animationClips),
-        dialogueGraphs: Object.values(baseline.dialogueGraphs),
-        quests: Object.values(baseline.quests),
-        triggers: Object.values(baseline.triggers),
-        flags: Object.values(baseline.flags),
-        generationJobs: [],
-        artifacts: [],
-        automationRuns: [],
-      },
-    );
   }
 
   private async readProjectRow(projectId: string): Promise<BuilderProjectRow | null> {
@@ -2570,6 +2590,7 @@ export class BuilderProjectStateStore {
    */
   public async createProject(
     projectId: string,
+    starterTemplateId: StarterProjectTemplateId,
     createdBy?: string,
   ): Promise<BuilderProjectSnapshot | null> {
     await this.initPromise;
@@ -2583,7 +2604,7 @@ export class BuilderProjectStateStore {
       return toProjectSnapshot(existing.row, existing.state, existing.published);
     }
 
-    const baseline = createBaselineState();
+    const baseline = createStarterProjectState(starterTemplateId);
     const actor = this.resolveUpdatedBy(createdBy, "builder-service");
     const created = await prisma.builderProject.createStateProject(
       sanitized,
@@ -2603,6 +2624,7 @@ export class BuilderProjectStateStore {
         artifacts: [],
         automationRuns: [],
       },
+      toStarterProjectSource(starterTemplateId),
     );
 
     return toProjectSnapshot(created, baseline, false);

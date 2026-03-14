@@ -1,6 +1,8 @@
 import { appConfig, type LocaleCode } from "../config/environment.ts";
 import { assetRelativePaths, joinUrlPath } from "../shared/constants/assets.ts";
 import { appRoutes, withLocaleQuery } from "../shared/constants/routes.ts";
+import { interpolateRoutePath } from "../shared/constants/route-patterns.ts";
+import { defaultBuilderProjectId } from "../domain/builder/builder-project-state-store.ts";
 import type { Messages } from "../shared/i18n/messages.ts";
 import { type OraclePanelState, renderOracleSection } from "./oracle.ts";
 import {
@@ -278,7 +280,7 @@ export const renderLayout = (input: LayoutInput): string => {
         </div>
 
         <!-- Global FAB for AI Chat (z-[90] ensures visibility above game canvas) -->
-        <div class="fab fixed bottom-6 right-6 z-[90]">
+        <div class="fab fixed right-6 ${activeRoute === "builder" ? "bottom-24 sm:bottom-6" : "bottom-6"} z-[90]">
           ${renderDrawerToggleControl({
             targetId: "ai-chat-drawer",
             label: messages.common.openAiAssistant,
@@ -438,7 +440,10 @@ const renderFooter = (messages: Messages, locale: LocaleCode): string => {
     },
     {
       label: messages.navigation.game,
-      href: withLocaleQuery(appRoutes.game, locale),
+      href: withLocaleQuery(
+        interpolateRoutePath(appRoutes.game, { projectId: defaultBuilderProjectId }),
+        locale,
+      ),
     },
     {
       label: messages.pages.home.docsCta,

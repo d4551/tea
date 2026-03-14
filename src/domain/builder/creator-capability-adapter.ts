@@ -1,7 +1,10 @@
+import type {
+  BuilderWorkflowStageStatus,
+  CreatorCapabilities,
+} from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
-import { type CreatorCapabilities, type BuilderWorkflowStageStatus } from "../../shared/contracts/game.ts";
-import type { BuilderPlatformReadiness } from "./platform-readiness.ts";
 import type { AvailableAiFeatures } from "../game/ai/game-ai-service.ts";
+import type { BuilderPlatformReadiness } from "./platform-readiness.ts";
 
 /**
  * Maps platform readiness + feature flags into creator-safe capabilities.
@@ -25,9 +28,7 @@ export const toCreatorCapabilities = (
       {
         key: "image-generation",
         label: messages.builder.creatorCapabilityImageGeneration,
-        statusLabel: statusLabel(
-          (capabilityState.get("aiAuthoring") ?? "missing") !== "missing",
-        ),
+        statusLabel: statusLabel((capabilityState.get("aiAuthoring") ?? "missing") !== "missing"),
         available: (capabilityState.get("aiAuthoring") ?? "missing") !== "missing",
       },
       {

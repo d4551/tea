@@ -1,135 +1,24 @@
-import { appConfig, type LocaleCode } from "../../config/environment.ts";
+import type { LocaleCode } from "../../config/environment.ts";
+import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
+import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import type {
-  BuilderCapabilityKey,
-  BuilderCapabilityReadiness,
-  BuilderPlatformReadiness,
-} from "../../domain/builder/platform-readiness.ts";
-import { appRoutes, withLocaleQuery, withQueryParameters } from "../../shared/constants/routes.ts";
+  BuilderWorkflowStage,
+  CreatorCapability,
+  CreatorDashboardContext,
+} from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 import { type ColorToken, renderStats } from "../shared/ui-components.ts";
-import {
-  buildBuilderWorkflowStages,
-  deriveCreatorCapabilities,
-} from "./builder-flow.ts";
-import type { BuilderWorkflowStage, CreatorCapability } from "../../shared/contracts/game.ts";
+import { buildBuilderWorkflowStages } from "./builder-flow.ts";
+import { buildBuilderJourneyConfig } from "./builder-journey.ts";
 
-import { renderWorkspaceShell } from "./workspace-shell.ts";
-
-/**
- * Summary metrics for the builder landing page.
- */
-export interface DashboardStats {
-  /** Number of active gameplay sessions observed by the builder. */
-  readonly activeSessions: number;
-  /** Total scenes in the current builder project. */
-  readonly totalScenes: number;
-  /** Number of scenes with sceneMode "2d". */
-  readonly scenes2d: number;
-  /** Number of scenes with sceneMode "3d". */
-  readonly scenes3d: number;
-  /** Total NPCs in the current builder project. */
-  readonly totalNpcs: number;
-  /** Total authored scene nodes. */
-  readonly sceneNodeCount: number;
-  /** Total authored collision masks. */
-  readonly collisionMaskCount: number;
-  /** Total authored assets. */
-  readonly assetCount: number;
-  /** Total authored sprite-facing assets. */
-  readonly spriteAssetCount: number;
-  /** Total authored model assets. */
-  readonly modelAssetCount: number;
-  /** Total authored OpenUSD assets. */
-  readonly openUsdAssetCount: number;
-  /** Total authored sprite atlases. */
-  readonly spriteAtlasCount: number;
-  /** Total animation clips. */
-  readonly animationClipCount: number;
-  /** Total animation timelines. */
-  readonly animationTimelineCount: number;
-  /** Total dialogue graphs. */
-  readonly dialogueGraphCount: number;
-  /** Total quests. */
-  readonly questCount: number;
-  /** Total triggers. */
-  readonly triggerCount: number;
-  /** Total flags. */
-  readonly flagCount: number;
-  /** Total generation jobs. */
-  readonly generationJobCount: number;
-  /** Total generated artifacts. */
-  readonly artifactCount: number;
-  /** Total automation runs. */
-  readonly automationRunCount: number;
-  /** Total automation steps. */
-  readonly automationStepCount: number;
-  /** Whether any AI provider is currently available. */
-  readonly aiAvailable: boolean;
-  /** Whether dialog generation capability is detected. */
-  readonly aiFeatureDialogue: boolean;
-  /** Whether vision capability is detected. */
-  readonly aiFeatureVision: boolean;
-  /** Whether sentiment analysis capability is detected. */
-  readonly aiFeatureSentiment: boolean;
-  /** Whether embeddings capability is detected. */
-  readonly aiFeatureEmbeddings: boolean;
-  /** Whether speech-to-text capability is detected. */
-  readonly aiFeatureSpeechToText: boolean;
-  /** Whether text-to-speech capability is detected. */
-  readonly aiFeatureSpeechSynthesis: boolean;
-  /** Whether any local AI inference path is available. */
-  readonly aiFeatureLocalInference: boolean;
-  /** Available provider names for the current runtime. */
-  readonly providers: readonly string[];
-  /** Number of available AI providers. */
-  readonly aiProviderCount: number;
-  /** Current mutable draft version. */
-  readonly draftVersion: number;
-  /** Latest immutable release version. */
-  readonly latestReleaseVersion: number;
-  /** Currently published immutable release version, if any. */
-  readonly publishedReleaseVersion: number | null;
-  /** Whether the project is currently published. */
-  readonly published: boolean;
-  /** Runtime renderer preference. */
-  readonly rendererPreference: "webgpu" | "webgl";
-  /** ONNX execution device preference. */
-  readonly onnxDevice: "wasm" | "webgpu" | "cpu";
-  /** Platform capability status summary. */
-  readonly readiness: BuilderPlatformReadiness;
-}
+import { renderWorkspaceFrame, renderWorkspaceShell } from "./workspace-shell.ts";
 
 interface CapabilityMetric {
   readonly label: string;
   readonly value: string | number;
   readonly tone?: "default" | "primary" | "secondary" | "accent";
 }
-
-const capabilityTone = (status: BuilderCapabilityReadiness["status"]): string => {
-  switch (status) {
-    case "implemented":
-      return "badge-success";
-    case "partial":
-      return "badge-warning";
-    default:
-      return "badge-error";
-  }
-};
-
-const capabilityStatusLabel = (
-  messages: Messages,
-  status: BuilderCapabilityReadiness["status"],
-): string => {
-  switch (status) {
-    case "implemented":
-      return messages.builder.readinessImplemented;
-    case "partial":
-      return messages.builder.readinessPartial;
-    default:
-      return messages.builder.readinessMissing;
-  }
-};
 
 const metricToneToken = (tone: CapabilityMetric["tone"]): ColorToken | undefined => {
   switch (tone) {
@@ -160,216 +49,6 @@ const renderMetricStats = (
     className,
   });
 
-const capabilityHref = (
-  capability: BuilderCapabilityKey,
-  locale: LocaleCode,
-  projectId: string,
-): string => {
-  switch (capability) {
-    case "releaseFlow":
-    case "webgpuRenderer":
-      return withQueryParameters(appRoutes.builder, { lang: locale, projectId });
-    case "runtime2d":
-      return withQueryParameters(appRoutes.builderScenes, { lang: locale, projectId });
-    case "runtime3d":
-      return withQueryParameters(appRoutes.game, { lang: locale, projectId });
-    case "spritePipeline":
-    case "animationPipeline":
-      return withQueryParameters(appRoutes.builderAssets, { lang: locale, projectId });
-    case "mechanics":
-      return withQueryParameters(appRoutes.builderMechanics, { lang: locale, projectId });
-    case "aiAuthoring":
-    case "aiOnnxGpu":
-      return withQueryParameters(appRoutes.builderAi, { lang: locale, projectId });
-    case "automation":
-      return withQueryParameters(appRoutes.builderAutomation, { lang: locale, projectId });
-  }
-};
-
-const capabilityCopy = (
-  messages: Messages,
-  capability: BuilderCapabilityKey,
-): Readonly<{ title: string; description: string }> => {
-  switch (capability) {
-    case "releaseFlow":
-      return {
-        title: messages.builder.capabilityReleaseFlowTitle,
-        description: messages.builder.capabilityReleaseFlowDescription,
-      };
-    case "runtime2d":
-      return {
-        title: messages.builder.capability2dRuntimeTitle,
-        description: messages.builder.capability2dRuntimeDescription,
-      };
-    case "runtime3d":
-      return {
-        title: messages.builder.capability3dRuntimeTitle,
-        description: messages.builder.capability3dRuntimeDescription,
-      };
-    case "spritePipeline":
-      return {
-        title: messages.builder.capabilitySpritePipelineTitle,
-        description: messages.builder.capabilitySpritePipelineDescription,
-      };
-    case "animationPipeline":
-      return {
-        title: messages.builder.capabilityAnimationPipelineTitle,
-        description: messages.builder.capabilityAnimationPipelineDescription,
-      };
-    case "mechanics":
-      return {
-        title: messages.builder.capabilityMechanicsTitle,
-        description: messages.builder.capabilityMechanicsDescription,
-      };
-    case "aiAuthoring":
-      return {
-        title: messages.builder.capabilityAiAuthoringTitle,
-        description: messages.builder.capabilityAiAuthoringDescription,
-      };
-    case "automation":
-      return {
-        title: messages.builder.capabilityAutomationTitle,
-        description: messages.builder.capabilityAutomationDescription,
-      };
-    case "webgpuRenderer":
-      return {
-        title: messages.builder.capabilityWebgpuRendererTitle,
-        description: messages.builder.capabilityWebgpuRendererDescription,
-      };
-    case "aiOnnxGpu":
-      return {
-        title: messages.builder.capabilityAiOnnxGpuTitle,
-        description: messages.builder.capabilityAiOnnxGpuDescription,
-      };
-  }
-};
-
-const releaseValue = (value: number | null, fallback: string): string =>
-  value === null ? fallback : String(value);
-
-const capabilityMetrics = (
-  messages: Messages,
-  capability: BuilderCapabilityKey,
-  stats: DashboardStats,
-): readonly CapabilityMetric[] => {
-  switch (capability) {
-    case "releaseFlow":
-      return [
-        { label: messages.builder.draftVersionLabel, value: stats.draftVersion, tone: "primary" },
-        {
-          label: messages.builder.latestReleaseLabel,
-          value: stats.latestReleaseVersion,
-          tone: "secondary",
-        },
-        {
-          label: messages.builder.publishedReleaseLabel,
-          value: releaseValue(stats.publishedReleaseVersion, messages.builder.noPublishedRelease),
-          tone: "accent",
-        },
-      ];
-    case "runtime2d":
-      return [
-        { label: messages.builder.scenes, value: stats.scenes2d, tone: "primary" },
-        { label: messages.builder.totalNpcs, value: stats.totalNpcs },
-        { label: messages.builder.sceneNodeCountLabel, value: stats.sceneNodeCount },
-        { label: messages.builder.collisionMaskCountLabel, value: stats.collisionMaskCount },
-      ];
-    case "runtime3d":
-      return [
-        { label: messages.builder.scenes, value: stats.scenes3d, tone: "secondary" },
-        { label: messages.builder.modelAssetCountLabel, value: stats.modelAssetCount },
-        { label: messages.builder.openUsdAssetCountLabel, value: stats.openUsdAssetCount },
-      ];
-    case "spritePipeline":
-      return [
-        { label: messages.builder.assets, value: stats.spriteAssetCount, tone: "primary" },
-        { label: messages.builder.spriteManifestCountLabel, value: stats.spriteAtlasCount },
-        { label: messages.builder.modelAssetCountLabel, value: stats.modelAssetCount },
-      ];
-    case "animationPipeline":
-      return [
-        { label: messages.builder.animations, value: stats.animationClipCount, tone: "primary" },
-        {
-          label: messages.builder.animationTimelineCountLabel,
-          value: stats.animationTimelineCount,
-        },
-        { label: messages.builder.spriteManifestCountLabel, value: stats.spriteAtlasCount },
-      ];
-    case "mechanics":
-      return [
-        { label: messages.builder.dialogueGraphCountLabel, value: stats.dialogueGraphCount },
-        { label: messages.builder.questCountLabel, value: stats.questCount, tone: "primary" },
-        { label: messages.builder.triggerCountLabel, value: stats.triggerCount },
-        { label: messages.builder.flagCountLabel, value: stats.flagCount },
-      ];
-    case "aiAuthoring":
-      return [
-        {
-          label: messages.builder.providerCountLabel,
-          value: stats.aiProviderCount,
-          tone: "primary",
-        },
-        { label: messages.builder.generationJobCountLabel, value: stats.generationJobCount },
-        { label: messages.builder.artifactCountLabel, value: stats.artifactCount },
-      ];
-    case "automation":
-      return [
-        { label: messages.builder.automationRunCountLabel, value: stats.automationRunCount },
-        { label: messages.builder.automationStepCountLabel, value: stats.automationStepCount },
-        { label: messages.builder.artifactCountLabel, value: stats.artifactCount, tone: "accent" },
-      ];
-    case "webgpuRenderer":
-      return [
-        {
-          label: messages.builder.runtimeLabel,
-          value: stats.rendererPreference.toUpperCase(),
-          tone: "secondary",
-        },
-        { label: messages.builder.scenes, value: stats.totalScenes },
-        { label: messages.builder.modelAssetCountLabel, value: stats.modelAssetCount },
-      ];
-    case "aiOnnxGpu":
-      return [
-        {
-          label: messages.builder.modelLabel,
-          value: stats.onnxDevice.toUpperCase(),
-          tone: "secondary",
-        },
-        { label: messages.builder.providerCountLabel, value: stats.aiProviderCount },
-        { label: messages.builder.generationJobCountLabel, value: stats.generationJobCount },
-      ];
-  }
-};
-
-const renderCapabilityCard = (
-  messages: Messages,
-  locale: LocaleCode,
-  projectId: string,
-  capability: BuilderCapabilityReadiness,
-  stats: DashboardStats,
-): string => {
-  const copy = capabilityCopy(messages, capability.key);
-  const metrics = renderMetricStats(capabilityMetrics(messages, capability.key, stats));
-  const href = capabilityHref(capability.key, locale, projectId);
-  const statusLabel = capabilityStatusLabel(messages, capability.status);
-
-  return `<article class="bg-base-200 card">
-    <div class="card-body gap-4">
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div class="space-y-2">
-          <h2 class="card-title text-xl">${escapeHtml(copy.title)}</h2>
-          <p class="max-w-2xl text-sm leading-6 text-base-content/72">${escapeHtml(copy.description)}</p>
-        </div>
-        <span class="badge ${capabilityTone(capability.status)} badge-soft badge-lg" role="status" aria-label="${escapeHtml(statusLabel)}">${escapeHtml(statusLabel)}</span>
-      </div>
-      ${metrics}
-      <div class="card-actions justify-end">
-        <a class="btn btn-ghost btn-sm" href="${escapeHtml(href)}" aria-label="${escapeHtml(messages.builder.openDetails)}: ${escapeHtml(copy.title)}">${escapeHtml(messages.builder.openDetails)}</a>
-      </div>
-    </div>
-  </article>`;
-};
-
 const renderGuidedWorkflowCard = (
   title: string,
   description: string,
@@ -397,10 +76,10 @@ const renderWorkflowStageCard = (stage: BuilderWorkflowStage, messages: Messages
         : "badge-ghost";
   const statusLabel =
     stage.status === "complete"
-      ? messages.builder.readinessImplemented
+      ? messages.builder.workflowStatusReady
       : stage.status === "in-progress"
-        ? messages.builder.readinessPartial
-        : messages.builder.readinessMissing;
+        ? messages.builder.workflowStatusInProgress
+        : messages.builder.workflowStatusStart;
 
   return `<article class="card border border-base-300 bg-base-100 shadow-sm">
     <div class="card-body gap-4">
@@ -426,7 +105,9 @@ const renderWorkflowStageCard = (stage: BuilderWorkflowStage, messages: Messages
   </article>`;
 };
 
-const renderCreatorCapabilityCard = (capability: CreatorCapability): string => `<article class="card border border-base-300 bg-base-100 shadow-sm">
+const renderCreatorCapabilityCard = (
+  capability: CreatorCapability,
+): string => `<article class="card border border-base-300 bg-base-100 shadow-sm">
   <div class="card-body gap-3">
     <div class="flex items-center justify-between gap-3">
       <h3 class="card-title text-base">${escapeHtml(capability.label)}</h3>
@@ -435,14 +116,36 @@ const renderCreatorCapabilityCard = (capability: CreatorCapability): string => `
   </div>
 </article>`;
 
-const findCapability = (
-  readiness: BuilderPlatformReadiness,
-  capability: BuilderCapabilityKey,
-): BuilderCapabilityReadiness =>
-  readiness.capabilities.find((entry) => entry.key === capability) ?? {
-    key: capability,
-    status: "missing",
-  };
+const renderWorkflowNavigatorItem = (
+  stage: BuilderWorkflowStage,
+  href: string,
+  messages: Messages,
+  stepNumber: number,
+): string => {
+  const toneClassName =
+    stage.status === "complete"
+      ? "badge-success"
+      : stage.status === "in-progress"
+        ? "badge-warning"
+        : "badge-ghost";
+  const statusLabel =
+    stage.status === "complete"
+      ? messages.builder.workflowStatusReady
+      : stage.status === "in-progress"
+        ? messages.builder.workflowStatusInProgress
+        : messages.builder.workflowStatusStart;
+
+  return `<a href="${escapeHtml(href)}" class="group flex items-start gap-3 rounded-[1.25rem] border border-base-300 bg-base-100 px-4 py-3 transition hover:border-primary/40 hover:bg-base-200/50">
+    <span class="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-base-200 text-xs font-semibold text-base-content/70">${escapeHtml(String(stepNumber))}</span>
+    <span class="min-w-0 flex-1 space-y-1">
+      <span class="flex flex-wrap items-center gap-2">
+        <span class="font-semibold text-base-content group-hover:text-primary">${escapeHtml(stage.label)}</span>
+        <span class="badge ${toneClassName} badge-soft badge-xs">${escapeHtml(statusLabel)}</span>
+      </span>
+      <span class="block text-sm leading-6 text-base-content/68">${escapeHtml(stage.description)}</span>
+    </span>
+  </a>`;
+};
 
 /**
  * Renders the builder dashboard landing view.
@@ -457,71 +160,114 @@ const findCapability = (
 export const renderBuilderDashboard = (
   messages: Messages,
   locale: LocaleCode,
-  stats: DashboardStats,
+  context: CreatorDashboardContext,
   projectId: string,
   published: boolean,
 ): string => {
-  const builderHref = withQueryParameters(appRoutes.builderScenes, { lang: locale, projectId });
-  const npcHref = withQueryParameters(appRoutes.builderNpcs, { lang: locale, projectId });
-  const dialogueHref = withQueryParameters(appRoutes.builderDialogue, { lang: locale, projectId });
-  const assetsHref = withQueryParameters(appRoutes.builderAssets, { lang: locale, projectId });
-  const settingsHref = withQueryParameters(appRoutes.builderAi, { lang: locale, projectId });
-  const reviewHref = withQueryParameters(appRoutes.builderAutomation, { lang: locale, projectId });
-  const gameHref = withQueryParameters(appRoutes.game, { lang: locale, projectId });
-  const docsHref = withLocaleQuery(appConfig.api.docsPath, locale);
-  const workflowStages = buildBuilderWorkflowStages(messages, locale, projectId, {
-    scenes: stats.totalScenes,
-    assets: stats.assetCount + stats.animationClipCount,
-    characters: stats.totalNpcs,
-    story: stats.dialogueGraphCount,
-    systems: stats.questCount + stats.triggerCount + stats.flagCount,
-    playtest: stats.activeSessions + (published ? 1 : 0),
+  const worldHref = withQueryParameters(interpolateRoutePath(appRoutes.builderScenes, { projectId }), {
+    lang: locale,
   });
-  const creatorCapabilities = deriveCreatorCapabilities(messages, {
-    providers: stats.providers,
-    richDialogue: stats.aiFeatureDialogue,
-    visionAnalysis: stats.aiFeatureVision,
-    sentimentAnalysis: stats.aiFeatureSentiment,
-    embeddings: stats.aiFeatureEmbeddings,
-    speechToText: stats.aiFeatureSpeechToText,
-    speechSynthesis: stats.aiFeatureSpeechSynthesis,
-    localInference: stats.aiFeatureLocalInference,
-  }, stats.readiness);
-  const capabilityCards = (
+  const npcHref = withQueryParameters(interpolateRoutePath(appRoutes.builderNpcs, { projectId }), { lang: locale });
+  const dialogueHref = withQueryParameters(interpolateRoutePath(appRoutes.builderDialogue, { projectId }), {
+    lang: locale,
+  });
+  const assetsHref = withQueryParameters(interpolateRoutePath(appRoutes.builderAssets, { projectId }), {
+    lang: locale,
+  });
+  const systemsHref = withQueryParameters(interpolateRoutePath(appRoutes.builderMechanics, { projectId }), {
+    lang: locale,
+  });
+  const gameHref = withQueryParameters(interpolateRoutePath(appRoutes.game, { projectId }), { lang: locale });
+  const workflowStages = buildBuilderWorkflowStages(messages, locale, projectId, {
+    scenes: context.totalScenes,
+    assets: context.assetCount + context.animationClipCount,
+    characters: context.totalNpcs,
+    story: context.dialogueGraphCount,
+    systems: context.questCount,
+    playtest: context.activeSessions + (published ? 1 : 0),
+  });
+  const creatorJourney = buildBuilderJourneyConfig(messages, locale, projectId, "start");
+  const workflowNavigator = workflowStages
+    .map((stage, index) =>
+      renderWorkflowNavigatorItem(
+        stage,
+        creatorJourney.steps[index]?.href ?? stage.primaryAction.href,
+        messages,
+        index + 1,
+      ),
+    )
+    .join("");
+  const creatorCapabilityCards = context.creatorCapabilities.items
+    .map((capability) => renderCreatorCapabilityCard(capability))
+    .join("");
+
+  const quickStartCards = [
+    renderGuidedWorkflowCard(
+      messages.builder.quickActionScene,
+      messages.builder.quickActionSceneDesc,
+      worldHref,
+      messages.builder.scenes,
+      "text-primary",
+    ),
+    renderGuidedWorkflowCard(
+      messages.builder.quickActionNpc,
+      messages.builder.quickActionNpcDesc,
+      npcHref,
+      messages.builder.npcs,
+      "text-secondary",
+    ),
+    renderGuidedWorkflowCard(
+      messages.builder.quickActionDialogue,
+      messages.builder.quickActionDialogueDesc,
+      dialogueHref,
+      messages.builder.dialogue,
+      "text-accent",
+    ),
+    renderGuidedWorkflowCard(
+      messages.builder.assets,
+      messages.builder.assetsWorkspaceDescription,
+      assetsHref,
+      messages.builder.assets,
+      "text-success",
+    ),
+    renderGuidedWorkflowCard(
+      messages.builder.mechanics,
+      messages.builder.workflowWireProgressDescription,
+      systemsHref,
+      messages.builder.mechanics,
+      "text-warning",
+    ),
+    renderGuidedWorkflowCard(
+      messages.builder.playtest,
+      messages.builder.workflowPlaytestDescription,
+      published ? gameHref : worldHref,
+      published ? messages.builder.playPublishedBuild : messages.builder.continueAuthoring,
+      "text-accent",
+    ),
+  ].join("");
+
+  const projectSnapshot = renderMetricStats(
     [
-      "releaseFlow",
-      "runtime2d",
-      "runtime3d",
-      "spritePipeline",
-      "animationPipeline",
-      "mechanics",
-      "aiAuthoring",
-      "automation",
-    ] as const satisfies readonly BuilderCapabilityKey[]
-  ).map((key) =>
-    renderCapabilityCard(messages, locale, projectId, findCapability(stats.readiness, key), stats),
+      { label: messages.builder.scenes, value: context.totalScenes, tone: "primary" },
+      { label: messages.builder.assets, value: context.assetCount, tone: "secondary" },
+      { label: messages.builder.totalNpcs, value: context.totalNpcs, tone: "accent" },
+      { label: messages.builder.dialogueGraphCountLabel, value: context.dialogueGraphCount },
+      { label: messages.builder.questCountLabel, value: context.questCount },
+      { label: messages.builder.activeSessions, value: context.activeSessions },
+    ],
+    "bg-base-200/60",
   );
+
   return `
-    <div class="grid gap-4">
+    <section class="space-y-6">
       ${renderWorkspaceShell({
         eyebrow: published
           ? messages.builder.projectStatusPublished
           : messages.builder.projectStatusDraft,
-        title: messages.builder.dashboard,
+        title: messages.builder.creatorWorkflowTitle,
         description: messages.builder.creatorWorkflowDescription,
+        journey: creatorJourney,
         facets: [
-          {
-            label: `${messages.builder.implementedCountLabel}: ${stats.readiness.implementedCount}`,
-            badgeClassName: "badge-success badge-soft",
-          },
-          {
-            label: `${messages.builder.partialCountLabel}: ${stats.readiness.partialCount}`,
-            badgeClassName: "badge-warning badge-soft",
-          },
-          {
-            label: `${messages.builder.missingCountLabel}: ${stats.readiness.missingCount}`,
-            badgeClassName: "badge-error badge-soft",
-          },
           {
             label: messages.builder.creatorSafeAiDescription,
             badgeClassName: "badge-outline",
@@ -530,122 +276,92 @@ export const renderBuilderDashboard = (
         metrics: [
           {
             label: messages.builder.scenes,
-            value: stats.totalScenes,
+            value: context.totalScenes,
             toneClassName: "text-primary",
           },
           {
-            label: messages.builder.assets,
-            value: stats.assetCount,
+            label: messages.builder.animations,
+            value: context.animationClipCount,
             toneClassName: "text-secondary",
           },
           {
-            label: messages.builder.npcs,
-            value: stats.totalNpcs,
+            label: messages.builder.totalNpcs,
+            value: context.totalNpcs,
             toneClassName: "text-accent",
           },
-          { label: messages.builder.playtest, value: stats.activeSessions },
+          {
+            label: messages.builder.playtest,
+            value: published ? messages.builder.projectStatusPublished : context.activeSessions,
+          },
         ],
         actions: `
-          <a class="btn btn-primary btn-sm" href="${escapeHtml(published ? gameHref : builderHref)}" aria-label="${escapeHtml(published ? messages.builder.playPublishedBuild : messages.builder.continueAuthoring)}">
+          <a class="btn btn-primary btn-sm" href="${escapeHtml(published ? gameHref : (workflowStages[0]?.primaryAction.href ?? worldHref))}" aria-label="${escapeHtml(published ? messages.builder.playPublishedBuild : messages.builder.continueAuthoring)}">
             ${escapeHtml(published ? messages.builder.playPublishedBuild : messages.builder.continueAuthoring)}
           </a>
-          <a class="btn btn-ghost btn-sm" href="${escapeHtml(settingsHref)}" aria-label="${escapeHtml(messages.builder.settings)}">
-            ${escapeHtml(messages.builder.settings)}
+          <a class="btn btn-ghost btn-sm" href="${escapeHtml(worldHref)}" aria-label="${escapeHtml(messages.builder.scenes)}">
+            ${escapeHtml(messages.builder.scenes)}
           </a>
         `,
       })}
-
-      <section class="grid gap-4 xl:grid-cols-[1.25fr_0.95fr]">
-        <article class="bg-base-200 card">
-          <div class="card-body gap-4">
-            <div class="flex flex-wrap items-start justify-between gap-3">
+      ${renderWorkspaceFrame({
+        navigatorTitle: messages.builder.creatorWorkflowTitle,
+        navigatorDescription: messages.builder.creatorWorkflowDescription,
+        navigatorBody: `<div class="space-y-3">
+          <div class="rounded-[1.25rem] border border-base-300 bg-base-200/55 p-4 text-sm leading-6 text-base-content/72">
+            ${escapeHtml(messages.builder.workflowGuideDescription)}
+          </div>
+          ${workflowNavigator}
+        </div>`,
+        mainBody: `<div class="space-y-4">
+          <section class="rounded-[1.5rem] border border-base-300 bg-base-100 shadow-sm">
+            <div class="flex flex-col gap-4 p-5 lg:p-6">
               <div class="space-y-2">
-                <h2 class="card-title text-xl">${escapeHtml(messages.builder.creatorWorkflowTitle)}</h2>
-                <p class="max-w-3xl text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.creatorWorkflowDescription)}</p>
+                <h2 class="text-xl font-semibold tracking-tight">${escapeHtml(messages.builder.workspaceTitle)}</h2>
+                <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.workspaceJumpBack)}</p>
               </div>
-              <span class="badge ${published ? "badge-success" : "badge-warning"} badge-soft">${escapeHtml(published ? messages.builder.projectStatusPublished : messages.builder.projectStatusDraft)}</span>
+              <div class="grid gap-3 xl:grid-cols-2">
+                ${workflowStages.map((stage) => renderWorkflowStageCard(stage, messages)).join("")}
+              </div>
             </div>
-            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              ${workflowStages.map((stage) => renderWorkflowStageCard(stage, messages)).join("")}
+          </section>
+          <section class="rounded-[1.5rem] border border-base-300 bg-base-100 shadow-sm">
+            <div class="flex flex-col gap-4 p-5 lg:p-6">
+              <div class="space-y-2">
+                <h2 class="text-xl font-semibold tracking-tight">${escapeHtml(messages.builder.creatorSupportTitle)}</h2>
+                <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.creatorSupportDescription)}</p>
+              </div>
+              <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                ${quickStartCards}
+              </div>
             </div>
-          </div>
-        </article>
-
-        <article class="bg-base-200 card">
-          <div class="card-body gap-4">
-            <div class="space-y-2">
-              <h2 class="card-title text-xl">${escapeHtml(messages.builder.creatorAssistTitle)}</h2>
-              <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.creatorAssistDescription)}</p>
-            </div>
-            <div class="grid gap-3">
-              ${creatorCapabilities.items.map((capability) => renderCreatorCapabilityCard(capability)).join("")}
-            </div>
-            <div class="card-actions justify-end">
-              <a class="btn btn-ghost btn-sm" href="${escapeHtml(settingsHref)}">${escapeHtml(messages.builder.settings)}</a>
-              <a class="btn btn-ghost btn-sm" href="${escapeHtml(reviewHref)}">${escapeHtml(messages.builder.automation)}</a>
-            </div>
-          </div>
-        </article>
-      </section>
-
-      <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        ${renderGuidedWorkflowCard(
-          messages.builder.quickActionScene,
-          messages.builder.quickActionSceneDesc,
-          builderHref,
-          messages.builder.scenes,
-          "text-primary",
-        )}
-        ${renderGuidedWorkflowCard(
-          messages.builder.quickActionNpc,
-          messages.builder.quickActionNpcDesc,
-          npcHref,
-          messages.builder.npcs,
-          "text-secondary",
-        )}
-        ${renderGuidedWorkflowCard(
-          messages.builder.quickActionDialogue,
-          messages.builder.quickActionDialogueDesc,
-          dialogueHref,
-          messages.builder.dialogue,
-          "text-accent",
-        )}
-        ${renderGuidedWorkflowCard(
-          messages.builder.assets,
-          messages.builder.assetsWorkspaceDescription,
-          assetsHref,
-          messages.builder.assets,
-          "text-success",
-        )}
-        ${renderGuidedWorkflowCard(
-          messages.builder.mechanics,
-          messages.builder.workflowWireProgressDescription,
-          withQueryParameters(appRoutes.builderMechanics, { lang: locale, projectId }),
-          messages.builder.mechanics,
-          "text-warning",
-        )}
-        ${renderGuidedWorkflowCard(
-          messages.builder.playtest,
-          messages.builder.workflowPlaytestDescription,
-          published ? gameHref : builderHref,
-          published ? messages.builder.playPublishedBuild : messages.builder.continueAuthoring,
-          "text-accent",
-        )}
-      </section>
-
-      <section id="builder-platform-readiness" role="region" aria-label="${escapeHtml(messages.builder.settings)}">
-        <article class="bg-base-200 card">
-          <div class="card-body gap-4">
-            <h2 class="card-title text-xl">${escapeHtml(messages.builder.settings)}</h2>
-            <p class="max-w-4xl text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.platformReadinessDescription)}</p>
-            <div class="grid gap-4 xl:grid-cols-2">${capabilityCards.join("")}</div>
-            <div class="card-actions justify-end gap-2">
-              <a class="btn btn-outline btn-sm" href="${escapeHtml(settingsHref)}">${escapeHtml(messages.builder.settings)}</a>
-              <a class="btn btn-outline btn-sm" href="${escapeHtml(reviewHref)}">${escapeHtml(messages.builder.automation)}</a>
-              <a class="btn btn-ghost btn-sm" href="${escapeHtml(docsHref)}">${escapeHtml(messages.docsLabel)}</a>
-            </div>
-          </div>
-        </article>
-      </section>
-    </div>`;
+          </section>
+        </div>`,
+        sideSections: [
+          {
+            title: messages.builder.workspaceTitle,
+            description: messages.builder.workspaceJumpBack,
+            body: `<div class="space-y-3">
+              ${projectSnapshot}
+              <div class="flex flex-wrap gap-2 pt-1">
+                <a class="btn btn-primary btn-sm" href="${escapeHtml(published ? gameHref : (workflowStages[0]?.primaryAction.href ?? worldHref))}">${escapeHtml(published ? messages.builder.playPublishedBuild : messages.builder.continueAuthoring)}</a>
+                <a class="btn btn-outline btn-sm" href="${escapeHtml(worldHref)}">${escapeHtml(messages.builder.scenes)}</a>
+              </div>
+            </div>`,
+          },
+          {
+            title: messages.builder.creatorSupportTitle,
+            description: messages.builder.creatorSupportDescription,
+            body: `<div class="space-y-3">
+              ${creatorCapabilityCards}
+              <div class="rounded-[1.25rem] border border-base-300 bg-base-100 p-4 shadow-sm">
+                <div class="space-y-2">
+                  <h3 class="text-base font-semibold tracking-tight">${escapeHtml(messages.builder.workflowPlaytestTitle)}</h3>
+                  <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.workflowPlaytestDescription)}</p>
+                </div>
+              </div>
+            </div>`,
+          },
+        ],
+      })}
+    </section>`;
 };

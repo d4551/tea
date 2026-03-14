@@ -62,3 +62,6 @@ export const CREATOR_PLACEHOLDER_SVG_WIDTH = 1024;
 
 /** Placeholder SVG height for builder generation previews (16:9). */
 export const CREATOR_PLACEHOLDER_SVG_HEIGHT = 576;
+
+/** Default number of library items shown per builder workspace page. */
+export const BUILDER_LIBRARY_PAGE_SIZE = 6;

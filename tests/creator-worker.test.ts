@@ -47,7 +47,7 @@ describe("creator worker execution", () => {
           status: "pending",
           spec: {
             kind: "goto",
-            path: `/builder?projectId=${projectId}`,
+            path: `/projects/${projectId}/start`,
           },
         },
         {

@@ -4,14 +4,22 @@
  * Scene library and detail workspace with inline HTMX editing.
  */
 import type { LocaleCode } from "../../config/environment.ts";
+import { resolveCreatorFacingText } from "../../domain/builder/builder-display.ts";
+import { resolveGameText } from "../../domain/game/data/game-text.ts";
 import {
+  BUILDER_LIBRARY_PAGE_SIZE,
   DEFAULT_SCENE_GEOMETRY_HEIGHT,
   DEFAULT_SCENE_GEOMETRY_WIDTH,
   DEFAULT_SCENE_NODE_SIZE,
   DEFAULT_SCENE_SPAWN_X,
   DEFAULT_SCENE_SPAWN_Y,
 } from "../../shared/constants/builder-defaults.ts";
+import {
+  BUILDER_QUERY_PARAM_PAGE,
+  BUILDER_QUERY_PARAM_SCENE_ID,
+} from "../../shared/constants/builder-query.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
+import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import type {
   BuilderAsset,
   SceneDefinition,
@@ -27,17 +35,38 @@ import {
   spinnerClasses,
 } from "../shared/ui-components.ts";
 import { buildCreatorAssistContext } from "./builder-flow.ts";
+import { buildBuilderJourneyConfig } from "./builder-journey.ts";
+import { renderCreatorAssistPanel } from "./creator-assist-panel.ts";
 import { getSceneNodeTypeLabel } from "./view-labels.ts";
-import { renderWorkspaceShell } from "./workspace-shell.ts";
+import {
+  paginateWorkspaceItems,
+  renderWorkspaceBrowseControls,
+  renderWorkspaceFrame,
+  renderWorkspaceShell,
+} from "./workspace-shell.ts";
 
-const renderScenePreview = (scene: SceneDefinition, spawnLabel: string): string => {
+const resolveSceneTitle = (locale: LocaleCode, scene: SceneDefinition): string => {
+  const translated = resolveGameText(locale, scene.titleKey);
+  return resolveCreatorFacingText(translated, scene.displayTitle || scene.titleKey, scene.id);
+};
+
+const resolveNpcLabel = (locale: LocaleCode, npc: SceneDefinition["npcs"][number]): string => {
+  const translated = resolveGameText(locale, npc.labelKey);
+  return resolveCreatorFacingText(translated, npc.displayName || npc.labelKey, npc.characterKey);
+};
+
+const renderScenePreview = (
+  scene: SceneDefinition,
+  locale: LocaleCode,
+  spawnLabel: string,
+): string => {
   const npcMarkers = scene.npcs
     .map((npc) => {
       const labelY = Math.max(20, npc.y - 14);
       return `<g>
         <circle cx="${npc.x}" cy="${npc.y}" r="10" fill="oklch(var(--s))" fill-opacity="0.85"></circle>
         <circle cx="${npc.x}" cy="${npc.y}" r="20" fill="oklch(var(--s))" fill-opacity="0.12"></circle>
-        <text x="${npc.x}" y="${labelY}" fill="oklch(var(--bc))" font-size="14" font-weight="600" text-anchor="middle">${escapeHtml(npc.characterKey)}</text>
+        <text x="${npc.x}" y="${labelY}" fill="oklch(var(--bc))" font-size="14" font-weight="600" text-anchor="middle">${escapeHtml(resolveNpcLabel(locale, npc))}</text>
       </g>`;
     })
     .join("");
@@ -308,39 +337,84 @@ export const renderSceneEditor = (
   scenes: Record<string, SceneDefinition>,
   locale: LocaleCode,
   projectId: string,
+  search = "",
+  page = 1,
+  selectedSceneId = "",
 ): string => {
-  const sceneIds = Object.keys(scenes);
-  const selectedSceneId = sceneIds[0] ?? null;
-  const selectedScene = selectedSceneId ? (scenes[selectedSceneId] ?? null) : null;
   const sceneValues = Object.values(scenes);
+  const normalizedSearch = search.trim().toLowerCase();
+  const filteredScenes = sceneValues
+    .filter((scene) => {
+      if (normalizedSearch.length === 0) {
+        return true;
+      }
+      const sceneTitle = resolveSceneTitle(locale, scene).toLowerCase();
+      return (
+        scene.id.toLowerCase().includes(normalizedSearch) ||
+        sceneTitle.includes(normalizedSearch) ||
+        (scene.sceneMode ?? "2d").toLowerCase().includes(normalizedSearch)
+      );
+    })
+    .sort((left, right) =>
+      resolveSceneTitle(locale, left).localeCompare(resolveSceneTitle(locale, right)),
+    );
+  const paginatedScenes = paginateWorkspaceItems(filteredScenes, page, BUILDER_LIBRARY_PAGE_SIZE);
+  const activeScene =
+    filteredScenes.find((scene) => scene.id === selectedSceneId) ??
+    paginatedScenes.items[0] ??
+    filteredScenes[0] ??
+    null;
   const scenes2d = sceneValues.filter((scene) => scene.sceneMode !== "3d").length;
   const scenes3d = sceneValues.filter((scene) => scene.sceneMode === "3d").length;
   const nodeCount = sceneValues.reduce((total, scene) => total + (scene.nodes?.length ?? 0), 0);
   const creatorAssist =
-    selectedScene !== null
+    activeScene !== null
       ? buildCreatorAssistContext(messages, locale, projectId, {
           entityType: "scene",
-          entityId: selectedScene.id,
-          title: selectedScene.titleKey,
-          targetId: selectedScene.id,
+          entityId: activeScene.id,
+          title: resolveSceneTitle(locale, activeScene),
+          targetId: activeScene.id,
         })
       : null;
-  const sceneCards = sceneIds
-    .map((id) => {
-      const scene = scenes[id];
-      if (!scene) {
-        return "";
-      }
-      const detailHref = withQueryParameters(`${appRoutes.builderApiScenes}/${scene.id}`, {
-        locale,
-        projectId,
+  const creatorJourney = buildBuilderJourneyConfig(messages, locale, projectId, "world");
+  const scenesPath = interpolateRoutePath(appRoutes.builderScenes, { projectId });
+  const searchAction = withQueryParameters(scenesPath, {
+    lang: locale,
+  });
+  const previousPageHref =
+    paginatedScenes.page > 1
+      ? withQueryParameters(scenesPath, {
+          lang: locale,
+          search,
+          [BUILDER_QUERY_PARAM_PAGE]: String(paginatedScenes.page - 1),
+          ...(activeScene ? { [BUILDER_QUERY_PARAM_SCENE_ID]: activeScene.id } : {}),
+        })
+      : undefined;
+  const nextPageHref =
+    paginatedScenes.page < paginatedScenes.totalPages
+      ? withQueryParameters(scenesPath, {
+          lang: locale,
+          search,
+          [BUILDER_QUERY_PARAM_PAGE]: String(paginatedScenes.page + 1),
+          ...(activeScene ? { [BUILDER_QUERY_PARAM_SCENE_ID]: activeScene.id } : {}),
+        })
+      : undefined;
+  const sceneCards = paginatedScenes.items
+    .map((scene) => {
+      const isSelected = scene.id === activeScene?.id;
+      const sceneTitle = resolveSceneTitle(locale, scene);
+      const detailHref = withQueryParameters(scenesPath, {
+        lang: locale,
+        search,
+        [BUILDER_QUERY_PARAM_PAGE]: String(paginatedScenes.page),
+        [BUILDER_QUERY_PARAM_SCENE_ID]: scene.id,
       });
-      return `<article class="${cardClasses.bordered}">
-        <div class="card-body gap-3">
+      return `<article class="rounded-[1.25rem] border ${isSelected ? "border-primary bg-primary/8" : "border-base-300 bg-base-100"} shadow-sm transition-colors">
+        <div class="flex flex-col gap-3 p-4">
           <div class="flex items-center justify-between gap-3">
             <div>
-              <h2 class="card-title text-lg">${escapeHtml(scene.id)}</h2>
-              <p class="text-sm text-base-content/70">${escapeHtml(scene.titleKey)}</p>
+              <h2 class="text-base font-semibold tracking-tight">${escapeHtml(sceneTitle)}</h2>
+              <p class="text-sm text-base-content/70">${escapeHtml(scene.id)}</p>
             </div>
             <div class="flex flex-wrap gap-2">
               ${renderSceneModeBadge(messages, scene.sceneMode)}
@@ -352,13 +426,15 @@ export const renderSceneEditor = (
             <span class="badge badge-soft">${scene.collisions.length} ${escapeHtml(messages.builder.collisions)}</span>
             <span class="badge badge-soft">${scene.nodes?.length ?? 0} ${escapeHtml(messages.builder.sceneNodes)}</span>
           </div>
-          <button
-            class="btn btn-outline btn-sm"
+          <a
+            class="btn ${isSelected ? "btn-primary" : "btn-outline"} btn-sm"
+            href="${escapeHtml(detailHref)}"
             hx-get="${escapeHtml(detailHref)}"
-            hx-target="#scene-detail"
+            hx-target="#builder-content"
             hx-swap="innerHTML"
+            hx-push-url="true"
             aria-label="${escapeHtml(messages.builder.editScene)}: ${escapeHtml(scene.id)}"
-          >${escapeHtml(messages.builder.openDetails)}</button>
+          >${escapeHtml(messages.builder.openDetails)}</a>
         </div>
       </article>`;
     })
@@ -372,6 +448,7 @@ export const renderSceneEditor = (
         eyebrow: messages.builder.scenes,
         title: messages.builder.sceneLibraryTitle,
         description: messages.builder.sceneCreationHelp,
+        journey: creatorJourney,
         facets: [
           {
             label: `${messages.builder.sceneMode2d}: ${[
@@ -407,129 +484,147 @@ export const renderSceneEditor = (
           { label: messages.builder.sceneNodes, value: nodeCount },
         ],
       })}
-      <section class="grid gap-4 xl:grid-cols-3">
-        <article class="${cardClasses.bordered}">
-          <div class="card-body gap-2">
-            <h2 class="card-title text-base text-primary">${escapeHtml(messages.builder.modePrimer2dTitle)}</h2>
-            <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.scene2dHelp)}</p>
+      ${renderWorkspaceFrame({
+        navigatorTitle: messages.builder.sceneLibraryTitle,
+        navigatorDescription: messages.builder.sceneCreateDescription,
+        navigatorBody: `${renderWorkspaceBrowseControls({
+          action: searchAction,
+          search,
+          searchLabel: messages.builder.sceneSearchLabel,
+          searchPlaceholder: messages.builder.sceneSearchPlaceholder,
+          submitLabel: messages.builder.filterAction,
+          resultsLabel: messages.builder.resultsLabel,
+          previousLabel: messages.builder.previousPage,
+          nextLabel: messages.builder.nextPage,
+          pageLabel: messages.builder.pageLabel,
+          page: paginatedScenes.page,
+          totalPages: paginatedScenes.totalPages,
+          totalItems: paginatedScenes.totalItems,
+          startIndex: paginatedScenes.startIndex,
+          endIndex: paginatedScenes.endIndex,
+          hiddenFields: {
+            lang: locale,
+            projectId,
+            ...(activeScene ? { [BUILDER_QUERY_PARAM_SCENE_ID]: activeScene.id } : {}),
+          },
+          htmxTarget: "#builder-content",
+          previousHref: previousPageHref,
+          nextHref: nextPageHref,
+        })}
+          <div class="space-y-3 max-h-[48vh] overflow-auto pr-1">
+            ${
+              sceneCards.length > 0
+                ? sceneCards
+                : renderEmptyStateCompact(
+                    messages.builder.noScenes,
+                    messages.builder.sceneCreateDescription,
+                  )
+            }
           </div>
-        </article>
-        <article class="${cardClasses.bordered}">
-          <div class="card-body gap-2">
-            <h2 class="card-title text-base text-secondary">${escapeHtml(messages.builder.modePrimer3dTitle)}</h2>
-            <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.scene3dHelp)}</p>
-          </div>
-        </article>
-        <article class="${cardClasses.bordered}">
-          <div class="card-body gap-2">
-            <h2 class="card-title text-base text-accent">${escapeHtml(messages.builder.modePrimerUsdTitle)}</h2>
-            <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.modePrimerUsdDescription)}</p>
-          </div>
-        </article>
-      </section>
-      ${
-        creatorAssist
-          ? `<section id="creator-ai-actions" class="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-              <article class="${cardClasses.bordered}">
-                <div class="card-body gap-4">
-                  <div class="space-y-2">
-                    <h2 class="card-title">${escapeHtml(messages.builder.creatorAssistTitle)}</h2>
-                    <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.creatorAssistDescription)}</p>
-                  </div>
-                  <div class="grid gap-3 md:grid-cols-2">
-                    ${creatorAssist.actions
-                      .map(
-                        (action) => `<a class="rounded-box border border-base-300 bg-base-200/55 p-4 transition hover:border-primary/50 hover:bg-base-200" href="${escapeHtml(action.href)}">
-                          <div class="font-medium">${escapeHtml(action.label)}</div>
-                          <p class="mt-2 text-sm leading-6 text-base-content/70">${escapeHtml(action.description)}</p>
-                        </a>`,
-                      )
-                      .join("")}
-                  </div>
+          <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
+            <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.addScene)}</summary>
+            <div class="collapse-content pt-2">
+              <form
+                class="space-y-4"
+                hx-post="${escapeHtml(createAction)}"
+                hx-target="#builder-content"
+                hx-swap="innerHTML"
+                hx-indicator="#scene-create-spinner"
+                hx-disabled-elt="button, input, select, textarea"
+              >
+                <div class="rounded-box border border-base-300 bg-base-200/50 p-3 text-sm leading-6 text-base-content/72">
+                  ${escapeHtml(messages.builder.sceneCreationHelp)}
                 </div>
-              </article>
-              <article class="${cardClasses.bordered}">
-                <div class="card-body gap-3">
-                  <h2 class="card-title">${escapeHtml(messages.builder.modePrimerTitle)}</h2>
-                  <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.modePrimerDescription)}</p>
-                  <div class="rounded-box border border-base-300 bg-base-200/55 p-3 text-sm leading-6 text-base-content/72">
-                    ${escapeHtml(messages.builder.modePrimerUsdDescription)}
+                ${renderBuilderHiddenFields(projectId, locale)}
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneTitle)}</legend>
+                  <input name="displayTitle" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.sceneCreateTitlePlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.sceneTitle)}" />
+                </fieldset>
+                <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
+                  <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
+                  <div class="collapse-content pt-2">
+                    <fieldset class="fieldset">
+                      <legend class="fieldset-legend">${escapeHtml(messages.builder.stableIdLabel)}</legend>
+                      <input name="id" type="text" class="input w-full builder-mono" placeholder="${escapeHtml(messages.builder.sceneIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.stableIdLabel)}" />
+                    </fieldset>
                   </div>
+                </details>
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneBackgroundLabel)}</legend>
+                  <input name="background" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.sceneBackgroundPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.sceneBackgroundLabel)}" />
+                </fieldset>
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneModeLabel)}</legend>
+                  <select name="sceneMode" class="select w-full" aria-label="${escapeHtml(messages.builder.sceneModeLabel)}">
+                    <option value="2d">${escapeHtml(messages.builder.sceneMode2d)}</option>
+                    <option value="3d">${escapeHtml(messages.builder.sceneMode3d)}</option>
+                  </select>
+                </fieldset>
+                <input type="hidden" name="geometryWidth" value="${DEFAULT_SCENE_GEOMETRY_WIDTH}" />
+                <input type="hidden" name="geometryHeight" value="${DEFAULT_SCENE_GEOMETRY_HEIGHT}" />
+                <input type="hidden" name="spawnX" value="${DEFAULT_SCENE_SPAWN_X}" />
+                <input type="hidden" name="spawnY" value="${DEFAULT_SCENE_SPAWN_Y}" />
+                <div class="flex items-center gap-2">
+                  <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.addScene)}">${escapeHtml(messages.builder.addScene)}</button>
+                  <span id="scene-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
                 </div>
-              </article>
-            </section>`
-          : ""
-      }
-      <section class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-      <div class="space-y-4">
-        <article class="${cardClasses.bordered}">
-          <form
-            class="card-body gap-4"
-            hx-post="${escapeHtml(createAction)}"
-            hx-target="#builder-content"
-            hx-swap="innerHTML"
-            hx-indicator="#scene-create-spinner"
-            hx-disabled-elt="button, input, select, textarea"
-          >
-            <div class="space-y-1">
-              <h1 class="card-title text-2xl">${escapeHtml(messages.builder.sceneLibraryTitle)}</h1>
-              <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.sceneCreateDescription)}</p>
+              </form>
             </div>
-            <div class="rounded-box border border-base-300 bg-base-200/50 p-3 text-sm leading-6 text-base-content/72">
-              ${escapeHtml(messages.builder.sceneCreationHelp)}
-            </div>
-            ${renderBuilderHiddenFields(projectId, locale)}
-            <fieldset class="fieldset">
-              <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneId)}</legend>
-            <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.sceneIdPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.sceneId)}" />
-            </fieldset>
-            <fieldset class="fieldset">
-              <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneTitle)}</legend>
-              <input name="titleKey" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.sceneCreateTitlePlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.sceneTitle)}" />
-            </fieldset>
-            <fieldset class="fieldset">
-              <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneBackgroundLabel)}</legend>
-              <input name="background" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.sceneBackgroundPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.sceneBackgroundLabel)}" />
-            </fieldset>
-            <fieldset class="fieldset">
-              <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneModeLabel)}</legend>
-              <select name="sceneMode" class="select w-full" aria-label="${escapeHtml(messages.builder.sceneModeLabel)}">
-                <option value="2d">${escapeHtml(messages.builder.sceneMode2d)}</option>
-                <option value="3d">${escapeHtml(messages.builder.sceneMode3d)}</option>
-              </select>
-            </fieldset>
-            <input type="hidden" name="geometryWidth" value="${DEFAULT_SCENE_GEOMETRY_WIDTH}" />
-            <input type="hidden" name="geometryHeight" value="${DEFAULT_SCENE_GEOMETRY_HEIGHT}" />
-            <input type="hidden" name="spawnX" value="${DEFAULT_SCENE_SPAWN_X}" />
-            <input type="hidden" name="spawnY" value="${DEFAULT_SCENE_SPAWN_Y}" />
-            <div class="flex items-center gap-2">
-              <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.addScene)}">${escapeHtml(messages.builder.addScene)}</button>
-              <span id="scene-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
-            </div>
-          </form>
-        </article>
-
-        ${
-          sceneCards.length > 0
-            ? `<div class="grid gap-4">${sceneCards}</div>`
-            : renderEmptyStateCompact(
-                messages.builder.noScenes,
-                messages.builder.sceneCreateDescription,
-              )
-        }
-      </div>
-
-      <div id="scene-detail" class="space-y-4" aria-live="polite" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
-        ${
-          selectedScene
-            ? renderSceneDetail(messages, selectedScene, locale, projectId)
-            : renderEmptyStateCompact(
-                messages.builder.noScenes,
-                messages.builder.sceneCreateDescription,
-              )
-        }
-      </div>
-    </section>
+          </details>`,
+        mainBody: `<div id="scene-detail" class="space-y-4" aria-live="polite" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
+          ${
+            activeScene
+              ? renderSceneDetail(messages, activeScene, locale, projectId)
+              : renderEmptyStateCompact(
+                  messages.builder.noScenes,
+                  messages.builder.sceneCreateDescription,
+                )
+          }
+        </div>`,
+        sideSections: [
+          ...(activeScene
+            ? [
+                {
+                  title: messages.builder.scenePreviewTitle,
+                  description: messages.builder.runtimePreviewTitle,
+                  body: `${renderScenePreview(activeScene, locale, messages.builder.spawnPoint)}
+                    <div class="flex flex-wrap gap-2">
+                      ${renderSceneModeBadge(messages, activeScene.sceneMode)}
+                      <span class="badge badge-outline">${activeScene.geometry.width}×${activeScene.geometry.height}</span>
+                      <span class="badge badge-soft">${activeScene.npcs.length} ${escapeHtml(messages.builder.npcs)}</span>
+                    </div>`,
+                },
+              ]
+            : []),
+          {
+            title: messages.builder.modePrimerTitle,
+            description: messages.builder.modePrimerDescription,
+            body: `<div class="space-y-3 text-sm leading-6 text-base-content/72">
+              <div class="rounded-box border border-base-300 bg-base-200/55 p-3">
+                <div class="font-medium text-primary">${escapeHtml(messages.builder.modePrimer2dTitle)}</div>
+                <p class="mt-1">${escapeHtml(messages.builder.scene2dHelp)}</p>
+              </div>
+              <div class="rounded-box border border-base-300 bg-base-200/55 p-3">
+                <div class="font-medium text-secondary">${escapeHtml(messages.builder.modePrimer3dTitle)}</div>
+                <p class="mt-1">${escapeHtml(messages.builder.scene3dHelp)}</p>
+              </div>
+              <div class="rounded-box border border-base-300 bg-base-200/55 p-3">
+                <div class="font-medium text-accent">${escapeHtml(messages.builder.modePrimerUsdTitle)}</div>
+                <p class="mt-1">${escapeHtml(messages.builder.modePrimerUsdDescription)}</p>
+              </div>
+            </div>`,
+          },
+          ...(creatorAssist
+            ? [
+                {
+                  title: messages.builder.creatorAssistTitle,
+                  description: messages.builder.creatorAssistDescription,
+                  body: renderCreatorAssistPanel(messages, locale, projectId, creatorAssist),
+                },
+              ]
+            : []),
+        ],
+      })}
     </section>`;
 };
 
@@ -591,14 +686,15 @@ export const renderSceneDetail = (
     messages.builder.selectNode,
   );
   const scenePayload = escapeHtml(JSON.stringify({ scene }));
+  const sceneTitle = resolveSceneTitle(locale, scene);
 
   return `
     <div class="${cardClasses.bordered}">
       <div class="card-body gap-4">
         <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h2 class="card-title text-2xl">${escapeHtml(messages.builder.editScene)}: ${escapeHtml(scene.id)}</h2>
-            <p class="text-sm text-base-content/70">${escapeHtml(scene.titleKey)}</p>
+            <h2 class="card-title text-2xl">${escapeHtml(sceneTitle)}</h2>
+            <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.editScene)} · ${escapeHtml(scene.id)}</p>
           </div>
           <div class="flex flex-wrap gap-2">
             ${renderSceneModeBadge(messages, scene.sceneMode)}
@@ -614,7 +710,7 @@ export const renderSceneDetail = (
 
         <section class="space-y-2">
           <h3 class="card-title text-base">${escapeHtml(messages.builder.scenePreviewTitle)}</h3>
-          ${renderScenePreview(scene, messages.builder.spawnPoint)}
+          ${renderScenePreview(scene, locale, messages.builder.spawnPoint)}
         </section>
 
         <section class="grid gap-4 xl:grid-cols-[0.28fr_0.44fr_0.28fr]">
@@ -726,8 +822,23 @@ export const renderSceneDetail = (
           <div class="space-y-4">
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneTitle)}</legend>
-              <input id="scene-title-key" name="titleKey" type="text" class="input w-full" value="${escapeHtml(scene.titleKey)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.sceneTitle)}" />
+              <input id="scene-display-title" name="displayTitle" type="text" class="input w-full" value="${escapeHtml(sceneTitle)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.sceneTitle)}" />
             </fieldset>
+
+            <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
+              <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
+              <div class="collapse-content pt-2">
+                <input type="hidden" name="titleKey" value="${escapeHtml(scene.titleKey)}" />
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">${escapeHtml(messages.builder.stableIdLabel)}</legend>
+                  <input id="scene-stable-id" type="text" class="input w-full builder-mono" value="${escapeHtml(scene.id)}" readonly aria-label="${escapeHtml(messages.builder.stableIdLabel)}" />
+                </fieldset>
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">${escapeHtml(messages.builder.configKeyLabel)}</legend>
+                  <input id="scene-title-key" type="text" class="input w-full builder-mono" value="${escapeHtml(scene.titleKey)}" readonly aria-label="${escapeHtml(messages.builder.configKeyLabel)}" />
+                </fieldset>
+              </div>
+            </details>
 
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneBackgroundLabel)}</legend>
@@ -845,10 +956,10 @@ export const renderSceneDetail = (
                       const col = i % gridCols;
                       const tileValue = layer.data[row]?.[col] ?? -1;
                       const bgClass = tileValue >= 0 ? "bg-primary/30" : "bg-base-300/30";
-                      return `<div class="${bgClass} rounded-sm min-h-4 cursor-crosshair select-none" data-tile-row="${row}" data-tile-col="${col}" data-tile-value="${tileValue}" role="button" tabindex="0" aria-label="Tile ${row},${col}"></div>`;
+                      return `<div class="${bgClass} rounded-sm min-h-4 cursor-crosshair select-none" data-tile-row="${row}" data-tile-col="${col}" data-tile-value="${tileValue}" role="button" tabindex="0" aria-label="${escapeHtml(messages.builder.tileCellLabel)} ${row + 1}, ${col + 1}"></div>`;
                     }).join("");
                     return `<div data-scene-tab-panel="tilemap" class="hidden space-y-4" data-tilemap-assets="${assetsPayload}" data-tilemap-layer="${layerPayload}" data-tilemap-cols="${gridCols}" data-tilemap-rows="${gridRows}" data-tilemap-form-action="${escapeHtml(formAction)}">
-                   <div class="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Tilemap tools">
+                   <div class="flex flex-wrap items-center gap-2" role="toolbar" aria-label="${escapeHtml(messages.builder.tilemapToolsLabel)}">
                      <button type="button" class="badge badge-soft badge-lg cursor-pointer hover:badge-primary" data-tilemap-mode="brush" aria-pressed="true" aria-label="${escapeHtml(messages.builder.tilemapBrushLabel)}">${escapeHtml(messages.builder.tilemapBrushLabel)}</button>
                      <button type="button" class="badge badge-soft badge-lg cursor-pointer hover:badge-primary" data-tilemap-mode="fill" aria-pressed="false" aria-label="${escapeHtml(messages.builder.tilemapFillLabel)}">${escapeHtml(messages.builder.tilemapFillLabel)}</button>
                    </div>
@@ -857,8 +968,8 @@ export const renderSceneDetail = (
                      <input type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.tilemapTileSetLabel)}" data-tilemap-tileset value="${escapeHtml(layer.tileSetAssetId)}" />
                    </fieldset>
                    <div class="rounded-box border border-base-300 bg-base-200/50 p-2" data-tilemap-palette-container>
-                     <p class="text-xs text-base-content/60 mb-2">${escapeHtml(messages.builder.tilemapTileSetLabel)} palette</p>
-                     <div class="flex flex-wrap gap-1 min-h-12 max-h-24 overflow-auto" data-tilemap-palette aria-label="Tile palette"></div>
+                     <p class="text-xs text-base-content/60 mb-2">${escapeHtml(messages.builder.tilePaletteLabel)}</p>
+                     <div class="flex flex-wrap gap-1 min-h-12 max-h-24 overflow-auto" data-tilemap-palette aria-label="${escapeHtml(messages.builder.tilePaletteLabel)}"></div>
                    </div>
                    <div class="aspect-video overflow-hidden rounded-box border border-base-300 bg-base-200/50 grid grid-cols-12 grid-rows-8 gap-px p-2 min-h-32" data-tilemap-grid aria-label="${escapeHtml(messages.builder.tilemapTabLabel)}">
                      ${gridCells}
@@ -867,7 +978,7 @@ export const renderSceneDetail = (
                      ${renderBuilderHiddenFields(projectId, locale)}
                      <input type="hidden" name="tilemap" data-tilemap-json value="" />
                    </form>
-                   <p class="text-sm text-base-content/60">${escapeHtml(messages.builder.tilemapTileSetLabel)}: ${escapeHtml(messages.builder.assetIdPlaceholder)}. Brush: drag to paint. Fill: click to flood-fill.</p>
+                   <p class="text-sm text-base-content/60">${escapeHtml(messages.builder.tilemapInstructions)}</p>
                  </div>`;
                   }
                 )()

@@ -68,6 +68,7 @@ export const builderProjectSceneRowSelect = {
   projectId: true,
   id: true,
   sceneMode: true,
+  displayTitle: true,
   titleKey: true,
   background: true,
   geometryWidth: true,
@@ -81,6 +82,7 @@ export const builderProjectSceneRowSelect = {
       ordinal: true,
       x: true,
       y: true,
+      displayName: true,
       labelKey: true,
       interactRadius: true,
       wanderRadius: true,
@@ -162,6 +164,7 @@ export const builderProjectSceneNpcRowSelect = {
   ordinal: true,
   x: true,
   y: true,
+  displayName: true,
   labelKey: true,
   interactRadius: true,
   wanderRadius: true,
@@ -837,6 +840,7 @@ const toSceneCreateManyInput = (
     projectId,
     id: scene.id,
     sceneMode: scene.sceneMode,
+    displayTitle: scene.displayTitle,
     titleKey: scene.titleKey,
     background: scene.background,
     geometryWidth: scene.geometry.width,
@@ -874,6 +878,7 @@ const toSceneNpcCreateManyInput = (
       ordinal,
       x: npc.x,
       y: npc.y,
+      displayName: npc.displayName,
       labelKey: npc.labelKey,
       interactRadius: npc.interactRadius,
       wanderRadius: npc.ai.wanderRadius,
@@ -1401,6 +1406,7 @@ const withBuilderCoreExtensions = (base: PrismaClient) =>
             readonly artifacts: readonly GenerationArtifact[];
             readonly automationRuns: readonly AutomationRun[];
           },
+          source?: string,
         ): Promise<BuilderProjectRow> {
           return base.$transaction(async (tx) => {
             const actor = (createdBy ?? "").trim() || "system";
@@ -1411,6 +1417,7 @@ const withBuilderCoreExtensions = (base: PrismaClient) =>
                 checksum,
                 createdBy: actor,
                 updatedBy: actor,
+                source: source?.trim() || "builder",
               },
               select: builderProjectRowSelect,
             });

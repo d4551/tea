@@ -16,8 +16,8 @@ test("home page has no critical or serious accessibility violations", async ({ p
 });
 
 test("game page has no critical or serious accessibility violations", async ({ page }) => {
-  await page.goto("/game?lang=en-US");
-  await expect(page).toHaveURL(/\/game/);
+  await page.goto("/projects/default/playtest?lang=en-US");
+  await expect(page).toHaveURL(/\/projects\/default\/playtest/);
 
   await page.waitForSelector("#game-canvas-wrapper", { timeout: 15_000 });
   await page.waitForTimeout(500);
@@ -34,8 +34,8 @@ test("game page has no critical or serious accessibility violations", async ({ p
 });
 
 test("builder dashboard has no critical or serious accessibility violations", async ({ page }) => {
-  await page.goto("/builder?lang=en-US&projectId=default");
-  await expect(page).toHaveURL(/\/builder/);
+  await page.goto("/projects/default/start?lang=en-US");
+  await expect(page).toHaveURL(/\/projects\/default\/start/);
 
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
@@ -50,8 +50,8 @@ test("builder dashboard has no critical or serious accessibility violations", as
 test("builder scenes page has no critical or serious accessibility violations", async ({
   page,
 }) => {
-  await page.goto("/builder/scenes?lang=en-US&projectId=default");
-  await expect(page).toHaveURL(/\/builder\/scenes/);
+  await page.goto("/projects/default/world?lang=en-US");
+  await expect(page).toHaveURL(/\/projects\/default\/world/);
 
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
@@ -66,8 +66,8 @@ test("builder scenes page has no critical or serious accessibility violations", 
 test("game page Key Bindings modal has no critical or serious accessibility violations", async ({
   page,
 }) => {
-  await page.goto("/game?lang=en-US");
-  await expect(page).toHaveURL(/\/game/);
+  await page.goto("/projects/default/playtest?lang=en-US");
+  await expect(page).toHaveURL(/\/projects\/default\/playtest/);
 
   await page.waitForSelector("#game-canvas-wrapper", { timeout: 15_000 });
   await page.waitForTimeout(500);

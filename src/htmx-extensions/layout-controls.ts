@@ -29,6 +29,7 @@ interface DrawerToggleControl extends HTMLElement {
 
 const drawerToggleSelector = "[data-drawer-toggle-target]";
 const themeStorageKey = "app-theme-preference";
+const supportedThemes = ["tea-dark", "tea-light"] as const;
 
 const resolveFocusTarget = (root: ParentNode): HTMLElement | null => {
   const panelTarget =
@@ -89,7 +90,8 @@ const resolveDrawerSideTransform = (isEndDrawer: boolean): string =>
 
 const syncDrawerVisualState = (targetId: string): void => {
   const checkbox = resolveDrawerToggle(targetId);
-  if (!checkbox || !checkbox.closest(".drawer-end")) {
+  const drawerHost = checkbox?.closest(".drawer");
+  if (!checkbox || !drawerHost) {
     return;
   }
 
@@ -99,7 +101,7 @@ const syncDrawerVisualState = (targetId: string): void => {
   }
 
   const isOpen = checkbox.checked;
-  const isEndDrawer = checkbox.closest(".drawer-end")?.classList.contains("drawer-end") ?? false;
+  const isEndDrawer = drawerHost.classList.contains("drawer-end");
   const closedTranslate = resolveDrawerSideTransform(isEndDrawer);
 
   for (const side of sidePanels) {
@@ -185,6 +187,18 @@ const normalizeTheme = (value: string): string | null => {
   return teaThemeByLegacyTheme[normalized] ?? normalized;
 };
 
+const isSupportedTheme = (theme: string): theme is (typeof supportedThemes)[number] =>
+  supportedThemes.includes(theme as (typeof supportedThemes)[number]);
+
+const applyDocumentTheme = (theme: string): void => {
+  const normalized = normalizeTheme(theme);
+  if (normalized === null || !isSupportedTheme(normalized)) {
+    return;
+  }
+
+  document.documentElement.setAttribute("data-theme", normalized);
+};
+
 const findThemeRadio = (theme: string): HTMLInputElement | null => {
   const escapedTheme = CSS.escape(theme);
   return document.querySelector<HTMLInputElement>(
@@ -197,11 +211,12 @@ const applyThemeFromStorage = (theme: string): void => {
   if (nextTheme === null) {
     return;
   }
-  if (!["tea-dark", "tea-light"].includes(nextTheme)) {
+  if (!isSupportedTheme(nextTheme)) {
     logger.warn("layout.theme.storage.unknown_theme", { theme });
     return;
   }
 
+  applyDocumentTheme(nextTheme);
   const radio = findThemeRadio(nextTheme);
   if (!radio) {
     logger.warn("layout.theme.radio.missing", { theme: nextTheme });
@@ -250,16 +265,38 @@ const persistThemeSelection = (event: Event): void => {
     return;
   }
 
-  if (!["tea-dark", "tea-light"].includes(normalized)) {
+  if (!isSupportedTheme(normalized)) {
     return;
   }
 
+  applyDocumentTheme(normalized);
   const result = writeLocalStorageResult(themeStorageKey, normalized);
   if (!result.ok) {
     logger.warn("layout.theme.storage.write_failed", {
       key: themeStorageKey,
       theme,
     });
+  }
+};
+
+const normalizeDocumentTheme = (): void => {
+  const currentTheme = parseThemeValue(document.documentElement.getAttribute("data-theme"));
+  if (!currentTheme) {
+    return;
+  }
+
+  const normalized = normalizeTheme(currentTheme);
+  if (!normalized || !isSupportedTheme(normalized)) {
+    return;
+  }
+
+  if (document.documentElement.getAttribute("data-theme") !== normalized) {
+    document.documentElement.setAttribute("data-theme", normalized);
+  }
+
+  const radio = findThemeRadio(normalized);
+  if (radio && !radio.checked) {
+    radio.checked = true;
   }
 };
 
@@ -465,11 +502,13 @@ wireHtmxLifecycle();
 
 document.addEventListener("DOMContentLoaded", () => {
   syncAllDrawerControls();
+  normalizeDocumentTheme();
   restoreThemeSelection();
   applyFormDefaults(document);
 });
 
 document.addEventListener("htmx:afterSwap", () => {
   syncAllDrawerControls();
+  normalizeDocumentTheme();
   restoreThemeSelection();
 });

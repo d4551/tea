@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
+  paginateWorkspaceItems,
+  renderWorkspaceBrowseControls,
+} from "../src/views/builder/workspace-shell.ts";
+import {
   type NavigationGroup,
   renderActionDropdown,
   renderCollapsibleSidebarMenu,
@@ -15,7 +19,7 @@ describe("shared navigation renderers", () => {
           {
             key: "dashboard",
             label: "Dashboard",
-            href: "/builder?lang=en-US&projectId=test",
+            href: "/projects/test/start?lang=en-US",
             active: true,
             icon: "<svg></svg>",
             htmx: {
@@ -32,7 +36,7 @@ describe("shared navigation renderers", () => {
           {
             key: "play",
             label: "Play",
-            href: "/game?lang=en-US&projectId=test",
+            href: "/projects/test/playtest?lang=en-US",
             icon: "<svg></svg>",
           },
         ],
@@ -56,8 +60,18 @@ describe("shared navigation renderers", () => {
   test("renders secondary navigation with horizontal overflow wrapper", () => {
     const html = renderSecondaryNav(
       [
-        { key: "status", label: "Status", href: "/builder/ai?lang=en-US&projectId=test" },
-        { key: "tools", label: "Tools", href: "/builder/ai/tools?lang=en-US&projectId=test" },
+        {
+          key: "status",
+          label: "Status",
+          href: "/projects/test/settings?lang=en-US",
+          htmx: {
+            get: "/projects/test/settings?lang=en-US",
+            target: "#main-content",
+            swap: "innerHTML",
+            pushUrl: true,
+          },
+        },
+        { key: "tools", label: "Tools", href: "/projects/test/settings/tools?lang=en-US" },
       ],
       "status",
       "AI tabs",
@@ -69,6 +83,10 @@ describe("shared navigation renderers", () => {
     expect(html).toContain('aria-label="AI tabs"');
     expect(html).toContain('aria-selected="true"');
     expect(html).toContain("tab-active");
+    expect(html).toContain('hx-get="/projects/test/settings?lang=en-US"');
+    expect(html).toContain('hx-target="#main-content"');
+    expect(html).toContain('hx-swap="innerHTML"');
+    expect(html).toContain('hx-push-url="true"');
   });
 
   test("renders action dropdown entries without placeholder hrefs", () => {
@@ -91,5 +109,46 @@ describe("shared navigation renderers", () => {
     expect(html).toContain('href="/public/assets/item.png"');
     expect(html).toContain('target="_blank"');
     expect(html).not.toContain('href="#"');
+  });
+
+  test("renders server-driven browse controls with pagination state", () => {
+    const html = renderWorkspaceBrowseControls({
+      action: "/projects/test/world?lang=en-US",
+      search: "tea",
+      searchLabel: "Filter scenes",
+      searchPlaceholder: "Search scenes",
+      submitLabel: "Filter results",
+      resultsLabel: "Results",
+      previousLabel: "Previous",
+      nextLabel: "Next",
+      pageLabel: "Page",
+      page: 2,
+      totalPages: 3,
+      totalItems: 14,
+      startIndex: 7,
+      endIndex: 12,
+      hiddenFields: { lang: "en-US", projectId: "test", sceneId: "tea-house" },
+      htmxTarget: "#builder-content",
+      previousHref: "/projects/test/world?lang=en-US&page=1",
+      nextHref: "/projects/test/world?lang=en-US&page=3",
+    });
+
+    expect(html).toContain('hx-get="/projects/test/world?lang=en-US"');
+    expect(html).toContain('hx-target="#builder-content"');
+    expect(html).toContain('name="search"');
+    expect(html).toContain('name="page" value="1"');
+    expect(html).toContain('name="sceneId" value="tea-house"');
+    expect(html).toContain("Results: 7-12 / 14");
+    expect(html).toContain("Page 2 / 3");
+  });
+
+  test("paginates workspace items with clamped page metadata", () => {
+    const paginated = paginateWorkspaceItems(["a", "b", "c", "d", "e"], 99, 2);
+
+    expect(paginated.items).toEqual(["e"]);
+    expect(paginated.page).toBe(3);
+    expect(paginated.totalPages).toBe(3);
+    expect(paginated.startIndex).toBe(5);
+    expect(paginated.endIndex).toBe(5);
   });
 });

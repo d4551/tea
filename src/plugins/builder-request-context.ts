@@ -75,9 +75,9 @@ const resolveBuilderProjectId = (
   paramSource: ContextSource,
 ): string => {
   const candidate =
+    readStringField(paramSource, "projectId") ??
     readStringField(bodySource, "projectId") ??
     readStringField(querySource, "projectId") ??
-    readStringField(paramSource, "projectId") ??
     "";
   const normalized = candidate.trim();
   return normalized.length > 0 ? normalized : defaultBuilderProjectId;
@@ -180,9 +180,9 @@ export const mergeBuilderRequestContext = (
         ? resolveBuilderLocale(undefined, querySource, bodySource)
         : base.builderLocale,
     builderProjectId:
-      (readStringField(bodySource, "projectId") ??
-      readStringField(querySource, "projectId") ??
-      readStringField(paramSource, "projectId"))
+      (readStringField(paramSource, "projectId") ??
+      readStringField(bodySource, "projectId") ??
+      readStringField(querySource, "projectId"))
         ? resolveBuilderProjectId(querySource, bodySource, paramSource)
         : base.builderProjectId,
     builderCurrentPath:

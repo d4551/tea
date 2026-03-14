@@ -205,9 +205,7 @@ export const evaluateBuilderPlatformReadiness = (
     input.aiFeatures.speechSynthesis ||
     audit.generationJobCount > 0;
   const has3dRuntimeSurface =
-    audit.scenes3dCount > 0 ||
-    audit.modelAssetCount > 0 ||
-    audit.openUsdAssetCount > 0;
+    audit.scenes3dCount > 0 || audit.modelAssetCount > 0 || audit.openUsdAssetCount > 0;
   const hasSpritePipelineSurface =
     input.spriteManifestCount > 0 || audit.assetCount > 0 || audit.scenes2dCount > 0;
   const hasAnimationSurface =

@@ -5,7 +5,8 @@ import type {
   BuilderCapabilityStatus,
   BuilderPlatformReadiness,
 } from "../../domain/builder/platform-readiness.ts";
-import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
+import { appRoutes, withLocaleQuery, withQueryParameters } from "../../shared/constants/routes.ts";
+import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 import { cardClasses } from "../shared/ui-components.ts";
@@ -57,7 +58,7 @@ const capabilityCopy = (
       return {
         title: messages.builder.capabilityReleaseFlowTitle,
         description: messages.builder.capabilityReleaseFlowDescription,
-        href: appRoutes.builder,
+        href: appRoutes.builderStart,
       };
     case "runtime2d":
       return {
@@ -105,7 +106,7 @@ const capabilityCopy = (
       return {
         title: messages.builder.capabilityWebgpuRendererTitle,
         description: messages.builder.capabilityWebgpuRendererDescription,
-        href: appRoutes.builder,
+        href: appRoutes.builderStart,
       };
     case "aiOnnxGpu":
       return {
@@ -123,7 +124,9 @@ const renderCapabilityCard = (
   capability: BuilderCapabilityReadiness,
 ): string => {
   const copy = capabilityCopy(messages, capability.key);
-  const href = withQueryParameters(copy.href, { lang: locale, projectId });
+  const href = copy.href.includes(":projectId")
+    ? withQueryParameters(interpolateRoutePath(copy.href, { projectId }), { lang: locale })
+    : withLocaleQuery(copy.href, locale);
   const statusText = statusLabel(messages, capability.status);
   return `<article class="${cardClasses.bordered}" role="listitem" aria-label="${escapeHtml(copy.title)} — ${escapeHtml(statusText)}">
     <div class="card-body gap-3">

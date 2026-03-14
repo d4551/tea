@@ -3,6 +3,7 @@ import { GAME_SESSION_ROUTE_PATTERNS, interpolateRoutePath } from "./route-patte
 
 type AppRouteMap = {
   readonly home: string;
+  readonly builderStart: string;
   readonly game: string;
   readonly gameAssets: string;
   readonly gameApiSession: string;
@@ -110,7 +111,8 @@ type AppRouteMap = {
  */
 export const appRoutes: AppRouteMap = {
   home: "/",
-  game: appConfig.playableGame.mountPath,
+  builderStart: "/projects/:projectId/start",
+  game: "/projects/:projectId/playtest",
   gameAssets: appConfig.playableGame.assetPrefix,
   gameApiSession: "/api/game/session",
   gameApiSessionRestore: GAME_SESSION_ROUTE_PATTERNS.restore,
@@ -160,14 +162,14 @@ export const appRoutes: AppRouteMap = {
   aiBuilderPatchPreviewForm: "/api/builder/ai/patch/preview/form",
   aiBuilderPatchApplyForm: "/api/builder/ai/patch/apply/form",
   builderPlatformReadiness: "/api/builder/platform-readiness",
-  builder: "/builder",
-  builderScenes: "/builder/scenes",
-  builderNpcs: "/builder/npcs",
-  builderDialogue: "/builder/dialogue",
-  builderAssets: "/builder/assets",
-  builderMechanics: "/builder/mechanics",
-  builderAutomation: "/builder/automation",
-  builderAi: "/builder/ai",
+  builder: "/projects/new",
+  builderScenes: "/projects/:projectId/world",
+  builderNpcs: "/projects/:projectId/characters",
+  builderDialogue: "/projects/:projectId/story",
+  builderAssets: "/projects/:projectId/assets",
+  builderMechanics: "/projects/:projectId/systems",
+  builderAutomation: "/projects/:projectId/operations",
+  builderAi: "/projects/:projectId/settings",
   builderApiProjects: "/api/builder/projects",
   builderApiProjectDetail: "/api/builder/projects/:projectId",
   builderApiProjectPublish: "/api/builder/projects/:projectId/publish",
@@ -259,9 +261,20 @@ export const withQueryParameters = (
   const queryIndex = pathPartRaw.indexOf("?");
   const pathname = queryIndex === -1 ? pathPartRaw : pathPartRaw.slice(0, queryIndex);
   const queryString = queryIndex === -1 ? "" : pathPartRaw.slice(queryIndex + 1);
+  const routeParams: Record<string, string> = {};
+  for (const [key, value] of Object.entries(params)) {
+    if (typeof value === "string" && pathname.includes(`:${key}`)) {
+      routeParams[key] = value;
+    }
+  }
+  const interpolatedPathname = interpolateRoutePath(pathname, routeParams);
   const searchParams = new URLSearchParams(queryString);
 
   for (const [key, value] of Object.entries(params)) {
+    if (interpolatedPathname !== pathname && pathname.includes(`:${key}`)) {
+      continue;
+    }
+
     if (typeof value === "string" && value.length > 0) {
       searchParams.set(key, value);
       continue;
@@ -271,7 +284,8 @@ export const withQueryParameters = (
   }
 
   const serialized = searchParams.toString();
-  const nextPath = serialized.length > 0 ? `${pathname}?${serialized}` : pathname;
+  const nextPath =
+    serialized.length > 0 ? `${interpolatedPathname}?${serialized}` : interpolatedPathname;
   return hashPart.length > 0 ? `${nextPath}#${hashPart}` : nextPath;
 };
 

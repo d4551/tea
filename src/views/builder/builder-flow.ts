@@ -1,23 +1,28 @@
 import type { LocaleCode } from "../../config/environment.ts";
+import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
+import {
+  toCreatorCapabilities,
+  toWorkflowStageStatus,
+} from "../../domain/builder/creator-capability-adapter.ts";
+import type { BuilderPlatformReadiness } from "../../domain/builder/platform-readiness.ts";
 import type { AvailableAiFeatures } from "../../domain/game/ai/game-ai-service.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
-import type { Messages } from "../../shared/i18n/messages.ts";
 import type {
-  type AnimationAuthoringContext,
-  type AutomationReviewContext,
-  type BuilderWorkflowStage,
-  type CreatorAssistContext,
-  type CreatorCapabilities,
-  type ContextualAiAction,
-  type RuntimeDiagnosticsContext,
+  AnimationAuthoringContext,
+  AutomationReviewContext,
+  BuilderAssetKind,
+  BuilderWorkflowStage,
+  ContextualAiAction,
+  CreatorAssistContext,
+  CreatorCapabilities,
+  RuntimeDiagnosticsContext,
 } from "../../shared/contracts/game.ts";
-import { toCreatorCapabilities, toWorkflowStageStatus } from "../../domain/builder/creator-capability-adapter.ts";
-import type { BuilderPlatformReadiness } from "../../domain/builder/platform-readiness.ts";
+import type { Messages } from "../../shared/i18n/messages.ts";
 
 // Contract types are now defined in shared/contracts/game.ts.
 
 const withBuilderQuery = (path: string, locale: LocaleCode, projectId: string): string =>
-  withQueryParameters(path, { lang: locale, projectId });
+  withQueryParameters(interpolateRoutePath(path, { projectId }), { lang: locale });
 
 /**
  * Builds the shared creator workflow model for the builder landing page.
@@ -53,7 +58,9 @@ export const buildBuilderWorkflowStages = (
       id: "start",
       label: messages.builder.dashboard,
       description: messages.builder.workflowGuideDescription,
-      status: toWorkflowStageStatus(counts.scenes + counts.assets + counts.characters + counts.story),
+      status: toWorkflowStageStatus(
+        counts.scenes + counts.assets + counts.characters + counts.story,
+      ),
       completionLabel: messages.builder.creatorStageStartCompletion,
       completionRequirements: [messages.builder.creatorStageStartCompletion],
       nextAction: {
@@ -226,6 +233,7 @@ export const buildCreatorAssistContext = (
     readonly entityId: string;
     readonly title: string;
     readonly targetId?: string;
+    readonly assetKind?: BuilderAssetKind;
   },
 ): CreatorAssistContext => {
   const anchorHref = withBuilderQuery(
@@ -280,15 +288,64 @@ export const buildCreatorAssistContext = (
                 kind: "animation-plan",
               },
             ]
-          : [
-              {
-                key: "generate-dialogue-pass",
-                label: messages.builder.generateDialogue,
-                description: messages.builder.generateInteractionDescription,
-                href: withBuilderQuery(appRoutes.builderDialogue, locale, projectId),
-                kind: "dialogue",
-              },
-            ];
+          : input.entityType === "asset"
+            ? input.assetKind === "background"
+              ? [
+                  {
+                    key: "generate-background",
+                    label: messages.builder.generateBackground,
+                    description: messages.builder.generateBackgroundDescription,
+                    href: `${anchorHref}#creator-ai-actions`,
+                    kind: "background",
+                  },
+                ]
+              : input.assetKind === "sprite-sheet" ||
+                  input.assetKind === "tiles" ||
+                  input.assetKind === "tile-set"
+                ? [
+                    {
+                      key: "generate-tileset",
+                      label: messages.builder.generateTileset,
+                      description: messages.builder.generateTilesetDescription,
+                      href: `${anchorHref}#creator-ai-actions`,
+                      kind: "tiles",
+                    },
+                    {
+                      key: "generate-idle-animation",
+                      label: messages.builder.generateIdleAnimation,
+                      description: messages.builder.generateIdleAnimationDescription,
+                      href: `${anchorHref}#creator-ai-actions`,
+                      kind: "animation-plan",
+                    },
+                  ]
+                : input.assetKind === "audio"
+                  ? [
+                      {
+                        key: "generate-voice-line",
+                        label: messages.builder.generateVoiceLine,
+                        description: messages.builder.generateVoiceLineDescription,
+                        href: `${anchorHref}#creator-ai-actions`,
+                        kind: "voice-line",
+                      },
+                    ]
+                  : [
+                      {
+                        key: "generate-idle-animation",
+                        label: messages.builder.generateIdleAnimation,
+                        description: messages.builder.generateIdleAnimationDescription,
+                        href: `${anchorHref}#creator-ai-actions`,
+                        kind: "animation-plan",
+                      },
+                    ]
+            : [
+                {
+                  key: "generate-dialogue-pass",
+                  label: messages.builder.generateDialogue,
+                  description: messages.builder.generateInteractionDescription,
+                  href: withBuilderQuery(appRoutes.builderDialogue, locale, projectId),
+                  kind: "dialogue",
+                },
+              ];
 
   return {
     entityType: input.entityType,

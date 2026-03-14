@@ -1,6 +1,6 @@
 import { appConfig } from "../config/environment.ts";
 import { joinUrlPath } from "../shared/constants/assets.ts";
-import { appRoutes, withLocaleQuery, withQueryParameters } from "../shared/constants/routes.ts";
+import { appRoutes, withLocaleQuery } from "../shared/constants/routes.ts";
 import {
   escapeHtml,
   type LayoutContext,
@@ -44,12 +44,8 @@ const activityEmptyIcon =
 export const renderHomePage = (input: PageRenderInput): string => {
   const { layout } = input;
   const { locale, messages } = layout;
-  const teaHouseLaunchUrl = withQueryParameters(withLocaleQuery(appRoutes.game, locale), {
-    sceneId: "teaHouse",
-  });
-  const crystalCavernLaunchUrl = withQueryParameters(withLocaleQuery(appRoutes.game, locale), {
-    sceneId: "crystalCavern",
-  });
+  const teaHouseLaunchUrl = withLocaleQuery(appRoutes.builder, locale);
+  const crystalCavernLaunchUrl = withLocaleQuery(appRoutes.builder, locale);
 
   const sceneLauncher = renderCollapse({
     title: messages.pages.home.sceneLauncherTitle,

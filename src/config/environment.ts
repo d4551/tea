@@ -304,7 +304,7 @@ const DEFAULT_BUILDER_WORKER_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_BUILDER_AUTOMATION_PROBE_TIMEOUT_MS = 500;
 const DEFAULT_BUILDER_AUTOMATION_MAX_STEPS = 32;
 const DEFAULT_BUILDER_AUTOMATION_MAX_RUNTIME_MS = 120_000;
-const DEFAULT_BUILDER_AUTOMATION_ALLOWED_PATH_PREFIXES = "/api/builder,/builder,/api/game/session";
+const DEFAULT_BUILDER_AUTOMATION_ALLOWED_PATH_PREFIXES = "/api/builder,/projects,/api/game/session";
 const DEFAULT_BUILDER_AUTOMATION_SIGNING_SECRET = "local-dev-automation-secret";
 const DEFAULT_ALLOW_UNSAFE_AUTOMATION_ACTIONS = false;
 const DEFAULT_RPA_EXECUTION_KILL_SWITCH_ENABLED = false;
@@ -315,6 +315,13 @@ const DEFAULT_COMPLIANCE_EXPORT_DIRECTORY = "uploads/compliance-exports";
 const DEFAULT_PLAYABLE_GAME_MOUNT_PATH = defaultAppRouteRoots.game;
 const DEFAULT_PLAYABLE_GAME_SOURCE_DIRECTORY = "public/game";
 const DEFAULT_THEME = "tea-dark";
+const SUPPORTED_UI_THEMES = ["tea-dark", "tea-light"] as const;
+const LEGACY_UI_THEME_ALIASES = {
+  silk: "tea-light",
+  autumn: "tea-dark",
+  "forge-dark": "tea-dark",
+  "forge-light": "tea-light",
+} as const;
 const DEFAULT_MAX_CONTENT_WIDTH_CLASS = "max-w-6xl";
 const DEFAULT_SESSION_COOKIE_NAME = "lotfk_session";
 const DEFAULT_SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
@@ -627,6 +634,27 @@ export const normalizeLocale = (value: string | undefined): LocaleCode => {
 };
 
 /**
+ * Normalizes configured UI theme names and maps legacy aliases to supported
+ * DaisyUI v5 tea themes.
+ *
+ * @param value Raw configured theme value.
+ * @returns Supported application theme identifier.
+ */
+export const normalizeUiTheme = (value: string | undefined): string => {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) {
+    return DEFAULT_THEME;
+  }
+
+  const aliasedTheme =
+    LEGACY_UI_THEME_ALIASES[normalized as keyof typeof LEGACY_UI_THEME_ALIASES] ?? normalized;
+
+  return SUPPORTED_UI_THEMES.includes(aliasedTheme as (typeof SUPPORTED_UI_THEMES)[number])
+    ? aliasedTheme
+    : DEFAULT_THEME;
+};
+
+/**
  * Matches a locale-like input value to a supported locale code.
  *
  * @param value Raw locale string.
@@ -741,7 +769,7 @@ export const appConfig: AppConfig = {
     ),
   },
   ui: {
-    defaultTheme: Bun.env.APP_THEME ?? DEFAULT_THEME,
+    defaultTheme: normalizeUiTheme(Bun.env.APP_THEME),
     maxContentWidthClass: Bun.env.MAX_CONTENT_WIDTH_CLASS ?? DEFAULT_MAX_CONTENT_WIDTH_CLASS,
     socialLinks: {
       githubUrl: parseOptionalAbsoluteUrl(Bun.env.APP_GITHUB_URL, "APP_GITHUB_URL"),

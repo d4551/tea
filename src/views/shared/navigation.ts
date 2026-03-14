@@ -5,6 +5,7 @@ import {
   withLocaleQuery,
   withQueryParameters,
 } from "../../shared/constants/routes.ts";
+import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 
 const escapeHtml = (value: unknown): string =>
   String(value ?? "")
@@ -97,6 +98,7 @@ export interface SecondaryNavItem {
     readonly get?: string;
     readonly target?: string;
     readonly swap?: string;
+    readonly pushUrl?: boolean;
   };
 }
 
@@ -150,12 +152,24 @@ export const buildNavigationHref = (
     readonly includeProjectId?: boolean;
   },
 ): string => {
+  if (path.includes(":projectId")) {
+    if (!options?.projectId) {
+      return withLocaleQuery(appRoutes.builder, locale);
+    }
+
+    return withQueryParameters(interpolateRoutePath(path, { projectId: options.projectId }), {
+      lang: locale,
+    });
+  }
+
   const localizedHref = withLocaleQuery(path, locale);
   if (!options?.includeProjectId || !options.projectId) {
     return localizedHref;
   }
 
-  return withQueryParameters(localizedHref, { projectId: options.projectId });
+  return withQueryParameters(localizedHref, {
+    projectId: options.projectId,
+  });
 };
 
 /**
@@ -371,14 +385,16 @@ export const renderCollapsibleSidebarMenu = (
 ): string => {
   const sections = groups
     .map((group) => {
-      const titleHtml = `<li class="menu-title"><span class="is-drawer-close:hidden">${escapeHtml(group.title)}</span></li>`;
+      const titleHtml = `<li class="menu-title px-3 pt-4 pb-1 text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-base-content/55"><span>${escapeHtml(group.title)}</span></li>`;
       const items = group.items
         .map((item) => {
           const badgeHtml =
             item.badge !== undefined && item.badge > 0
-              ? `<span class="badge badge-neutral badge-xs is-drawer-close:hidden">${item.badge}</span>`
+              ? `<span class="badge badge-neutral badge-xs">${item.badge}</span>`
               : "";
-          const activeClass = item.active ? "menu-active font-semibold" : "";
+          const activeClass = item.active
+            ? "menu-active bg-primary text-primary-content font-semibold"
+            : "hover:bg-base-100 hover:text-base-content";
           const htmxAttrs = item.htmx
             ? [
                 `hx-get="${escapeHtml(item.href)}"`,
@@ -390,9 +406,9 @@ export const renderCollapsibleSidebarMenu = (
                 .join(" ")
             : "";
           return `<li>
-            <a href="${escapeHtml(item.href)}" class="is-drawer-close:tooltip is-drawer-close:tooltip-right ${activeClass}" data-tip="${escapeHtml(item.shortLabel ?? item.label)}"${item.active ? ' aria-current="page"' : ""} aria-label="${escapeHtml(item.label)}" ${htmxAttrs}>
+            <a href="${escapeHtml(item.href)}" class="gap-3 rounded-box px-3 py-3 text-sm transition-colors ${activeClass}"${item.active ? ' aria-current="page"' : ""} aria-label="${escapeHtml(item.label)}" ${htmxAttrs}>
               ${item.icon ?? ""}
-              <span class="is-drawer-close:hidden">${escapeHtml(item.label)}</span>
+              <span>${escapeHtml(item.label)}</span>
               ${badgeHtml}
             </a>
           </li>`;
@@ -403,11 +419,11 @@ export const renderCollapsibleSidebarMenu = (
     })
     .join("");
 
-  return `<aside class="${escapeHtml(options.className ?? "flex min-h-full flex-col items-start border-r border-base-300/70 bg-base-200/85 backdrop-blur is-drawer-close:w-14 is-drawer-open:w-72 is-drawer-close:overflow-visible")}" aria-label="${escapeHtml(options.ariaLabel)}">
-    ${options.brandHtml ? `<div class="w-full border-b border-base-300 px-3 py-4 is-drawer-close:p-2">${options.brandHtml}</div>` : ""}
-    ${options.mastheadHtml ? `<div class="w-full border-b border-base-300/70 px-3 py-3 is-drawer-close:p-2">${options.mastheadHtml}</div>` : ""}
-    <ul class="menu w-full grow gap-1 px-2">${sections}</ul>
-    ${options.footerHtml ? `<div class="w-full border-t border-base-300/70 p-3 is-drawer-close:p-2">${options.footerHtml}</div>` : ""}
+  return `<aside class="${escapeHtml(options.className ?? "flex min-h-full w-[20rem] max-w-[85vw] flex-col border-r border-base-300 bg-base-200 text-base-content shadow-2xl lg:w-72 lg:max-w-none")}" aria-label="${escapeHtml(options.ariaLabel)}">
+    ${options.brandHtml ? `<div class="w-full border-b border-base-300 px-4 py-4">${options.brandHtml}</div>` : ""}
+    ${options.mastheadHtml ? `<div class="w-full border-b border-base-300/70 px-4 py-4">${options.mastheadHtml}</div>` : ""}
+    <ul class="menu w-full grow gap-1 overflow-y-auto px-3 py-2">${sections}</ul>
+    ${options.footerHtml ? `<div class="w-full border-t border-base-300/70 p-4">${options.footerHtml}</div>` : ""}
   </aside>`;
 };
 
@@ -477,13 +493,14 @@ export const renderSecondaryNav = (
             item.htmx.get ? `hx-get="${escapeHtml(item.htmx.get)}"` : "",
             item.htmx.target ? `hx-target="${escapeHtml(item.htmx.target)}"` : "",
             item.htmx.swap ? `hx-swap="${escapeHtml(item.htmx.swap)}"` : "",
+            item.htmx.pushUrl === false ? "" : 'hx-push-url="true"',
           ]
             .filter(Boolean)
             .join(" ")
         : "";
 
-      if (item.href && !item.htmx?.get) {
-        return `<a href="${escapeHtml(item.href)}" role="tab" class="tab ${activeClass}" aria-selected="${ariaSelected}" aria-label="${escapeHtml(item.label)}">${content}</a>`;
+      if (item.href) {
+        return `<a href="${escapeHtml(item.href)}" role="tab" class="tab ${activeClass}" aria-selected="${ariaSelected}" aria-label="${escapeHtml(item.label)}" ${htmxAttrs}>${content}</a>`;
       }
 
       return `<button type="button" role="tab" class="tab ${activeClass}" aria-selected="${ariaSelected}" aria-label="${escapeHtml(item.label)}" ${htmxAttrs}>${content}</button>`;
@@ -520,7 +537,6 @@ export const buildPublicPrimaryNavigation = (
   },
   projectId?: string,
 ): readonly NavigationItem[] => {
-  const projectScopedRoutes = new Set([appRoutes.builder, appRoutes.game]);
   return [
     {
       key: "home",
@@ -532,20 +548,18 @@ export const buildPublicPrimaryNavigation = (
     {
       key: "builder",
       label: labels.builder,
-      href: buildNavigationHref(appRoutes.builder, locale, {
-        projectId,
-        includeProjectId: Boolean(projectId && projectScopedRoutes.has(appRoutes.builder)),
-      }),
+      href: projectId
+        ? withQueryParameters(appRoutes.builderStart, { lang: locale, projectId })
+        : withLocaleQuery(appRoutes.builder, locale),
       icon: icons.builder,
       active: activeRoute === "builder",
     },
     {
       key: "game",
       label: labels.game,
-      href: buildNavigationHref(appRoutes.game, locale, {
-        projectId,
-        includeProjectId: Boolean(projectId && projectScopedRoutes.has(appRoutes.game)),
-      }),
+      href: projectId
+        ? withQueryParameters(appRoutes.game, { lang: locale, projectId })
+        : withLocaleQuery(appRoutes.builder, locale),
       icon: icons.game,
       active: activeRoute === "game",
     },

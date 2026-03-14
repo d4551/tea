@@ -8,7 +8,8 @@ import {
   CREATOR_PLACEHOLDER_SVG_WIDTH,
 } from "../../shared/constants/builder-defaults.ts";
 import { httpStatus } from "../../shared/constants/http.ts";
-import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
+import { appRoutes } from "../../shared/constants/routes.ts";
+import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import type {
   AutomationAttachFileStepSpec,
   AutomationRun,
@@ -867,7 +868,7 @@ export const executeAutomationRun = async (
   );
 
   if (run.steps.some((step) => step.action === "browser")) {
-    const targetUrl = buildAutomationUrl(withQueryParameters(appRoutes.builder, { projectId }));
+    const targetUrl = buildAutomationUrl(interpolateRoutePath(appRoutes.builderStart, { projectId }));
     const originReachable = await probeAutomationOrigin(targetUrl);
     if (!originReachable) {
       return {

@@ -123,6 +123,40 @@ export const resolveScene = (sceneId: string): SceneDefinition | null => {
   return gameScenes[sceneId] ?? null;
 };
 
+const humanizeSceneIdentifier = (sceneId: string): string =>
+  sceneId
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[-_.]+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (segment) => segment.toUpperCase()) || defaultGameConfig.defaultSceneId;
+
+/**
+ * Builds a generic runtime-safe fallback scene when authored or canonical scene data is missing.
+ *
+ * @param sceneId Desired scene identifier.
+ * @returns Minimal scene definition derived from runtime config instead of embedded sample content.
+ */
+export const createFallbackSceneDefinition = (
+  sceneId = defaultGameConfig.defaultSceneId,
+): SceneDefinition => ({
+  id: sceneId,
+  sceneMode: "2d",
+  displayTitle: humanizeSceneIdentifier(sceneId),
+  titleKey: `scene.${sceneId}.title`,
+  background: "",
+  geometry: {
+    width: defaultGameConfig.viewportWidth,
+    height: defaultGameConfig.viewportHeight,
+  },
+  spawn: {
+    x: Math.round(defaultGameConfig.viewportWidth / 2),
+    y: Math.round(defaultGameConfig.viewportHeight / 2),
+  },
+  nodes: [],
+  npcs: [],
+  collisions: [],
+});
+
 /**
  * Resolves sprite manifest by character key.
  *
