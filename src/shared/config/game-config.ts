@@ -150,7 +150,7 @@ export const validateGameCommand = (
  * Converts a typed game command result to API transport state.
  *
  * @param result Domain command result.
- * @returns Result passthrough placeholder for consistency with current contracts.
+ * @returns Result identity for consistency with current contracts.
  */
 export const normalizeGameResult = <TData>(result: GameResult<TData>): GameResult<TData> => result;
 

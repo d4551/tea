@@ -8,6 +8,25 @@
 import { escapeHtml } from "../layout.ts";
 
 /* ------------------------------------------------------------------ */
+/* Shared CSS Class Constants (DRY)                                   */
+/* ------------------------------------------------------------------ */
+
+/** DaisyUI card variants. Use for article/div wrappers. */
+export const cardClasses = {
+  default: "card bg-base-100 shadow-sm",
+  bordered: "card card-border bg-base-100 shadow-sm",
+  borderedGlass: "card card-border bg-base-100/90 shadow-sm backdrop-blur-sm",
+  borderedGlassNoBlur: "card card-border bg-base-100/90 shadow-sm",
+  borderedNoShadow: "card card-border bg-base-100",
+} as const;
+
+/** DaisyUI loading spinner classes for HTMX indicators. */
+export const spinnerClasses = {
+  xs: "loading loading-spinner loading-xs htmx-indicator",
+  sm: "loading loading-spinner loading-sm htmx-indicator",
+} as const;
+
+/* ------------------------------------------------------------------ */
 /* Types                                                              */
 /* ------------------------------------------------------------------ */
 
@@ -113,8 +132,8 @@ export interface BadgeConfig {
   readonly colorToken?: ColorToken;
   /** Optional size. */
   readonly size?: "xs" | "sm" | "md" | "lg";
-  /** Optional leading status dot. */
-  readonly statusDot?: boolean;
+  /** Optional leading DaisyUI 5 status indicator. */
+  readonly statusIndicator?: boolean;
   /** Optional additional CSS classes. */
   readonly className?: string;
 }
@@ -267,10 +286,10 @@ export const renderCard = (config: CardConfig): string => {
   const colorToken = config.colorToken;
 
   const variantClasses: Record<string, string> = {
-    bordered: "card card-border bg-base-100 shadow-sm",
+    bordered: cardClasses.bordered,
     elevated: "card card-elevated bg-base-100",
     interactive: "card card-interactive card-border bg-base-100 shadow-sm",
-    glass: "card glass-card shadow-lg",
+    glass: "card card-border bg-base-100/90 backdrop-blur-sm shadow-lg",
   };
 
   const baseClasses = variantClasses[variant] ?? variantClasses.bordered;
@@ -304,6 +323,9 @@ export const renderCard = (config: CardConfig): string => {
 </article>`;
 };
 
+/** Default empty state icon (inbox). */
+const emptyStateIconDefault = `<svg xmlns="http://www.w3.org/2000/svg" class="size-16 text-base-content/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg>`;
+
 /**
  * Renders an empty state card.
  */
@@ -313,15 +335,31 @@ export const renderEmptyState = (
   description: string,
   actions?: string,
 ): string => {
-  return `<div class="empty-state">
+  return `<div class="empty-state flex flex-col items-center justify-center gap-4 text-center" role="status" aria-label="${escapeHtml(title)}">
+  ${icon}
+  <div class="space-y-1">
+    <h3 class="font-semibold text-base-content/70">${escapeHtml(title)}</h3>
+    <p class="text-sm text-base-content/50 max-w-sm">${escapeHtml(description)}</p>
+  </div>
+  ${actions ? `<div class="flex flex-wrap gap-2 justify-center">${actions}</div>` : ""}
+</div>`;
+};
+
+/**
+ * Renders a compact empty state for builder panels.
+ */
+export const renderEmptyStateCompact = (
+  title: string,
+  description: string,
+  icon = emptyStateIconDefault,
+): string =>
+  `<div class="empty-state empty-state-compact" role="status" aria-label="${escapeHtml(title)}">
   ${icon}
   <div class="space-y-1">
     <h3 class="font-semibold text-base-content/70">${escapeHtml(title)}</h3>
     <p class="text-sm text-base-content/50">${escapeHtml(description)}</p>
   </div>
-  ${actions ? `<div class="flex gap-2">${actions}</div>` : ""}
 </div>`;
-};
 
 /* ------------------------------------------------------------------ */
 /* Button Components                                                  */
@@ -454,11 +492,11 @@ export const renderBadge = (config: BadgeConfig): string => {
     .filter(Boolean)
     .join(" ");
 
-  const statusDot = config.statusDot
-    ? `<span class="status-dot status-dot-${config.colorToken ?? "neutral"}"></span>`
+  const statusIndicator = config.statusIndicator
+    ? `<span class="status status-${config.colorToken ?? "neutral"} status-sm"></span>`
     : "";
 
-  return `<span class="${classes}">${statusDot}${escapeHtml(config.content)}</span>`;
+  return `<span class="${classes}">${statusIndicator}${escapeHtml(config.content)}</span>`;
 };
 
 /**
@@ -656,6 +694,7 @@ export const renderField = (config: FieldConfig): string => {
   const ariaDescribedByAttr = describedByIds
     ? ` aria-describedby="${escapeHtml(describedByIds)}"`
     : "";
+  const ariaLabelAttr = ` aria-label="${escapeHtml(config.label)}"`;
 
   const inputClasses = [
     config.type === "textarea" ? "textarea" : config.type === "select" ? "select" : "input",
@@ -681,7 +720,7 @@ export const renderField = (config: FieldConfig): string => {
           `<option value="${escapeHtml(opt.value)}"${opt.selected ? " selected" : ""}>${escapeHtml(opt.label)}</option>`,
       )
       .join("");
-    inputHtml = `<select${idAttr}${nameAttr}${requiredAttr}${disabledAttr}${ariaInvalidAttr}${ariaDescribedByAttr} class="${inputClasses}">${optionsHtml}</select>`;
+    inputHtml = `<select${idAttr}${nameAttr}${ariaLabelAttr}${requiredAttr}${disabledAttr}${ariaInvalidAttr}${ariaDescribedByAttr} class="${inputClasses}">${optionsHtml}</select>`;
   } else {
     const typeAttr = ` type="${config.type ?? "text"}"`;
     inputHtml = `<input${idAttr}${nameAttr}${typeAttr}${placeholderAttr}${valueAttr}${minAttr}${maxAttr}${stepAttr}${requiredAttr}${disabledAttr}${ariaInvalidAttr}${ariaDescribedByAttr} class="${inputClasses}" />`;
@@ -701,6 +740,14 @@ export const renderField = (config: FieldConfig): string => {
   ${errorHtml}
 </fieldset>`;
 };
+
+/**
+ * Renders projectId and locale hidden inputs for builder forms.
+ * Single source of truth for the repeated pattern across builder views.
+ */
+export const renderBuilderHiddenFields = (projectId: string, locale: string): string =>
+  `<input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
+        <input type="hidden" name="locale" value="${escapeHtml(locale)}" />`;
 
 /**
  * Renders a loading spinner.

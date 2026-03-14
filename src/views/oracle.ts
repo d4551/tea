@@ -4,6 +4,7 @@ import { appRoutes } from "../shared/constants/routes.ts";
 import type { UiErrorState } from "../shared/contracts/ui-state.ts";
 import type { Messages } from "../shared/i18n/messages.ts";
 import { escapeHtml } from "./layout.ts";
+import { spinnerClasses } from "./shared/ui-components.ts";
 
 type BaseOraclePanelState = {
   readonly mode: OracleMode;
@@ -97,7 +98,7 @@ export const renderOracleSection = (
   locale: LocaleCode,
 ): string => {
   return `<section aria-labelledby="oracle-title" class="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
-    <article class="card border border-base-300 bg-base-100 shadow-sm">
+    <article class="card card-border bg-base-100 shadow-sm">
       <div class="card-body gap-4">
         <h2 id="oracle-title" class="card-title text-2xl">${escapeHtml(messages.aiPlayground.cardTitle)}</h2>
         <p class="opacity-90">${escapeHtml(messages.aiPlayground.cardDescription)}</p>
@@ -142,7 +143,7 @@ export const renderOracleSection = (
             messages.aiPlayground.submit,
           )}">
             <span>${escapeHtml(messages.aiPlayground.submit)}</span>
-            <span id="oracle-loading" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(
+            <span id="oracle-loading" class="${spinnerClasses.sm}" aria-label="${escapeHtml(
               messages.common.loading,
             )}"></span>
           </button>
@@ -167,7 +168,7 @@ export const renderOracleSection = (
  */
 export const renderOraclePanel = (messages: Messages, panelState: OraclePanelState): string => {
   if (panelState.state === "loading") {
-    return `<article id="oracle-panel" class="card border border-info/30 bg-info/5" role="status" aria-live="polite" aria-busy="true" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
+    return `<article id="oracle-panel" class="card card-border border-info/30 bg-info/5" role="status" aria-live="polite" aria-busy="true" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
       <div class="card-body gap-3">
         <h3 class="card-title text-info text-sm">${escapeHtml(messages.aiPlayground.loadingTitle)}</h3>
         <div class="chat chat-start">
@@ -185,7 +186,7 @@ export const renderOraclePanel = (messages: Messages, panelState: OraclePanelSta
   }
 
   if (panelState.state === "idle") {
-    return `<article id="oracle-panel" class="card border border-dashed border-base-300 bg-base-200/40" aria-live="polite" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
+    return `<article id="oracle-panel" class="card card-dash border-base-300 bg-base-200/40" aria-live="polite" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
       <div class="card-body">
         <div class="empty-state">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>

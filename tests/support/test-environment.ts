@@ -1,5 +1,3 @@
-import { resolve } from "node:path";
-
 export const testEnvDefaults = {
   databaseUrlKey: "DATABASE_URL",
   nodeEnvKey: "NODE_ENV",
@@ -31,5 +29,7 @@ export const applyTestEnvironment = (values: Record<string, string>): void => {
   }
 };
 
-export const buildTestDatabaseUrl = (projectRoot: string, filename: string): string =>
-  `file:${resolve(projectRoot, "prisma", filename)}`;
+export const buildTestDatabaseUrl = (projectRoot: string, filename: string): string => {
+  const projectRootUrl = Bun.pathToFileURL(`${projectRoot.replace(/\\+/gu, "/")}/`);
+  return `file:${Bun.fileURLToPath(new URL(`prisma/${filename}`, projectRootUrl))}`;
+};

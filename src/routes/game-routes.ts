@@ -17,7 +17,11 @@ import { GamePage, type GamePageProps } from "../views/game-page.ts";
  * @param locale Active locale code.
  * @returns Props suitable for `GamePage`.
  */
-const buildPlayablePageProps = (session: GameSessionState, locale: LocaleCode): GamePageProps => ({
+const buildPlayablePageProps = (
+  session: GameSessionState,
+  locale: LocaleCode,
+  requestOrigin?: string,
+): GamePageProps => ({
   state: "playable",
   locale,
   sessionId: session.sessionId,
@@ -44,6 +48,7 @@ const buildPlayablePageProps = (session: GameSessionState, locale: LocaleCode): 
     restoreMaxAttempts: defaultGameConfig.restoreMaxAttempts,
     rendererPreference: appConfig.playableGame.rendererPreference,
   },
+  appOrigin: requestOrigin,
 });
 
 const hydrateGameSession = async (
@@ -51,6 +56,7 @@ const hydrateGameSession = async (
   locale: LocaleCode,
   projectId: string | null,
   ownerSessionId: string,
+  sceneId: string | null,
 ): Promise<GameSessionState | null> => {
   if (sessionId) {
     const existing = await gameLoop.getSessionState(sessionId, ownerSessionId);
@@ -61,7 +67,7 @@ const hydrateGameSession = async (
 
   const created = await gameLoop.createSession(
     locale,
-    defaultGameConfig.defaultSceneId,
+    sceneId ?? defaultGameConfig.defaultSceneId,
     projectId ?? undefined,
     ownerSessionId,
   );
@@ -74,10 +80,12 @@ export const gameRoutes = new Elysia({ prefix: appRoutes.game })
     app.get(
       "/",
       async ({
+        request,
         gameRequestLocale,
         gameParticipantSessionId,
         gameRequestedSessionId,
         gameRequestedProjectId,
+        gameRequestedSceneId,
         gameInviteToken,
       }) => {
         const locale = gameRequestLocale;
@@ -85,10 +93,11 @@ export const gameRoutes = new Elysia({ prefix: appRoutes.game })
         const projectId = gameRequestedProjectId;
         const inviteToken = gameInviteToken;
         const ownerSessionId = gameParticipantSessionId;
+        const requestOrigin = new URL(request.url).origin;
         if (inviteToken) {
           const joined = await gameLoop.joinSession(inviteToken, ownerSessionId);
           if (joined) {
-            return GamePage(buildPlayablePageProps(joined, locale));
+            return GamePage(buildPlayablePageProps(joined, locale, requestOrigin));
           }
 
           return GamePage({
@@ -115,7 +124,13 @@ export const gameRoutes = new Elysia({ prefix: appRoutes.game })
             });
           }
         }
-        const session = await hydrateGameSession(sessionId, locale, projectId, ownerSessionId);
+        const session = await hydrateGameSession(
+          sessionId,
+          locale,
+          projectId,
+          ownerSessionId,
+          gameRequestedSceneId,
+        );
         if (!session) {
           return GamePage({
             locale,
@@ -124,7 +139,7 @@ export const gameRoutes = new Elysia({ prefix: appRoutes.game })
           });
         }
 
-        return GamePage(buildPlayablePageProps(session, locale));
+        return GamePage(buildPlayablePageProps(session, locale, requestOrigin));
       },
     ),
   );

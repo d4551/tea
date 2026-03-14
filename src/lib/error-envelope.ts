@@ -89,13 +89,13 @@ export class ApplicationError extends Error {
  * Shared error payload returned to API clients.
  */
 export interface ErrorEnvelope {
-  readonly ok: false;
-  readonly error: {
-    readonly code: AppErrorCode;
-    readonly category: AppErrorCategory;
-    readonly message: string;
-    readonly retryable: boolean;
-    readonly correlationId: string;
+  ok: false;
+  error: {
+    code: AppErrorCode;
+    category: AppErrorCategory;
+    message: string;
+    retryable: boolean;
+    correlationId: string;
   };
 }
 
@@ -103,8 +103,8 @@ export interface ErrorEnvelope {
  * Shared success payload returned to API clients.
  */
 export interface SuccessEnvelope<TData> {
-  readonly ok: true;
-  readonly data: TData;
+  ok: true;
+  data: TData;
 }
 
 /**

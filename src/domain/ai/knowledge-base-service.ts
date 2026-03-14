@@ -1,6 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { appConfig, type LocaleCode, normalizeLocale } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
+import {
+  KNOWLEDGE_DOCUMENT_EMPTY_ERROR,
+  KNOWLEDGE_DOCUMENT_NO_CHUNKS_ERROR,
+} from "../../shared/constants/errors.ts";
 import { prismaBase } from "../../shared/services/db.ts";
 import { settleAsync } from "../../shared/utils/async-result.ts";
 import {
@@ -353,7 +357,7 @@ export class KnowledgeBaseService {
   async ingestDocument(input: KnowledgeDocumentInput): Promise<KnowledgeDocumentRecord> {
     const text = input.text.trim();
     if (text.length === 0) {
-      throw new Error("Knowledge document text must not be empty.");
+      throw new Error(KNOWLEDGE_DOCUMENT_EMPTY_ERROR);
     }
 
     const locale = normalizeLocale(input.locale);
@@ -366,7 +370,7 @@ export class KnowledgeBaseService {
     );
 
     if (chunkSeeds.length === 0) {
-      throw new Error("Knowledge document produced no indexable chunks.");
+      throw new Error(KNOWLEDGE_DOCUMENT_NO_CHUNKS_ERROR);
     }
 
     const embeddedChunks: EmbeddedChunkSeed[] = [];

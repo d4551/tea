@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./design-tokens.css";
 @import "./game-forge-theme.css";
 
 @source "../**/*.ts";
@@ -13,6 +14,16 @@
       "Iowan Old Style", "Palatino Linotype", "Book Antiqua", "Noto Serif SC", serif;
     --app-body-font:
       "Avenir Next", "Segoe UI Variable", "Noto Sans SC", "Trebuchet MS", sans-serif;
+    --forge-display-font: "Syne", system-ui, sans-serif;
+    --forge-body-font: "Source Serif 4", Georgia, serif;
+    --forge-mono-font: "JetBrains Mono", ui-monospace, monospace;
+    --app-transition-duration: 200ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --app-transition-duration: 0ms;
+    }
   }
 
   html,
@@ -23,6 +34,7 @@
   body {
     font-family: var(--app-body-font);
     background-image:
+      url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E"),
       radial-gradient(circle at 10% 10%, color-mix(in oklab, var(--color-primary) 12%, transparent), transparent 32%),
       radial-gradient(circle at 90% 20%, color-mix(in oklab, var(--color-secondary) 11%, transparent), transparent 30%),
       radial-gradient(circle at 50% 100%, color-mix(in oklab, var(--color-accent) 12%, transparent), transparent 36%),
@@ -44,8 +56,73 @@
     letter-spacing: 0.01em;
   }
 
+  /* Typography scale */
+  .text-display {
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+  .text-heading-1 {
+    font-size: clamp(1.5rem, 3vw, 2.25rem);
+    line-height: 1.2;
+  }
+  .text-heading-2 {
+    font-size: clamp(1.25rem, 2.5vw, 1.5rem);
+    line-height: 1.3;
+  }
+  .text-heading-3 {
+    font-size: 1.125rem;
+    line-height: 1.4;
+  }
+  .text-body {
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+  .text-body-sm {
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+  .text-caption {
+    font-size: 0.75rem;
+    line-height: 1.4;
+    letter-spacing: 0.05em;
+  }
+
   :focus-visible {
-    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-base-100;
+    outline: 2px solid var(--color-focus-ring, var(--color-primary));
+    outline-offset: 2px;
+  }
+
+  /* Forge theme: Syne + Source Serif 4 typography */
+  [data-theme="forge-dark"],
+  [data-theme="forge-light"] {
+    --app-heading-font: "Syne", system-ui, sans-serif;
+    --app-body-font: "Source Serif 4", Georgia, serif;
+    --app-mono-font: "JetBrains Mono", ui-monospace, monospace;
+  }
+
+  [data-theme="forge-dark"] body,
+  [data-theme="forge-light"] body {
+    font-family: var(--app-body-font);
+  }
+
+  [data-theme="forge-dark"] h1,
+  [data-theme="forge-dark"] h2,
+  [data-theme="forge-dark"] h3,
+  [data-theme="forge-dark"] .card-title,
+  [data-theme="forge-dark"] .hero-title,
+  [data-theme="forge-light"] h1,
+  [data-theme="forge-light"] h2,
+  [data-theme="forge-light"] h3,
+  [data-theme="forge-light"] .card-title,
+  [data-theme="forge-light"] .hero-title {
+    font-family: var(--app-heading-font);
+    letter-spacing: 0.02em;
+  }
+
+  /* Builder: JetBrains Mono for code/tools */
+  .builder-mono {
+    font-family: var(--app-mono-font);
   }
 }
 
@@ -62,14 +139,47 @@
   /* ── Glassmorphism ─────────────────────────────── */
 
   .glass-card {
+    --glass-border: color-mix(in oklab, var(--color-base-content) 8%, transparent);
     backdrop-filter: blur(12px);
     background: color-mix(in oklab, var(--color-base-100) 70%, transparent);
-    border: 1px solid color-mix(in oklab, var(--color-base-content) 8%, transparent);
+    border: 1px solid var(--glass-border);
   }
 
   .glass-header {
     backdrop-filter: blur(16px) saturate(1.2);
     background: color-mix(in oklab, var(--color-base-100) 86%, transparent);
+  }
+
+  .navbar-glass {
+    backdrop-filter: blur(12px) saturate(1.1);
+    -webkit-backdrop-filter: blur(12px) saturate(1.1);
+    background: color-mix(in oklab, var(--color-base-100) 85%, transparent);
+  }
+
+  /* ── Layout composition (asymmetry, grid-breaking) ────── */
+
+  .layout-asymmetric {
+    --layout-offset: 2rem;
+  }
+
+  .layout-asymmetric > *:first-child {
+    margin-right: var(--layout-offset);
+  }
+
+  .game-page-layout {
+    max-width: 1800px;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    padding-top: 0.5rem;
+    padding-bottom: 1rem;
+  }
+
+  @media (min-width: 1024px) {
+    .game-page-layout {
+      padding-left: 1rem;
+      padding-right: 1rem;
+      padding-top: 0.75rem;
+    }
   }
 
   /* ── Card Variants ─────────────────────────────── */
@@ -166,34 +276,7 @@
     outline-offset: 2px;
   }
 
-  /* ── Status Indicators ─────────────────────────── */
 
-  .status-dot {
-    width: 0.5rem;
-    height: 0.5rem;
-    border-radius: 50%;
-    display: inline-block;
-  }
-
-  .status-dot-success {
-    background-color: var(--color-success);
-    box-shadow: 0 0 8px color-mix(in oklab, var(--color-success) 50%, transparent);
-  }
-
-  .status-dot-warning {
-    background-color: var(--color-warning);
-    box-shadow: 0 0 8px color-mix(in oklab, var(--color-warning) 50%, transparent);
-  }
-
-  .status-dot-error {
-    background-color: var(--color-error);
-    box-shadow: 0 0 8px color-mix(in oklab, var(--color-error) 50%, transparent);
-  }
-
-  .status-dot-info {
-    background-color: var(--color-info);
-    box-shadow: 0 0 8px color-mix(in oklab, var(--color-info) 50%, transparent);
-  }
 
   /* ── Micro-animations ──────────────────────────── */
 
@@ -255,6 +338,35 @@
     }
   }
 
+  @keyframes hit-flash {
+    0%,
+    100% {
+      background-color: transparent;
+    }
+    50% {
+      background-color: color-mix(in oklab, var(--color-error) 30%, transparent);
+    }
+  }
+
+  @keyframes combat-death {
+    0% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    100% {
+      opacity: 0.5;
+      transform: scale(0.98);
+    }
+  }
+
+  .animate-hit-flash {
+    animation: hit-flash 0.3s ease-out;
+  }
+
+  .animate-combat-death {
+    animation: combat-death 0.4s ease-out forwards;
+  }
+
   @keyframes pulse-subtle {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.6; }
@@ -302,6 +414,7 @@
   .stagger-children > *:nth-child(6) { animation-delay: 300ms; }
   .stagger-children > *:nth-child(7) { animation-delay: 360ms; }
   .stagger-children > *:nth-child(8) { animation-delay: 420ms; }
+  .stagger-children > *:nth-child(n+9) { animation-delay: 480ms; }
 
   /* ── Accessibility: reduced motion ─────────────── */
 
@@ -320,6 +433,24 @@
     .hover-lift:hover,
     .card-interactive:hover {
       transform: none;
+    }
+
+    .modal-box,
+    .modal-backdrop,
+    [class*="transition"],
+    [class*="duration-"] {
+      transition: none !important;
+    }
+  }
+
+  /* ── Touch targets (pointer: coarse) ─────────── */
+
+  @media (pointer: coarse) {
+    .btn,
+    .btn-sm,
+    a[role="button"] {
+      min-height: 44px;
+      min-width: 44px;
     }
   }
 
@@ -428,18 +559,9 @@
     border-radius: 50%;
   }
 
-  /* ── Mobile dock ───────────────────────────────── */
 
-  .mobile-dock {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 40;
-    border-top: 1px solid color-mix(in oklab, var(--color-base-content) 10%, transparent);
-    background: color-mix(in oklab, var(--color-base-100) 90%, transparent);
-    backdrop-filter: blur(12px);
-  }
+
+
 
   /* ── Empty states ──────────────────────────────── */
 

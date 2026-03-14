@@ -144,12 +144,15 @@ export const getMessages = (locale: LocaleCode): Messages => messagesByLocale[lo
 
 /**
  * Resolves locale directly from a request URL query and Accept-Language header.
+ * Supports both `?locale=` and `?lang=` query parameters; `locale` takes precedence.
  *
  * @param request Incoming request.
  * @returns Supported locale.
  */
 export const resolveRequestLocale = (request: Request): LocaleCode => {
-  const queryLocale = resolveRequestQueryParam(request, "lang");
+  const localeParam = resolveRequestQueryParam(request, "locale");
+  const langParam = resolveRequestQueryParam(request, "lang");
+  const queryLocale = localeParam ?? langParam;
   return resolveLocale(queryLocale, request.headers.get("accept-language"));
 };
 
@@ -164,7 +167,9 @@ export const resolveRequestLocaleWithOverride = (
   request: Request,
   localeOverride: string | undefined,
 ): LocaleCode => {
-  const queryLocale = resolveRequestQueryParam(request, "lang");
+  const localeParam = resolveRequestQueryParam(request, "locale");
+  const langParam = resolveRequestQueryParam(request, "lang");
+  const queryLocale = localeParam ?? langParam;
   const selection = resolveLocaleSelectionWithOverride(
     queryLocale,
     localeOverride,
@@ -207,7 +212,9 @@ export interface RequestI18nContext {
  * @returns Request i18n context.
  */
 export const resolveRequestI18n = (request: Request): RequestI18nContext => {
-  const queryLocale = resolveRequestQueryParam(request, "lang");
+  const localeParam = resolveRequestQueryParam(request, "locale");
+  const langParam = resolveRequestQueryParam(request, "lang");
+  const queryLocale = localeParam ?? langParam;
   const selection = resolveLocaleSelection(queryLocale, request.headers.get("accept-language"));
   return {
     locale: selection.locale,
@@ -227,7 +234,9 @@ export const resolveRequestI18nWithOverride = (
   request: Request,
   localeOverride: string | undefined,
 ): RequestI18nContext => {
-  const queryLocale = resolveRequestQueryParam(request, "lang");
+  const localeParam = resolveRequestQueryParam(request, "locale");
+  const langParam = resolveRequestQueryParam(request, "lang");
+  const queryLocale = localeParam ?? langParam;
   const selection = resolveLocaleSelectionWithOverride(
     queryLocale,
     localeOverride,

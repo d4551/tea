@@ -1,9 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { runDoctorWorkflow, runSetupWorkflow } from "../scripts/runtime-bootstrap.ts";
 import { collectRuntimeReadinessReport } from "../src/bootstrap/runtime-readiness.ts";
+
+const createTempDirectory = async (): Promise<string> => {
+  const tmpBase = (Bun.env.TMPDIR ?? Bun.env.TEMP ?? Bun.env.TMP ?? import.meta.dir)
+    .replace(/\\+/gu, "/")
+    .replace(/\/+$/u, "");
+  const candidate = `${tmpBase}/bun-test-${crypto.randomUUID()}`;
+  const markerPath = `${candidate}/.keep`;
+  await Bun.write(markerPath, "ok");
+  await Bun.file(markerPath).delete();
+  return candidate;
+};
 
 describe("runtime bootstrap", () => {
   test("doctor workflow returns a deterministic readiness envelope", async () => {
@@ -47,7 +55,7 @@ describe("runtime bootstrap", () => {
   });
 
   test("setup workflow creates .env when missing and runs canonical Bun steps", async () => {
-    const cwd = await mkdtemp(join(tmpdir(), "bun-test-"));
+    const cwd = await createTempDirectory();
     await Bun.write(`${cwd}/.env.example`, "TEST_VALUE=from-example\n");
 
     const commands: string[] = [];
@@ -82,7 +90,7 @@ describe("runtime bootstrap", () => {
   });
 
   test("setup workflow preserves existing .env files", async () => {
-    const cwd = await mkdtemp(join(tmpdir(), "bun-test-"));
+    const cwd = await createTempDirectory();
     await Bun.write(`${cwd}/.env.example`, "TEST_VALUE=from-example\n");
     await Bun.write(`${cwd}/.env`, "TEST_VALUE=preserved\n");
 

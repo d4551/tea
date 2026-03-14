@@ -1,4 +1,3 @@
-import { rm } from "node:fs/promises";
 import { ProviderRegistry } from "../../src/domain/ai/providers/provider-registry.ts";
 import { prisma } from "../../src/shared/services/db.ts";
 import { settleAsync } from "../../src/shared/utils/async-result.ts";
@@ -64,7 +63,7 @@ export const cleanupTestDatabase = async (): Promise<void> => {
 
   await Promise.all(
     candidatePaths.map(async (candidatePath) => {
-      const result = await settleAsync(rm(candidatePath, { force: true }));
+      const result = await settleAsync(Bun.file(candidatePath).delete());
       if (!result.ok) {
         // Ignore cleanup races between Bun workers removing the same test sidecar file.
         return;

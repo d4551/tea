@@ -1,9 +1,11 @@
 /**
  * Game Forge Custom DaisyUI v5 Themes
  *
- * Deep ink, jade, ember and mist palette — crafted for immersive game creation.
+ * Deep ink, jade, ember and mist palette — editorial/industrial aesthetic.
  * forge-dark: dark variant for focused creative sessions.
  * forge-light: light variant for workspace clarity.
+ *
+ * Typography: Syne (display) + Source Serif 4 (body) + JetBrains Mono (builder/code)
  */
 
 @plugin "daisyui/theme" {
@@ -44,6 +46,14 @@
   --border: 1px;
   --depth: 1;
   --noise: 0;
+
+  /* Semantic aliases */
+  --color-action-primary: var(--color-primary);
+  --color-action-secondary: var(--color-secondary);
+  --color-surface: var(--color-base-100);
+  --color-surface-elevated: var(--color-base-200);
+  --color-border-subtle: color-mix(in oklab, var(--color-base-content) 8%, transparent);
+  --color-focus-ring: var(--color-primary);
 }
 
 @plugin "daisyui/theme" {
@@ -84,4 +94,12 @@
   --border: 1px;
   --depth: 1;
   --noise: 0;
+
+  /* Semantic aliases */
+  --color-action-primary: var(--color-primary);
+  --color-action-secondary: var(--color-secondary);
+  --color-surface: var(--color-base-100);
+  --color-surface-elevated: var(--color-base-200);
+  --color-border-subtle: color-mix(in oklab, var(--color-base-content) 8%, transparent);
+  --color-focus-ring: var(--color-primary);
 }

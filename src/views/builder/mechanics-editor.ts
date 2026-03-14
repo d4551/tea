@@ -8,6 +8,7 @@ import type {
 } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
+import { cardClasses, renderBuilderHiddenFields, spinnerClasses } from "../shared/ui-components.ts";
 import { getTriggerEventLabel } from "./view-labels.ts";
 import { renderWorkspaceShell } from "./workspace-shell.ts";
 
@@ -52,7 +53,7 @@ export const renderQuestEditForm = (
     },
   );
   const firstStep = quest.steps[0];
-  return `<div class="card card-border bg-base-100 shadow-sm">
+  return `<div class="${cardClasses.bordered}">
     <div class="card-body gap-3">
       <div class="flex items-center justify-between gap-3">
         <h3 class="card-title">${escapeHtml(messages.builder.editQuest)}: ${escapeHtml(quest.id)}</h3>
@@ -61,8 +62,7 @@ export const renderQuestEditForm = (
         </form>
       </div>
       <form hx-post="${escapeHtml(formAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#quest-edit-spinner" hx-disabled-elt="button, input, select, textarea">
-        <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
-        <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+        ${renderBuilderHiddenFields(projectId, locale)}
         <input type="hidden" name="id" value="${escapeHtml(quest.id)}" />
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.titleLabel)}</legend>
@@ -78,7 +78,7 @@ export const renderQuestEditForm = (
         </fieldset>
         <div class="flex items-center gap-2">
           <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.save)}">${escapeHtml(messages.builder.save)}</button>
-          <span id="quest-edit-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+          <span id="quest-edit-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
       </form>
     </div>
@@ -108,7 +108,7 @@ export const renderTriggerEditForm = (
       projectId,
     },
   );
-  return `<div class="card card-border bg-base-100 shadow-sm">
+  return `<div class="${cardClasses.bordered}">
     <div class="card-body gap-3">
       <div class="flex items-center justify-between gap-3">
         <h3 class="card-title">${escapeHtml(messages.builder.editTrigger)}: ${escapeHtml(trigger.id)}</h3>
@@ -117,8 +117,7 @@ export const renderTriggerEditForm = (
         </form>
       </div>
       <form hx-post="${escapeHtml(formAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#trigger-edit-spinner" hx-disabled-elt="button, input, select, textarea">
-        <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
-        <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+        ${renderBuilderHiddenFields(projectId, locale)}
         <input type="hidden" name="id" value="${escapeHtml(trigger.id)}" />
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.labelField)}</legend>
@@ -138,7 +137,7 @@ export const renderTriggerEditForm = (
         </fieldset>
         <div class="flex items-center gap-2">
           <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.save)}">${escapeHtml(messages.builder.save)}</button>
-          <span id="trigger-edit-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+          <span id="trigger-edit-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
       </form>
     </div>
@@ -171,7 +170,7 @@ export const renderDialogueGraphEditForm = (
   const rootNode =
     graph.nodes.find((n) => n.id === "root" || n.id === graph.rootNodeId) ?? graph.nodes[0];
   const line = rootNode?.line ?? "";
-  return `<div class="card card-border bg-base-100 shadow-sm">
+  return `<div class="${cardClasses.bordered}">
     <div class="card-body gap-3">
       <div class="flex items-center justify-between gap-3">
         <h3 class="card-title">${escapeHtml(messages.builder.editDialogueGraph)}: ${escapeHtml(graph.id)}</h3>
@@ -180,8 +179,7 @@ export const renderDialogueGraphEditForm = (
         </form>
       </div>
       <form hx-post="${escapeHtml(formAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#graph-edit-spinner" hx-disabled-elt="button, input, select, textarea">
-        <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
-        <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+        ${renderBuilderHiddenFields(projectId, locale)}
         <input type="hidden" name="id" value="${escapeHtml(graph.id)}" />
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.titleLabel)}</legend>
@@ -197,7 +195,7 @@ export const renderDialogueGraphEditForm = (
         </fieldset>
         <div class="flex items-center gap-2">
           <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.save)}">${escapeHtml(messages.builder.save)}</button>
-          <span id="graph-edit-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+          <span id="graph-edit-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
       </form>
     </div>
@@ -235,7 +233,7 @@ export const renderMechanicsEditor = (
     });
   const questCards = quests
     .map(
-      (quest) => `<article class="card card-border bg-base-100 shadow-sm">
+      (quest) => `<article class="${cardClasses.bordered}">
         <div class="card-body gap-2">
           <div>
             <h3 class="card-title text-base">${escapeHtml(quest.title)}</h3>
@@ -266,7 +264,7 @@ export const renderMechanicsEditor = (
     });
   const triggerCards = triggers
     .map(
-      (trigger) => `<article class="card card-border bg-base-100 shadow-sm">
+      (trigger) => `<article class="${cardClasses.bordered}">
         <div class="card-body gap-2">
           <div class="flex items-center justify-between gap-3">
             <div>
@@ -295,7 +293,7 @@ export const renderMechanicsEditor = (
     });
   const graphCards = dialogueGraphs
     .map(
-      (graph) => `<article class="card card-border bg-base-100 shadow-sm">
+      (graph) => `<article class="${cardClasses.bordered}">
         <div class="card-body gap-2">
           <div>
             <h3 class="card-title text-base">${escapeHtml(graph.title)}</h3>
@@ -348,10 +346,9 @@ export const renderMechanicsEditor = (
       ],
     })}
     <div class="grid gap-4 xl:grid-cols-3">
-      <article class="card card-border bg-base-100 shadow-sm">
+      <article class="${cardClasses.bordered}">
         <form class="card-body gap-3" hx-post="${escapeHtml(createQuestAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#quest-create-spinner" hx-disabled-elt="button, input, select, textarea">
-          <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
-          <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+          ${renderBuilderHiddenFields(projectId, locale)}
           <h2 class="card-title">${escapeHtml(messages.builder.questsTitle)}</h2>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.questIdLabel)}</legend>
@@ -371,15 +368,14 @@ export const renderMechanicsEditor = (
           </fieldset>
           <div class="flex items-center gap-2">
             <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.createQuest)}">${escapeHtml(messages.builder.createQuest)}</button>
-            <span id="quest-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+            <span id="quest-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>
       </article>
 
-      <article class="card card-border bg-base-100 shadow-sm">
+      <article class="${cardClasses.bordered}">
         <form class="card-body gap-3" hx-post="${escapeHtml(createTriggerAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#trigger-create-spinner" hx-disabled-elt="button, input, select, textarea">
-          <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
-          <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+          ${renderBuilderHiddenFields(projectId, locale)}
           <h2 class="card-title">${escapeHtml(messages.builder.triggersTitle)}</h2>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.triggerIdLabel)}</legend>
@@ -403,15 +399,14 @@ export const renderMechanicsEditor = (
           </fieldset>
           <div class="flex items-center gap-2">
             <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.createTrigger)}">${escapeHtml(messages.builder.createTrigger)}</button>
-            <span id="trigger-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+            <span id="trigger-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>
       </article>
 
-      <article class="card card-border bg-base-100 shadow-sm">
+      <article class="${cardClasses.bordered}">
         <form class="card-body gap-3" hx-post="${escapeHtml(createGraphAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#graph-create-spinner" hx-disabled-elt="button, input, select, textarea">
-          <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
-          <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+          ${renderBuilderHiddenFields(projectId, locale)}
           <h2 class="card-title">${escapeHtml(messages.builder.dialogueGraphsTitle)}</h2>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.graphIdLabel)}</legend>
@@ -431,7 +426,7 @@ export const renderMechanicsEditor = (
           </fieldset>
           <div class="flex items-center gap-2">
             <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.createDialogueGraph)}">${escapeHtml(messages.builder.createDialogueGraph)}</button>
-            <span id="graph-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+            <span id="graph-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>
       </article>
@@ -461,7 +456,7 @@ export const renderMechanicsEditor = (
       <div class="grid gap-4 xl:grid-cols-2">${dialogueGraphs.length === 0 ? emptyGraphAlert : graphCards}</div>
     </section>
 
-    <section class="card card-border bg-base-100 shadow-sm">
+    <section class="${cardClasses.bordered}">
       <div class="card-body gap-3">
         <h2 class="card-title">${escapeHtml(messages.builder.flagsTitle)}</h2>
         <div class="flex flex-wrap gap-2">

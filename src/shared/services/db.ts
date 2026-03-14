@@ -74,6 +74,7 @@ export const builderProjectSceneRowSelect = {
   geometryHeight: true,
   spawnX: true,
   spawnY: true,
+  tilemapData: true,
   npcs: {
     select: {
       characterKey: true,
@@ -110,6 +111,7 @@ export const builderProjectSceneRowSelect = {
       scaleX: true,
       scaleY: true,
       scaleZ: true,
+      particleEmitterData: true,
     },
   },
   collisions: {
@@ -799,29 +801,25 @@ export type BuilderProjectAutomationRunArtifactRow =
 // ── Base client ───────────────────────────────────────────────────────────────
 
 const prismaLogger = createLogger("database.prisma");
-const prismaLogDefinitions: Prisma.LogDefinition[] = [
-  { emit: "event", level: "warn" },
-  { emit: "event", level: "error" },
-];
+
+const prismaLogDefinitions: Prisma.LogDefinition[] = [{ emit: "event", level: "query" }];
+
+type QueryEvent = { query: string; params: string; timestamp: Date };
 
 const attachPrismaStructuredLogging = (client: PrismaClient): PrismaClient => {
-  client.$on("warn", (event) => {
-    prismaLogger.warn("prisma.client", {
-      level: "warn",
-      target: event.target,
-      message: event.message,
-      timestamp: event.timestamp.toISOString(),
-    });
-  });
-
-  client.$on("error", (event) => {
-    prismaLogger.error("prisma.client", {
-      level: "error",
-      target: event.target,
-      message: event.message,
-      timestamp: event.timestamp.toISOString(),
-    });
-  });
+  // Prisma Client with libsql adapter may have $on types that exclude "query"
+  // https://github.com/prisma/prisma/issues/23108
+  (client as { $on(event: "query", callback: (e: QueryEvent) => void): void }).$on(
+    "query",
+    (event) => {
+      prismaLogger.info("prisma.client", {
+        level: "query",
+        target: "prisma-query",
+        message: `${event.query} (${event.params})`,
+        timestamp: event.timestamp.toISOString(),
+      });
+    },
+  );
 
   return client;
 };
@@ -845,6 +843,7 @@ const toSceneCreateManyInput = (
     geometryHeight: scene.geometry.height,
     spawnX: scene.spawn.x,
     spawnY: scene.spawn.y,
+    tilemapData: (scene.tilemap ?? undefined) as Prisma.InputJsonValue | undefined,
   }));
 
 const toSceneCollisionCreateManyInput = (
@@ -927,6 +926,7 @@ const toSceneNodeCreateManyInput = (
       scaleX: "scale" in node ? node.scale.x : null,
       scaleY: "scale" in node ? node.scale.y : null,
       scaleZ: "scale" in node ? node.scale.z : null,
+      particleEmitterData: (node.particleEmitter ?? undefined) as Prisma.InputJsonValue | undefined,
     })),
   );
 
@@ -1902,7 +1902,11 @@ const withBuilderCoreExtensions = (base: PrismaClient) =>
                   checksum: snapshot?.checksum ?? row.checksum,
                   state:
                     snapshot?.state ??
-                    safeJsonParse<Prisma.InputJsonValue>(JSON.stringify(row.state ?? {}), {}),
+                    safeJsonParse<Prisma.InputJsonValue>(
+                      JSON.stringify(row.state ?? {}),
+                      {},
+                      (v): v is Prisma.InputJsonValue => true,
+                    ),
                 },
               });
 

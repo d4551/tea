@@ -1,5 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { settleAsync } from "../../src/shared/utils/async-result.ts";
 import {
   applyTestEnvironment,
   buildTestDatabaseUrl,
@@ -7,24 +6,33 @@ import {
   testPreloadConfig,
 } from "./test-environment.ts";
 
+const repositoryRoot = Bun.fileURLToPath(new URL("../../", import.meta.url));
+const repositoryRootUrl = Bun.pathToFileURL(`${repositoryRoot.replace(/\\+/gu, "/")}/`);
+
 const testDatabaseUrl = buildTestDatabaseUrl(
-  process.cwd(),
+  repositoryRoot,
   `test-${process.pid}-${Date.now().toString(36)}.db`,
 );
 const testDatabaseFile = testDatabaseUrl.slice("file:".length);
 
-mkdirSync(dirname(testDatabaseFile), { recursive: true });
-rmSync(testDatabaseFile, { force: true });
-rmSync(`${testDatabaseFile}-journal`, { force: true });
-rmSync(`${testDatabaseFile}-shm`, { force: true });
-rmSync(`${testDatabaseFile}-wal`, { force: true });
+await Promise.all(
+  [
+    testDatabaseFile,
+    `${testDatabaseFile}-journal`,
+    `${testDatabaseFile}-shm`,
+    `${testDatabaseFile}-wal`,
+  ].map(async (candidatePath) => {
+    const result = await settleAsync(Bun.file(candidatePath).delete());
+    if (!result.ok) {
+      return;
+    }
+  }),
+);
 
 applyTestEnvironment(testPreloadConfig(testDatabaseUrl));
 
-const schemaScriptPath = resolve(
-  process.cwd(),
-  "prisma",
-  `test-schema-${process.pid}-${Date.now().toString(36)}.sql`,
+const schemaScriptPath = Bun.fileURLToPath(
+  new URL(`prisma/test-schema-${process.pid}-${Date.now().toString(36)}.sql`, repositoryRootUrl),
 );
 
 const diffResult = Bun.spawnSync(
@@ -40,7 +48,7 @@ const diffResult = Bun.spawnSync(
     "--script",
   ],
   {
-    cwd: process.cwd(),
+    cwd: repositoryRoot,
     env: Bun.env,
     stderr: "pipe",
     stdout: "pipe",
@@ -53,12 +61,12 @@ if (diffResult.exitCode !== 0) {
   );
 }
 
-writeFileSync(schemaScriptPath, Buffer.from(diffResult.stdout));
+await Bun.write(schemaScriptPath, diffResult.stdout);
 
 const bootstrapResult = Bun.spawnSync(
   ["bunx", "--bun", "prisma", "db", "execute", "--file", schemaScriptPath],
   {
-    cwd: process.cwd(),
+    cwd: repositoryRoot,
     env: {
       ...Bun.env,
       [testEnvDefaults.databaseUrlKey]: testDatabaseUrl,
@@ -68,7 +76,7 @@ const bootstrapResult = Bun.spawnSync(
   },
 );
 
-rmSync(schemaScriptPath, { force: true });
+await settleAsync(Bun.file(schemaScriptPath).delete());
 
 if (bootstrapResult.exitCode !== 0) {
   throw new Error(

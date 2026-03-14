@@ -11,6 +11,10 @@ import {
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
+import {
+  DEFAULT_SCENE_SPAWN_X,
+  DEFAULT_SCENE_SPAWN_Y,
+} from "../shared/constants/builder-defaults.ts";
 import type { SceneDefinition, SceneNodeDefinition } from "../shared/contracts/game.ts";
 import { safeJsonParse } from "../shared/utils/safe-json.ts";
 
@@ -52,7 +56,11 @@ const readPayload = (element: HTMLElement): SceneEditorPayload | null => {
     return null;
   }
 
-  return safeJsonParse<SceneEditorPayload | null>(script.textContent, null);
+  return safeJsonParse<SceneEditorPayload | null>(
+    script.textContent ?? "",
+    null,
+    (v): v is SceneEditorPayload | null => true,
+  );
 };
 
 const isSceneNode2D = (
@@ -545,8 +553,8 @@ const render3dScene = (
   renderer.domElement.addEventListener("pointerdown", handleViewportPointerDown);
 
   const resize = (): void => {
-    const nextWidth = Math.max(320, viewport.clientWidth);
-    const nextHeight = Math.max(180, viewport.clientHeight);
+    const nextWidth = Math.max(DEFAULT_SCENE_SPAWN_X, viewport.clientWidth);
+    const nextHeight = Math.max(DEFAULT_SCENE_SPAWN_Y, viewport.clientHeight);
     camera.aspect = nextWidth / nextHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(nextWidth, nextHeight);

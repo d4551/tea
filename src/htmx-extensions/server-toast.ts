@@ -7,11 +7,10 @@
  * @example Server response header:
  *   HX-Trigger: {"showToast": {"message": "Project saved", "type": "success"}}
  */
+import { TOAST_DISMISS_MS, TOAST_FADE_MS } from "../shared/constants/ui.ts";
 import { escapeHtml } from "./shared.ts";
 
 const CONTAINER_ID = "toast-container";
-const DISMISS_MS = 4000;
-const FADE_MS = 300;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
@@ -76,12 +75,23 @@ const showToast = (payload: unknown): void => {
     el.classList.add("opacity-0");
     setTimeout(() => {
       el.remove();
-    }, FADE_MS);
-  }, DISMISS_MS);
+    }, TOAST_FADE_MS);
+  }, TOAST_DISMISS_MS);
 };
 
 document.body.addEventListener("showToast", (evt: Event) => {
   if (evt instanceof CustomEvent) {
     showToast(evt.detail);
   }
+});
+
+/** Show error toast on HTMX request failures. */
+document.body.addEventListener("htmx:responseError", (evt: Event) => {
+  if (!(evt instanceof CustomEvent)) return;
+  const detail = evt.detail as { xhr?: XMLHttpRequest; message?: string };
+  const message =
+    typeof detail?.message === "string" && detail.message.length > 0
+      ? detail.message
+      : (detail?.xhr?.statusText ?? "Request failed");
+  showToast({ message, type: "error" });
 });

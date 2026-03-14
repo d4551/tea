@@ -25,14 +25,14 @@ const isWhitespace = (char: string): boolean =>
 
 const parseJsonValue = (cursor: JsonParseCursor): JsonValueResult => {
   const text = cursor.text;
-  while (cursor.index < text.length && isWhitespace(text[cursor.index])) {
+  while (cursor.index < text.length && isWhitespace(text.charAt(cursor.index))) {
     cursor.index += 1;
   }
   if (cursor.index >= text.length) {
     return { success: false };
   }
 
-  const char = text[cursor.index];
+  const char = text.charAt(cursor.index);
   if (char === "{") {
     return parseJsonObject(cursor);
   }
@@ -77,14 +77,14 @@ const parseJsonLiteral = <T>(
 
 const parseJsonString = (cursor: JsonParseCursor): JsonValueResult => {
   const text = cursor.text;
-  if (text[cursor.index] !== `"`) {
+  if (text.charAt(cursor.index) !== `"`) {
     return { success: false };
   }
   cursor.index += 1;
 
   let result = "";
   while (cursor.index < text.length) {
-    const char = text[cursor.index];
+    const char = text.charAt(cursor.index);
     if (char === `"`) {
       cursor.index += 1;
       return { success: true, value: result, nextIndex: cursor.index };
@@ -104,7 +104,7 @@ const parseJsonString = (cursor: JsonParseCursor): JsonValueResult => {
       return { success: false };
     }
 
-    const escapeChar = text[escapeStart];
+    const escapeChar = text.charAt(escapeStart);
     cursor.index = escapeStart + 1;
     if (escapeChar === `"`) {
       result += `"`;
@@ -162,7 +162,7 @@ const parseJsonNumber = (cursor: JsonParseCursor): JsonValueResult => {
   const text = cursor.text;
   const start = cursor.index;
 
-  if (text[cursor.index] === "-") {
+  if (text.charAt(cursor.index) === "-") {
     cursor.index += 1;
   }
 
@@ -170,12 +170,12 @@ const parseJsonNumber = (cursor: JsonParseCursor): JsonValueResult => {
     return { success: false };
   }
 
-  const firstDigit = text[cursor.index];
+  const firstDigit = text.charAt(cursor.index);
   if (firstDigit === "0") {
     cursor.index += 1;
   } else if (firstDigit >= "1" && firstDigit <= "9") {
     while (cursor.index < text.length) {
-      const next = text[cursor.index];
+      const next = text.charAt(cursor.index);
       if (next >= "0" && next <= "9") {
         cursor.index += 1;
       } else {
@@ -186,18 +186,18 @@ const parseJsonNumber = (cursor: JsonParseCursor): JsonValueResult => {
     return { success: false };
   }
 
-  if (text[cursor.index] === ".") {
+  if (text.charAt(cursor.index) === ".") {
     cursor.index += 1;
     if (cursor.index >= text.length) {
       return { success: false };
     }
 
-    const firstFractionDigit = text[cursor.index];
+    const firstFractionDigit = text.charAt(cursor.index);
     if (!(firstFractionDigit >= "0" && firstFractionDigit <= "9")) {
       return { success: false };
     }
     while (cursor.index < text.length) {
-      const next = text[cursor.index];
+      const next = text.charAt(cursor.index);
       if (next >= "0" && next <= "9") {
         cursor.index += 1;
       } else {
@@ -206,13 +206,13 @@ const parseJsonNumber = (cursor: JsonParseCursor): JsonValueResult => {
     }
   }
 
-  const exponent = text[cursor.index];
+  const exponent = text.charAt(cursor.index);
   if (exponent === "e" || exponent === "E") {
     cursor.index += 1;
     if (cursor.index >= text.length) {
       return { success: false };
     }
-    const exponentSign = text[cursor.index];
+    const exponentSign = text.charAt(cursor.index);
     if (exponentSign === "+" || exponentSign === "-") {
       cursor.index += 1;
     }
@@ -220,12 +220,12 @@ const parseJsonNumber = (cursor: JsonParseCursor): JsonValueResult => {
       return { success: false };
     }
 
-    const firstExponentDigit = text[cursor.index];
+    const firstExponentDigit = text.charAt(cursor.index);
     if (!(firstExponentDigit >= "0" && firstExponentDigit <= "9")) {
       return { success: false };
     }
     while (cursor.index < text.length) {
-      const next = text[cursor.index];
+      const next = text.charAt(cursor.index);
       if (next >= "0" && next <= "9") {
         cursor.index += 1;
       } else {
@@ -245,21 +245,21 @@ const parseJsonNumber = (cursor: JsonParseCursor): JsonValueResult => {
 
 const parseJsonArray = (cursor: JsonParseCursor): JsonValueResult => {
   const text = cursor.text;
-  if (text[cursor.index] !== "[") {
+  if (text.charAt(cursor.index) !== "[") {
     return { success: false };
   }
   cursor.index += 1;
 
   const entries: unknown[] = [];
   while (cursor.index < text.length) {
-    while (cursor.index < text.length && isWhitespace(text[cursor.index])) {
+    while (cursor.index < text.length && isWhitespace(text.charAt(cursor.index))) {
       cursor.index += 1;
     }
     if (cursor.index >= text.length) {
       return { success: false };
     }
 
-    if (text[cursor.index] === "]") {
+    if (text.charAt(cursor.index) === "]") {
       cursor.index += 1;
       return { success: true, value: entries, nextIndex: cursor.index };
     }
@@ -271,19 +271,19 @@ const parseJsonArray = (cursor: JsonParseCursor): JsonValueResult => {
     entries.push(entry.value);
     cursor.index = entry.nextIndex;
 
-    while (cursor.index < text.length && isWhitespace(text[cursor.index])) {
+    while (cursor.index < text.length && isWhitespace(text.charAt(cursor.index))) {
       cursor.index += 1;
     }
     if (cursor.index >= text.length) {
       return { success: false };
     }
 
-    if (text[cursor.index] === "]") {
+    if (text.charAt(cursor.index) === "]") {
       cursor.index += 1;
       return { success: true, value: entries, nextIndex: cursor.index };
     }
 
-    if (text[cursor.index] !== ",") {
+    if (text.charAt(cursor.index) !== ",") {
       return { success: false };
     }
     cursor.index += 1;
@@ -294,21 +294,21 @@ const parseJsonArray = (cursor: JsonParseCursor): JsonValueResult => {
 
 const parseJsonObject = (cursor: JsonParseCursor): JsonValueResult => {
   const text = cursor.text;
-  if (text[cursor.index] !== "{") {
+  if (text.charAt(cursor.index) !== "{") {
     return { success: false };
   }
   cursor.index += 1;
 
   const entries: Record<string, unknown> = {};
   while (cursor.index < text.length) {
-    while (cursor.index < text.length && isWhitespace(text[cursor.index])) {
+    while (cursor.index < text.length && isWhitespace(text.charAt(cursor.index))) {
       cursor.index += 1;
     }
     if (cursor.index >= text.length) {
       return { success: false };
     }
 
-    if (text[cursor.index] === "}") {
+    if (text.charAt(cursor.index) === "}") {
       cursor.index += 1;
       return { success: true, value: entries, nextIndex: cursor.index };
     }
@@ -318,10 +318,10 @@ const parseJsonObject = (cursor: JsonParseCursor): JsonValueResult => {
       return { success: false };
     }
 
-    while (cursor.index < text.length && isWhitespace(text[cursor.index])) {
+    while (cursor.index < text.length && isWhitespace(text.charAt(cursor.index))) {
       cursor.index += 1;
     }
-    if (cursor.index >= text.length || text[cursor.index] !== ":") {
+    if (cursor.index >= text.length || text.charAt(cursor.index) !== ":") {
       return { success: false };
     }
     cursor.index += 1;
@@ -334,19 +334,19 @@ const parseJsonObject = (cursor: JsonParseCursor): JsonValueResult => {
     entries[keyResult.value] = valueResult.value;
     cursor.index = valueResult.nextIndex;
 
-    while (cursor.index < text.length && isWhitespace(text[cursor.index])) {
+    while (cursor.index < text.length && isWhitespace(text.charAt(cursor.index))) {
       cursor.index += 1;
     }
     if (cursor.index >= text.length) {
       return { success: false };
     }
 
-    if (text[cursor.index] === "}") {
+    if (text.charAt(cursor.index) === "}") {
       cursor.index += 1;
       return { success: true, value: entries, nextIndex: cursor.index };
     }
 
-    if (text[cursor.index] !== ",") {
+    if (text.charAt(cursor.index) !== ",") {
       return { success: false };
     }
     cursor.index += 1;
@@ -355,7 +355,11 @@ const parseJsonObject = (cursor: JsonParseCursor): JsonValueResult => {
   return { success: false };
 };
 
-const isExpectedType = <T>(_value: unknown): _value is T => true;
+/**
+ * Validator that accepts any parsed value. Use only when the result is consumed as unknown
+ * or validated separately. Never use for typed results without explicit structure validation.
+ */
+export const acceptUnknown = (value: unknown): value is unknown => true;
 
 const readJsonParseResult = (source: string): unknown | null => {
   const cursor: JsonParseCursor = {
@@ -369,7 +373,7 @@ const readJsonParseResult = (source: string): unknown | null => {
   }
 
   let index = root.nextIndex;
-  while (index < cursor.text.length && isWhitespace(cursor.text[index])) {
+  while (index < cursor.text.length && isWhitespace(cursor.text.charAt(index))) {
     index += 1;
   }
   if (index !== cursor.text.length) {
@@ -380,10 +384,11 @@ const readJsonParseResult = (source: string): unknown | null => {
 };
 
 // SAFETY: Central JSON parser with explicit structural failures returns fallback for malformed payloads.
+// Callers MUST pass an explicit validator. Use acceptUnknown when accepting any JSON as unknown.
 export const safeJsonParse = <T>(
   source: string,
   fallback: T,
-  isExpected: (value: unknown) => value is T = isExpectedType,
+  isExpected: (value: unknown) => value is T,
 ): T => {
   const parsed = readJsonParseResult(source);
   if (parsed === null || !isExpected(parsed)) {

@@ -44,20 +44,17 @@ const oracleErrorEnvelopeSchema = t.Object({
   }),
 });
 
-const createHealthRoutes = () =>
-  new Elysia({ name: "api-health-routes" }).use(i18nContextPlugin).get(
-    appRoutes.healthApi,
-    ({ messages }) => {
-      const healthMessage = messages.api.healthOk;
+const createHealthPayload = (messages: { api: { healthOk: string } }) => ({
+  status: "ok" as const,
+  message: messages.api.healthOk,
+  uptimeSeconds: Number(((Bun.nanoseconds() - serverStartNs) / 1e9).toFixed(2)),
+  timestamp: new Date().toISOString(),
+});
 
-      return successEnvelope({
-        status: "ok",
-        message: healthMessage,
-        uptimeSeconds: Number(((Bun.nanoseconds() - serverStartNs) / 1e9).toFixed(2)),
-        timestamp: new Date().toISOString(),
-      });
-    },
-    {
+const createHealthRoutes = () =>
+  new Elysia({ name: "api-health-routes" })
+    .use(i18nContextPlugin)
+    .get(appRoutes.healthApi, ({ messages }) => successEnvelope(createHealthPayload(messages)), {
       detail: {
         tags: ["system"],
       },
@@ -70,8 +67,21 @@ const createHealthRoutes = () =>
           }),
         ]),
       }),
-    },
-  );
+    })
+    .get(appRoutes.health, ({ messages }) => successEnvelope(createHealthPayload(messages)), {
+      detail: {
+        tags: ["system"],
+      },
+      response: t.Object({
+        ok: t.Literal(true),
+        data: t.Intersect([
+          healthResponseSchema,
+          t.Object({
+            message: t.String(),
+          }),
+        ]),
+      }),
+    });
 
 const createOracleRoutes = (oracleService: OracleService) =>
   new Elysia({ name: "api-oracle-routes" })

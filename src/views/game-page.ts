@@ -1,12 +1,14 @@
-type PageScript = {
-  src: string;
-  type: "module";
-};
-
 import { appConfig, type LocaleCode } from "../config/environment.ts";
+import { joinUrlPath } from "../shared/constants/assets.ts";
+
+type PageScript = {
+  readonly src: string;
+  readonly type?: "module";
+};
 import {
   appRoutes,
   interpolateRoutePath,
+  withLocaleQuery,
   withQueryParameters,
 } from "../shared/constants/routes.ts";
 import type {
@@ -20,6 +22,7 @@ import {
 import type { Messages } from "../shared/i18n/messages.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
 import { escapeHtml, type LayoutContext, renderDocument } from "./layout.ts";
+import { cardClasses, spinnerClasses } from "./shared/ui-components.ts";
 
 /**
  * Props for the playable runtime page.
@@ -40,6 +43,8 @@ interface PlayableGamePageProps {
   readonly participantRole: GameSessionParticipantRole;
   readonly participants: readonly GameSessionParticipant[];
   readonly clientRuntimeConfig: GameClientBootstrapData["runtime"];
+  /** Request origin for absolute SSE/WS URLs; uses appConfig.appOrigin when omitted. */
+  readonly appOrigin?: string;
 }
 
 /**
@@ -102,25 +107,23 @@ const renderInactiveState = (
           ? messages.game.projectUnavailableDescription
           : messages.game.projectUnpublishedDescription;
 
-  return `<section class="mx-auto grid max-w-3xl gap-6 pt-8">
-    <article class="card card-border bg-base-100 shadow-xl">
-      <div class="card-body gap-4">
-        <div class="empty-state py-6">
-          <svg xmlns="http://www.w3.org/2000/svg" class="size-16 text-warning/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.692-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+  return `<section class="hero min-h-[50vh] rounded-box bg-base-200" aria-label="${escapeHtml(title)}">
+    <div class="hero-content text-center">
+      <div class="max-w-lg">
+        <div class="mb-6">
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-16 text-warning/40 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.692-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
         </div>
-        <span class="badge badge-warning badge-soft w-max">${escapeHtml(messages.game.publishedProjectLabel)}</span>
-        <h1 class="card-title text-3xl">${escapeHtml(title)}</h1>
-        <p class="text-base-content/75">${escapeHtml(description)}</p>
+        <span class="badge badge-warning badge-soft mb-3">${escapeHtml(messages.game.publishedProjectLabel)}</span>
+        <h1 class="text-3xl font-bold tracking-tight">${escapeHtml(title)}</h1>
+        <p class="text-base-content/75 py-4">${escapeHtml(description)}</p>
         ${
           projectId
-            ? `<div class="rounded-box bg-base-200/70 p-4 font-mono text-sm">${escapeHtml(projectId)}</div>`
+            ? `<div class="rounded-box bg-base-300/50 p-4 font-mono text-sm mb-4">${escapeHtml(projectId)}</div>`
             : ""
         }
-        <div class="card-actions justify-end">
-          <a href="${escapeHtml(builderHref)}" class="btn btn-primary" aria-label="${escapeHtml(messages.game.returnToBuilder)}">${escapeHtml(messages.game.returnToBuilder)}</a>
-        </div>
+        <a href="${escapeHtml(builderHref)}" class="btn btn-primary" aria-label="${escapeHtml(messages.game.returnToBuilder)}">${escapeHtml(messages.game.returnToBuilder)}</a>
       </div>
-    </article>
+    </div>
   </section>`;
 };
 
@@ -179,10 +182,25 @@ export function GamePage(props: GamePageProps) {
     activeRoute: "game",
     currentPathWithQuery,
     persistentProjectId: projectId,
+    hideTopBar: true,
+    hideFooter: true,
   };
   const gameHudStreamPath = interpolateRoutePath(appRoutes.gameApiSessionHud, { id: sessionId });
+  const origin = props.appOrigin ?? appConfig.appOrigin;
+  const gameHudStreamBaseUrl =
+    gameHudStreamPath.startsWith("/") && origin
+      ? `${origin.replace(/\/$/, "")}${gameHudStreamPath}`
+      : gameHudStreamPath;
+  const gameHudStreamUrl = withQueryParameters(gameHudStreamBaseUrl, { locale });
   const builderHref = withQueryParameters(appRoutes.builder, { lang: locale, projectId });
   const inviteAction = interpolateRoutePath(appRoutes.gameApiSessionInvite, { id: sessionId });
+  const saveSlotAction = interpolateRoutePath(appRoutes.gameApiSessionSaveSlot, { id: sessionId });
+  const saveSlotsAction = interpolateRoutePath(appRoutes.gameApiSessionSaveSlots, {
+    id: sessionId,
+  });
+  const _restoreSlotAction = interpolateRoutePath(appRoutes.gameApiSessionRestoreSlot, {
+    id: sessionId,
+  });
   const clientBootstrap: GameClientBootstrapData = {
     session: {
       sessionId,
@@ -204,15 +222,27 @@ export function GamePage(props: GamePageProps) {
       src: appConfig.playableGame.clientScriptPath,
       type: "module",
     },
+    {
+      src: joinUrlPath(appConfig.staticAssets.publicPrefix, "js/game-sse-error.js"),
+      type: "module",
+    },
+    {
+      src: joinUrlPath(appConfig.staticAssets.publicPrefix, "js/game-modal-focus.js"),
+      type: "module",
+    },
+    {
+      src: joinUrlPath(appConfig.staticAssets.publicPrefix, "js/game-key-bindings.js"),
+      type: "module",
+    },
   ];
 
   const content = `
     <script id="game-client-bootstrap" type="application/json">${serializeGameClientBootstrap(clientBootstrap)}</script>
-    <div class="grid gap-5 font-serif animate-fade-in-up" hx-boost="false" hx-ext="sse" sse-connect="${escapeHtml(gameHudStreamPath)}">
+    <div class="game-page-grid gap-5 font-serif stagger-children animate-fade-in-up" hx-boost="false" hx-ext="sse" sse-connect="${escapeHtml(gameHudStreamUrl)}" data-sse-url="${escapeHtml(gameHudStreamUrl)}" data-builder-href="${escapeHtml(builderHref)}" data-back-to-builder-label="${escapeHtml(messages.game.builderReturn)}" data-connecting-to-realm="${escapeHtml(messages.game.connectingToRealm)}">
       <!-- Game Header Bar -->
-      <header class="card card-elevated bg-base-100/95 backdrop-blur-sm border border-base-300/50 shadow-lg">
+      <header class="card card-border shadow-lg">
         <div class="card-body p-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-3 min-w-0 shrink" role="group" aria-label="${escapeHtml(messages.game.sceneLabel)}">
             <div class="rounded-lg w-10 h-10 flex items-center justify-center bg-primary/15 text-primary shrink-0">
               <svg xmlns="http://www.w3.org/2000/svg" class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
             </div>
@@ -221,7 +251,7 @@ export function GamePage(props: GamePageProps) {
                 id="game-scene-title-heading"
                 sse-swap="scene-title-heading"
                 hx-swap="outerHTML"
-                class="text-xl lg:text-2xl font-bold tracking-tight truncate"
+                class="text-heading-2 font-bold tracking-tight truncate"
               >${escapeHtml(sceneTitle)}</h1>
               <p
                 id="game-objective-summary"
@@ -231,11 +261,32 @@ export function GamePage(props: GamePageProps) {
               >${escapeHtml(activeQuestTitle ?? messages.game.objectiveDescription)}</p>
             </div>
           </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <a href="${escapeHtml(builderHref)}" class="btn btn-ghost btn-sm gap-2" aria-label="${escapeHtml(messages.game.builderReturn)}">
-              <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
-              ${escapeHtml(messages.game.builderReturn)}
-            </a>
+          <div class="flex flex-wrap items-center gap-4 lg:gap-6">
+            <div class="flex gap-2" role="group" aria-label="${escapeHtml(messages.builder.title)}">
+              <a href="${escapeHtml(builderHref)}" class="btn btn-outline btn-sm gap-2" aria-label="${escapeHtml(messages.game.builderReturn)}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                <span class="hidden sm:inline">${escapeHtml(messages.game.builderReturn)}</span>
+              </a>
+              <button type="button" class="btn btn-ghost btn-sm gap-2" data-modal-trigger="key_bindings_modal" aria-label="${escapeHtml(messages.game.keyBindingsTitle)}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-1.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h1.09a1.65 1.65 0 001-1.51 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v1.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-1.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                <span class="hidden sm:inline">${escapeHtml(messages.game.keyBindingsTitle)}</span>
+              </button>
+            ${
+              participantRole === "owner"
+                ? `
+              <button type="button" class="btn btn-ghost btn-sm gap-2" data-modal-trigger="save_slot_modal" aria-label="${escapeHtml(messages.game.saveAction)}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                <span class="hidden sm:inline">${escapeHtml(messages.game.saveAction)}</span>
+              </button>
+              <button type="button" class="btn btn-ghost btn-sm gap-2" data-modal-trigger="load_slot_modal" aria-label="${escapeHtml(messages.game.loadAction)}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span class="hidden sm:inline">${escapeHtml(messages.game.loadAction)}</span>
+              </button>
+            `
+                : ""
+            }
+            </div>
+            <div class="flex items-center gap-2 flex-wrap" role="group" aria-label="${escapeHtml(messages.game.connectionStatus)}">
             <span id="game-session-meta" class="hidden"
               data-session-id="${escapeHtml(sessionId)}"
               data-participant-session-id="${escapeHtml(participantSessionId)}"
@@ -291,6 +342,7 @@ export function GamePage(props: GamePageProps) {
               <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
               ${escapeHtml(messages.game.initialXp)}
             </div>
+            </div>
           </div>
         </div>
         <div
@@ -306,7 +358,7 @@ export function GamePage(props: GamePageProps) {
         </div>
       </header>
 
-      <section class="grid gap-6 lg:grid-cols-[0.82fr_0.18fr]">
+      <section class="grid gap-6 lg:grid-cols-[0.82fr_0.18fr]" aria-label="${escapeHtml(messages.game.runtimeSurfaceLabel)}">
           <div class="relative aspect-video overflow-hidden rounded-xl border border-base-content/20 bg-black shadow-2xl">
             <div
               id="game-canvas-wrapper"
@@ -324,7 +376,7 @@ export function GamePage(props: GamePageProps) {
               class="pointer-events-none absolute inset-0 flex flex-col justify-between p-6 backdrop-blur-sm"
             >
               <div class="flex justify-between items-start pt-2">
-                <div id="hud-scene" sse-swap="scene-badge" hx-swap="outerHTML" aria-live="polite" role="status" class="pointer-events-auto rounded-full border border-base-content/10 bg-base-100/80 px-6 py-2 text-lg font-bold shadow backdrop-blur">
+                <div id="hud-scene" sse-swap="scene-badge" hx-swap="outerHTML" aria-live="polite" role="status" class="pointer-events-auto rounded-full border border-base-content/10 bg-base-100/80 backdrop-blur-sm px-6 py-2 text-lg font-bold shadow">
                   ${escapeHtml(messages.game.connectingToRealm)}
                 </div>
               </div>
@@ -377,63 +429,72 @@ export function GamePage(props: GamePageProps) {
             </div>
           </div>
 
-          <aside class="space-y-4">
-            <article class="card card-border bg-base-100 shadow-sm">
+          <aside class="order-2 lg:order-none space-y-4 game-sidebar" aria-label="${escapeHtml(messages.game.objectiveTitle)}">
+            <article class="card card-border shadow-sm flex-1">
               <div class="card-body">
                 <h2 class="card-title text-lg">${escapeHtml(messages.game.objectiveTitle)}</h2>
-                <p
-                  id="game-objective-card"
-                  sse-swap="objective-card"
+                <div
+                  id="game-quest-log"
+                  sse-swap="quest"
                   hx-swap="outerHTML"
-                  class="text-sm text-base-content/75"
-                >${escapeHtml(activeQuestTitle ?? messages.game.objectiveDescription)}</p>
-                <div class="grid gap-2 text-sm">
-                  <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
-                    <span>${escapeHtml(messages.game.sceneLabel)}</span>
-                    <span
-                      id="game-scene-title-value"
-                      sse-swap="scene-title-value"
-                      hx-swap="outerHTML"
-                      class="font-medium"
-                    >${escapeHtml(sceneTitle)}</span>
+                  class="hidden"
+                  aria-label="${escapeHtml(messages.game.questLogTitle)}"
+                ></div>
+                <details class="collapse collapse-arrow mt-3 bg-base-200/70 rounded-box lg:open" aria-label="${escapeHtml(messages.game.sessionInfoLabel)}">
+                  <summary class="collapse-title font-medium text-sm">
+                    ${escapeHtml(messages.game.sessionInfoLabel)}
+                  </summary>
+                  <div class="collapse-content">
+                    <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
+                      <span>${escapeHtml(messages.game.sceneLabel)}</span>
+                      <span
+                        id="game-scene-title-value"
+                        sse-swap="scene-title-value"
+                        hx-swap="outerHTML"
+                        class="font-medium"
+                      >${escapeHtml(sceneTitle)}</span>
+                    </div>
+                    <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
+                      <span>${escapeHtml(messages.game.sceneModeLabel)}</span>
+                      <span
+                        id="game-scene-mode-value"
+                        sse-swap="scene-mode"
+                        hx-swap="outerHTML"
+                        class="font-medium"
+                      >${escapeHtml(
+                        sceneMode === "3d" ? messages.game.sceneMode3d : messages.game.sceneMode2d,
+                      )}</span>
+                    </div>
+                    <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
+                      <span>${escapeHtml(messages.game.projectLabel)}</span>
+                      <span class="font-mono text-xs">${escapeHtml(
+                        projectId ?? messages.game.projectUnavailableValue,
+                      )}</span>
+                    </div>
+                    <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
+                      <span>${escapeHtml(messages.game.sessionIdLabel)}</span>
+                      <span class="font-mono text-xs">${escapeHtml(sessionId)}</span>
+                    </div>
+                    <div class="flex items-center justify-between gap-2 rounded-box bg-base-200/70 px-3 py-2">
+                      <span>${escapeHtml(messages.game.localeLabel)}</span>
+                      <div class="flex items-center gap-2">
+                        <span class="font-medium">${escapeHtml(
+                          resolveLocaleDisplayName(messages, locale),
+                        )}</span>
+                        <a href="${escapeHtml(withLocaleQuery(currentPathWithQuery, locale === "en-US" ? "zh-CN" : "en-US"))}" class="link link-hover text-xs" aria-label="${escapeHtml(locale === "en-US" ? messages.navigation.switchToChinese : messages.navigation.switchToEnglish)}">${escapeHtml(locale === "en-US" ? messages.navigation.switchToChinese : messages.navigation.switchToEnglish)}</a>
+                      </div>
+                    </div>
+                    <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
+                      <span>${escapeHtml(messages.game.participantRoleLabel)}</span>
+                      <span class="font-medium">${escapeHtml(
+                        resolveParticipantRoleLabel(messages, participantRole),
+                      )}</span>
+                    </div>
                   </div>
-                  <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
-                    <span>${escapeHtml(messages.game.sceneModeLabel)}</span>
-                    <span
-                      id="game-scene-mode-value"
-                      sse-swap="scene-mode"
-                      hx-swap="outerHTML"
-                      class="font-medium"
-                    >${escapeHtml(
-                      sceneMode === "3d" ? messages.game.sceneMode3d : messages.game.sceneMode2d,
-                    )}</span>
-                  </div>
-                  <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
-                    <span>${escapeHtml(messages.game.projectLabel)}</span>
-                    <span class="font-mono text-xs">${escapeHtml(
-                      projectId ?? messages.game.projectUnavailableValue,
-                    )}</span>
-                  </div>
-                  <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
-                    <span>${escapeHtml(messages.game.sessionIdLabel)}</span>
-                    <span class="font-mono text-xs">${escapeHtml(sessionId)}</span>
-                  </div>
-                  <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
-                    <span>${escapeHtml(messages.game.localeLabel)}</span>
-                    <span class="font-medium">${escapeHtml(
-                      resolveLocaleDisplayName(messages, locale),
-                    )}</span>
-                  </div>
-                  <div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
-                    <span>${escapeHtml(messages.game.participantRoleLabel)}</span>
-                    <span class="font-medium">${escapeHtml(
-                      resolveParticipantRoleLabel(messages, participantRole),
-                    )}</span>
-                  </div>
-                </div>
+                </details>
               </div>
             </article>
-            <article class="card card-border bg-base-100 shadow-sm">
+            <article class="card card-border shadow-sm flex-1">
               <div class="card-body">
                 <h2 class="card-title text-lg">${escapeHtml(messages.game.sessionContextTitle)}</h2>
                 <div class="flex flex-wrap gap-2">
@@ -445,7 +506,7 @@ export function GamePage(props: GamePageProps) {
                 </div>
               </div>
             </article>
-            <article class="card card-border bg-base-100 shadow-sm">
+            <article class="card card-border shadow-sm flex-1">
               <div class="card-body gap-4">
                 <h2 class="card-title text-lg">${escapeHtml(messages.game.multiplayerTitle)}</h2>
                 <p class="text-sm text-base-content/70">${escapeHtml(messages.game.multiplayerDescription)}</p>
@@ -473,13 +534,13 @@ export function GamePage(props: GamePageProps) {
                           <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
                           <input type="hidden" name="role" value="controller" />
                           <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.game.inviteControllerAction)}">${escapeHtml(messages.game.inviteControllerAction)}</button>
-                          <span id="invite-controller-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+                          <span id="invite-controller-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
                         </form>
                         <form hx-post="${escapeHtml(inviteAction)}" hx-target="#game-multiplayer-share-result" hx-swap="outerHTML" hx-disabled-elt="button" hx-indicator="#invite-spectator-spinner" class="flex flex-wrap items-center gap-2">
                           <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
                           <input type="hidden" name="role" value="spectator" />
                           <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.game.inviteSpectatorAction)}">${escapeHtml(messages.game.inviteSpectatorAction)}</button>
-                          <span id="invite-spectator-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+                          <span id="invite-spectator-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
                         </form>
                         <div id="game-multiplayer-share-result" class="hidden"></div>
                       </div>`
@@ -491,7 +552,7 @@ export function GamePage(props: GamePageProps) {
                 }
               </div>
             </article>
-            <article class="card card-border bg-base-100 shadow-sm">
+            <article class="card card-border shadow-sm flex-1">
               <div class="card-body">
                 <h2 class="card-title text-lg">${escapeHtml(messages.game.controlsTitle)}</h2>
                 <p id="game-runtime-help" class="text-sm text-base-content/70">${escapeHtml(messages.game.runtimeSurfaceHint)}</p>
@@ -505,6 +566,165 @@ export function GamePage(props: GamePageProps) {
             </article>
           </aside>
       </section>
+
+      ${
+        participantRole === "owner"
+          ? `
+      <!-- Save slot modal (native dialog with showModal, focus trap, restore on close) -->
+      <dialog id="save_slot_modal" class="modal" role="dialog" aria-labelledby="save-slot-modal-title" aria-modal="true">
+        <div class="modal-box">
+          <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" aria-label="${escapeHtml(messages.common.closeMenu)}">✕</button>
+          </form>
+          <h3 id="save-slot-modal-title" class="font-bold text-lg">${escapeHtml(messages.game.saveSlotTitle)}</h3>
+          <form
+            id="save-slot-form"
+            hx-post="${escapeHtml(saveSlotAction)}"
+            hx-target="#save-slot-result"
+            hx-swap="innerHTML"
+            hx-disabled-elt="button[type=submit]"
+            class="mt-4 space-y-4"
+          >
+            <div class="form-control">
+              <label class="label" for="save-slot-name">
+                <span class="label-text">${escapeHtml(messages.game.saveSlotNameLabel)}</span>
+              </label>
+              <input
+                type="text"
+                id="save-slot-name"
+                name="slotName"
+                placeholder="${escapeHtml(messages.game.saveSlotNamePlaceholder)}"
+                class="input input-bordered w-full"
+                required
+                aria-required="true"
+              />
+            </div>
+            <div id="save-slot-result"></div>
+            <div class="modal-action">
+              <form method="dialog" class="inline"><button type="submit" class="btn btn-ghost">${escapeHtml(messages.builder.cancel)}</button></form>
+              <button type="submit" class="btn btn-primary">${escapeHtml(messages.game.saveAction)}</button>
+            </div>
+          </form>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+          <button type="submit" aria-label="${escapeHtml(messages.common.closeMenu)}">close</button>
+        </form>
+      </dialog>
+
+      <!-- Load slot modal (native dialog with showModal) -->
+      <dialog id="load_slot_modal" class="modal" role="dialog" aria-labelledby="load-slot-modal-title" aria-modal="true">
+        <div class="modal-box">
+          <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" aria-label="${escapeHtml(messages.common.closeMenu)}">✕</button>
+          </form>
+          <h3 id="load-slot-modal-title" class="font-bold text-lg">${escapeHtml(messages.game.loadSlotTitle)}</h3>
+          <div
+            id="load-slots-list"
+            class="mt-4 space-y-2 max-h-64 overflow-y-auto"
+            hx-get="${escapeHtml(saveSlotsAction)}"
+            hx-trigger="revealed"
+            hx-swap="innerHTML"
+          >
+            <div class="flex flex-col gap-2" aria-busy="true" aria-label="${escapeHtml(messages.common.loading)}">
+              <div class="skeleton h-12 w-full rounded-box"></div>
+              <div class="skeleton h-12 w-full rounded-box"></div>
+              <div class="skeleton h-12 w-full rounded-box"></div>
+              <div class="skeleton h-12 w-3/4 rounded-box"></div>
+            </div>
+          </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+          <button type="submit" aria-label="${escapeHtml(messages.common.closeMenu)}">close</button>
+        </form>
+      </dialog>
+      `
+          : ""
+      }
+
+      <!-- Key bindings modal (for all players) -->
+
+      <dialog id="key_bindings_modal" class="modal" role="dialog" aria-labelledby="key-bindings-modal-title" aria-modal="true" data-listening-hint="${escapeHtml(messages.game.keyBindingsListeningHint)}" data-set-label="${escapeHtml(messages.game.keyBindingsSetButton)}">
+        <div class="modal-box max-w-md">
+          <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" aria-label="${escapeHtml(messages.common.closeMenu)}">✕</button>
+          </form>
+          <h3 id="key-bindings-modal-title" class="font-bold text-lg">${escapeHtml(messages.game.keyBindingsTitle)}</h3>
+          <p class="text-sm text-base-content/70 mt-1">${escapeHtml(messages.game.keyBindingsDescription)}</p>
+          <div class="mt-4 space-y-3">
+            <div class="form-control key-binding-row" data-action="move-up">
+              <div class="flex items-center justify-between gap-4">
+                <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionMoveUp)}</span></label>
+                <div class="flex items-center gap-2">
+                  <span class="key-binding-keys flex flex-wrap gap-1"></span>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="move-up">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+                </div>
+              </div>
+            </div>
+            <div class="form-control key-binding-row" data-action="move-down">
+              <div class="flex items-center justify-between gap-4">
+                <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionMoveDown)}</span></label>
+                <div class="flex items-center gap-2">
+                  <span class="key-binding-keys flex flex-wrap gap-1"></span>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="move-down">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+                </div>
+              </div>
+            </div>
+            <div class="form-control key-binding-row" data-action="move-left">
+              <div class="flex items-center justify-between gap-4">
+                <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionMoveLeft)}</span></label>
+                <div class="flex items-center gap-2">
+                  <span class="key-binding-keys flex flex-wrap gap-1"></span>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="move-left">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+                </div>
+              </div>
+            </div>
+            <div class="form-control key-binding-row" data-action="move-right">
+              <div class="flex items-center justify-between gap-4">
+                <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionMoveRight)}</span></label>
+                <div class="flex items-center gap-2">
+                  <span class="key-binding-keys flex flex-wrap gap-1"></span>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="move-right">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+                </div>
+              </div>
+            </div>
+            <div class="form-control key-binding-row" data-action="interact">
+              <div class="flex items-center justify-between gap-4">
+                <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionInteract)}</span></label>
+                <div class="flex items-center gap-2">
+                  <span class="key-binding-keys flex flex-wrap gap-1"></span>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="interact">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+                </div>
+              </div>
+            </div>
+            <div class="form-control key-binding-row" data-action="menu">
+              <div class="flex items-center justify-between gap-4">
+                <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionMenu)}</span></label>
+                <div class="flex items-center gap-2">
+                  <span class="key-binding-keys flex flex-wrap gap-1"></span>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="menu">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+                </div>
+              </div>
+            </div>
+            <div class="form-control key-binding-row" data-action="close">
+              <div class="flex items-center justify-between gap-4">
+                <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionClose)}</span></label>
+                <div class="flex items-center gap-2">
+                  <span class="key-binding-keys flex flex-wrap gap-1"></span>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="close">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="text-xs text-base-content/50 mt-3">${escapeHtml(messages.game.keyBindingsUpdatedHint)}</p>
+          <div class="modal-action mt-4">
+            <button type="button" class="btn btn-ghost btn-sm" data-reset-bindings>${escapeHtml(messages.game.keyBindingsResetDefaults)}</button>
+            <form method="dialog" class="inline"><button type="submit" class="btn btn-ghost">${escapeHtml(messages.common.closeMenu)}</button></form>
+          </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+          <button type="submit" aria-label="${escapeHtml(messages.common.closeMenu)}">close</button>
+        </form>
+      </dialog>
     </div>
   `;
 

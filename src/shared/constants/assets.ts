@@ -9,13 +9,26 @@ export const assetRelativePaths = {
   htmxExtensionOracleIndicatorFile: "vendor/htmx-ext/oracle-indicator.js",
   htmxExtensionFocusPanelFile: "vendor/htmx-ext/focus-panel.js",
   htmxExtensionLayoutControlsFile: "vendor/htmx-ext/layout-controls.js",
+  htmxExtensionSseFile: "vendor/htmx-ext/sse.js",
   builderSceneEditorEntryFile: "src/builder-scene-editor/client.ts",
   builderSceneEditorBundleFile: "vendor/builder-scene-editor.js",
   onnxPublicDirectory: "onnx",
   htmxExtensionsSourceDirectory: "src/htmx-extensions",
   playableGameClientEntryFile: "src/playable-game/game-client.ts",
   gameClientBundleFile: "game-client.js",
+  clientModulesOutputDirectory: "js",
 } as const;
+
+/**
+ * Client module entrypoints bundled into the public `js/` directory.
+ */
+export const clientModuleEntryFiles = [
+  "welcome-strip.ts",
+  "game-sse-error.ts",
+  "game-modal-focus.ts",
+  "game-key-bindings.ts",
+  "scene-editor-tabs.ts",
+] as const;
 
 /**
  * Canonical HTMX extension entrypoints bundled into the public asset tree.
@@ -52,6 +65,14 @@ export interface StaticAssetMount {
   readonly assets: string;
   readonly prefix: string;
 }
+
+/**
+ * Relative paths for builder baseline geometry placeholders.
+ */
+export const builderGeometryPlaceholderPaths = {
+  glb: "geometry/placeholder.glb",
+  usdz: "geometry/placeholder.usdz",
+} as const;
 
 /**
  * Canonical relative asset paths used by the browser game runtime.
@@ -120,6 +141,16 @@ export const toPublicAssetUrl = (publicPrefix: string, relativePath: string): st
 export const getHtmxExtensionEntryPaths = (): readonly string[] =>
   htmxExtensionEntryFiles.map((fileName) =>
     joinLocalPath(assetRelativePaths.htmxExtensionsSourceDirectory, fileName),
+  );
+
+/**
+ * Resolves client module entrypoint paths relative to the repo root.
+ *
+ * @returns Canonical client module entrypoint paths.
+ */
+export const getClientModuleEntryPaths = (): readonly string[] =>
+  clientModuleEntryFiles.map((fileName) =>
+    joinLocalPath("src/client", fileName),
   );
 
 /**

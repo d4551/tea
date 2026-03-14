@@ -2,6 +2,7 @@ import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
 import { defaultGameConfig, resolveScene } from "../../shared/config/game-config.ts";
 import type {
+  BuilderAsset,
   CutsceneStep,
   EquipmentSlotType,
   GameActionState,
@@ -41,6 +42,7 @@ import {
   type StoreResult,
 } from "./services/GameStateStore.ts";
 import { type PlayerProgressStore, playerProgressStore } from "./services/player-progress-store.ts";
+import { saveSlotStore } from "./services/save-slot-store.ts";
 import type { Mutable, MutableGameSceneState } from "./types.ts";
 import { buildSessionSceneState } from "./utils/session-state.ts";
 
@@ -186,14 +188,21 @@ const encodeInviteToken = (
 
 const decodeResumeToken = (token: string): ResumeTokenPayload | null => {
   const decoded = Buffer.from(token, "base64url").toString("utf8");
-  const payload = safeJsonParse<ResumeTokenPayload | null>(decoded, null);
+  const payload = safeJsonParse<ResumeTokenPayload | null>(
+    decoded,
+    null,
+    (v): v is ResumeTokenPayload | null => true,
+  );
 
   if (
     !payload ||
+    typeof payload.sessionId !== "string" ||
     payload.sessionId.length === 0 ||
+    typeof payload.participantSessionId !== "string" ||
     payload.participantSessionId.length === 0 ||
     !Number.isFinite(payload.expiresAtMs) ||
     !Number.isFinite(payload.tokenVersion) ||
+    typeof payload.signature !== "string" ||
     payload.signature.length === 0
   ) {
     return null;
@@ -204,7 +213,11 @@ const decodeResumeToken = (token: string): ResumeTokenPayload | null => {
 
 const decodeInviteToken = (token: string): InviteTokenPayload | null => {
   const decoded = Buffer.from(token, "base64url").toString("utf8");
-  const payload = safeJsonParse<InviteTokenPayload | null>(decoded, null);
+  const payload = safeJsonParse<InviteTokenPayload | null>(
+    decoded,
+    null,
+    (v): v is InviteTokenPayload | null => true,
+  );
 
   if (
     !payload ||
@@ -704,6 +717,56 @@ export class GameLoopService {
     return this.stateStore.toSnapshot(liveSession);
   }
 
+  /**
+   * Restores a new session from a save slot. Returns session state for the new session.
+   */
+  public async restoreFromSaveSlot(
+    slotId: string,
+    ownerSessionId: string,
+  ): Promise<GameSessionState | null> {
+    const snapshot = await saveSlotStore.getSlotSnapshot(slotId, ownerSessionId);
+    if (!snapshot) {
+      return null;
+    }
+
+    const session = snapshot.session;
+    const newSessionId = crypto.randomUUID();
+    const seed = {
+      id: newSessionId,
+      ownerSessionId,
+      seed: session.seed,
+      locale: session.locale,
+      scene: this.toMutable(session.scene),
+      projectId: session.projectId,
+      releaseVersion: session.releaseVersion,
+      triggerDefinitions: session.triggerDefinitions,
+    };
+
+    await this.stateStore.createSession(seed);
+    await this.progressStore.initialize(newSessionId);
+    if (snapshot.progress) {
+      await this.progressStore.restoreSnapshot(
+        newSessionId,
+        snapshot.progress.xp,
+        snapshot.progress.level,
+      );
+    }
+
+    const saved = await this.stateStore.getSession(newSessionId);
+    if (!saved.ok) {
+      return null;
+    }
+
+    this.ensureSessionMaps(newSessionId);
+    const liveSession = await this.enrichSessionParticipants(this.toMutable(saved.payload));
+    this.liveSessions.set(newSessionId, liveSession);
+    this.lastPersistAtMs.set(newSessionId, Date.now());
+    this.chatWindow.set(newSessionId, []);
+    this.getResumeTokenState(newSessionId, ownerSessionId, false);
+
+    return this.getSessionState(newSessionId, ownerSessionId);
+  }
+
   public async restoreSession(
     sessionId: string,
     resumeToken: string,
@@ -834,11 +897,29 @@ export class GameLoopService {
       sessionResult.payload.scene.quests?.[0];
 
     let activeCutsceneStep: CutsceneStep | undefined;
+    let activeCutsceneSoundAssetSource: string | undefined;
+    let cutsceneSkippable: boolean | undefined;
     if (sessionResult.payload.scene.cutscene) {
       const state = sessionResult.payload.scene.cutscene;
       const def = sessionResult.payload.cutsceneDefinitions?.find((c) => c.id === state.cutsceneId);
+      cutsceneSkippable = def?.skippable;
       if (def && state.currentStepIndex < def.steps.length) {
         activeCutsceneStep = def.steps[state.currentStepIndex];
+        const soundAssetId = activeCutsceneStep?.soundAssetId;
+        if (soundAssetId && sessionResult.payload.scene.assets) {
+          const matchingAsset = sessionResult.payload.scene.assets.find(
+            (asset: BuilderAsset) => asset.id === soundAssetId,
+          );
+          if (matchingAsset) {
+            const runtimeVariant = matchingAsset.variants.find(
+              (variant) => variant.usage === "runtime",
+            );
+            const sourceVariant =
+              runtimeVariant ??
+              matchingAsset.variants.find((variant) => variant.usage === "source");
+            activeCutsceneSoundAssetSource = sourceVariant?.source ?? matchingAsset.source;
+          }
+        }
       }
     }
 
@@ -847,6 +928,7 @@ export class GameLoopService {
       sceneTitle: sessionResult.payload.scene.sceneTitle,
       sceneMode: sessionResult.payload.scene.sceneMode,
       activeQuestTitle: activeQuest?.title,
+      quests: sessionResult.payload.scene.quests,
       locale: sessionResult.payload.locale,
       participantRole,
       participants: sessionResult.payload.participants,
@@ -859,7 +941,10 @@ export class GameLoopService {
           ? sessionResult.payload.scene.inventory
           : undefined,
       cutscene: sessionResult.payload.scene.cutscene,
+      cutsceneSkippable,
       activeCutsceneStep,
+      activeCutsceneSoundAssetSource,
+      itemDefinitions: sessionResult.payload.itemDefinitions,
     };
   }
 

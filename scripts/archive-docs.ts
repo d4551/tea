@@ -29,6 +29,7 @@ interface ArchiveManifest {
 }
 
 const logger = createLogger("script.archive-docs");
+const repositoryRootUrl = new URL("../", import.meta.url);
 
 const sourceMarkdownPaths: readonly string[] = [
   "README.md",
@@ -94,7 +95,7 @@ const rewriteSourceLinks = (
   sourceText: string,
   archiveEntries: readonly ArchiveEntry[],
 ): string => {
-  const cwd = process.cwd().replace(/\\/gu, "/");
+  const cwd = repositoryRootUrl.pathname.replace(/\\/gu, "/");
   let rewritten = sourceText;
 
   for (const entry of archiveEntries) {
@@ -120,7 +121,8 @@ const run = async (): Promise<void> => {
   const producedEntries: ArchiveEntry[] = [];
 
   for (const sourcePath of sourceMarkdownPaths) {
-    const sourceFile = Bun.file(sourcePath);
+    const sourceFilePath = Bun.fileURLToPath(new URL(sourcePath, repositoryRootUrl));
+    const sourceFile = Bun.file(sourceFilePath);
     if (!(await sourceFile.exists())) {
       throw new Error(`Missing required source markdown file: ${sourcePath}`);
     }
@@ -128,8 +130,9 @@ const run = async (): Promise<void> => {
     const sourceText = (await sourceFile.text()).trimEnd();
     const rewritten = rewriteSourceLinks(sourcePath, sourceText, archiveEntries);
     const archivePath = toArchivePath(sourcePath);
-    await Bun.write(archivePath, `${rewritten}\n`);
-    const archivedText = await Bun.file(archivePath).text();
+    const archiveFile = Bun.file(Bun.fileURLToPath(new URL(archivePath, repositoryRootUrl)));
+    await archiveFile.write(`${rewritten}\n`);
+    const archivedText = await archiveFile.text();
     const timestamp = new Date().toISOString();
 
     producedEntries.push({
@@ -141,13 +144,13 @@ const run = async (): Promise<void> => {
     });
 
     if (deleteSources) {
-      await Bun.file(sourcePath).unlink();
+      await sourceFile.unlink();
       logger.info("docs.archive.deleted", { sourcePath });
       continue;
     }
 
     if (clearSources) {
-      await Bun.write(sourcePath, "");
+      await Bun.write(sourceFilePath, "");
       logger.info("docs.archive.cleared", { sourcePath });
     }
   }
@@ -158,7 +161,8 @@ const run = async (): Promise<void> => {
     entries: producedEntries,
   };
 
-  await Bun.write(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  const manifestFile = Bun.file(Bun.fileURLToPath(new URL(manifestPath, repositoryRootUrl)));
+  await manifestFile.write(`${JSON.stringify(manifest, null, 2)}\n`);
   logger.info("docs.archive.completed", {
     sourceCount: sourceMarkdownPaths.length,
     archiveCount: producedEntries.length,

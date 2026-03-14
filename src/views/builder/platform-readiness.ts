@@ -8,6 +8,7 @@ import type {
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
+import { cardClasses } from "../shared/ui-components.ts";
 
 /**
  * Rendering options for the platform readiness section.
@@ -124,7 +125,7 @@ const renderCapabilityCard = (
   const copy = capabilityCopy(messages, capability.key);
   const href = withQueryParameters(copy.href, { lang: locale, projectId });
   const statusText = statusLabel(messages, capability.status);
-  return `<article class="card card-border bg-base-100 shadow-sm" role="listitem" aria-label="${escapeHtml(copy.title)} — ${escapeHtml(statusText)}">
+  return `<article class="${cardClasses.bordered}" role="listitem" aria-label="${escapeHtml(copy.title)} — ${escapeHtml(statusText)}">
     <div class="card-body gap-3">
       <div class="flex items-start justify-between gap-3">
         <h3 class="card-title text-lg" id="readiness-${escapeHtml(capability.key)}">${escapeHtml(copy.title)}</h3>

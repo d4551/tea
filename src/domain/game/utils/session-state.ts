@@ -1,21 +1,46 @@
 import { resolveSpriteManifest } from "../../../shared/config/game-config.ts";
 import type {
   BuilderAsset,
+  CollisionMask,
+  Direction,
   GameDialogueEntry,
   GameFlagDefinition,
   GameLocale,
-  NpcState,
   GameQuestState,
   GameSceneState,
-  Direction,
+  NpcState,
   NpcStateMachine,
   QuestDefinition,
   SceneDefinition,
+  TilemapDefinition,
 } from "../../../shared/contracts/game.ts";
 import { resolveGameText } from "../data/game-text.ts";
 import { gameSpriteManifests } from "../data/sprite-data.ts";
 
 const COLLISION_SIZE_RATIO = 0.4;
+
+const tilemapLayersToCollisionMasks = (tilemap: TilemapDefinition): CollisionMask[] => {
+  const masks: CollisionMask[] = [];
+  for (const layer of tilemap.layers) {
+    if (!layer.collision) continue;
+    for (let row = 0; row < layer.data.length; row++) {
+      const rowData = layer.data[row];
+      if (!rowData) continue;
+      for (let col = 0; col < rowData.length; col++) {
+        const tileIndex = rowData[col];
+        if (typeof tileIndex === "number" && tileIndex >= 0) {
+          masks.push({
+            x: col * layer.tileWidth,
+            y: row * layer.tileHeight,
+            width: layer.tileWidth,
+            height: layer.tileHeight,
+          });
+        }
+      }
+    }
+  }
+  return masks;
+};
 
 const createLocalBounds = (
   frameWidth: number,
@@ -133,8 +158,12 @@ export const buildSessionSceneState = (
     geometry: sceneDefinition.geometry,
     player: playerState,
     npcs,
-    collisions: sceneDefinition.collisions,
+    collisions: [
+      ...sceneDefinition.collisions,
+      ...(sceneDefinition.tilemap ? tilemapLayersToCollisionMasks(sceneDefinition.tilemap) : []),
+    ],
     nodes: sceneDefinition.nodes ?? [],
+    ...(sceneDefinition.tilemap ? { tilemap: sceneDefinition.tilemap } : {}),
     assets,
     camera: { x: 0, y: 0 },
     uiState: "playing",

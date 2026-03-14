@@ -1587,7 +1587,11 @@ const toCombatEncounterStateFromRows = (
         critRate: row.critRate,
         critMultiplier: row.critMultiplier,
       };
-      const statusEffects = safeJsonParse<StatusEffect[]>(row.statusEffects, []);
+      const statusEffects = safeJsonParse<StatusEffect[]>(
+        row.statusEffects,
+        [],
+        (v): v is StatusEffect[] => Array.isArray(v),
+      );
       return {
         id: row.id,
         label: row.label,
@@ -1599,7 +1603,11 @@ const toCombatEncounterStateFromRows = (
       };
     });
 
-  const log = safeJsonParse<CombatTurnResult[]>(stateRow.combatLog, []);
+  const log = safeJsonParse<CombatTurnResult[]>(
+    stateRow.combatLog,
+    [],
+    (v): v is CombatTurnResult[] => Array.isArray(v),
+  );
 
   return {
     id: stateRow.encounterId,

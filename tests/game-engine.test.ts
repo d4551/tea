@@ -601,6 +601,28 @@ describe("game engine HTTP contracts", () => {
     expect(response.status).toBe(httpStatus.unauthorized);
   });
 
+  test("restore route rejects malformed resume token formats", async () => {
+    const session = await gameLoop.createSession("en-US", "teaHouse");
+    managedSessionIds.add(session.sessionId);
+    const path = withSessionId(appRoutes.gameApiSessionRestore, session.sessionId);
+    const ownerCookie = `${appConfig.auth.sessionCookieName}=anonymous`;
+
+    const malformedTokens = ["invalid-token", "not-valid-base64!!!", "eyJpbnZhbGlkIjoidHJ1ZSJ9"];
+    for (const token of malformedTokens) {
+      const response = await app.handle(
+        new Request(toUrl(path), {
+          method: "POST",
+          headers: {
+            cookie: ownerCookie,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ resumeToken: token }),
+        }),
+      );
+      expect(response.status).toBe(httpStatus.unauthorized);
+    }
+  });
+
   test("save route enforces the configured cooldown", async () => {
     const session = await gameLoop.createSession("en-US", "teaHouse");
     managedSessionIds.add(session.sessionId);

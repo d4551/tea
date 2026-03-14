@@ -442,6 +442,7 @@ model BuilderProjectScene {
   geometryHeight Int
   spawnX         Int
   spawnY         Int
+  tilemapData    Json?
   npcs           BuilderProjectSceneNpc[]
   nodes          BuilderProjectSceneNode[]
   collisions     BuilderProjectSceneCollision[]
@@ -500,26 +501,27 @@ model BuilderProjectSceneNpcDialogueKey {
 }
 
 model BuilderProjectSceneNode {
-  projectId       String
-  sceneId         String
-  id              String
-  scene           BuilderProjectScene @relation(fields: [projectId, sceneId], references: [projectId, id], onDelete: Cascade)
-  ordinal         Int
-  nodeType        String
-  assetId         String?
-  animationClipId String?
-  positionX       Float
-  positionY       Float
-  positionZ       Float?
-  sizeWidth       Float?
-  sizeHeight      Float?
-  layer           String?
-  rotationX       Float?
-  rotationY       Float?
-  rotationZ       Float?
-  scaleX          Float?
-  scaleY          Float?
-  scaleZ          Float?
+  projectId          String
+  sceneId            String
+  id                 String
+  scene              BuilderProjectScene @relation(fields: [projectId, sceneId], references: [projectId, id], onDelete: Cascade)
+  ordinal            Int
+  nodeType           String
+  assetId            String?
+  animationClipId    String?
+  positionX          Float
+  positionY          Float
+  positionZ          Float?
+  sizeWidth          Float?
+  sizeHeight         Float?
+  layer              String?
+  rotationX          Float?
+  rotationY          Float?
+  rotationZ          Float?
+  scaleX             Float?
+  scaleY             Float?
+  scaleZ             Float?
+  particleEmitterData Json?
 
   @@id([projectId, sceneId, id])
   @@unique([projectId, sceneId, ordinal])
@@ -836,6 +838,23 @@ model PlayerProgress {
   visitedScenes PlayerProgressVisitedScene[]
   interactions  PlayerProgressInteraction[]
   updatedAt     DateTime                     @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Save slots: named snapshots for save/load UX
+// ---------------------------------------------------------------------------
+
+model GameSaveSlot {
+  id               String   @id @default(cuid())
+  ownerSessionId   String
+  slotName         String?
+  slotIndex        Int?
+  sceneTitle       String
+  sessionSnapshot  String
+  createdAt        DateTime @default(now())
+
+  @@index([ownerSessionId])
+  @@index([ownerSessionId, slotIndex])
 }
 
 model PlayerProgressVisitedScene {

@@ -29,7 +29,12 @@ interface AuthSessionCookieOptions {
   readonly secure: boolean;
 }
 
-export type AuthCookieBag = Record<string, Cookie<unknown>>;
+interface AuthSessionCookie {
+  readonly value?: Cookie<unknown>["value"];
+  readonly set: (...args: Parameters<Cookie<unknown>["set"]>) => void;
+}
+
+export type AuthCookieBag = Record<string, AuthSessionCookie>;
 const authSessionCache = new WeakMap<AuthCookieBag, AuthSession>();
 
 const authSessionCookieSchema = t.Cookie({

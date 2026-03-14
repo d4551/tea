@@ -18,6 +18,8 @@ export type CutsceneTickResult =
  * It tracks duration-based steps (pan, wait) and input-based steps (dialogue).
  */
 export class CutsceneEngine {
+  private static readonly FALLBACK_PLAY_SOUND_DURATION_MS = 250;
+
   /**
    * Initializes a new cutscene playback state.
    */
@@ -58,16 +60,18 @@ export class CutsceneEngine {
     const nextElapsed = playback.stepElapsedMs + deltaMs;
     const requiresInput = this.stepRequiresInput(currentStep);
 
+    const durationMs = this.resolveStepDurationMs(currentStep);
+
     // If the step is bounded by duration
-    if (currentStep.durationMs && currentStep.durationMs > 0) {
-      if (nextElapsed >= currentStep.durationMs) {
+    if (durationMs > 0) {
+      if (nextElapsed >= durationMs) {
         if (requiresInput) {
           // Duration elapsed but still requires input to proceed (e.g. dialogue finished printing but user must press A)
           return {
             type: "waiting_for_input",
             state: {
               ...playback,
-              stepElapsedMs: currentStep.durationMs,
+              stepElapsedMs: durationMs,
               phase: "waiting_for_input",
             },
           };
@@ -92,6 +96,13 @@ export class CutsceneEngine {
       type: "playing",
       state: { ...playback, stepElapsedMs: nextElapsed },
     };
+  }
+
+  private resolveStepDurationMs(step: CutsceneStep): number {
+    if (step.action === "play_sound" && step.durationMs <= 0) {
+      return CutsceneEngine.FALLBACK_PLAY_SOUND_DURATION_MS;
+    }
+    return step.durationMs;
   }
 
   /**

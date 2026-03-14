@@ -1,4 +1,8 @@
-import { appRoutes, interpolateRoutePath } from "../shared/constants/routes.ts";
+import { httpStatus } from "../shared/constants/http.ts";
+import {
+  GAME_SESSION_ROUTE_PATTERNS,
+  interpolateRoutePath,
+} from "../shared/constants/route-patterns.ts";
 import type { GameCommand, GameRealtimeFrame, GameSceneState } from "../shared/contracts/game.ts";
 import {
   validateGameRealtimeFrame,
@@ -7,7 +11,7 @@ import {
 } from "../shared/contracts/game.ts";
 import type { GameClientRuntimeConfig } from "../shared/contracts/game-client-bootstrap.ts";
 import { readJsonResponse, settleAsync } from "../shared/utils/async-result.ts";
-import { safeJsonParse } from "../shared/utils/safe-json.ts";
+import { acceptUnknown, safeJsonParse } from "../shared/utils/safe-json.ts";
 import { isResumeTokenExpiredSoon } from "./game-client-bootstrap-session.ts";
 import type {
   GameClientAlertTone,
@@ -20,7 +24,7 @@ const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 
 const buildSessionSocketUrl = (sessionId: string, resumeToken: string): string => {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const path = interpolateRoutePath(appRoutes.gameApiSessionWebSocket, { id: sessionId });
+  const path = interpolateRoutePath(GAME_SESSION_ROUTE_PATTERNS.websocket, { id: sessionId });
   const target = new URL(`${protocol}//${window.location.host}${path}`);
   if (resumeToken.length > 0) {
     target.searchParams.set("resumeToken", resumeToken);
@@ -30,7 +34,7 @@ const buildSessionSocketUrl = (sessionId: string, resumeToken: string): string =
 };
 
 const buildSessionRestoreUrl = (sessionId: string): string => {
-  const path = interpolateRoutePath(appRoutes.gameApiSessionRestore, { id: sessionId });
+  const path = interpolateRoutePath(GAME_SESSION_ROUTE_PATTERNS.restore, { id: sessionId });
   return new URL(path, window.location.origin).toString();
 };
 
@@ -43,7 +47,8 @@ const parseGameFrameFromMessage = (incoming: unknown): GameRealtimeFrame | null 
     return null;
   }
 
-  const payload = typeof incoming === "string" ? safeJsonParse(incoming, null) : incoming;
+  const payload =
+    typeof incoming === "string" ? safeJsonParse(incoming, null, acceptUnknown) : incoming;
   const validation = validateGameRealtimeFrame(payload);
   if (!validation.ok) {
     return null;
@@ -220,7 +225,10 @@ export const createGameClientTransport = ({
 
       const response = fetchResult.value;
       if (!response.ok) {
-        if (response.status >= 500 && attempt + 1 < runtimeConfig.restoreMaxAttempts) {
+        if (
+          response.status >= httpStatus.internalServerError &&
+          attempt + 1 < runtimeConfig.restoreMaxAttempts
+        ) {
           await delay(runtimeConfig.socketReconnectDelayMs);
           continue;
         }

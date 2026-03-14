@@ -12,6 +12,12 @@ import type {
 } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
+import {
+  cardClasses,
+  renderBuilderHiddenFields,
+  renderEmptyStateCompact,
+  spinnerClasses,
+} from "../shared/ui-components.ts";
 import { getBooleanLabel } from "./view-labels.ts";
 import { renderWorkspaceShell } from "./workspace-shell.ts";
 
@@ -61,7 +67,7 @@ export const renderNpcEditor = (
           sceneId,
         },
       );
-      return `<article class="card card-border bg-base-100 shadow-sm">
+      return `<article class="${cardClasses.bordered}">
         <div class="card-body gap-3">
           <div class="flex items-start gap-3">
             ${
@@ -113,7 +119,7 @@ export const renderNpcEditor = (
       })}
       <section class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <div class="space-y-4">
-        <article class="card card-border bg-base-100 shadow-sm">
+        <article class="${cardClasses.bordered}">
           <form
             class="card-body gap-4"
             hx-post="${escapeHtml(createAction)}"
@@ -126,8 +132,7 @@ export const renderNpcEditor = (
               <h1 class="card-title text-2xl">${escapeHtml(messages.builder.npcRosterTitle)}</h1>
               <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.npcCreateDescription)}</p>
             </div>
-            <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
-            <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+            ${renderBuilderHiddenFields(projectId, locale)}
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.npcCreateSceneLabel)}</legend>
               <select name="sceneId" class="select w-full" aria-label="${escapeHtml(messages.builder.sceneId)}">${sceneOptions}</select>
@@ -142,7 +147,7 @@ export const renderNpcEditor = (
             </fieldset>
             <div class="flex items-center gap-2">
               <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.addNpc)}">${escapeHtml(messages.builder.addNpc)}</button>
-              <span id="npc-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+              <span id="npc-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
             </div>
           </form>
         </article>
@@ -150,7 +155,10 @@ export const renderNpcEditor = (
         ${
           rosterCards.length > 0
             ? `<div class="grid gap-4">${rosterCards}</div>`
-            : `<div role="alert" class="alert alert-warning alert-soft"><span>${escapeHtml(messages.builder.noNpcs)}</span></div>`
+            : renderEmptyStateCompact(
+                messages.builder.noNpcs,
+                messages.builder.npcCreateDescription,
+              )
         }
       </div>
 
@@ -165,7 +173,10 @@ export const renderNpcEditor = (
                 selectedNpc.sceneId,
                 manifests[selectedNpc.npc.characterKey] ?? null,
               )
-            : `<div role="alert" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noNpcs)}</span></div>`
+            : renderEmptyStateCompact(
+                messages.builder.noNpcs,
+                messages.builder.npcCreateDescription,
+              )
         }
       </div>
     </section>
@@ -209,7 +220,7 @@ export const renderNpcDetail = (
   const dialogueKeys = npc.dialogueKeys.join(", ");
 
   return `
-    <div class="card card-border bg-base-100 shadow-sm">
+    <div class="${cardClasses.bordered}">
       <div class="card-body gap-4">
         <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div class="flex items-start gap-3">
@@ -230,7 +241,7 @@ export const renderNpcDetail = (
           <form hx-delete="${escapeHtml(deleteAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#npc-delete-spinner" hx-disabled-elt="button">
             <span class="flex items-center gap-2">
               <button type="submit" class="btn btn-error btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(npc.characterKey)}">${escapeHtml(messages.builder.delete)}</button>
-              <span id="npc-delete-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+              <span id="npc-delete-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
             </span>
           </form>
         </div>
@@ -243,59 +254,61 @@ export const renderNpcDetail = (
           hx-indicator="#npc-detail-spinner"
           hx-disabled-elt="button, input, select, textarea"
         >
-          <fieldset class="fieldset">
-            <legend class="fieldset-legend">${escapeHtml(messages.builder.npcLabel)}</legend>
-            <input name="labelKey" type="text" class="input w-full" value="${escapeHtml(npc.labelKey)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.labelField)}" />
-          </fieldset>
+          <div class="form-control">
+            <label class="label" for="npc-label-key"><span class="label-text">${escapeHtml(messages.builder.npcLabel)}</span></label>
+            <input id="npc-label-key" name="labelKey" type="text" class="input input-bordered w-full" value="${escapeHtml(npc.labelKey)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.labelField)}" />
+          </div>
 
-          <fieldset class="fieldset">
-            <legend class="fieldset-legend">${escapeHtml(messages.builder.npcPosition)}</legend>
-            <label class="label" for="npc-x">${escapeHtml(messages.builder.xLabel)}</label>
-            <input id="npc-x" name="x" type="number" class="input w-full" value="${npc.x}" aria-required="true" required aria-label="${escapeHtml(messages.builder.xLabel)}" />
-            <label class="label" for="npc-y">${escapeHtml(messages.builder.yLabel)}</label>
-            <input id="npc-y" name="y" type="number" class="input w-full" value="${npc.y}" aria-required="true" required aria-label="${escapeHtml(messages.builder.yLabel)}" />
-          </fieldset>
+          <div class="form-control">
+            <label class="label" for="npc-x"><span class="label-text">${escapeHtml(messages.builder.npcPosition)} · ${escapeHtml(messages.builder.xLabel)}</span></label>
+            <input id="npc-x" name="x" type="number" class="input input-bordered w-full" value="${npc.x}" required aria-required="true" aria-label="${escapeHtml(messages.builder.xLabel)}" />
+          </div>
+          <div class="form-control">
+            <label class="label" for="npc-y"><span class="label-text">${escapeHtml(messages.builder.yLabel)}</span></label>
+            <input id="npc-y" name="y" type="number" class="input input-bordered w-full" value="${npc.y}" required aria-required="true" aria-label="${escapeHtml(messages.builder.yLabel)}" />
+          </div>
 
-          <fieldset class="fieldset">
-            <legend class="fieldset-legend">${escapeHtml(messages.builder.geometry)}</legend>
-            <label class="label" for="npc-interact-radius">${escapeHtml(messages.builder.interactRadius)}</label>
-            <input id="npc-interact-radius" name="interactRadius" type="number" class="input w-full" value="${npc.interactRadius}" min="1" aria-required="true" required aria-label="${escapeHtml(messages.builder.interactRadius)}" />
-            <label class="label" for="npc-wander-radius">${escapeHtml(messages.builder.wanderRadius)}</label>
-            <input id="npc-wander-radius" name="wanderRadius" type="number" class="input w-full" value="${npc.ai.wanderRadius}" min="0" aria-required="true" required aria-label="${escapeHtml(messages.builder.wanderRadius)}" />
-          </fieldset>
+          <div class="form-control">
+            <label class="label" for="npc-interact-radius"><span class="label-text">${escapeHtml(messages.builder.interactRadius)}</span></label>
+            <input id="npc-interact-radius" name="interactRadius" type="number" class="input input-bordered w-full" value="${npc.interactRadius}" min="1" required aria-required="true" aria-label="${escapeHtml(messages.builder.interactRadius)}" />
+          </div>
+          <div class="form-control">
+            <label class="label" for="npc-wander-radius"><span class="label-text">${escapeHtml(messages.builder.wanderRadius)}</span></label>
+            <input id="npc-wander-radius" name="wanderRadius" type="number" class="input input-bordered w-full" value="${npc.ai.wanderRadius}" min="0" required aria-required="true" aria-label="${escapeHtml(messages.builder.wanderRadius)}" />
+          </div>
 
-          <fieldset class="fieldset">
-            <legend class="fieldset-legend">${escapeHtml(messages.builder.wanderSpeed)}</legend>
-            <label class="label" for="npc-wander-speed">${escapeHtml(messages.builder.wanderSpeed)}</label>
-            <input id="npc-wander-speed" name="wanderSpeed" type="number" class="input w-full" value="${npc.ai.wanderSpeed}" min="0" step="0.1" aria-required="true" required aria-label="${escapeHtml(messages.builder.wanderSpeed)}" />
-            <label class="label" for="npc-idle-min">${escapeHtml(messages.builder.idlePauseMinMs)}</label>
-            <input id="npc-idle-min" name="idlePauseMinMs" type="number" class="input w-full" value="${npc.ai.idlePauseMs[0]}" min="0" step="1" aria-required="true" required aria-label="${escapeHtml(messages.builder.idlePauseMinMs)}" />
-            <label class="label" for="npc-idle-max">${escapeHtml(messages.builder.idlePauseMaxMs)}</label>
-            <input id="npc-idle-max" name="idlePauseMaxMs" type="number" class="input w-full" value="${npc.ai.idlePauseMs[1]}" min="0" step="1" aria-required="true" required aria-label="${escapeHtml(messages.builder.idlePauseMaxMs)}" />
-          </fieldset>
+          <div class="form-control">
+            <label class="label" for="npc-wander-speed"><span class="label-text">${escapeHtml(messages.builder.wanderSpeed)}</span></label>
+            <input id="npc-wander-speed" name="wanderSpeed" type="number" class="input input-bordered w-full" value="${npc.ai.wanderSpeed}" min="0" step="0.1" required aria-required="true" aria-label="${escapeHtml(messages.builder.wanderSpeed)}" />
+          </div>
+          <div class="form-control">
+            <label class="label" for="npc-idle-min"><span class="label-text">${escapeHtml(messages.builder.idlePauseMinMs)}</span></label>
+            <input id="npc-idle-min" name="idlePauseMinMs" type="number" class="input input-bordered w-full" value="${npc.ai.idlePauseMs[0]}" min="0" step="1" required aria-required="true" aria-label="${escapeHtml(messages.builder.idlePauseMinMs)}" />
+          </div>
+          <div class="form-control">
+            <label class="label" for="npc-idle-max"><span class="label-text">${escapeHtml(messages.builder.idlePauseMaxMs)}</span></label>
+            <input id="npc-idle-max" name="idlePauseMaxMs" type="number" class="input input-bordered w-full" value="${npc.ai.idlePauseMs[1]}" min="0" step="1" required aria-required="true" aria-label="${escapeHtml(messages.builder.idlePauseMaxMs)}" />
+          </div>
 
-          <fieldset class="fieldset lg:col-span-2">
-            <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogue)}</legend>
-            <label class="label" for="npc-dialogue-keys">${escapeHtml(messages.builder.dialogueKey)}</label>
-            <textarea id="npc-dialogue-keys" name="dialogueKeys" class="textarea w-full" rows="3" aria-label="${escapeHtml(messages.builder.dialogueSearchLabel)}">${escapeHtml(dialogueKeys)}</textarea>
-            <div class="grid gap-4 lg:grid-cols-2">
-              <div>
-                <label class="label" for="npc-greet-line-key">${escapeHtml(messages.builder.greetLineKey)}</label>
-                <input id="npc-greet-line-key" name="greetLineKey" type="text" class="input w-full" value="${escapeHtml(npc.ai.greetLineKey)}" aria-label="${escapeHtml(messages.builder.greetLineKey)}" />
-              </div>
-              <div>
-                <label class="label" for="npc-greet-enabled">${escapeHtml(messages.builder.greetOnApproach)}</label>
-                <select id="npc-greet-enabled" name="greetOnApproach" class="select w-full" aria-label="${escapeHtml(messages.builder.greetOnApproach)}">
-                  <option value="true"${npc.ai.greetOnApproach ? " selected" : ""}>${escapeHtml(getBooleanLabel(messages, true))}</option>
-                  <option value="false"${npc.ai.greetOnApproach ? "" : " selected"}>${escapeHtml(getBooleanLabel(messages, false))}</option>
-                </select>
-              </div>
-            </div>
-          </fieldset>
+          <div class="form-control lg:col-span-2">
+            <label class="label" for="npc-dialogue-keys"><span class="label-text">${escapeHtml(messages.builder.dialogue)} · ${escapeHtml(messages.builder.dialogueKey)}</span></label>
+            <textarea id="npc-dialogue-keys" name="dialogueKeys" class="textarea textarea-bordered w-full" rows="3" aria-label="${escapeHtml(messages.builder.dialogueSearchLabel)}">${escapeHtml(dialogueKeys)}</textarea>
+          </div>
+          <div class="form-control">
+            <label class="label" for="npc-greet-line-key"><span class="label-text">${escapeHtml(messages.builder.greetLineKey)}</span></label>
+            <input id="npc-greet-line-key" name="greetLineKey" type="text" class="input input-bordered w-full" value="${escapeHtml(npc.ai.greetLineKey)}" aria-label="${escapeHtml(messages.builder.greetLineKey)}" />
+          </div>
+          <div class="form-control">
+            <label class="label" for="npc-greet-enabled"><span class="label-text">${escapeHtml(messages.builder.greetOnApproach)}</span></label>
+            <select id="npc-greet-enabled" name="greetOnApproach" class="select select-bordered w-full" aria-label="${escapeHtml(messages.builder.greetOnApproach)}">
+              <option value="true"${npc.ai.greetOnApproach ? " selected" : ""}>${escapeHtml(getBooleanLabel(messages, true))}</option>
+              <option value="false"${npc.ai.greetOnApproach ? "" : " selected"}>${escapeHtml(getBooleanLabel(messages, false))}</option>
+            </select>
+          </div>
 
           <div class="lg:col-span-2 flex items-center justify-end gap-2">
             <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.save)}">${escapeHtml(messages.builder.save)}</button>
-            <span id="npc-detail-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+            <span id="npc-detail-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>
       </div>

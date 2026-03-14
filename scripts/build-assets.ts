@@ -1,7 +1,10 @@
+import { appConfig } from "../src/config/environment.ts";
 import { createLogger } from "../src/lib/logger.ts";
+import { assetRelativePaths, joinLocalPath } from "../src/shared/constants/assets.ts";
 import {
   assetPipelinePaths,
   createBuilderSceneEditorBuildOptions,
+  createClientModulesBuildOptions,
   createGameClientBuildOptions,
   createHtmxExtensionBuildOptions,
   createTailwindCommand,
@@ -13,6 +16,16 @@ type BuildLogs = Awaited<ReturnType<typeof Bun.build>>["logs"];
 
 const serializeBuildLogs = (logs: BuildLogs): readonly string[] =>
   logs.map((log) => Bun.inspect(log));
+
+const nodeBuiltinImportPattern =
+  /(?:\bimport\s+(?:[^'"`]+?\s+from\s+)?["']node:[^"']+["']|import\(\s*["']node:[^"']+["']\s*\)|require\(\s*["']node:[^"']+["']\s*\))/u;
+
+const assertNoNodeBuiltinImports = async (assetPath: string): Promise<void> => {
+  const contents = await Bun.file(assetPath).text();
+  if (nodeBuiltinImportPattern.test(contents)) {
+    throw new Error(`Browser bundle ${assetPath} contains node built-in imports.`);
+  }
+};
 
 const run = async (command: readonly string[]): Promise<number> => {
   const process = Bun.spawn({
@@ -51,6 +64,18 @@ const copyHtmxBundle = async (): Promise<void> => {
   });
 };
 
+const copyHtmxSseExtension = async (): Promise<void> => {
+  const destination = joinLocalPath(
+    appConfig.staticAssets.publicDirectory,
+    assetRelativePaths.htmxExtensionSseFile,
+  );
+  await Bun.write(destination, Bun.file(assetPipelinePaths.htmxSseExtensionSourcePath));
+  logger.info("htmx.sse-extension.copied", {
+    source: assetPipelinePaths.htmxSseExtensionSourcePath,
+    destination,
+  });
+};
+
 const buildGameClient = async (): Promise<void> => {
   logger.info("game-client.build.started");
   const result = await Bun.build(createGameClientBuildOptions());
@@ -66,6 +91,9 @@ const buildGameClient = async (): Promise<void> => {
   logger.info("game-client.build.completed", {
     outputs: result.outputs.map((output) => output.path),
   });
+  for (const output of result.outputs) {
+    await assertNoNodeBuiltinImports(output.path);
+  }
 };
 
 const buildBuilderSceneEditorClient = async (): Promise<void> => {
@@ -83,6 +111,9 @@ const buildBuilderSceneEditorClient = async (): Promise<void> => {
   logger.info("builder-scene-editor.build.completed", {
     outputs: result.outputs.map((output) => output.path),
   });
+  for (const output of result.outputs) {
+    await assertNoNodeBuiltinImports(output.path);
+  }
 };
 
 const buildHtmxExtensions = async (): Promise<void> => {
@@ -100,6 +131,12 @@ const buildHtmxExtensions = async (): Promise<void> => {
   logger.info("htmx.extensions.build.completed", {
     outputs: result.outputs.map((output) => output.path),
   });
+  for (const output of result.outputs) {
+    if (output.kind === "asset") {
+      continue;
+    }
+    await assertNoNodeBuiltinImports(output.path);
+  }
 };
 
 const copyOnnxWasm = async (): Promise<void> => {
@@ -121,9 +158,31 @@ const copyOnnxWasm = async (): Promise<void> => {
   });
 };
 
+const buildClientModules = async (): Promise<void> => {
+  const result = await Bun.build(createClientModulesBuildOptions());
+  if (!result.success) {
+    for (const log of serializeBuildLogs(result.logs)) {
+      logger.error("client.modules.build.error", { message: log });
+    }
+    throw new Error("Client modules build failed.");
+  }
+
+  logger.info("client.modules.build.completed", {
+    outputs: result.outputs.map((output) => output.path),
+  });
+  for (const output of result.outputs) {
+    if (output.kind === "asset") {
+      continue;
+    }
+    await assertNoNodeBuiltinImports(output.path);
+  }
+};
+
 await buildTailwindCss();
 await copyHtmxBundle();
+await copyHtmxSseExtension();
 await copyOnnxWasm();
 await buildHtmxExtensions();
 await buildGameClient();
 await buildBuilderSceneEditorClient();
+await buildClientModules();

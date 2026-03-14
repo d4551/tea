@@ -1,5 +1,5 @@
 import { createLogger } from "../../lib/logger.ts";
-import { safeJsonParse } from "../../shared/utils/safe-json.ts";
+import { acceptUnknown, safeJsonParse } from "../../shared/utils/safe-json.ts";
 import type { AiProvider } from "../ai/providers/provider-types.ts";
 
 const logger = createLogger("builder.ai-authoring");
@@ -94,7 +94,7 @@ export interface CutsceneScriptContext {
 const extractJson = (raw: string): unknown | null => {
   const fencedMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
   const jsonStr = fencedMatch ? (fencedMatch[1]?.trim() ?? "") : raw.trim();
-  return safeJsonParse(jsonStr, null);
+  return safeJsonParse(jsonStr, null, acceptUnknown);
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

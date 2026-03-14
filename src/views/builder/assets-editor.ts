@@ -1,5 +1,9 @@
 import type { LocaleCode } from "../../config/environment.ts";
 import type { BuilderPlatformReadiness } from "../../domain/builder/platform-readiness.ts";
+import {
+  DEFAULT_ANIMATION_FRAME_COUNT,
+  DEFAULT_ANIMATION_PLAYBACK_FPS,
+} from "../../shared/constants/builder-defaults.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type {
   AnimationClip,
@@ -10,6 +14,12 @@ import type {
 } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
+import {
+  cardClasses,
+  renderBuilderHiddenFields,
+  renderEmptyStateCompact,
+  spinnerClasses,
+} from "../shared/ui-components.ts";
 import { renderPlatformReadinessSection } from "./platform-readiness.ts";
 import {
   getArtifactLabel,
@@ -75,24 +85,41 @@ export const renderAssetsEditor = (
     )
     .join("");
   const assetCards = assets
-    .map(
-      (asset) => `<article class="card card-border bg-base-100 shadow-sm">
-        <div class="card-body gap-3">
-          <div class="flex items-center justify-between gap-3">
-            <div>
-              <h3 class="card-title text-base">${escapeHtml(getAssetLabel(messages, asset))}</h3>
-              <p class="font-mono text-xs text-base-content/60">${escapeHtml(asset.id)}</p>
+    .map((asset) => {
+      const isImage =
+        /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(asset.source) ||
+        ["portrait", "sprite-sheet", "background"].includes(asset.kind);
+      const previewHtml = isImage
+        ? `<img src="${escapeHtml(asset.source)}" alt="${escapeHtml(asset.id)}" class="object-cover w-full h-full min-h-24 rounded-box bg-base-200" loading="lazy" onerror="this.outerHTML='<div class=\\'skeleton w-full min-h-24 rounded-box\\'></div>'" />`
+        : `<div class="skeleton w-full h-24 rounded-box flex items-center justify-center text-base-content/40"><svg xmlns="http://www.w3.org/2000/svg" class="size-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg></div>`;
+      return `<article class="${cardClasses.bordered} card-compact">
+        <figure class="px-4 pt-4">
+          <div class="overflow-hidden rounded-box bg-base-200 aspect-video max-h-24">${previewHtml}</div>
+        </figure>
+        <div class="card-body gap-2 p-4 pt-2">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <h3 class="card-title text-base truncate">${escapeHtml(getAssetLabel(messages, asset))}</h3>
+              <p class="font-mono text-xs text-base-content/60 truncate">${escapeHtml(asset.id)}</p>
             </div>
-            <span class="badge badge-outline">${escapeHtml(getAssetKindLabel(messages, asset.kind))}</span>
+            <div class="dropdown dropdown-end">
+              <button type="button" tabindex="0" class="btn btn-ghost btn-xs btn-square" aria-label="${escapeHtml(messages.builder.openDetails)}" aria-haspopup="menu">
+                <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
+              </button>
+              <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-10 w-40 p-1 shadow-lg border border-base-300">
+                <li><a href="#" class="text-sm">${escapeHtml(messages.builder.openDetails)}</a></li>
+              </ul>
+            </div>
           </div>
-          <div class="flex flex-wrap gap-2 text-xs">
-            <span class="badge badge-soft">${escapeHtml(getSceneModeLabel(messages, asset.sceneMode))}</span>
-            <span class="badge ${asset.approved ? "badge-success" : "badge-warning"} badge-soft">${asset.approved ? escapeHtml(messages.builder.assetStatusApproved) : escapeHtml(messages.builder.assetStatusDraft)}</span>
+          <div class="flex flex-wrap gap-1">
+            <span class="badge badge-outline badge-sm">${escapeHtml(getAssetKindLabel(messages, asset.kind))}</span>
+            <span class="badge badge-soft badge-sm">${escapeHtml(getSceneModeLabel(messages, asset.sceneMode))}</span>
+            <span class="badge ${asset.approved ? "badge-success" : "badge-warning"} badge-soft badge-sm">${asset.approved ? escapeHtml(messages.builder.assetStatusApproved) : escapeHtml(messages.builder.assetStatusDraft)}</span>
           </div>
-          <p class="break-all text-sm text-base-content/70">${escapeHtml(asset.source)}</p>
+          <p class="break-all text-xs text-base-content/70 line-clamp-2">${escapeHtml(asset.source)}</p>
         </div>
-      </article>`,
-    )
+      </article>`;
+    })
     .join("");
 
   const clipCards = clips
@@ -101,12 +128,13 @@ export const renderAssetsEditor = (
         clip.frameCount > 0 && clip.playbackFps > 0
           ? Math.round((clip.frameCount / clip.playbackFps) * 1000)
           : 0;
-      const durationLabel = durationMs > 0 ? `${(durationMs / 1000).toFixed(2)}s` : "—";
+      const durationLabel =
+        durationMs > 0 ? `${(durationMs / 1000).toFixed(2)}s` : messages.common.notApplicable;
       const loopLabel = clip.loop
         ? messages.builder.clipTimelineLoop
         : messages.builder.clipTimelineNoLoop;
 
-      return `<article class="card card-border bg-base-100 shadow-sm">
+      return `<article class="${cardClasses.bordered}">
         <div class="card-body gap-2">
           <div class="flex items-center justify-between gap-3">
             <div>
@@ -120,14 +148,14 @@ export const renderAssetsEditor = (
             <div>${escapeHtml(messages.builder.clipStateTagLabel)}: ${escapeHtml(clip.stateTag)}</div>
             <div>${escapeHtml(messages.builder.clipFrameCountLabel)}: ${clip.frameCount}</div>
           </div>
-          <div class="mt-2 rounded-box bg-base-200/60 p-3" role="img" aria-label="${escapeHtml(messages.builder.clipTimelineDuration)}: ${durationLabel}">
+          <div class="mt-2 rounded-box bg-base-200/60 p-3" role="status" aria-label="${escapeHtml(messages.builder.clipTimelineDuration)}: ${escapeHtml(durationLabel)}">
             <div class="flex items-center justify-between text-xs text-base-content/70 mb-2">
               <span>${escapeHtml(messages.builder.clipTimelineDuration)}: ${escapeHtml(durationLabel)}</span>
-              <span>${clip.playbackFps} FPS</span>
+              <span>${clip.playbackFps} ${escapeHtml(messages.builder.fpsUnit)}</span>
             </div>
             <progress class="progress progress-primary w-full" value="100" max="100" aria-hidden="true"></progress>
             <div class="flex items-center justify-between gap-2 mt-2">
-              <span class="badge badge-xs badge-outline">0</span>
+              <span class="badge badge-xs badge-outline">${escapeHtml(messages.builder.clipFrameStart)}</span>
               <span class="badge badge-xs ${clip.loop ? "badge-success" : "badge-warning"} badge-soft">${escapeHtml(loopLabel)}</span>
               <span class="badge badge-xs badge-outline">${clip.frameCount}</span>
             </div>
@@ -178,11 +206,11 @@ export const renderAssetsEditor = (
                   aria-label="${escapeHtml(messages.builder.cancelAction)}: ${escapeHtml(getGenerationJobKindLabel(messages, job.kind))}"
                 >${escapeHtml(messages.builder.cancelAction)}</button>
               </form>
-              <span id="${jobSpinnerId}" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+              <span id="${jobSpinnerId}" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
             </div>`
           : "";
 
-      return `<article class="card card-border bg-base-100 shadow-sm">
+      return `<article class="${cardClasses.bordered}">
         <div class="card-body gap-3">
           <div class="flex items-center justify-between gap-3">
             <h3 class="card-title text-base">${escapeHtml(getGenerationJobKindLabel(messages, job.kind))}</h3>
@@ -196,9 +224,18 @@ export const renderAssetsEditor = (
     })
     .join("");
 
-  const emptyAssetAlert = `<div role="status" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noAssets)}</span></div>`;
-  const emptyClipAlert = `<div role="status" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noAnimationClips)}</span></div>`;
-  const emptyJobAlert = `<div role="status" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noGenerationJobs)}</span></div>`;
+  const emptyAssetAlert = renderEmptyStateCompact(
+    messages.builder.noAssets,
+    messages.builder.assetPlaceholder,
+  );
+  const emptyClipAlert = renderEmptyStateCompact(
+    messages.builder.noAnimationClips,
+    messages.builder.assetPlaceholder,
+  );
+  const emptyJobAlert = renderEmptyStateCompact(
+    messages.builder.noGenerationJobs,
+    messages.builder.assetPlaceholder,
+  );
 
   const assets2d = assets.filter((asset) => asset.sceneMode !== "3d").length;
   const assets3d = assets.filter((asset) => asset.sceneMode === "3d").length;
@@ -239,12 +276,11 @@ export const renderAssetsEditor = (
         : ""
     }
     <div class="grid gap-4 xl:grid-cols-3">
-      <article class="card card-border bg-base-100 shadow-sm">
+      <article class="${cardClasses.bordered}">
         <div class="card-body gap-3">
           <h2 class="card-title">${escapeHtml(messages.builder.assetsWorkspaceTitle)}</h2>
           <form class="space-y-3" hx-post="${escapeHtml(uploadAssetAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-encoding="multipart/form-data" hx-indicator="#asset-upload-spinner" hx-disabled-elt="button, input, select, textarea">
-            <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
-            <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+            ${renderBuilderHiddenFields(projectId, locale)}
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.assetIdFieldLabel)}</legend>
               <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.assetIdFieldLabel)}" />
@@ -270,13 +306,12 @@ export const renderAssetsEditor = (
             </fieldset>
             <div class="flex items-center gap-2">
               <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.addAssetFile)}">${escapeHtml(messages.builder.addAssetFile)}</button>
-              <span id="asset-upload-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+              <span id="asset-upload-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
             </div>
           </form>
           <div class="divider text-xs text-base-content/60">${escapeHtml(messages.builder.addAssetPath)}</div>
           <form class="space-y-3" hx-post="${escapeHtml(createAssetAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#asset-create-spinner" hx-disabled-elt="button, input, select, textarea">
-            <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
-            <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+            ${renderBuilderHiddenFields(projectId, locale)}
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.assetIdFieldLabel)}</legend>
               <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.assetIdFieldLabel)}" />
@@ -302,16 +337,15 @@ export const renderAssetsEditor = (
             </fieldset>
             <div class="flex items-center gap-2">
               <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.addAssetPath)}">${escapeHtml(messages.builder.addAssetPath)}</button>
-              <span id="asset-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+              <span id="asset-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
             </div>
           </form>
         </div>
       </article>
 
-      <article class="card card-border bg-base-100 shadow-sm">
+      <article class="${cardClasses.bordered}">
         <form class="card-body gap-3" hx-post="${escapeHtml(createClipAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#clip-create-spinner" hx-disabled-elt="button, input, select, textarea">
-          <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
-          <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+          ${renderBuilderHiddenFields(projectId, locale)}
           <h2 class="card-title">${escapeHtml(messages.builder.animationClipsTitle)}</h2>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.clipIdLabel)}</legend>
@@ -327,23 +361,22 @@ export const renderAssetsEditor = (
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.clipFrameCountLabel)}</legend>
-            <input name="frameCount" type="number" class="input w-full" value="4" min="1" aria-label="${escapeHtml(messages.builder.clipFrameCountLabel)}" />
+            <input name="frameCount" type="number" class="input w-full" value="${DEFAULT_ANIMATION_FRAME_COUNT}" min="1" aria-label="${escapeHtml(messages.builder.clipFrameCountLabel)}" />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.clipPlaybackLabel)}</legend>
-            <input name="playbackFps" type="number" class="input w-full" value="8" min="1" aria-label="${escapeHtml(messages.builder.clipPlaybackLabel)}" />
+            <input name="playbackFps" type="number" class="input w-full" value="${DEFAULT_ANIMATION_PLAYBACK_FPS}" min="1" aria-label="${escapeHtml(messages.builder.clipPlaybackLabel)}" />
           </fieldset>
           <div class="flex items-center gap-2">
             <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.createAnimationClip)}">${escapeHtml(messages.builder.createAnimationClip)}</button>
-            <span id="clip-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+            <span id="clip-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>
       </article>
 
-      <article class="card card-border bg-base-100 shadow-sm">
+      <article class="${cardClasses.bordered}">
         <form class="card-body gap-3" hx-post="${escapeHtml(createJobAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#job-create-spinner" hx-disabled-elt="button, input, select, textarea">
-          <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
-          <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+          ${renderBuilderHiddenFields(projectId, locale)}
           <h2 class="card-title">${escapeHtml(messages.builder.generationJobsTitle)}</h2>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.generationJobKindLabel)}</legend>
@@ -359,7 +392,7 @@ export const renderAssetsEditor = (
           </fieldset>
           <div class="flex items-center gap-2">
             <button type="submit" class="btn btn-secondary btn-sm" aria-label="${escapeHtml(messages.builder.createGenerationJob)}">${escapeHtml(messages.builder.createGenerationJob)}</button>
-            <span id="job-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+            <span id="job-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>
       </article>

@@ -1,4 +1,5 @@
 import { appConfig, type LocaleCode } from "../../config/environment.ts";
+import { GAME_SESSION_ROUTE_PATTERNS, interpolateRoutePath } from "./route-patterns.ts";
 
 type AppRouteMap = {
   readonly home: string;
@@ -11,12 +12,17 @@ type AppRouteMap = {
   readonly gameApiSessionCommand: string;
   readonly gameApiSessionDialogue: string;
   readonly gameApiSessionSave: string;
+  readonly gameApiSessionSaveSlot: string;
+  readonly gameApiSessionSaveSlots: string;
+  readonly gameApiSessionRestoreSlot: string;
   readonly gameApiSessionHud: string;
+  readonly gameApiSessionItemTooltip: string;
   readonly gameApiSessionWebSocket: string;
   readonly gameApiSessionInvite: string;
   readonly gameApiSessionJoin: string;
   readonly aiPlaygroundPartial: string;
   readonly oracleApi: string;
+  readonly health: string;
   readonly healthApi: string;
   readonly aiStatus: string;
   readonly aiHealth: string;
@@ -42,6 +48,8 @@ type AppRouteMap = {
   readonly aiBuilderKnowledgeDocuments: string;
   readonly aiBuilderKnowledgeSearch: string;
   readonly aiBuilderToolPlan: string;
+  readonly aiBuilderPatchPreview: string;
+  readonly aiBuilderPatchApply: string;
   readonly aiBuilderPatchPreviewForm: string;
   readonly aiBuilderPatchApplyForm: string;
   readonly builderPlatformReadiness: string;
@@ -54,20 +62,46 @@ type AppRouteMap = {
   readonly builderAutomation: string;
   readonly builderAi: string;
   readonly builderApiProjects: string;
+  readonly builderApiProjectDetail: string;
+  readonly builderApiProjectPublish: string;
   readonly builderApiScenes: string;
+  readonly builderApiScenesCreateForm: string;
+  readonly builderApiSceneDetail: string;
+  readonly builderApiSceneForm: string;
+  readonly builderApiSceneTilemap: string;
   readonly builderApiSceneNodes: string;
+  readonly builderApiSceneNodeDelete: string;
   readonly builderApiNpcs: string;
+  readonly builderApiNpcsCreateForm: string;
+  readonly builderApiNpcDetail: string;
+  readonly builderApiNpcForm: string;
   readonly builderApiDialogue: string;
+  readonly builderApiDialogueCreateForm: string;
+  readonly builderApiDialogueEntry: string;
+  readonly builderApiDialogueEntryForm: string;
+  readonly builderApiDialogueGenerate: string;
   readonly builderApiAssets: string;
   readonly builderApiAssetsUpload: string;
+  readonly builderApiAssetsCreateForm: string;
   readonly builderApiAnimationClips: string;
+  readonly builderApiAnimationClipsCreateForm: string;
   readonly builderApiDialogueGraphs: string;
+  readonly builderApiDialogueGraphsCreateForm: string;
   readonly builderApiQuests: string;
+  readonly builderApiQuestsCreateForm: string;
+  readonly builderApiQuestDetail: string;
+  readonly builderApiQuestForm: string;
   readonly builderApiTriggers: string;
+  readonly builderApiTriggersCreateForm: string;
   readonly builderApiGenerationJobs: string;
+  readonly builderApiGenerationJobsCreateForm: string;
+  readonly builderApiGenerationJobApprove: string;
   readonly builderApiGenerationJobStream: string;
   readonly builderApiAutomationRuns: string;
+  readonly builderApiAutomationRunsCreateForm: string;
+  readonly builderApiAutomationRunApprove: string;
   readonly builderApiAutomationRunStream: string;
+  readonly builderApiStatus: string;
 };
 
 /**
@@ -79,18 +113,23 @@ export const appRoutes: AppRouteMap = {
   game: appConfig.playableGame.mountPath,
   gameAssets: appConfig.playableGame.assetPrefix,
   gameApiSession: "/api/game/session",
-  gameApiSessionRestore: "/api/game/session/:id",
+  gameApiSessionRestore: GAME_SESSION_ROUTE_PATTERNS.restore,
   gameApiSessionClose: "/api/game/session/:id/close",
   gameApiSessionState: "/api/game/session/:id/state",
   gameApiSessionCommand: "/api/game/session/:id/command",
   gameApiSessionDialogue: "/api/game/session/:id/dialogue",
   gameApiSessionSave: "/api/game/session/:id/save",
+  gameApiSessionSaveSlot: "/api/game/session/:id/save-slot",
+  gameApiSessionSaveSlots: "/api/game/session/:id/save-slots",
+  gameApiSessionRestoreSlot: "/api/game/session/:id/restore-slot",
   gameApiSessionHud: "/api/game/session/:id/hud",
-  gameApiSessionWebSocket: "/api/game/session/:id/ws",
+  gameApiSessionItemTooltip: "/api/game/session/:id/item-tooltip",
+  gameApiSessionWebSocket: GAME_SESSION_ROUTE_PATTERNS.websocket,
   gameApiSessionInvite: "/api/game/session/:id/invite",
   gameApiSessionJoin: "/api/game/session/:id/join",
   aiPlaygroundPartial: "/partials/ai-playground",
   oracleApi: "/api/oracle",
+  health: "/health",
   healthApi: "/api/health",
   aiStatus: "/api/ai/status",
   aiHealth: "/api/ai/health",
@@ -116,6 +155,8 @@ export const appRoutes: AppRouteMap = {
   aiBuilderKnowledgeDocuments: "/api/builder/ai/knowledge/documents",
   aiBuilderKnowledgeSearch: "/api/builder/ai/knowledge/search",
   aiBuilderToolPlan: "/api/builder/ai/plan/tools",
+  aiBuilderPatchPreview: "/api/builder/ai/patch/preview",
+  aiBuilderPatchApply: "/api/builder/ai/patch/apply",
   aiBuilderPatchPreviewForm: "/api/builder/ai/patch/preview/form",
   aiBuilderPatchApplyForm: "/api/builder/ai/patch/apply/form",
   builderPlatformReadiness: "/api/builder/platform-readiness",
@@ -128,20 +169,46 @@ export const appRoutes: AppRouteMap = {
   builderAutomation: "/builder/automation",
   builderAi: "/builder/ai",
   builderApiProjects: "/api/builder/projects",
+  builderApiProjectDetail: "/api/builder/projects/:projectId",
+  builderApiProjectPublish: "/api/builder/projects/:projectId/publish",
   builderApiScenes: "/api/builder/scenes",
+  builderApiScenesCreateForm: "/api/builder/scenes/create/form",
+  builderApiSceneDetail: "/api/builder/scenes/:sceneId",
+  builderApiSceneForm: "/api/builder/scenes/:sceneId/form",
+  builderApiSceneTilemap: "/api/builder/scenes/:sceneId/tilemap",
   builderApiSceneNodes: "/api/builder/scenes/:sceneId/nodes",
+  builderApiSceneNodeDelete: "/api/builder/scenes/:sceneId/nodes/:nodeId",
   builderApiNpcs: "/api/builder/npcs",
+  builderApiNpcsCreateForm: "/api/builder/npcs/create/form",
+  builderApiNpcDetail: "/api/builder/npcs/:npcId",
+  builderApiNpcForm: "/api/builder/npcs/:npcId/form",
   builderApiDialogue: "/api/builder/dialogue",
+  builderApiDialogueCreateForm: "/api/builder/dialogue/create/form",
+  builderApiDialogueEntry: "/api/builder/dialogue/:key",
+  builderApiDialogueEntryForm: "/api/builder/dialogue/:key/form",
+  builderApiDialogueGenerate: "/api/builder/dialogue/generate",
   builderApiAssets: "/api/builder/assets",
   builderApiAssetsUpload: "/api/builder/assets/upload",
+  builderApiAssetsCreateForm: "/api/builder/assets/create/form",
   builderApiAnimationClips: "/api/builder/animation-clips",
+  builderApiAnimationClipsCreateForm: "/api/builder/animation-clips/create/form",
   builderApiDialogueGraphs: "/api/builder/dialogue-graphs",
+  builderApiDialogueGraphsCreateForm: "/api/builder/dialogue-graphs/create/form",
   builderApiQuests: "/api/builder/quests",
+  builderApiQuestsCreateForm: "/api/builder/quests/create/form",
+  builderApiQuestDetail: "/api/builder/quests/:questId",
+  builderApiQuestForm: "/api/builder/quests/:questId/form",
   builderApiTriggers: "/api/builder/triggers",
+  builderApiTriggersCreateForm: "/api/builder/triggers/create/form",
   builderApiGenerationJobs: "/api/builder/generation-jobs",
+  builderApiGenerationJobsCreateForm: "/api/builder/generation-jobs/create/form",
+  builderApiGenerationJobApprove: "/api/builder/generation-jobs/:jobId/approve",
   builderApiGenerationJobStream: "/api/builder/generation-jobs/:jobId/stream",
   builderApiAutomationRuns: "/api/builder/automation-runs",
+  builderApiAutomationRunsCreateForm: "/api/builder/automation-runs/create/form",
+  builderApiAutomationRunApprove: "/api/builder/automation-runs/:runId/approve",
   builderApiAutomationRunStream: "/api/builder/automation-runs/:runId/stream",
+  builderApiStatus: "/api/builder/status",
 };
 
 /**
@@ -246,11 +313,4 @@ export const resolveRequestQueryParam = (request: Request, key: string): string 
  * @param params Route parameter bag.
  * @returns Concrete route path with all known params interpolated.
  */
-export const interpolateRoutePath = (
-  path: string,
-  params: Readonly<Record<string, string>>,
-): string =>
-  path.replaceAll(/:([A-Za-z0-9_]+)/g, (segment, key: string) => {
-    const value = params[key];
-    return typeof value === "string" ? encodeURIComponent(value) : segment;
-  });
+export { interpolateRoutePath };

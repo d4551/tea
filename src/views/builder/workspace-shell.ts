@@ -73,7 +73,7 @@ export const renderWorkspaceShell = (config: WorkspaceShellConfig): string => {
               : ""
           }
           <div class="space-y-2">
-            <h1 class="text-3xl font-semibold tracking-tight">${escapeHtml(config.title)}</h1>
+            <h1 class="text-heading-1 font-semibold tracking-tight">${escapeHtml(config.title)}</h1>
             <p class="max-w-3xl text-sm leading-6 text-base-content/72">${escapeHtml(config.description)}</p>
           </div>
         </div>

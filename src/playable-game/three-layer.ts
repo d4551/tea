@@ -7,6 +7,10 @@ import type { GameSceneState, SceneNode3D } from "../shared/contracts/game.ts";
 const LEAF_COUNT = 80;
 const LEAF_SPREAD_X = 8;
 const LEAF_SPREAD_Y = 6;
+
+/** LOD distance thresholds: high at 0, medium at threshold1, low at threshold2. */
+const LOD_THRESHOLD_MEDIUM = 8;
+const LOD_THRESHOLD_LOW = 16;
 const LEAF_FALL_SPEED_MIN = 0.002;
 const LEAF_FALL_SPEED_MAX = 0.008;
 const LEAF_DRIFT_AMPLITUDE = 0.003;
@@ -27,6 +31,8 @@ export class ThreeLayer {
   private _authoredModelCache = new Map<string, Promise<THREE.Object3D | null>>();
   private _lastNodeSignature = "";
   private _nodeRenderVersion = 0;
+  private _modelFallbackGeometry: THREE.BufferGeometry;
+  private _modelFallbackMaterial: THREE.Material;
   private readonly _gltfLoader = new GLTFLoader();
   private readonly _usdLoader = new USDLoader();
   private readonly _useWebGpu: boolean;
@@ -51,6 +57,15 @@ export class ThreeLayer {
 
     this.camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 100);
     this.camera.position.set(0, 0, 5);
+
+    this._modelFallbackGeometry = new THREE.IcosahedronGeometry(0.8, 1);
+    this._modelFallbackMaterial = new THREE.MeshStandardMaterial({
+      color: 0x64748b,
+      emissive: 0x020617,
+      roughness: 0.65,
+      metalness: 0.1,
+      transparent: false,
+    });
   }
 
   async init(): Promise<void> {
@@ -169,6 +184,8 @@ export class ThreeLayer {
     if (this._leafMesh?.material instanceof THREE.Material) {
       this._leafMesh.material.dispose();
     }
+    this._modelFallbackGeometry.dispose();
+    this._modelFallbackMaterial.dispose();
     this.renderer.dispose();
   }
 
@@ -183,11 +200,34 @@ export class ThreeLayer {
       return light;
     }
 
+    // Particle emitter scaffold: Three.js Points/PointsMaterial when node has particleEmitter
+    if (node.particleEmitter) {
+      const count = Math.min(node.particleEmitter.maxCount, 500);
+      const geometry = new THREE.BufferGeometry();
+      const positions = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        positions[i * 3] = (Math.random() - 0.5) * 2;
+        positions[i * 3 + 1] = (Math.random() - 0.5) * 2;
+        positions[i * 3 + 2] = (Math.random() - 0.5) * 2;
+      }
+      geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      const material = new THREE.PointsMaterial({
+        color: 0xffd700,
+        size: (node.particleEmitter.size[0] + node.particleEmitter.size[1]) / 2,
+        transparent: true,
+        opacity: 0.8,
+      });
+      const points = new THREE.Points(geometry, material);
+      points.position.set(node.position.x, node.position.y, node.position.z);
+      return points;
+    }
+
     if (node.nodeType === "model" && typeof node.assetId === "string" && node.assetId.length > 0) {
       const container = new THREE.Group();
       container.position.set(node.position.x, node.position.y, node.position.z);
       container.rotation.set(node.rotation.x, node.rotation.y, node.rotation.z);
       container.scale.set(node.scale.x, node.scale.y, node.scale.z);
+      container.add(this._createModelFallbackObject());
       void this._resolveModelObject(state, node.assetId).then((resolved) => {
         const currentObject = this._authoredNodes.get(node.id);
         if (!resolved || currentObject !== container || this._nodeRenderVersion !== renderVersion) {
@@ -195,7 +235,8 @@ export class ThreeLayer {
         }
 
         container.clear();
-        container.add(resolved.clone(true));
+        const lodObject = this._createModelLOD(resolved);
+        container.add(lodObject);
       });
       return container;
     }
@@ -242,12 +283,46 @@ export class ThreeLayer {
 
     const pending =
       runtimeAsset.format === "glb" || runtimeAsset.format === "gltf"
-        ? this._gltfLoader.loadAsync(runtimeAsset.source).then((gltf) => gltf.scene)
+        ? this._gltfLoader
+            .loadAsync(runtimeAsset.source)
+            .then((gltf) => gltf.scene)
+            .catch(() => null)
         : runtimeAsset.format === "usdz"
-          ? this._usdLoader.loadAsync(runtimeAsset.source)
+          ? this._usdLoader.loadAsync(runtimeAsset.source).catch(() => null)
           : Promise.resolve(null);
     this._authoredModelCache.set(cacheKey, pending);
     return pending;
+  }
+
+  private _createModelFallbackObject(): THREE.Object3D {
+    const mesh = new THREE.Mesh(this._modelFallbackGeometry, this._modelFallbackMaterial);
+    mesh.position.set(0, -0.35, 0);
+    return mesh;
+  }
+
+  /**
+   * Wraps a model in THREE.LOD with high/medium/low levels based on camera distance.
+   * High at 0, medium at LOD_THRESHOLD_MEDIUM, low at LOD_THRESHOLD_LOW.
+   */
+  private _createModelLOD(resolved: THREE.Object3D): THREE.LOD {
+    const lod = new THREE.LOD();
+    lod.addLevel(resolved.clone(true), 0);
+
+    const mediumMesh = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.8, 0),
+      this._modelFallbackMaterial,
+    );
+    mediumMesh.position.set(0, -0.35, 0);
+    lod.addLevel(mediumMesh, LOD_THRESHOLD_MEDIUM);
+
+    const lowMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.6, 0.6, 0.6),
+      this._modelFallbackMaterial,
+    );
+    lowMesh.position.set(0, -0.35, 0);
+    lod.addLevel(lowMesh, LOD_THRESHOLD_LOW);
+
+    return lod;
   }
 
   private _resolveRuntimeAsset(
@@ -285,6 +360,7 @@ export class ThreeLayer {
       new THREE.Color(0x8b3a0f),
       new THREE.Color(0xd4a853),
     ];
+    const fallbackColor = palette[0] ?? new THREE.Color(0xd4a853);
 
     for (let index = 0; index < LEAF_COUNT; index += 1) {
       const offset = index * 3;
@@ -299,7 +375,7 @@ export class ThreeLayer {
       );
       velocities[offset + 2] = 0;
 
-      const color = palette[Math.floor(Math.random() * palette.length)];
+      const color = palette[Math.floor(Math.random() * palette.length)] ?? fallbackColor;
       colors[offset] = color.r;
       colors[offset + 1] = color.g;
       colors[offset + 2] = color.b;

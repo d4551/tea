@@ -93,6 +93,58 @@ describe("CutsceneEngine", () => {
     expect(result.state.stepElapsedMs).toBe(0);
   });
 
+  it("does not wait for input on non-dialogue sound steps", () => {
+    const playback: CutscenePlaybackState = {
+      cutsceneId: "test-cutscene",
+      currentStepIndex: 0,
+      stepElapsedMs: 0,
+      phase: "playing",
+    };
+    const soundOnlyCutscene: CutsceneDefinition = {
+      ...mockCutscene,
+      steps: [
+        {
+          id: "sound-step",
+          ordinal: 0,
+          action: "play_sound",
+          durationMs: 250,
+          soundAssetId: "audio-1",
+        },
+      ],
+    };
+
+    const result = engine.executeTick(playback, soundOnlyCutscene, 1);
+    expect(result.type).toBe("playing");
+    expect(result.state.currentStepIndex).toBe(0);
+    expect(result.state.stepElapsedMs).toBe(1);
+  });
+
+  it("auto-advances sound steps with implicit fallback duration", () => {
+    const playback: CutscenePlaybackState = {
+      cutsceneId: "test-cutscene",
+      currentStepIndex: 0,
+      stepElapsedMs: 0,
+      phase: "playing",
+    };
+    const noDurationSoundCutscene: CutsceneDefinition = {
+      ...mockCutscene,
+      steps: [
+        {
+          id: "sound-step",
+          ordinal: 0,
+          action: "play_sound",
+          durationMs: 0,
+          soundAssetId: "audio-1",
+        },
+      ],
+    };
+
+    const result = engine.executeTick(playback, noDurationSoundCutscene, 300);
+    expect(result.type).toBe("completed");
+    expect(result.state.currentStepIndex).toBe(0);
+    expect(result.state.phase).toBe("completed");
+  });
+
   it("completes cutscene after last step", () => {
     const playback: CutscenePlaybackState = {
       cutsceneId: "test-cutscene",

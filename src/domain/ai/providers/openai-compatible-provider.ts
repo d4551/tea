@@ -19,7 +19,7 @@ import {
   toRetryableError,
 } from "../../../shared/contracts/external-boundary.ts";
 import { readJsonResponse, settleAsync } from "../../../shared/utils/async-result.ts";
-import { safeJsonParse } from "../../../shared/utils/safe-json.ts";
+import { acceptUnknown, safeJsonParse } from "../../../shared/utils/safe-json.ts";
 import { encodeMonoWavAudio, safeDecodeWavAudio } from "../../../shared/utils/wav-audio.ts";
 import type {
   AiCapability,
@@ -368,8 +368,7 @@ const normalizeModerationLabel = (value: string): string =>
     .replace(/^_+|_+$/gu, "")
     .toUpperCase();
 
-const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer =>
-  bytes.slice().buffer;
+const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => bytes.slice().buffer;
 
 const buildAuthHeaders = (apiKey: string): HeadersInit => ({
   ...(apiKey.length > 0 ? { authorization: `Bearer ${apiKey}` } : {}),
@@ -749,7 +748,9 @@ export class OpenAiCompatibleProvider implements AiProvider {
             return;
           }
 
-          const payload = parseChatCompletionChunk(safeJsonParse<unknown>(line, null));
+          const payload = parseChatCompletionChunk(
+            safeJsonParse<unknown>(line, null, acceptUnknown),
+          );
           const content = payload?.choices
             .map((choice) =>
               choice.delta?.content ? normalizeMessageContent(choice.delta.content) : "",
@@ -891,7 +892,9 @@ export class OpenAiCompatibleProvider implements AiProvider {
 
     const textPayloadResult = await settleAsync(response.data.text());
     const textPayload = textPayloadResult.ok ? textPayloadResult.value : "";
-    const payload = parseTranscriptionResponse(safeJsonParse<unknown>(textPayload, null)) ?? {
+    const payload = parseTranscriptionResponse(
+      safeJsonParse<unknown>(textPayload, null, acceptUnknown),
+    ) ?? {
       text: textPayload.trim(),
     };
     if (!payload?.text || payload.text.trim().length === 0) {

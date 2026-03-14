@@ -13,3 +13,5 @@ Reference these documentation files when working on this stack:
 - https://raw.githubusercontent.com/d4551/llms-stack-refresh/main/better-auth/llms.txt
 
 Use framework-native patterns: Elysia plugins, htmx attributes (hx-get, hx-post, hx-swap, hx-target), DaisyUI component classes, Prisma client extensions. No legacy shims or polyfills.
+
+For Pixi.js, Three.js, HuggingFace Transformers, Playwright, and Biome (not in this static doc set), use the Context7 MCP server per context7.mdc.

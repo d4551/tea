@@ -16,6 +16,7 @@ import type { AvailableAiFeatures } from "../../domain/game/ai/game-ai-service.t
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
+import { cardClasses, renderBuilderHiddenFields, spinnerClasses } from "../shared/ui-components.ts";
 import { renderPlatformReadinessSection } from "./platform-readiness.ts";
 import { renderWorkspaceHeader } from "./workspace-header.ts";
 
@@ -116,7 +117,7 @@ export const renderKnowledgeRetrievalResult = (
           .join("")
       : `<li class="rounded-box border border-base-300 bg-base-200/60 p-3">${escapeHtml(messages.builder.noKnowledgeMatches)}</li>`;
 
-  return `<article class="card card-border bg-base-100 shadow-sm">
+  return `<article class="${cardClasses.bordered}">
     <div class="card-body gap-4">
       <div>
         <h3 class="card-title">${escapeHtml(messages.builder.retrievalResultTitle)}</h3>
@@ -138,7 +139,7 @@ export const renderKnowledgeRetrievalResult = (
 export const renderToolPlanPreview = (
   messages: Messages,
   result: Pick<AiToolPlanSuccess, "steps" | "model">,
-): string => `<article class="card card-border bg-base-100 shadow-sm">
+): string => `<article class="${cardClasses.bordered}">
   <div class="card-body gap-4">
     <div>
       <h3 class="card-title">${escapeHtml(messages.builder.toolPlanPreviewTitle)}</h3>
@@ -202,7 +203,7 @@ const renderAiStatusHero = (
             <span class="badge badge-outline">${escapeHtml(`${runtimeProfile.onnx.threadCount}`)}</span>
           </div>
         </div>
-        <div class="card card-border bg-base-100 shadow-sm">
+        <div class="${cardClasses.bordered}">
           <div class="card-body gap-2">
             <h2 class="card-title">${escapeHtml(messages.builder.providerStatus)}</h2>
             <div>${providerList}</div>
@@ -249,7 +250,7 @@ const renderAiCapabilityTable = (messages: Messages, features: AvailableAiFeatur
     )
     .join("");
 
-  return `<div class="card card-border bg-base-100 shadow-sm">
+  return `<div class="${cardClasses.bordered}">
     <div class="card-body">
       <h2 class="card-title">${escapeHtml(messages.builder.providerStatus)}</h2>
       <table class="table table-xs" aria-label="${escapeHtml(messages.builder.providerStatus)}">
@@ -285,7 +286,7 @@ const renderAiModelInventory = (messages: Messages, runtimeProfile: AiRuntimePro
     )
     .join("");
 
-  return `<div class="card card-border bg-base-100 shadow-sm">
+  return `<div class="${cardClasses.bordered}">
     <div class="card-body">
       <h2 class="card-title">${escapeHtml(messages.builder.availableModels)}</h2>
       <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.aiLaneDescription)}</p>
@@ -321,7 +322,7 @@ const renderAiModelInventory = (messages: Messages, runtimeProfile: AiRuntimePro
 const renderAiAssistForm = (messages: Messages, locale: LocaleCode, projectId: string): string => {
   const aiAssistHref = withQueryParameters(appRoutes.aiBuilderAssist, { projectId });
 
-  return `<div class="card card-border bg-base-100 shadow-sm">
+  return `<div class="${cardClasses.bordered}">
     <div class="card-body">
       <h2 class="card-title">${escapeHtml(messages.builder.assistantReviewTitle)}</h2>
       <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.assistantReviewDescription)}</p>
@@ -333,8 +334,7 @@ const renderAiAssistForm = (messages: Messages, locale: LocaleCode, projectId: s
         hx-disabled-elt="button, input, select, textarea"
         class="space-y-3"
       >
-        <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
-        <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
+        ${renderBuilderHiddenFields(projectId, locale)}
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.promptLabel)}</legend>
           <textarea id="ai-assist-prompt" name="prompt" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.assistPromptPlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.promptLabel)}"></textarea>
@@ -343,7 +343,7 @@ const renderAiAssistForm = (messages: Messages, locale: LocaleCode, projectId: s
           <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.designAssist)}">
             ${escapeHtml(messages.builder.designAssist)}
           </button>
-          <span id="ai-assist-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+          <span id="ai-assist-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
       </form>
       <div id="ai-assist-result" class="mt-3" aria-live="polite"></div>
@@ -362,7 +362,7 @@ const renderAiAssistForm = (messages: Messages, locale: LocaleCode, projectId: s
 const renderAiTestForm = (messages: Messages, locale: LocaleCode, projectId: string): string => {
   const aiTestHref = withQueryParameters(appRoutes.aiBuilderTest, { projectId });
 
-  return `<div class="card card-border bg-base-100 shadow-sm">
+  return `<div class="${cardClasses.bordered}">
     <div class="card-body">
       <h2 class="card-title">${escapeHtml(messages.builder.testDialogue)}</h2>
       <form
@@ -373,8 +373,7 @@ const renderAiTestForm = (messages: Messages, locale: LocaleCode, projectId: str
         hx-disabled-elt="button, input, select, textarea"
         class="space-y-3"
       >
-        <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
-        <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
+        ${renderBuilderHiddenFields(projectId, locale)}
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.npcIdLabel)}</legend>
           <input id="ai-test-npc" name="npcId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.testNpcPlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.npcIdLabel)}" />
@@ -387,7 +386,7 @@ const renderAiTestForm = (messages: Messages, locale: LocaleCode, projectId: str
           <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.testDialogue)}">
             ${escapeHtml(messages.builder.testDialogue)}
           </button>
-          <span id="ai-test-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+          <span id="ai-test-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
       </form>
       <div id="ai-test-result" class="mt-3" aria-live="polite"></div>
@@ -415,7 +414,7 @@ const renderAiKnowledgeWorkspace = (
     locale,
   });
 
-  return `<div class="card card-border bg-base-100 shadow-sm">
+  return `<div class="${cardClasses.bordered}">
     <div class="card-body">
       <h2 class="card-title">${escapeHtml(messages.builder.knowledgeWorkspaceTitle)}</h2>
       <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.knowledgeWorkspaceDescription)}</p>
@@ -442,7 +441,7 @@ const renderAiKnowledgeWorkspace = (
         <div class="flex items-center gap-2">
           <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.ingestKnowledgeDocument)}">
             ${escapeHtml(messages.builder.ingestKnowledgeDocument)}
-            <span id="ai-ingest-spinner" class="loading loading-spinner loading-xs htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+            <span id="ai-ingest-spinner" class="${spinnerClasses.xs}" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </button>
         </div>
       </form>
@@ -476,7 +475,7 @@ const renderAiRetrievalAndToolPlan = (
   });
 
   return `<div class="space-y-4">
-    <div class="card card-border bg-base-100 shadow-sm">
+    <div class="${cardClasses.bordered}">
       <div class="card-body">
         <h2 class="card-title">${escapeHtml(messages.builder.retrievalWorkspaceTitle)}</h2>
         <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.retrievalWorkspaceDescription)}</p>
@@ -494,14 +493,14 @@ const renderAiRetrievalAndToolPlan = (
           </fieldset>
           <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.runRetrievalAssist)}">
             ${escapeHtml(messages.builder.runRetrievalAssist)}
-            <span id="ai-retrieval-spinner" class="loading loading-spinner loading-xs htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+            <span id="ai-retrieval-spinner" class="${spinnerClasses.xs}" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </button>
         </form>
         <div id="ai-retrieval-result" class="mt-4" aria-live="polite"></div>
       </div>
     </div>
 
-    <div class="card card-border bg-base-100 shadow-sm">
+    <div class="${cardClasses.bordered}">
       <div class="card-body">
         <h2 class="card-title">${escapeHtml(messages.builder.toolPlanWorkspaceTitle)}</h2>
         <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.toolPlanWorkspaceDescription)}</p>
@@ -519,7 +518,7 @@ const renderAiRetrievalAndToolPlan = (
           </fieldset>
           <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.previewToolPlan)}">
             ${escapeHtml(messages.builder.previewToolPlan)}
-            <span id="ai-plan-spinner" class="loading loading-spinner loading-xs htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+            <span id="ai-plan-spinner" class="${spinnerClasses.xs}" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </button>
         </form>
         <div id="ai-tool-plan-result" class="mt-4" aria-live="polite"></div>
@@ -559,7 +558,7 @@ const renderAiPatchAndApiSurface = (
     .join("");
 
   return `<div class="grid gap-4 xl:grid-cols-2">
-    <div class="card card-border bg-base-100 shadow-sm">
+    <div class="${cardClasses.bordered}">
       <div class="card-body">
         <h2 class="card-title">${escapeHtml(messages.builder.previewChanges)}</h2>
         <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.patchOperations)}</p>
@@ -571,22 +570,21 @@ const renderAiPatchAndApiSurface = (
           hx-disabled-elt="button, input, select, textarea"
           class="space-y-3"
         >
-          <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
-          <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+          ${renderBuilderHiddenFields(projectId, locale)}
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.operationsJsonLabel)}</legend>
             <textarea id="operations-json" name="operationsJson" class="textarea w-full min-h-28" placeholder="${escapeHtml(messages.builder.operationsJsonPlaceholder)}" aria-label="${escapeHtml(messages.builder.operationsJsonLabel)}"></textarea>
           </fieldset>
           <div class="flex items-center gap-2">
             <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.previewChanges)}">${escapeHtml(messages.builder.previewChanges)}</button>
-            <span id="ai-patch-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+            <span id="ai-patch-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>
         <div id="ai-patch-result" class="mt-3" aria-live="polite"></div>
       </div>
     </div>
 
-    <div class="card card-border bg-base-100 shadow-sm">
+    <div class="${cardClasses.bordered}">
       <div class="card-body">
         <h2 class="card-title">${escapeHtml(messages.builder.apiSurfaceTitle)}</h2>
         <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.apiSurfaceDescription)}</p>
@@ -647,7 +645,7 @@ export const renderAiPanel = (
       })}
 
       <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box" open>
-        <summary class="collapse-title font-semibold">${escapeHtml(messages.builder.providerStatus)}</summary>
+        <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.providerStatus)}">${escapeHtml(messages.builder.providerStatus)}</summary>
         <div class="collapse-content space-y-4">
           ${renderAiStatusHero(messages, runtimeProfile, features)}
           <div class="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
@@ -658,7 +656,7 @@ export const renderAiPanel = (
       </details>
 
       <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
-        <summary class="collapse-title font-semibold">${escapeHtml(messages.builder.assistantReviewTitle)}</summary>
+        <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.assistantReviewTitle)}">${escapeHtml(messages.builder.assistantReviewTitle)}</summary>
         <div class="collapse-content">
           <div class="grid gap-4 xl:grid-cols-2">
             ${renderAiAssistForm(messages, locale, projectId)}
@@ -668,11 +666,11 @@ export const renderAiPanel = (
       </details>
 
       <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
-        <summary class="collapse-title font-semibold">${escapeHtml(messages.builder.voicePreviewTitle)}</summary>
+        <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.voicePreviewTitle)}">${escapeHtml(messages.builder.voicePreviewTitle)}</summary>
         <div class="collapse-content">
           <p class="text-sm text-base-content/70 mb-4">${escapeHtml(messages.builder.voicePreviewDescription)}</p>
           <div class="grid gap-4 xl:grid-cols-2">
-            <div class="card card-border bg-base-100 shadow-sm">
+            <div class="${cardClasses.bordered}">
               <div class="card-body">
                 <h2 class="card-title">${escapeHtml(messages.builder.speechSynthesisLabel)}</h2>
                 <form
@@ -691,14 +689,14 @@ export const renderAiPanel = (
                     <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.synthesizeSubmit)}">
                       ${escapeHtml(messages.builder.synthesizeSubmit)}
                     </button>
-                    <span id="voice-synthesize-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+                    <span id="voice-synthesize-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
                   </div>
                 </form>
                 <div id="voice-synthesize-result" class="mt-3" aria-live="polite"></div>
               </div>
             </div>
 
-            <div class="card card-border bg-base-100 shadow-sm">
+            <div class="${cardClasses.bordered}">
               <div class="card-body">
                 <h2 class="card-title">${escapeHtml(messages.builder.speechToTextLabel)}</h2>
                 <form
@@ -718,7 +716,7 @@ export const renderAiPanel = (
                     <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.transcribeSubmit)}">
                       ${escapeHtml(messages.builder.transcribeSubmit)}
                     </button>
-                    <span id="voice-transcribe-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+                    <span id="voice-transcribe-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
                   </div>
                 </form>
                 <div id="voice-transcribe-result" class="mt-3" aria-live="polite"></div>
@@ -729,7 +727,7 @@ export const renderAiPanel = (
       </details>
 
       <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
-        <summary class="collapse-title font-semibold">${escapeHtml(messages.builder.knowledgeWorkspaceTitle)}</summary>
+        <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.knowledgeWorkspaceTitle)}">${escapeHtml(messages.builder.knowledgeWorkspaceTitle)}</summary>
         <div class="collapse-content">
           <div class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
             ${renderAiKnowledgeWorkspace(messages, locale, projectId, documents)}
@@ -739,7 +737,7 @@ export const renderAiPanel = (
       </details>
 
       <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
-        <summary class="collapse-title font-semibold">${escapeHtml(messages.builder.previewChanges)}</summary>
+        <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.previewChanges)}">${escapeHtml(messages.builder.previewChanges)}</summary>
         <div class="collapse-content">
           ${renderAiPatchAndApiSurface(messages, locale, projectId)}
         </div>

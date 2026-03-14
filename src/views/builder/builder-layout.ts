@@ -8,6 +8,7 @@ import type { LocaleCode } from "../../config/environment.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml, renderDrawerToggleControl } from "../layout.ts";
+import { spinnerClasses } from "../shared/ui-components.ts";
 import {
   iconAi,
   iconAssets,
@@ -182,7 +183,7 @@ export const renderBuilderProjectShell = (
           <button type="submit" class="btn ${project.publishedReleaseVersion === null ? "btn-primary" : "btn-warning"} btn-xs" aria-label="${escapeHtml(project.publishedReleaseVersion === null ? messages.builder.publishProject : messages.builder.unpublishProject)}">
             ${escapeHtml(project.publishedReleaseVersion === null ? messages.builder.publishProject : messages.builder.unpublishProject)}
           </button>
-          <span id="publish-spinner" class="loading loading-spinner loading-xs htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+          <span id="publish-spinner" class="${spinnerClasses.xs}" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </form>`;
 
   const playBtn =
@@ -226,7 +227,7 @@ export const renderBuilderProjectShell = (
                   <input type="hidden" name="redirectPath" value="${escapeHtml(currentPath)}" />
                   <div class="flex items-center gap-2">
                     <button type="submit" class="btn btn-primary btn-xs w-full" aria-label="${escapeHtml(messages.builder.createProject)}">${escapeHtml(messages.builder.createProject)}</button>
-                    <span id="builder-project-create-spinner" class="loading loading-spinner loading-xs htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+                    <span id="builder-project-create-spinner" class="${spinnerClasses.xs}" aria-label="${escapeHtml(messages.common.loading)}"></span>
                   </div>
                 </fieldset>
               </form>
@@ -248,32 +249,35 @@ export const renderBuilderSidebar = (props: BuilderLayoutProps): string => {
   const { locale, messages, activeTab, projectId, project, navCounts } = props;
   const navItems = builderNavItems(messages);
 
-  const sidebarItems = navItems
-    .map((item) => {
-      const isActive = item.key === activeTab;
-      const activeClass = isActive
-        ? "menu-active bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_0_var(--color-primary)]"
-        : "";
-      const ariaCurrent = isActive ? ' aria-current="page"' : "";
-      const href = withBuilderQuery(item.href, locale, project?.id ?? projectId);
-      const count = navCounts?.[item.key];
-      return `<li>
-        <a class="${activeClass} is-drawer-close:tooltip is-drawer-close:tooltip-right" href="${escapeHtml(href)}"${ariaCurrent}
-           aria-label="${escapeHtml(item.label)}" data-tip="${escapeHtml(item.label)}"
-           hx-get="${escapeHtml(href)}" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML">
-          ${item.icon()}
-          <span class="is-drawer-close:hidden">${escapeHtml(item.label)}</span>
-          ${count !== undefined ? `<span class="badge badge-xs badge-neutral is-drawer-close:hidden">${count}</span>` : ""}
-        </a>
-      </li>`;
-    })
-    .join("");
+  const renderNavItem = (item: BuilderNavItem): string => {
+    const isActive = item.key === activeTab;
+    const activeClass = isActive
+      ? "menu-active bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_0_var(--color-primary)]"
+      : "";
+    const ariaCurrent = isActive ? ' aria-current="page"' : "";
+    const href = withBuilderQuery(item.href, locale, project?.id ?? projectId);
+    const count = navCounts?.[item.key];
+    return `<li>
+      <a class="${activeClass} is-drawer-close:tooltip is-drawer-close:tooltip-right" href="${escapeHtml(href)}"${ariaCurrent}
+         aria-label="${escapeHtml(item.label)}" data-tip="${escapeHtml(item.label)}"
+         hx-get="${escapeHtml(href)}" hx-target="#main-content" hx-push-url="true" hx-swap="innerHTML">
+        ${item.icon()}
+        <span class="is-drawer-close:hidden">${escapeHtml(item.label)}</span>
+        ${count !== undefined ? `<span class="badge badge-xs badge-neutral is-drawer-close:hidden">${count}</span>` : ""}
+      </a>
+    </li>`;
+  };
+
+  const contentItems = navItems.slice(1, 5).map(renderNavItem).join("");
+  const systemsItems = navItems.slice(5).map(renderNavItem).join("");
+  const dashboard = navItems[0];
+  const sidebarItems = `${dashboard ? renderNavItem(dashboard) : ""}<li class="menu-title"><span>${escapeHtml(messages.builder.navGroupContent)}</span></li>${contentItems}<li class="menu-title"><span>${escapeHtml(messages.builder.navGroupSystems)}</span></li>${systemsItems}`;
 
   return `
     <aside class="bg-base-200 border-r border-base-300 w-80 max-w-[80vw] min-h-full flex flex-col text-base-content" aria-label="${escapeHtml(messages.builder.title)}">
       <div class="p-4 border-b border-base-300 flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" class="size-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
           <span class="text-xl font-bold tracking-tight">${escapeHtml(messages.metadata.appName)}</span>
         </div>
         ${renderDrawerToggleControl({
@@ -301,7 +305,7 @@ export const renderBuilderSidebar = (props: BuilderLayoutProps): string => {
       
       <div class="p-4 border-t border-base-300">
         <a href="${escapeHtml(withQueryParameters(appRoutes.home, { lang: locale }))}" class="btn btn-outline btn-block btn-sm gap-2" aria-label="${escapeHtml(messages.builder.exitBuilder)}">
-          <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
           ${escapeHtml(messages.builder.exitBuilder)}
         </a>
       </div>
@@ -332,7 +336,7 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
             })}
           </div>
           <div class="flex-1">
-            <span class="text-lg font-semibold">${escapeHtml(messages.builder.title)}</span>
+            <span class="text-heading-3 font-semibold">${escapeHtml(messages.builder.title)}</span>
           </div>
           <div class="flex-none">
             <a href="${escapeHtml(playHref)}" class="btn btn-ghost btn-sm" aria-label="${escapeHtml(messages.navigation.game)}">
@@ -347,7 +351,7 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
         </div>
 
         <footer class="sticky bottom-0 z-40 border-t border-base-300/50 bg-base-200/90 backdrop-blur-sm px-4 py-2" role="status" aria-label="${escapeHtml(messages.builder.statusBarProject)}">
-          <div class="flex items-center gap-4 text-xs text-base-content/70">
+          <div class="flex flex-wrap items-center gap-4 text-xs text-base-content/70">
             <div class="flex items-center gap-1.5">
               <span class="status status-primary"></span>
               <span class="font-medium">${escapeHtml(messages.builder.statusBarProject)}:</span>
@@ -371,7 +375,7 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
             </div>
           </div>
         </footer>
-        <nav class="dock dock-sm lg:hidden z-40 fixed bottom-0 w-full" aria-label="${escapeHtml(messages.builder.title)}">
+        <nav class="dock dock-sm lg:hidden" aria-label="${escapeHtml(messages.builder.title)}">
           <a href="${escapeHtml(withBuilderQuery(appRoutes.builder, locale, project?.id ?? projectId))}" class="${activeTab === "dashboard" ? "dock-active" : ""}" aria-label="${escapeHtml(messages.builder.dashboard)}">
             ${iconDashboard()}
             <span class="dock-label">${escapeHtml(messages.builder.dashboard)}</span>
@@ -388,7 +392,7 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
             ${iconAi()}
             <span class="dock-label">${escapeHtml(messages.builder.ai)}</span>
           </a>
-          <a href="${escapeHtml(playHref)}" class="" aria-label="${escapeHtml(messages.navigation.game)}">
+          <a href="${escapeHtml(playHref)}" aria-label="${escapeHtml(messages.navigation.game)}">
             ${iconPlay()}
             <span class="dock-label">${escapeHtml(messages.navigation.game)}</span>
           </a>

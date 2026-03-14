@@ -7,6 +7,7 @@ import type {
 import { appRoutes, withLocaleQuery, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
+
 import { renderWorkspaceShell } from "./workspace-shell.ts";
 
 /**
@@ -124,9 +125,9 @@ const metricToneClass = (tone: CapabilityMetric["tone"]): string => {
 };
 
 const renderMetric = (metric: CapabilityMetric): string => `
-  <div class="rounded-box border border-base-300/60 bg-base-100/80 px-3 py-2">
-    <dt class="text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-base-content/55">${escapeHtml(metric.label)}</dt>
-    <dd class="mt-2 text-lg font-semibold ${metricToneClass(metric.tone)}">${escapeHtml(String(metric.value))}</dd>
+  <div class="stat p-3">
+    <div class="stat-title text-[0.7rem] font-semibold uppercase tracking-[0.22em]">${escapeHtml(metric.label)}</div>
+    <div class="stat-value text-lg ${metricToneClass(metric.tone)}">${escapeHtml(String(metric.value))}</div>
   </div>`;
 
 const capabilityHref = (
@@ -322,7 +323,7 @@ const renderCapabilityCard = (
   const href = capabilityHref(capability.key, locale, projectId);
   const statusLabel = capabilityStatusLabel(messages, capability.status);
 
-  return `<article class="card card-border bg-base-100/90 shadow-sm backdrop-blur-sm">
+  return `<article class="bg-base-200 card">
     <div class="card-body gap-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="space-y-2">
@@ -331,7 +332,7 @@ const renderCapabilityCard = (
         </div>
         <span class="badge ${capabilityTone(capability.status)} badge-soft badge-lg" role="status" aria-label="${escapeHtml(statusLabel)}">${escapeHtml(statusLabel)}</span>
       </div>
-      <dl class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">${metrics}</dl>
+      <dl class="stats stats-vertical sm:stats-horizontal bg-base-200/50 shadow-sm">${metrics}</dl>
       <div class="card-actions justify-end">
         <a class="btn btn-ghost btn-sm" href="${escapeHtml(href)}" aria-label="${escapeHtml(messages.builder.openDetails)}: ${escapeHtml(copy.title)}">${escapeHtml(messages.builder.openDetails)}</a>
       </div>
@@ -370,23 +371,25 @@ export const renderBuilderDashboard = (
   const docsHref = withLocaleQuery(appConfig.api.docsPath, locale);
   const providerSummary =
     stats.providers.length > 0 ? stats.providers.join(", ") : messages.ai.noProviderAvailable;
-  const capabilityCards: readonly BuilderCapabilityKey[] = [
-    "releaseFlow",
-    "runtime2d",
-    "runtime3d",
-    "spritePipeline",
-    "animationPipeline",
-    "mechanics",
-    "aiAuthoring",
-    "automation",
-    "webgpuRenderer",
-    "aiOnnxGpu",
-  ].map((key) =>
+  const capabilityCards = (
+    [
+      "releaseFlow",
+      "runtime2d",
+      "runtime3d",
+      "spritePipeline",
+      "animationPipeline",
+      "mechanics",
+      "aiAuthoring",
+      "automation",
+      "webgpuRenderer",
+      "aiOnnxGpu",
+    ] as const satisfies readonly BuilderCapabilityKey[]
+  ).map((key) =>
     renderCapabilityCard(messages, locale, projectId, findCapability(stats.readiness, key), stats),
   );
 
   return `
-    <div class="space-y-6">
+    <div class="grid gap-4">
       ${renderWorkspaceShell({
         eyebrow: published
           ? messages.builder.projectStatusPublished
@@ -440,7 +443,7 @@ export const renderBuilderDashboard = (
       })}
 
       <section class="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">
-        <article class="card card-border bg-base-100/90 shadow-sm">
+        <article class="bg-base-200 card">
           <div class="card-body gap-4">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div class="space-y-2">
@@ -470,7 +473,7 @@ export const renderBuilderDashboard = (
           </div>
         </article>
 
-        <article class="card card-border bg-base-100/90 shadow-sm">
+        <article class="bg-base-200 card">
           <div class="card-body gap-4">
             <div class="space-y-2">
               <h2 class="card-title text-xl">${escapeHtml(messages.builder.localRuntimeTitle)}</h2>
@@ -487,13 +490,25 @@ export const renderBuilderDashboard = (
       </section>
 
       <section id="builder-platform-readiness" class="space-y-4" aria-labelledby="builder-platform-readiness-heading">
-        <div class="space-y-2">
-          <h2 id="builder-platform-readiness-heading" class="text-2xl font-semibold tracking-tight">${escapeHtml(messages.builder.platformReadinessTitle)}</h2>
-          <p class="max-w-4xl text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.platformReadinessDescription)}</p>
-        </div>
-        <div class="grid gap-4 2xl:grid-cols-2">
-          ${capabilityCards.join("")}
-        </div>
+        <details class="group">
+          <summary class="cursor-pointer list-none [&::-webkit-details-marker]:hidden" aria-label="${escapeHtml(messages.builder.readinessSummaryExpand)}">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <h2 id="builder-platform-readiness-heading" class="text-2xl font-semibold tracking-tight">${escapeHtml(messages.builder.platformReadinessTitle)}</h2>
+              <span class="flex items-center gap-2">
+                <span class="badge badge-ghost badge-sm">
+                  ${stats.readiness.implementedCount} of ${stats.readiness.implementedCount + stats.readiness.partialCount + stats.readiness.missingCount} ready
+                </span>
+                <span class="text-base-content/50 -rotate-90 group-open:rotate-0 transition-transform inline-block" aria-hidden="true">▾</span>
+              </span>
+            </div>
+          </summary>
+          <div class="mt-4 space-y-4">
+            <p class="max-w-4xl text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.platformReadinessDescription)}</p>
+            <div class="grid gap-4 2xl:grid-cols-2">
+              ${capabilityCards.join("")}
+            </div>
+          </div>
+        </details>
       </section>
     </div>`;
 };

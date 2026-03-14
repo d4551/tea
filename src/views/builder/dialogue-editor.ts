@@ -7,6 +7,12 @@ import type { LocaleCode } from "../../config/environment.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
+import {
+  cardClasses,
+  renderBuilderHiddenFields,
+  renderEmptyStateCompact,
+  spinnerClasses,
+} from "../shared/ui-components.ts";
 import { renderWorkspaceShell } from "./workspace-shell.ts";
 
 /**
@@ -89,7 +95,7 @@ export const renderDialogueEditor = (
         })
         .join("");
 
-      return `<article class="card card-border bg-base-100 shadow-sm">
+      return `<article class="${cardClasses.bordered}">
         <div class="card-body gap-4">
           <div class="flex items-center justify-between gap-3">
             <div>
@@ -109,7 +115,7 @@ export const renderDialogueEditor = (
               >
                 <span aria-hidden="true">✨</span> ${escapeHtml(messages.builder.generateDialogue)}
               </button>
-              <span id="dialogue-generate-${npcId.replace(/[^a-zA-Z0-9_.-]/g, "-")}-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+              <span id="dialogue-generate-${npcId.replace(/[^a-zA-Z0-9_.-]/g, "-")}-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
             </span>
           </div>
           <div class="space-y-3">${lineRows}</div>
@@ -136,7 +142,7 @@ export const renderDialogueEditor = (
       })}
       <section class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <div class="space-y-4">
-        <article class="card card-border bg-base-100 shadow-sm">
+        <article class="${cardClasses.bordered}">
           <div class="card-body gap-4">
             <div class="space-y-1">
               <h1 class="card-title text-2xl">${escapeHtml(messages.builder.dialogueWorkspaceTitle)}</h1>
@@ -161,11 +167,10 @@ export const renderDialogueEditor = (
               hx-indicator="#dialogue-create-spinner"
               hx-disabled-elt="button, input, select, textarea"
             >
-              <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
-              <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
+              ${renderBuilderHiddenFields(projectId, locale)}
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueKey)}</legend>
-                <input name="key" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.dialogueKeyPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.dialogueKeyPlaceholder)}" />
+                <input name="key" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.dialogueKeyPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.dialogueKey)}" />
               </fieldset>
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueLine)}</legend>
@@ -173,7 +178,7 @@ export const renderDialogueEditor = (
               </fieldset>
               <div class="flex items-center gap-2">
                 <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.addDialogue)}">${escapeHtml(messages.builder.addDialogue)}</button>
-                <span id="dialogue-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+                <span id="dialogue-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
               </div>
             </form>
           </div>
@@ -182,7 +187,10 @@ export const renderDialogueEditor = (
         ${
           groupHtml.length > 0
             ? `<div class="space-y-4">${groupHtml}</div>`
-            : `<div role="alert" class="alert alert-warning alert-soft"><span>${escapeHtml(messages.builder.noDialogues)}</span></div>`
+            : renderEmptyStateCompact(
+                messages.builder.noDialogues,
+                messages.builder.dialogueCreateDescription,
+              )
         }
       </div>
 
@@ -190,7 +198,10 @@ export const renderDialogueEditor = (
         ${
           selectedLine
             ? renderDialogueDetail(messages, selectedLine.key, selectedLine.text, locale, projectId)
-            : `<div role="alert" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noDialogues)}</span></div>`
+            : renderEmptyStateCompact(
+                messages.builder.noDialogues,
+                messages.builder.dialogueCreateDescription,
+              )
         }
       </div>
     </section>
@@ -230,7 +241,7 @@ export const renderDialogueDetail = (
   );
 
   return `
-    <div class="card card-border bg-base-100 shadow-sm">
+    <div class="${cardClasses.bordered}">
       <form
         class="card-body gap-4"
         hx-post="${escapeHtml(formAction)}"
@@ -251,20 +262,22 @@ export const renderDialogueDetail = (
             hx-disabled-elt="this"
             aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(key)}"
         >${escapeHtml(messages.builder.delete)}</button>
-          <span id="dialogue-delete-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+          <span id="dialogue-delete-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
-        <fieldset class="fieldset">
-          <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueLine)}</legend>
+        <div class="form-control">
+          <label class="label" for="dialogue-text"><span class="label-text">${escapeHtml(messages.builder.dialogueLine)}</span></label>
           <textarea
+            id="dialogue-text"
             name="text"
-            class="textarea w-full min-h-28"
+            class="textarea textarea-bordered w-full min-h-28"
             required
+            aria-required="true"
             aria-label="${escapeHtml(messages.builder.dialogueLine)}"
           >${escapeHtml(text)}</textarea>
-        </fieldset>
+        </div>
         <div class="flex items-center justify-end gap-2">
           <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.save)}">${escapeHtml(messages.builder.save)}</button>
-          <span id="dialogue-detail-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+          <span id="dialogue-detail-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
       </form>
     </div>`;

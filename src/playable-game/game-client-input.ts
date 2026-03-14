@@ -5,6 +5,7 @@ import type {
   GameClientLabels,
   GameConnectionState,
 } from "./game-client-types.ts";
+import { readInputConfig } from "./input-config.ts";
 
 const readNonEmptyDatasetValue = (
   element: HTMLElement | null,
@@ -46,6 +47,8 @@ export type GameClientStatusOptions = {
   readonly reconnectButton: HTMLButtonElement | null;
   readonly connectionAlert: HTMLElement | null;
   readonly connectionAlertText: HTMLElement | null;
+  /** Resolve at update time; SSE may replace #hud-scene via outerHTML swap. */
+  readonly getHudSceneElement: () => HTMLElement | null;
   readonly labels: GameClientLabels;
 };
 
@@ -81,6 +84,7 @@ export const readGameClientLabels = (
   queueBadge: HTMLElement | null,
   reconnectButton: HTMLButtonElement | null,
 ): GameClientLabels | null => {
+  const gamePageGrid = wrapper.closest(".game-page-grid") as HTMLElement | null;
   const queueLabel = readNonEmptyDatasetValue(queueBadge, "queueLabel");
   const connectionConnecting = readNonEmptyDatasetValue(statusBadge, "connectingLabel");
   const connectionConnected = readNonEmptyDatasetValue(statusBadge, "connectedLabel");
@@ -89,6 +93,13 @@ export const readGameClientLabels = (
   const connectionExpired = readNonEmptyDatasetValue(statusBadge, "expiredLabel");
   const connectionMissing = readNonEmptyDatasetValue(statusBadge, "missingLabel");
   const reconnectAction = readNonEmptyDatasetValue(reconnectButton, "reconnectLabel");
+  const backToBuilderLabel = gamePageGrid
+    ? readNonEmptyDatasetValue(gamePageGrid, "backToBuilderLabel")
+    : null;
+  const builderHref = gamePageGrid ? readNonEmptyDatasetValue(gamePageGrid, "builderHref") : null;
+  const connectingToRealm = gamePageGrid
+    ? readNonEmptyDatasetValue(gamePageGrid, "connectingToRealm")
+    : null;
   const runtimeFocusActive = readNonEmptyDatasetValue(wrapper, "runtimeFocusActiveLabel");
   const runtimeFocusInactive = readNonEmptyDatasetValue(wrapper, "runtimeFocusInactiveLabel");
   const spectatorControlDenied = readNonEmptyDatasetValue(wrapper, "spectatorControlDeniedLabel");
@@ -120,6 +131,9 @@ export const readGameClientLabels = (
       missing: connectionMissing,
     },
     reconnectAction,
+    backToBuilderLabel: backToBuilderLabel ?? "Back to builder",
+    builderHref: builderHref ?? "#",
+    connectingToRealm: connectingToRealm ?? connectionConnecting,
     runtimeFocusActive,
     runtimeFocusInactive,
     spectatorControlDenied,
@@ -129,6 +143,13 @@ export const readGameClientLabels = (
 /**
  * Creates the DOM status controller used by the transport and runtime entrypoint.
  */
+const escapeHtmlAttr = (s: string): string =>
+  String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
 export const createGameClientStatusController = ({
   queueBadge,
   statusBadge,
@@ -136,6 +157,7 @@ export const createGameClientStatusController = ({
   reconnectButton,
   connectionAlert,
   connectionAlertText,
+  getHudSceneElement,
   labels,
 }: GameClientStatusOptions): GameClientStatusController => ({
   setQueueDepth(depth) {
@@ -154,11 +176,34 @@ export const createGameClientStatusController = ({
 
     if (state === "connecting" || state === "connected" || state === "reconnecting") {
       statusBadge.textContent = labels.connection[state];
+      const hudEl = getHudSceneElement();
+      if (hudEl && (state === "connecting" || state === "reconnecting")) {
+        hudEl.textContent =
+          state === "reconnecting" ? labels.connection.reconnecting : labels.connectingToRealm;
+      }
       return;
     }
 
     if (state === "expired" || state === "missing") {
       statusBadge.textContent = labels.connection[state];
+      const hudEl = getHudSceneElement();
+      if (hudEl) {
+        const msg = labels.connection[state];
+        const reconnectLabel = escapeHtmlAttr(labels.reconnectAction);
+        const backLabel = escapeHtmlAttr(labels.backToBuilderLabel);
+        const builderHref = escapeHtmlAttr(labels.builderHref);
+        hudEl.innerHTML = `<div class="flex flex-col items-center gap-3 pointer-events-auto">
+          <span class="font-semibold">${escapeHtmlAttr(msg)}</span>
+          <div class="flex gap-2">
+            <button type="button" class="btn btn-warning btn-sm game-reconnect-overlay-trigger" aria-label="${reconnectLabel}">${reconnectLabel}</button>
+            <a href="${builderHref}" class="btn btn-ghost btn-sm" aria-label="${backLabel}">${backLabel}</a>
+          </div>
+        </div>`;
+        const overlayBtn = hudEl.querySelector(".game-reconnect-overlay-trigger");
+        if (overlayBtn && reconnectButton) {
+          overlayBtn.addEventListener("click", () => reconnectButton.click());
+        }
+      }
       return;
     }
 
@@ -200,6 +245,9 @@ export const createGameClientInputController = ({
   getConnectionState,
   onReconnect,
 }: GameClientInputOptions): GameClientInputController => {
+  const inputConfig = readInputConfig();
+  const hasKey = (action: keyof typeof inputConfig, key: string) =>
+    inputConfig[action].includes(key);
   const listenerController = new AbortController();
   const keysHeld = new Set<string>();
   let runtimeHasFocus = false;
@@ -274,19 +322,35 @@ export const createGameClientInputController = ({
 
       keysHeld.add(event.key);
 
-      if (event.key === "e" || event.key === "Enter" || event.key === " ") {
-        sendCommand({ type: "interact" });
+      if (hasKey("interact", event.key) || hasKey("interact", event.key.toLowerCase())) {
+        const cutsceneEl = document.getElementById("hud-cutscene");
+        const dialogueEl = document.getElementById("hud-dialogue");
+        const cutsceneVisible =
+          cutsceneEl &&
+          !cutsceneEl.classList.contains("hidden") &&
+          cutsceneEl.offsetParent !== null;
+        const dialogueVisible =
+          dialogueEl &&
+          !dialogueEl.classList.contains("hidden") &&
+          dialogueEl.textContent?.trim().length > 0;
+        if (cutsceneVisible) {
+          sendCommand({ type: "advanceCutscene" });
+        } else if (dialogueVisible) {
+          sendCommand({ type: "confirmDialogue" });
+        } else {
+          sendCommand({ type: "interact" });
+        }
         event.preventDefault();
         return;
       }
 
-      if (event.key.toLowerCase() === "i" || event.key === "Tab") {
+      if (hasKey("menu", event.key) || hasKey("menu", event.key.toLowerCase())) {
         sendCommand({ type: "openInventory" });
         event.preventDefault();
         return;
       }
 
-      if (event.key === "Escape") {
+      if (hasKey("close", event.key)) {
         sendCommand({ type: "closeDialogue" });
         sendCommand({ type: "closeInventory" });
         event.preventDefault();
@@ -314,7 +378,12 @@ export const createGameClientInputController = ({
         return;
       }
 
-      if (keysHeld.has("w") || keysHeld.has("ArrowUp")) {
+      const up = inputConfig["move-up"].some((k) => keysHeld.has(k));
+      const down = inputConfig["move-down"].some((k) => keysHeld.has(k));
+      const left = inputConfig["move-left"].some((k) => keysHeld.has(k));
+      const right = inputConfig["move-right"].some((k) => keysHeld.has(k));
+
+      if (up) {
         sendCommand({
           type: "move",
           direction: "up",
@@ -324,7 +393,7 @@ export const createGameClientInputController = ({
         return;
       }
 
-      if (keysHeld.has("s") || keysHeld.has("ArrowDown")) {
+      if (down) {
         sendCommand({
           type: "move",
           direction: "down",
@@ -334,7 +403,7 @@ export const createGameClientInputController = ({
         return;
       }
 
-      if (keysHeld.has("a") || keysHeld.has("ArrowLeft")) {
+      if (left) {
         sendCommand({
           type: "move",
           direction: "left",
@@ -344,7 +413,7 @@ export const createGameClientInputController = ({
         return;
       }
 
-      if (keysHeld.has("d") || keysHeld.has("ArrowRight")) {
+      if (right) {
         sendCommand({
           type: "move",
           direction: "right",

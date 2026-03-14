@@ -2,11 +2,13 @@ import { Ticker } from "pixi.js";
 import { createLogger } from "../lib/logger.ts";
 import type { GameSceneState } from "../shared/contracts/game.ts";
 import { settleAsync } from "../shared/utils/async-result.ts";
+import { createGameClientAudioService } from "./game-client-audio.ts";
 import {
   persistSessionMeta,
   readGameClientBootstrap,
   readSessionMeta,
 } from "./game-client-bootstrap-session.ts";
+import { createGameClientDebugController } from "./game-client-debug.ts";
 import {
   createGameClientInputController,
   createGameClientStatusController,
@@ -46,6 +48,30 @@ const readReconnectButton = (): HTMLButtonElement | null => {
   return candidate instanceof HTMLButtonElement ? candidate : null;
 };
 
+const parseCutsceneAudioPayload = (): {
+  readonly action: string;
+  readonly stepId: string | null;
+  readonly soundAssetUrl: string | null;
+  readonly stepDurationMs: number;
+} => {
+  const cutscene = document.getElementById("hud-cutscene");
+  if (!(cutscene instanceof HTMLElement)) {
+    return { action: "", stepId: null, soundAssetUrl: null, stepDurationMs: 0 };
+  }
+
+  const action = cutscene.dataset.cutsceneAction ?? "";
+  const stepId = cutscene.dataset.cutsceneStepId ?? "";
+  const soundAssetUrl = cutscene.dataset.cutsceneSoundAssetSource ?? "";
+  const stepDurationMsRaw = Number(cutscene.dataset.cutsceneDurationMs ?? "0");
+
+  return {
+    action,
+    stepId: stepId.length > 0 ? stepId : null,
+    soundAssetUrl: soundAssetUrl.length > 0 ? soundAssetUrl : null,
+    stepDurationMs: Number.isFinite(stepDurationMsRaw) ? stepDurationMsRaw : 0,
+  };
+};
+
 const initGameClient = async (): Promise<void> => {
   const wrapper = document.getElementById("game-canvas-wrapper");
   if (!(wrapper instanceof HTMLElement)) {
@@ -78,7 +104,14 @@ const initGameClient = async (): Promise<void> => {
     reconnectButton,
     connectionAlert,
     connectionAlertText,
+    getHudSceneElement: () => document.getElementById("hud-scene"),
     labels,
+  });
+
+  const audioService = createGameClientAudioService({
+    onWarning(message, detail) {
+      clientLog("warn", message, detail);
+    },
   });
 
   let previousState: GameSceneState | null = null;
@@ -114,6 +147,10 @@ const initGameClient = async (): Promise<void> => {
     },
   });
 
+  const gamePageRoot = document.querySelector(".game-page-grid");
+  const debug =
+    gamePageRoot instanceof HTMLElement ? createGameClientDebugController(gamePageRoot) : null;
+
   const input = createGameClientInputController({
     wrapper,
     reconnectButton,
@@ -145,16 +182,34 @@ const initGameClient = async (): Promise<void> => {
 
   const listenerController = new AbortController();
   let isDisposed = false;
+  const syncCutsceneAudio = (): void => {
+    const { action, stepId, soundAssetUrl, stepDurationMs } = parseCutsceneAudioPayload();
+    audioService.handleCutsceneUpdate({
+      action,
+      stepId: stepId ?? undefined,
+      soundAssetUrl: soundAssetUrl ?? undefined,
+      stepDurationMs,
+    });
+  };
+
+  document.addEventListener("htmx:sseMessage", syncCutsceneAudio, {
+    signal: listenerController.signal,
+  });
+
+  void syncCutsceneAudio();
+
   const ticker = new Ticker();
   ticker.add((time) => {
     const now = performance.now();
     input.tick(now);
+    debug?.tick(time.deltaMS, () => currentState);
     renderer.renderFrame({
       state: currentState,
       previousState,
       alpha: input.resolveInterpolationAlpha(now),
       participantSessionId: transport.getSessionMeta().participantSessionId,
       deltaMs: time.deltaMS,
+      debugMode: debug?.isVisible?.() ?? false,
     });
   });
 
@@ -165,11 +220,13 @@ const initGameClient = async (): Promise<void> => {
 
     isDisposed = true;
     listenerController.abort();
+    debug?.dispose();
     input.dispose();
     transport.dispose();
     ticker.stop();
     ticker.destroy();
     renderer.dispose();
+    audioService.dispose();
   };
 
   window.addEventListener(
@@ -226,6 +283,7 @@ const bootGameClient = async (): Promise<void> => {
     reconnectButton,
     connectionAlert: document.getElementById("game-connection-alert"),
     connectionAlertText: document.getElementById("game-connection-alert-text"),
+    getHudSceneElement: () => document.getElementById("hud-scene"),
     labels,
   });
   status.setConnectionState("disconnected");

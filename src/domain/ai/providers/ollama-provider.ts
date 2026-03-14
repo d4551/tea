@@ -8,6 +8,7 @@
 
 import { appConfig } from "../../../config/environment.ts";
 import { createLogger } from "../../../lib/logger.ts";
+import { OLLAMA_DEFAULT_CONTEXT_LENGTH } from "../../../shared/constants/ai.ts";
 import {
   createHttpExternalFailure,
   type ExternalBoundaryResult,
@@ -18,7 +19,7 @@ import {
   toRetryableError,
 } from "../../../shared/contracts/external-boundary.ts";
 import { readJsonResponse, settleAsync } from "../../../shared/utils/async-result.ts";
-import { safeJsonParse } from "../../../shared/utils/safe-json.ts";
+import { acceptUnknown, safeJsonParse } from "../../../shared/utils/safe-json.ts";
 import type {
   AiCapability,
   AiChatParams,
@@ -33,6 +34,14 @@ import type {
 } from "./provider-types.ts";
 
 const logger = createLogger("ai.provider.ollama");
+
+/** Ollama REST API paths. Single source of truth for provider HTTP routes. */
+const OLLAMA_API_PATHS = {
+  tags: "/api/tags",
+  show: "/api/show",
+  chat: "/api/chat",
+  embeddings: "/api/embeddings",
+} as const;
 
 /**
  * Raw model entry from Ollama `/api/tags` response.
@@ -490,7 +499,7 @@ export class OllamaProvider implements AiProvider {
       return this._cachedCapabilities;
     }
 
-    const response = await this.ollamaFetchResult("/api/tags", "detect-capabilities");
+    const response = await this.ollamaFetchResult(OLLAMA_API_PATHS.tags, "detect-capabilities");
     if (!response.ok) {
       logBoundaryFailure("ollama.tags.failed", response.failure);
       this._consecutiveFailures += 1;
@@ -516,7 +525,7 @@ export class OllamaProvider implements AiProvider {
     for (const entry of dataResult.data) {
       let showData: OllamaShowResponse | null = null;
 
-      const showResponse = await this.ollamaFetchResult("/api/show", "show-model", {
+      const showResponse = await this.ollamaFetchResult(OLLAMA_API_PATHS.show, "show-model", {
         method: "POST",
         body: JSON.stringify({ name: entry.name }),
       });
@@ -536,7 +545,9 @@ export class OllamaProvider implements AiProvider {
       const caps = detectModelCapabilities(entry, showData);
 
       const paramSize = entry.details.parameter_size ?? "";
-      const contextLength = paramSize.includes("B") ? Number.parseInt(paramSize, 10) * 1024 : 4096;
+      const contextLength = paramSize.includes("B")
+        ? Number.parseInt(paramSize, 10) * 1024
+        : OLLAMA_DEFAULT_CONTEXT_LENGTH;
 
       capabilities.push({
         provider: this.name,
@@ -589,7 +600,7 @@ export class OllamaProvider implements AiProvider {
       })),
     ];
 
-    const response = await this.ollamaFetchResult("/api/chat", "chat", {
+    const response = await this.ollamaFetchResult(OLLAMA_API_PATHS.chat, "chat", {
       method: "POST",
       body: JSON.stringify({
         model,
@@ -648,7 +659,7 @@ export class OllamaProvider implements AiProvider {
       })),
     ];
 
-    const response = await this.ollamaFetchResult("/api/chat", "chat-stream", {
+    const response = await this.ollamaFetchResult(OLLAMA_API_PATHS.chat, "chat-stream", {
       method: "POST",
       body: JSON.stringify({
         model,
@@ -703,7 +714,7 @@ export class OllamaProvider implements AiProvider {
           continue;
         }
 
-        const chunk = parseOllamaStreamChunk(safeJsonParse<unknown>(line, null));
+        const chunk = parseOllamaStreamChunk(safeJsonParse<unknown>(line, null, acceptUnknown));
         if (!chunk) {
           continue;
         }
@@ -794,7 +805,7 @@ export class OllamaProvider implements AiProvider {
   async generateEmbedding(text: string): Promise<Float32Array | null> {
     const model = appConfig.ai.ollamaChatModel;
 
-    const response = await this.ollamaFetchResult("/api/embeddings", "embedding", {
+    const response = await this.ollamaFetchResult(OLLAMA_API_PATHS.embeddings, "embedding", {
       method: "POST",
       body: JSON.stringify({ model, input: text }),
     });

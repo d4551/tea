@@ -48,6 +48,9 @@ export type GameClientLabels = {
   readonly queueLabel: string;
   readonly connection: Readonly<Record<GameConnectionState, string>>;
   readonly reconnectAction: string;
+  readonly backToBuilderLabel: string;
+  readonly builderHref: string;
+  readonly connectingToRealm: string;
   readonly runtimeFocusActive: string;
   readonly runtimeFocusInactive: string;
   readonly spectatorControlDenied: string;

@@ -66,6 +66,60 @@ const resolveDrawerToggle = (targetId: string): HTMLInputElement | null => {
   return element;
 };
 
+const findControlledDrawerSides = (checkbox: HTMLInputElement): readonly HTMLElement[] => {
+  const targetId = checkbox.id;
+  if (!targetId) {
+    return [];
+  }
+
+  const drawerHost = checkbox.closest(".drawer");
+  if (!drawerHost) {
+    return [];
+  }
+
+  const escapedTargetId = CSS.escape(targetId);
+  const sidePanels = Array.from(drawerHost.querySelectorAll<HTMLElement>(".drawer-side")).filter(
+    (side) => side.querySelector<HTMLElement>(`label[for="${escapedTargetId}"]`) !== null,
+  );
+  return sidePanels;
+};
+
+const resolveDrawerSideTransform = (isEndDrawer: boolean): string =>
+  isEndDrawer ? "100%" : "-100%";
+
+const syncDrawerVisualState = (targetId: string): void => {
+  const checkbox = resolveDrawerToggle(targetId);
+  if (!checkbox || !checkbox.closest(".drawer-end")) {
+    return;
+  }
+
+  const sidePanels = findControlledDrawerSides(checkbox);
+  if (sidePanels.length === 0) {
+    return;
+  }
+
+  const isOpen = checkbox.checked;
+  const isEndDrawer = checkbox.closest(".drawer-end")?.classList.contains("drawer-end") ?? false;
+  const closedTranslate = resolveDrawerSideTransform(isEndDrawer);
+
+  for (const side of sidePanels) {
+    const panel = side.querySelector<HTMLElement>(":scope > :not(.drawer-overlay)");
+    const overlay = side.querySelector<HTMLElement>(".drawer-overlay");
+
+    side.style.visibility = isOpen ? "visible" : "hidden";
+    side.style.opacity = isOpen ? "1" : "0";
+    side.style.pointerEvents = isOpen ? "auto" : "none";
+    if (overlay) {
+      overlay.style.visibility = isOpen ? "visible" : "hidden";
+      overlay.style.pointerEvents = isOpen ? "auto" : "none";
+    }
+
+    if (panel) {
+      panel.style.transform = isOpen ? "translateX(0%)" : `translateX(${closedTranslate})`;
+    }
+  }
+};
+
 const resolveRelatedControls = (targetId: string): readonly DrawerToggleControl[] =>
   Array.from(document.querySelectorAll<DrawerToggleControl>(drawerToggleSelector)).filter(
     (control) => control.dataset.drawerToggleTarget === targetId,
@@ -82,6 +136,8 @@ const syncDrawerControlState = (targetId: string): void => {
       control.setAttribute("aria-expanded", String(checkbox.checked));
     }
   }
+
+  syncDrawerVisualState(targetId);
 };
 
 const toggleDrawer = (control: DrawerToggleControl): void => {
@@ -288,6 +344,43 @@ document.addEventListener("click", (event) => {
   toggleDrawer(control);
 });
 
+const getFocusables = (root: ParentNode): HTMLElement[] =>
+  Array.from(
+    root.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((el) => {
+    if (
+      el instanceof HTMLButtonElement ||
+      el instanceof HTMLInputElement ||
+      el instanceof HTMLSelectElement ||
+      el instanceof HTMLTextAreaElement
+    ) {
+      if (el.disabled) return false;
+    }
+    return el.offsetParent !== null;
+  });
+
+const manageDrawerFocus = (checkbox: HTMLInputElement): void => {
+  const sides = findControlledDrawerSides(checkbox);
+  const firstSide = sides[0];
+  if (checkbox.checked && firstSide) {
+    const focusables = getFocusables(firstSide);
+    const first = focusables[0];
+    if (first) {
+      queueMicrotask(() => first.focus({ preventScroll: false }));
+    }
+  } else if (!checkbox.checked) {
+    const controls = resolveRelatedControls(checkbox.id);
+    const trigger = controls[0];
+    if (trigger instanceof HTMLElement) {
+      queueMicrotask(() => trigger.focus({ preventScroll: false }));
+    } else {
+      queueMicrotask(() => checkbox.focus({ preventScroll: false }));
+    }
+  }
+};
+
 document.addEventListener("change", (event) => {
   persistThemeSelection(event);
 
@@ -297,6 +390,10 @@ document.addEventListener("change", (event) => {
 
   if (!event.target.id) {
     return;
+  }
+
+  if (event.target.classList.contains("drawer-toggle")) {
+    manageDrawerFocus(event.target);
   }
 
   syncDrawerControlState(event.target.id);
@@ -327,6 +424,7 @@ document.addEventListener("keydown", (event) => {
     }
 
     control.checked = false;
+    manageDrawerFocus(control);
     syncDrawerControlState(control.id);
   }
 });

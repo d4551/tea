@@ -8,16 +8,19 @@ import { createLogger, getLoggerWriteFailures } from "../src/lib/logger.ts";
  * and do not throw from caller sites.
  */
 describe("createLogger", () => {
-  const originalWrite = Bun.write;
+  const originalStdoutWrite = Bun.stdout.write;
+  const originalStderrWrite = Bun.stderr.write;
 
   afterEach(() => {
-    Bun.write = originalWrite;
+    Bun.stdout.write = originalStdoutWrite;
+    Bun.stderr.write = originalStderrWrite;
   });
 
   test("does not throw when stdout sink rejects", async () => {
     const previousFailures = getLoggerWriteFailures();
-    const writeFails: typeof Bun.write = () => Promise.reject(new Error("stream unavailable"));
-    Bun.write = writeFails;
+    const writeFails: typeof Bun.stdout.write = () =>
+      Promise.reject(new Error("stream unavailable"));
+    Bun.stdout.write = writeFails;
 
     const logger = createLogger("logger.test");
 
@@ -32,13 +35,10 @@ describe("createLogger", () => {
 
   test("records stderr stream failures on error logs", async () => {
     const previousFailures = getLoggerWriteFailures();
-    const writeWithConditionalFailure: typeof Bun.write = (stream) => {
-      if (stream === Bun.stderr) {
-        return Promise.reject(new Error("stderr blocked"));
-      }
-      return Promise.resolve(0);
+    const writeWithConditionalFailure: typeof Bun.stderr.write = () => {
+      return Promise.reject(new Error("stderr blocked"));
     };
-    Bun.write = writeWithConditionalFailure;
+    Bun.stderr.write = writeWithConditionalFailure;
 
     const logger = createLogger("logger.test");
 

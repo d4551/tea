@@ -126,22 +126,18 @@ const normalizeError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
 
 const writeToBunStream = (stream: "stderr" | "stdout", bytes: Uint8Array): boolean => {
-  if (typeof Bun === "undefined" || typeof Bun.write !== "function") {
+  if (typeof Bun === "undefined") {
     return false;
   }
 
-  if (stream === "stdout") {
-    void Bun.write(Bun.stdout, bytes).then(
-      () => true,
-      (error: unknown) => {
-        recordLoggerWriteFailure(stream, error);
-        return false;
-      },
-    );
-    return true;
+  const target = stream === "stdout" ? Bun.stdout : Bun.stderr;
+  if (!target) {
+    return false;
   }
 
-  void Bun.write(Bun.stderr, bytes).then(
+  const writePromise = stream === "stdout" ? target.write(bytes) : target.write(bytes);
+
+  void writePromise.then(
     () => true,
     (error: unknown) => {
       recordLoggerWriteFailure(stream, error);

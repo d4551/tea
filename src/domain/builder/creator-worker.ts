@@ -2,6 +2,12 @@ import { chromium } from "playwright";
 import sharp from "sharp";
 import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
+import {
+  AUTOMATION_STEP_KIND_UNSUPPORTED_ERROR,
+  CREATOR_PLACEHOLDER_SVG_HEIGHT,
+  CREATOR_PLACEHOLDER_SVG_WIDTH,
+} from "../../shared/constants/builder-defaults.ts";
+import { httpStatus } from "../../shared/constants/http.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type {
   AutomationAttachFileStepSpec,
@@ -29,7 +35,7 @@ interface WorkerFailure {
 type WorkerResult<TPayload> = WorkerSuccess<TPayload> | WorkerFailure;
 
 const assertUnreachable = (_value: never): never => {
-  throw new Error("automation-step-kind-unsupported");
+  throw new Error(AUTOMATION_STEP_KIND_UNSUPPORTED_ERROR);
 };
 
 const workerLogger = createLogger("builder.creator-worker");
@@ -70,7 +76,7 @@ const buildImageSvg = (
   title: string,
   body: string,
 ): string => `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="1024" height="576" viewBox="0 0 1024 576" xmlns="http://www.w3.org/2000/svg">
+<svg width="${CREATOR_PLACEHOLDER_SVG_WIDTH}" height="${CREATOR_PLACEHOLDER_SVG_HEIGHT}" viewBox="0 0 ${CREATOR_PLACEHOLDER_SVG_WIDTH} ${CREATOR_PLACEHOLDER_SVG_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="${SVG_PALETTE.gradientStart}"/>
@@ -87,8 +93,8 @@ const buildImageSvg = (
       white-space: pre-wrap;
     }
   ]]></style>
-  <rect width="1024" height="576" rx="32" fill="url(#bg)" />
-  <rect x="28" y="28" width="968" height="520" rx="24" fill="${SVG_PALETTE.overlayFill}" stroke="${SVG_PALETTE.overlayStroke}" />
+  <rect width="${CREATOR_PLACEHOLDER_SVG_WIDTH}" height="${CREATOR_PLACEHOLDER_SVG_HEIGHT}" rx="32" fill="url(#bg)" />
+  <rect x="28" y="28" width="${CREATOR_PLACEHOLDER_SVG_WIDTH - 56}" height="${CREATOR_PLACEHOLDER_SVG_HEIGHT - 56}" rx="24" fill="${SVG_PALETTE.overlayFill}" stroke="${SVG_PALETTE.overlayStroke}" />
   <text x="64" y="120" font-family="ui-monospace, monospace" font-size="28" font-weight="700" fill="${SVG_PALETTE.text}">${title}</text>
   <foreignObject x="64" y="156" width="896" height="320">
     <div xmlns="http://www.w3.org/1999/xhtml" class="placeholder-copy">${body}</div>
@@ -206,7 +212,7 @@ const probeAutomationOrigin = async (targetUrl: URL): Promise<boolean> => {
       signal: AbortSignal.timeout(appConfig.builder.automationProbeTimeoutMs),
     });
 
-    if (response.status >= 400) {
+    if (response.status >= httpStatus.badRequest) {
       throw new Error(`automation-origin-unreachable:${response.status}`);
     }
 
@@ -496,7 +502,7 @@ const executeHttpAutomationStep = async (
     throw new Error(`automation-http-unexpected-status:${response.status}`);
   }
 
-  if (response.status >= 400) {
+  if (response.status >= httpStatus.badRequest) {
     throw new Error(`automation-http-failed:${response.status}`);
   }
 
@@ -620,7 +626,7 @@ const executeBuilderAutomationStep = async (
     signal: AbortSignal.timeout(appConfig.ai.requestTimeoutMs),
   });
 
-  if (response.status >= 400) {
+  if (response.status >= httpStatus.badRequest) {
     throw new Error(`automation-builder-step-failed:${response.status}`);
   }
 

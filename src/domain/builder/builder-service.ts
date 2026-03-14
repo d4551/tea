@@ -1,4 +1,14 @@
 import { appConfig, type LocaleCode } from "../../config/environment.ts";
+import {
+  AUTOMATION_STEP_KIND_UNSUPPORTED_ERROR,
+  DEFAULT_ANIMATION_FRAME_COUNT,
+  DEFAULT_ANIMATION_PLAYBACK_FPS,
+  DEFAULT_SCENE_GEOMETRY_HEIGHT,
+  DEFAULT_SCENE_GEOMETRY_WIDTH,
+  DEFAULT_SCENE_NODE_SIZE,
+  DEFAULT_SCENE_SPAWN_X,
+  DEFAULT_SCENE_SPAWN_Y,
+} from "../../shared/constants/builder-defaults.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type {
   AnimationClip,
@@ -19,16 +29,19 @@ import type {
   BuilderScenePayload,
   BuilderTriggerPayload,
   DialogueGraph,
+  Facing,
   GameFlagDefinition,
   GenerationArtifact,
   GenerationJob,
+  ParticleEmitterConfig,
   QuestDefinition,
   SceneDefinition,
   SceneNodeDefinition,
   SceneNpcDefinition,
+  TilemapDefinition,
   TriggerDefinition,
 } from "../../shared/contracts/game.ts";
-import { safeJsonParse } from "../../shared/utils/safe-json.ts";
+import { acceptUnknown, safeJsonParse } from "../../shared/utils/safe-json.ts";
 import {
   type BuilderProjectSnapshot,
   type BuilderProjectState,
@@ -156,6 +169,8 @@ export interface BuilderSceneNodePayload {
   readonly sizeWidth?: string;
   /** Optional height update for 2D nodes. */
   readonly sizeHeight?: string;
+  /** Optional particle emitter config (JSON string). */
+  readonly particleEmitter?: string;
 }
 
 /**
@@ -178,6 +193,8 @@ export interface BuilderSceneFormPayload {
   readonly spawnX?: string;
   /** Optional spawn Y update. */
   readonly spawnY?: string;
+  /** Optional tilemap definition (JSON string). */
+  readonly tilemap?: string;
 }
 
 /**
@@ -616,7 +633,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
 const assertUnreachable = (_value: never): never => {
-  throw new Error("automation-step-kind-unsupported");
+  throw new Error(AUTOMATION_STEP_KIND_UNSUPPORTED_ERROR);
 };
 
 const toAutomationStepSummary = (spec: AutomationStepSpec): string => {
@@ -774,7 +791,7 @@ const isAutomationStepSpec = (value: unknown): value is AutomationStepSpec => {
 };
 
 const parseAutomationStepSpecs = (value: string | undefined): readonly AutomationStepSpec[] => {
-  const parsed = safeJsonParse<unknown>(value ?? "", []);
+  const parsed = safeJsonParse<unknown>(value ?? "", [], acceptUnknown);
   if (!Array.isArray(parsed)) {
     return [];
   }
@@ -826,7 +843,7 @@ const isSuggestedAnimationPlanClip = (value: unknown): value is SuggestedAnimati
 const parseSuggestedAnimationPlanPayload = (
   source: string,
 ): SuggestedAnimationPlanPayload | null => {
-  const parsed = safeJsonParse<unknown>(source, null);
+  const parsed = safeJsonParse<unknown>(source, null, acceptUnknown);
   if (!isRecord(parsed) || !Array.isArray(parsed.suggestedClips)) {
     return null;
   }
@@ -915,15 +932,44 @@ const buildAssetVariants = (
   ];
 };
 
-const clipDirections: readonly AnimationClip["direction"][] = ["up", "down", "left", "right"];
+const clipDirections: readonly Facing[] = ["up", "down", "left", "right"];
 
-const inferClipDirection = (stateTag: string): AnimationClip["direction"] | undefined =>
-  clipDirections.find((candidate) => stateTag.includes(candidate));
+const inferClipDirection = (stateTag: string): Facing =>
+  clipDirections.find((candidate) => stateTag.includes(candidate)) ?? "down";
 
 const isSceneNode3d = (
   node: SceneNodeDefinition | undefined,
 ): node is Extract<SceneNodeDefinition, { readonly rotation: { readonly x: number } }> =>
   Boolean(node && "rotation" in node && "scale" in node);
+
+const parseParticleEmitter = (
+  raw: string | undefined,
+  fallback: ParticleEmitterConfig | undefined,
+): ParticleEmitterConfig | undefined => {
+  if (!raw || raw.trim().length === 0) {
+    return fallback;
+  }
+  const parsed = safeJsonParse<unknown>(raw, null, (v): v is unknown => v !== undefined);
+  if (!parsed || typeof parsed !== "object") {
+    return fallback;
+  }
+  const r = parsed as Record<string, unknown>;
+  if (typeof r.maxCount !== "number" || typeof r.rate !== "number") {
+    return fallback;
+  }
+  const speed = Array.isArray(r.speed) && r.speed.length >= 2 ? [r.speed[0], r.speed[1]] : [0, 1];
+  const size = Array.isArray(r.size) && r.size.length >= 2 ? [r.size[0], r.size[1]] : [4, 8];
+  return {
+    assetId: typeof r.assetId === "string" ? r.assetId : undefined,
+    maxCount: r.maxCount,
+    rate: r.rate,
+    lifetimeMs: typeof r.lifetimeMs === "number" ? r.lifetimeMs : 2000,
+    speed: [Number(speed[0]), Number(speed[1])],
+    spread: typeof r.spread === "number" ? r.spread : Math.PI,
+    size: [Number(size[0]), Number(size[1])],
+    gravity: typeof r.gravity === "boolean" ? r.gravity : undefined,
+  };
+};
 
 const buildSceneNodeDefinition = (
   scene: SceneDefinition,
@@ -957,6 +1003,10 @@ const buildSceneNodeDefinition = (
           ? existingNode.nodeType
           : "model";
 
+    const particleEmitter = parseParticleEmitter(
+      payload.particleEmitter,
+      existingNode?.particleEmitter,
+    );
     return {
       id: nodeId,
       nodeType: nextNodeType,
@@ -977,6 +1027,7 @@ const buildSceneNodeDefinition = (
         y: Math.max(0.1, parseNodeFloat(payload.scaleY, current.scale.y)),
         z: Math.max(0.1, parseNodeFloat(payload.scaleZ, current.scale.z)),
       },
+      ...(particleEmitter ? { particleEmitter } : {}),
     };
   }
 
@@ -985,7 +1036,7 @@ const buildSceneNodeDefinition = (
       ? existingNode
       : {
           position: { x: 0, y: 0 },
-          size: { width: 64, height: 64 },
+          size: { width: DEFAULT_SCENE_NODE_SIZE, height: DEFAULT_SCENE_NODE_SIZE },
           layer: "foreground",
         };
   const nextNodeType =
@@ -999,6 +1050,10 @@ const buildSceneNodeDefinition = (
         ? existingNode.nodeType
         : "sprite";
 
+  const particleEmitter = parseParticleEmitter(
+    payload.particleEmitter,
+    existingNode?.particleEmitter,
+  );
   return {
     id: nodeId,
     nodeType: nextNodeType,
@@ -1013,6 +1068,7 @@ const buildSceneNodeDefinition = (
       height: Math.max(1, parseNodeFloat(payload.sizeHeight, current.size.height)),
     },
     layer: trimOptionalField(payload.layer, current.layer) ?? current.layer,
+    ...(particleEmitter ? { particleEmitter } : {}),
   };
 };
 
@@ -1138,7 +1194,8 @@ const automationRunMutationResult = (
 /**
  * Parses JSON-like AI patch payload values into runtime values.
  */
-const parsePatchValue = (value: string): unknown => safeJsonParse<unknown>(value, value);
+const parsePatchValue = (value: string): unknown =>
+  safeJsonParse<unknown>(value, value, acceptUnknown);
 
 type PatchTarget =
   | {
@@ -1201,6 +1258,7 @@ const parseScenePatch = (
   const base = safeJsonParse<SceneDefinition>(
     JSON.stringify(payload),
     fallback ?? buildScenePatchFallback(sceneId),
+    (v): v is SceneDefinition => isRecord(v),
   );
   return structuredClone({
     ...base,
@@ -1249,15 +1307,16 @@ class PrismaBuilderService implements BuilderService {
     payload: BuilderScenePayload,
   ): Promise<BuilderMutation<SceneDefinition> | null> {
     const mutation = await this.mutateProject(projectId, "builder-editor", (state) => {
+      const nextScene = cloneScene(payload.scene);
       const action: BuilderMutationResult["action"] = Object.hasOwn(state.scenes, payload.id)
         ? "updated"
         : "created";
-      state.scenes[payload.id] = cloneScene(payload.scene);
+      state.scenes[payload.id] = nextScene;
       return {
         ok: true,
         payload: {
           action,
-          scene: cloneScene(state.scenes[payload.id]),
+          scene: nextScene,
         },
       };
     });
@@ -1288,12 +1347,18 @@ class PrismaBuilderService implements BuilderService {
         background: payload.background.trim(),
         sceneMode: payload.sceneMode === "3d" ? "3d" : "2d",
         geometry: {
-          width: Math.max(1, parseBuilderInteger(payload.geometryWidth, 640)),
-          height: Math.max(1, parseBuilderInteger(payload.geometryHeight, 360)),
+          width: Math.max(
+            1,
+            parseBuilderInteger(payload.geometryWidth, DEFAULT_SCENE_GEOMETRY_WIDTH),
+          ),
+          height: Math.max(
+            1,
+            parseBuilderInteger(payload.geometryHeight, DEFAULT_SCENE_GEOMETRY_HEIGHT),
+          ),
         },
         spawn: {
-          x: parseBuilderInteger(payload.spawnX, 320),
-          y: parseBuilderInteger(payload.spawnY, 180),
+          x: parseBuilderInteger(payload.spawnX, DEFAULT_SCENE_SPAWN_X),
+          y: parseBuilderInteger(payload.spawnY, DEFAULT_SCENE_SPAWN_Y),
         },
         npcs: [],
         collisions: [],
@@ -1315,7 +1380,7 @@ class PrismaBuilderService implements BuilderService {
           return { ok: false };
         }
 
-        const updatedScene: SceneDefinition = {
+        let updatedScene: SceneDefinition = {
           ...current,
           id: payload.sceneId,
           titleKey: trimOrFallback(payload.titleKey, current.titleKey),
@@ -1338,6 +1403,21 @@ class PrismaBuilderService implements BuilderService {
             y: parseBuilderInteger(payload.spawnY, current.spawn.y),
           },
         };
+
+        if (payload.tilemap != null && payload.tilemap.trim() !== "") {
+          const parsed = safeJsonParse<TilemapDefinition | null>(
+            payload.tilemap,
+            null,
+            (v): v is TilemapDefinition =>
+              v !== null &&
+              typeof v === "object" &&
+              Array.isArray((v as TilemapDefinition).layers) &&
+              (v as TilemapDefinition).layers.length > 0,
+          );
+          if (parsed) {
+            updatedScene = { ...updatedScene, tilemap: parsed };
+          }
+        }
 
         state.scenes[payload.sceneId] = updatedScene;
 
@@ -1544,6 +1624,9 @@ class PrismaBuilderService implements BuilderService {
       }
 
       const currentNpc = scene.npcs[existingIndex];
+      if (!currentNpc) {
+        return { ok: false };
+      }
       const nextDialogueKeys = (payload.dialogueKeys ?? "")
         .split(",")
         .map((key) => key.trim())
@@ -1809,15 +1892,16 @@ class PrismaBuilderService implements BuilderService {
     payload: BuilderAssetPayload,
   ): Promise<BuilderMutation<BuilderAsset> | null> {
     const mutation = await this.mutateProject(projectId, "builder-assets", (state) => {
+      const nextAsset = structuredClone(payload.asset);
       const action: BuilderMutationResult["action"] = Object.hasOwn(state.assets, payload.id)
         ? "updated"
         : "created";
-      state.assets[payload.id] = structuredClone(payload.asset);
+      state.assets[payload.id] = nextAsset;
       return {
         ok: true,
         payload: {
           action,
-          asset: structuredClone(state.assets[payload.id]),
+          asset: nextAsset,
         },
       };
     });
@@ -1906,18 +1990,19 @@ class PrismaBuilderService implements BuilderService {
     payload: BuilderAnimationClipPayload,
   ): Promise<BuilderMutation<AnimationClip> | null> {
     const mutation = await this.mutateProject(projectId, "builder-assets", (state) => {
+      const nextClip = structuredClone(payload.clip);
       const action: BuilderMutationResult["action"] = Object.hasOwn(
         state.animationClips,
         payload.id,
       )
         ? "updated"
         : "created";
-      state.animationClips[payload.id] = structuredClone(payload.clip);
+      state.animationClips[payload.id] = nextClip;
       return {
         ok: true,
         payload: {
           action,
-          clip: structuredClone(state.animationClips[payload.id]),
+          clip: nextClip,
         },
       };
     });
@@ -1957,9 +2042,15 @@ class PrismaBuilderService implements BuilderService {
         label: clipId,
         sceneMode: asset?.sceneMode ?? "2d",
         stateTag,
-        playbackFps: Math.max(1, parseBuilderInteger(payload.playbackFps, 8)),
+        playbackFps: Math.max(
+          1,
+          parseBuilderInteger(payload.playbackFps, DEFAULT_ANIMATION_PLAYBACK_FPS),
+        ),
         startFrame: 0,
-        frameCount: Math.max(1, parseBuilderInteger(payload.frameCount, 4)),
+        frameCount: Math.max(
+          1,
+          parseBuilderInteger(payload.frameCount, DEFAULT_ANIMATION_FRAME_COUNT),
+        ),
         loop: true,
         direction: inferClipDirection(stateTag),
         createdAtMs: now,
@@ -2005,18 +2096,19 @@ class PrismaBuilderService implements BuilderService {
     payload: BuilderDialogueGraphPayload,
   ): Promise<BuilderMutation<DialogueGraph> | null> {
     const mutation = await this.mutateProject(projectId, "builder-mechanics", (state) => {
+      const nextGraph = structuredClone(payload.graph);
       const action: BuilderMutationResult["action"] = Object.hasOwn(
         state.dialogueGraphs,
         payload.id,
       )
         ? "updated"
         : "created";
-      state.dialogueGraphs[payload.id] = structuredClone(payload.graph);
+      state.dialogueGraphs[payload.id] = nextGraph;
       return {
         ok: true,
         payload: {
           action,
-          graph: structuredClone(state.dialogueGraphs[payload.id]),
+          graph: nextGraph,
         },
       };
     });
@@ -2097,15 +2189,16 @@ class PrismaBuilderService implements BuilderService {
     payload: BuilderQuestPayload,
   ): Promise<BuilderMutation<QuestDefinition> | null> {
     const mutation = await this.mutateProject(projectId, "builder-mechanics", (state) => {
+      const nextQuest = structuredClone(payload.quest);
       const action: BuilderMutationResult["action"] = Object.hasOwn(state.quests, payload.id)
         ? "updated"
         : "created";
-      state.quests[payload.id] = structuredClone(payload.quest);
+      state.quests[payload.id] = nextQuest;
       return {
         ok: true,
         payload: {
           action,
-          quest: structuredClone(state.quests[payload.id]),
+          quest: nextQuest,
         },
       };
     });
@@ -2238,15 +2331,16 @@ class PrismaBuilderService implements BuilderService {
     payload: BuilderTriggerPayload,
   ): Promise<BuilderMutation<TriggerDefinition> | null> {
     const mutation = await this.mutateProject(projectId, "builder-mechanics", (state) => {
+      const nextTrigger = structuredClone(payload.trigger);
       const action: BuilderMutationResult["action"] = Object.hasOwn(state.triggers, payload.id)
         ? "updated"
         : "created";
-      state.triggers[payload.id] = structuredClone(payload.trigger);
+      state.triggers[payload.id] = nextTrigger;
       return {
         ok: true,
         payload: {
           action,
-          trigger: structuredClone(state.triggers[payload.id]),
+          trigger: nextTrigger,
         },
       };
     });
@@ -2323,18 +2417,19 @@ class PrismaBuilderService implements BuilderService {
     payload: BuilderGenerationJobPayload,
   ): Promise<BuilderMutation<GenerationJob> | null> {
     const mutation = await this.mutateProject(projectId, "builder-ai", (state) => {
+      const nextJob = structuredClone(payload.job);
       const action: BuilderMutationResult["action"] = Object.hasOwn(
         state.generationJobs,
         payload.id,
       )
         ? "updated"
         : "queued";
-      state.generationJobs[payload.id] = structuredClone(payload.job);
+      state.generationJobs[payload.id] = nextJob;
       return {
         ok: true,
         payload: {
           action,
-          job: structuredClone(state.generationJobs[payload.id]),
+          job: nextJob,
         },
       };
     });
@@ -2525,18 +2620,19 @@ class PrismaBuilderService implements BuilderService {
     payload: BuilderAutomationRunPayload,
   ): Promise<BuilderMutation<AutomationRun> | null> {
     const mutation = await this.mutateProject(projectId, "builder-automation", (state) => {
+      const nextRun = structuredClone(payload.run);
       const action: BuilderMutationResult["action"] = Object.hasOwn(
         state.automationRuns,
         payload.id,
       )
         ? "updated"
         : "queued";
-      state.automationRuns[payload.id] = structuredClone(payload.run);
+      state.automationRuns[payload.id] = nextRun;
       return {
         ok: true,
         payload: {
           action,
-          run: structuredClone(state.automationRuns[payload.id]),
+          run: nextRun,
         },
       };
     });

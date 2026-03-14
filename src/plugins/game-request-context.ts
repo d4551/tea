@@ -14,6 +14,8 @@ export interface GameRequestContext {
   readonly gameRequestLocale: LocaleCode;
   /** Requested session id from the game page query string. */
   readonly gameRequestedSessionId: string | null;
+  /** Requested scene id from the game page query string. */
+  readonly gameRequestedSceneId: string | null;
   /** Requested project id from the game page query string. */
   readonly gameRequestedProjectId: string | null;
   /** Requested invite token from the game page query string. */
@@ -79,6 +81,7 @@ export const resolveGameRequestContext = (
   gameParticipantSessionId: resolveAuthSession(cookie).sessionId,
   gameRequestLocale: resolveRequestLocale(request),
   gameRequestedSessionId: resolveTrimmedQueryValue(request, "sessionId"),
+  gameRequestedSceneId: resolveTrimmedQueryValue(request, "sceneId"),
   gameRequestedProjectId: resolveTrimmedQueryValue(request, "projectId"),
   gameInviteToken: resolveTrimmedQueryValue(request, "invite"),
 });
@@ -118,6 +121,7 @@ export const gameRequestContextPlugin = new Elysia({ name: "game-request-context
       gameParticipantSessionId: context.gameParticipantSessionId,
       gameRequestLocale: context.gameRequestLocale,
       gameRequestedSessionId: context.gameRequestedSessionId,
+      gameRequestedSceneId: context.gameRequestedSceneId,
       gameRequestedProjectId: context.gameRequestedProjectId,
       gameInviteToken: context.gameInviteToken,
     };

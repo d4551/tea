@@ -1,4 +1,12 @@
-import { env, pipeline } from "@huggingface/transformers";
+import {
+  type AutomaticSpeechRecognitionPipelineCallback,
+  env,
+  type FeatureExtractionPipelineCallback,
+  pipeline,
+  type TextClassificationPipelineCallback,
+  type TextGenerationPipelineCallback,
+  type TextToAudioPipelineCallback,
+} from "@huggingface/transformers";
 import { $ } from "bun";
 import { appConfig } from "../../config/environment.ts";
 import { settleAsync } from "../../shared/utils/async-result.ts";
@@ -16,7 +24,12 @@ import { MODEL_REGISTRY, type ModelKey } from "./model-registry.ts";
 /**
  * Runtime pipeline instance shape used by the local-model manager.
  */
-export type AnyPipeline = Awaited<ReturnType<typeof pipeline>>;
+export type AnyPipeline =
+  | TextGenerationPipelineCallback
+  | TextClassificationPipelineCallback
+  | FeatureExtractionPipelineCallback
+  | AutomaticSpeechRecognitionPipelineCallback
+  | TextToAudioPipelineCallback;
 
 const corruptedCacheErrorFragments: readonly string[] = [
   "protobuf",

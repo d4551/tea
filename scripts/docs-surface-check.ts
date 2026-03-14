@@ -1,6 +1,6 @@
 import { createLogger } from "../src/lib/logger.ts";
 import { settleAsync } from "../src/shared/utils/async-result.ts";
-import { safeJsonParse } from "../src/shared/utils/safe-json.ts";
+import { acceptUnknown, safeJsonParse } from "../src/shared/utils/safe-json.ts";
 
 interface ArchiveEntry {
   /** Source markdown path in repo at archive time. */
@@ -65,6 +65,13 @@ const toArchivePath = (sourcePath: string): string => {
   return `${archiveRoot}/${normalized.replaceAll("/", "__")}`;
 };
 
+const sha256Hex = async (value: string): Promise<string> => {
+  const bytes = new TextEncoder().encode(value);
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  const hashValues = [...new Uint8Array(hash)];
+  return hashValues.map((digit) => digit.toString(16).padStart(2, "0")).join("");
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object";
 
@@ -95,7 +102,7 @@ const readManifest = async (): Promise<ArchiveManifest | null> => {
     return null;
   }
 
-  const parsed = safeJsonParse<unknown>(manifestText.value, null);
+  const parsed = safeJsonParse<unknown>(manifestText.value, null, acceptUnknown);
   if (!isRecord(parsed)) {
     return null;
   }
@@ -173,6 +180,20 @@ const main = async (): Promise<void> => {
       }
       if (!(await Bun.file(enEntry.archivePath).exists())) {
         errors.push(`Archive artifact missing: ${enEntry.archivePath}`);
+      } else {
+        const fileText = await Bun.file(enEntry.archivePath).text();
+        const actualSha256 = await sha256Hex(fileText);
+        const actualSizeBytes = fileText.length;
+        if (actualSha256 !== enEntry.sha256) {
+          errors.push(
+            `Archive hash mismatch for ${enEntry.sourcePath}: expected ${enEntry.sha256}, got ${actualSha256}`,
+          );
+        }
+        if (actualSizeBytes !== enEntry.sizeBytes) {
+          errors.push(
+            `Archive size mismatch for ${enEntry.sourcePath}: expected ${enEntry.sizeBytes}, got ${actualSizeBytes}`,
+          );
+        }
       }
 
       if (pair.zh !== undefined) {
@@ -183,6 +204,20 @@ const main = async (): Promise<void> => {
         }
         if (!(await Bun.file(zhEntry.archivePath).exists())) {
           errors.push(`Archive artifact missing: ${zhEntry.archivePath}`);
+        } else {
+          const fileText = await Bun.file(zhEntry.archivePath).text();
+          const actualSha256 = await sha256Hex(fileText);
+          const actualSizeBytes = fileText.length;
+          if (actualSha256 !== zhEntry.sha256) {
+            errors.push(
+              `Archive hash mismatch for ${zhEntry.sourcePath}: expected ${zhEntry.sha256}, got ${actualSha256}`,
+            );
+          }
+          if (actualSizeBytes !== zhEntry.sizeBytes) {
+            errors.push(
+              `Archive size mismatch for ${zhEntry.sourcePath}: expected ${zhEntry.sizeBytes}, got ${actualSizeBytes}`,
+            );
+          }
         }
       }
     }

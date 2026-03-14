@@ -43,6 +43,8 @@ export interface Messages {
     readonly projectConfigured: string;
     readonly noProjectBound: string;
     readonly contextLabel: string;
+    readonly notApplicable: string;
+    readonly dismiss: string;
   };
   readonly pages: {
     readonly home: {
@@ -50,6 +52,7 @@ export interface Messages {
       readonly heroTitle: string;
       readonly heroDescription: string;
       readonly welcomeBack: string;
+      readonly quickStartHint: string;
       readonly builderCardTitle: string;
       readonly builderCardDescription: string;
       readonly builderCardCta: string;
@@ -60,6 +63,10 @@ export interface Messages {
       readonly playerCardCta: string;
       readonly playtestBuild: string;
       readonly playtestBuildDescription: string;
+      readonly sceneLauncherTitle: string;
+      readonly sceneLauncherDescription: string;
+      readonly launch2dScene: string;
+      readonly launch3dScene: string;
       readonly statusUnpublishedDraft: string;
       readonly launchPlayerSurface: string;
       readonly projectActivity: string;
@@ -168,6 +175,11 @@ export interface Messages {
     readonly objectiveTitle: string;
     readonly objectiveDescription: string;
     readonly sessionContextTitle: string;
+    readonly sessionInfoLabel: string;
+    readonly questLogTitle: string;
+    readonly questStepActive: string;
+    readonly questStepCompleted: string;
+    readonly questStepPending: string;
     readonly sessionIdLabel: string;
     readonly sceneLabel: string;
     readonly sceneModeLabel: string;
@@ -214,6 +226,7 @@ export interface Messages {
     readonly chatRateLimited: string;
     readonly commandTypeMissing: string;
     readonly saveCooldownActive: string;
+    readonly dialogueConfirm: string;
     readonly inventoryAction: string;
     readonly inventoryClose: string;
     readonly inventoryTitle: string;
@@ -223,9 +236,19 @@ export interface Messages {
     readonly inventoryEmpty: string;
     readonly inventoryWeight: string;
     readonly inventoryGold: string;
+    readonly inventoryWeightPlaceholder: string;
+    readonly inventoryGoldPlaceholder: string;
     readonly inventoryManageHint: string;
     readonly inventorySessionIdLabel: string;
+    readonly inventoryUse: string;
+    readonly inventoryEquip: string;
+    readonly inventoryUnequip: string;
+    readonly inventoryEquipment: string;
+    readonly inventoryWeapon: string;
+    readonly inventoryArmor: string;
+    readonly inventoryAccessory: string;
     readonly cutsceneSkip: string;
+    readonly cutsceneAdvance: string;
     readonly cutsceneAdvanceHint: string;
     readonly cutsceneInProgress: string;
     readonly cutsceneBadge: string;
@@ -236,12 +259,39 @@ export interface Messages {
     readonly combatHostilesLabel: string;
     readonly combatLogEmpty: string;
     readonly combatActionHint: string;
+    readonly combatAttack: string;
+    readonly combatDefend: string;
+    readonly combatSkill: string;
+    readonly combatFlee: string;
     readonly combatPhaseIntro: string;
     readonly combatPhasePlayerTurn: string;
     readonly combatPhaseEnemyTurn: string;
     readonly combatPhaseVictory: string;
     readonly combatPhaseDefeat: string;
     readonly hitPointsShortLabel: string;
+    readonly saveAction: string;
+    readonly loadAction: string;
+    readonly saveSlotTitle: string;
+    readonly saveSlotNamePlaceholder: string;
+    readonly saveSlotNameLabel: string;
+    readonly saveSlotSuccess: string;
+    readonly loadSlotTitle: string;
+    readonly loadSlotEmpty: string;
+    readonly loadSlotRestore: string;
+    readonly loadSlotCreatedAt: string;
+    readonly keyBindingsTitle: string;
+    readonly keyBindingsDescription: string;
+    readonly keyBindingsSetButton: string;
+    readonly keyBindingsListeningHint: string;
+    readonly keyBindingsResetDefaults: string;
+    readonly keyBindingsUpdatedHint: string;
+    readonly keyBindingsActionMoveUp: string;
+    readonly keyBindingsActionMoveDown: string;
+    readonly keyBindingsActionMoveLeft: string;
+    readonly keyBindingsActionMoveRight: string;
+    readonly keyBindingsActionInteract: string;
+    readonly keyBindingsActionMenu: string;
+    readonly keyBindingsActionClose: string;
   };
   readonly builder: {
     readonly projectNotFound: string;
@@ -278,6 +328,8 @@ export interface Messages {
     readonly mechanics: string;
     readonly automation: string;
     readonly ai: string;
+    readonly navGroupContent: string;
+    readonly navGroupSystems: string;
     readonly animations: string;
     readonly addScene: string;
     readonly editScene: string;
@@ -446,6 +498,11 @@ export interface Messages {
     readonly sceneNodeTypeCamera: string;
     readonly sceneNodeTypeModel: string;
     readonly sceneNodeTypeLight: string;
+    readonly tilemapTabLabel: string;
+    readonly tilemapTileSetLabel: string;
+    readonly tilemapBrushLabel: string;
+    readonly tilemapFillLabel: string;
+    readonly modelPathLabel: string;
     readonly assetKindPortrait: string;
     readonly assetKindSpriteSheet: string;
     readonly assetKindBackground: string;
@@ -522,6 +579,9 @@ export interface Messages {
     readonly clipTimelineDuration: string;
     readonly clipTimelineLoop: string;
     readonly clipTimelineNoLoop: string;
+    readonly clipDurationEmpty: string;
+    readonly clipFrameStart: string;
+    readonly fpsUnit: string;
     readonly clipIdLabel: string;
     readonly generationJobsTitle: string;
     readonly generationJobKindLabel: string;
@@ -646,6 +706,7 @@ export interface Messages {
     readonly implementedCountLabel: string;
     readonly partialCountLabel: string;
     readonly missingCountLabel: string;
+    readonly readinessSummaryExpand: string;
     readonly sceneBaselineCountLabel: string;
     readonly spriteManifestCountLabel: string;
     readonly draftVersionLabel: string;
@@ -798,6 +859,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       projectConfigured: "Project configured",
       noProjectBound: "No project bound",
       contextLabel: "Context",
+      notApplicable: "—",
+      dismiss: "Dismiss",
     },
     pages: {
       home: {
@@ -806,6 +869,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         heroDescription:
           "Create scenes, characters, and stories — powered by local AI models. Design, publish, and play your game from a single creative workspace.",
         welcomeBack: "Welcome back. Here's an overview of your current project workspace.",
+        quickStartHint:
+          "Open the Builder Workspace to create scenes, add NPCs, and publish your game.",
         builderCardTitle: "Build Worlds",
         builderCardDescription:
           "Design environments, place objects, and craft the spaces your players will explore. AI helps generate terrain, lighting, and atmosphere.",
@@ -819,6 +884,10 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         playtestBuild: "Playtest Build",
         playtestBuildDescription:
           "Validate your scenes, dialogues, and mechanics by dropping directly into the runtime surface.",
+        sceneLauncherTitle: "Choose your scene mode",
+        sceneLauncherDescription: "Start in 2D or 3D from the baseline scenes.",
+        launch2dScene: "Launch Tea House",
+        launch3dScene: "Launch Crystal Cavern",
         statusUnpublishedDraft: "Status: Unpublished Draft",
         launchPlayerSurface: "Launch Player Surface",
         projectActivity: "Project Activity",
@@ -944,6 +1013,11 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       objectiveDescription:
         "Validate the published scene, dialogue pacing, and runtime stability before returning to the builder.",
       sessionContextTitle: "Current session",
+      sessionInfoLabel: "Session info",
+      questLogTitle: "Quest log",
+      questStepActive: "Active",
+      questStepCompleted: "Done",
+      questStepPending: "Pending",
       sessionIdLabel: "Session ID",
       sceneLabel: "Scene",
       sceneModeLabel: "Scene mode",
@@ -996,6 +1070,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       chatRateLimited: "Chat commands are temporarily rate limited.",
       commandTypeMissing: "Command type was not resolved for the accepted command.",
       saveCooldownActive: "Save is cooling down.",
+      dialogueConfirm: "Continue",
       inventoryAction: "Item action",
       inventoryClose: "Close inventory",
       inventoryTitle: "Inventory",
@@ -1005,9 +1080,19 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       inventoryEmpty: "Empty",
       inventoryWeight: "Weight",
       inventoryGold: "Gold",
+      inventoryWeightPlaceholder: "0.0kg",
+      inventoryGoldPlaceholder: "0",
       inventoryManageHint: "Use inventory commands to manage items.",
       inventorySessionIdLabel: "ID",
+      inventoryUse: "Use",
+      inventoryEquip: "Equip",
+      inventoryUnequip: "Unequip",
+      inventoryEquipment: "Equipment",
+      inventoryWeapon: "Weapon",
+      inventoryArmor: "Armor",
+      inventoryAccessory: "Accessory",
       cutsceneAdvanceHint: "Use advance cutscene (Space/Enter) to continue.",
+      cutsceneAdvance: "Continue",
       cutsceneInProgress: "Cinematic in progress...",
       cutsceneBadge: "Cinematic",
       cutsceneSkip: "Skip cutscene",
@@ -1018,12 +1103,39 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       combatHostilesLabel: "Hostiles",
       combatLogEmpty: "Combat initiated...",
       combatActionHint: "Use combat commands to resolve this encounter.",
+      combatAttack: "Attack",
+      combatDefend: "Defend",
+      combatSkill: "Skill",
+      combatFlee: "Flee",
       combatPhaseIntro: "Intro",
       combatPhasePlayerTurn: "Player turn",
       combatPhaseEnemyTurn: "Enemy turn",
       combatPhaseVictory: "Victory",
       combatPhaseDefeat: "Defeat",
       hitPointsShortLabel: "HP",
+      saveAction: "Save",
+      loadAction: "Load",
+      saveSlotTitle: "Save game",
+      saveSlotNamePlaceholder: "Slot name (optional)",
+      saveSlotNameLabel: "Slot name",
+      saveSlotSuccess: "Game saved.",
+      loadSlotTitle: "Load game",
+      loadSlotEmpty: "No saved games.",
+      loadSlotRestore: "Load",
+      loadSlotCreatedAt: "Saved",
+      keyBindingsTitle: "Key Bindings",
+      keyBindingsDescription: "Customize your controls. Click Set and press a key to rebind.",
+      keyBindingsSetButton: "Set",
+      keyBindingsListeningHint: "Press any key...",
+      keyBindingsResetDefaults: "Reset to defaults",
+      keyBindingsUpdatedHint: "Changes apply when you refocus the game or refresh.",
+      keyBindingsActionMoveUp: "Move up",
+      keyBindingsActionMoveDown: "Move down",
+      keyBindingsActionMoveLeft: "Move left",
+      keyBindingsActionMoveRight: "Move right",
+      keyBindingsActionInteract: "Interact",
+      keyBindingsActionMenu: "Menu / Inventory",
+      keyBindingsActionClose: "Close / Back",
     },
     builder: {
       projectNotFound: "Project not found",
@@ -1074,6 +1186,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       mechanics: "Mechanics",
       automation: "Automation",
       ai: "AI Tools",
+      navGroupContent: "Content",
+      navGroupSystems: "Systems",
       animations: "Animations",
       addScene: "Add Scene",
       editScene: "Edit Scene",
@@ -1250,6 +1364,11 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       sceneNodeTypeCamera: "Camera",
       sceneNodeTypeModel: "Model",
       sceneNodeTypeLight: "Light",
+      tilemapTabLabel: "Tilemap",
+      tilemapTileSetLabel: "Tile set",
+      tilemapBrushLabel: "Brush",
+      tilemapFillLabel: "Fill",
+      modelPathLabel: "Model path (glb/usdz)",
       assetKindPortrait: "Portrait",
       assetKindSpriteSheet: "Sprite sheet",
       assetKindBackground: "Background",
@@ -1338,6 +1457,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       clipTimelineDuration: "Duration",
       clipTimelineLoop: "Loops",
       clipTimelineNoLoop: "One-shot",
+      clipDurationEmpty: "—",
+      clipFrameStart: "0",
+      fpsUnit: "FPS",
       clipIdLabel: "Clip ID",
       generationJobsTitle: "Generation jobs",
       generationJobKindLabel: "Job kind",
@@ -1462,8 +1584,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       activeProjectMissing:
         "The selected project could not be loaded. Create it or switch to an existing project.",
       platformReadinessTitle: "Platform readiness",
-      platformReadinessDescription:
-        "This matrix shows the real product surface today: release publishing works, but game creation systems beyond the narrow baseline runtime remain partial or missing.",
+      platformReadinessDescription: "Track what's ready to use and what's still in progress.",
       platformReadinessWarning:
         "The builder can author and publish the current baseline, but sprite generation, animation tooling, advanced mechanics, and automation are not fully wired yet.",
       readinessImplemented: "Implemented",
@@ -1472,6 +1593,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       implementedCountLabel: "Implemented",
       partialCountLabel: "Partial",
       missingCountLabel: "Missing",
+      readinessSummaryExpand: "View capability details",
       sceneBaselineCountLabel: "Baseline scenes",
       spriteManifestCountLabel: "Sprite manifests",
       draftVersionLabel: "Draft version",
@@ -1563,6 +1685,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       projectConfigured: "已配置项目",
       noProjectBound: "未绑定项目",
       contextLabel: "上下文",
+      notApplicable: "—",
+      dismiss: "关闭",
     },
     pages: {
       home: {
@@ -1571,6 +1695,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         heroDescription:
           "创建场景、角色和故事 —— 由本地 AI 模型驱动。在同一个创意工作空间中设计、发布并游玩你的游戏。",
         welcomeBack: "欢迎回来。这是你当前项目工作区的概览。",
+        quickStartHint: "打开构建器工作区以创建场景、添加 NPC 并发布你的游戏。",
         builderCardTitle: "构建世界",
         builderCardDescription:
           "设计环境、放置物体，打造玩家将要探索的空间。AI 帮助生成地形、光照和氛围。",
@@ -1583,6 +1708,10 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         playerCardCta: "立即游玩",
         playtestBuild: "试玩构建",
         playtestBuildDescription: "直接进入运行时界面，验证场景、对话和机制。",
+        sceneLauncherTitle: "选择场景模式",
+        sceneLauncherDescription: "从默认场景直接开始 2D 或 3D。",
+        launch2dScene: "启动茶屋场景",
+        launch3dScene: "启动水晶洞窟",
         statusUnpublishedDraft: "状态：未发布草稿",
         launchPlayerSurface: "启动玩家界面",
         projectActivity: "项目动态",
@@ -1696,6 +1825,11 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       objectiveTitle: "本次验证目标",
       objectiveDescription: "确认已发布场景、对话节奏与运行时稳定性后，再返回构建器继续迭代。",
       sessionContextTitle: "当前会话",
+      sessionInfoLabel: "会话信息",
+      questLogTitle: "任务日志",
+      questStepActive: "进行中",
+      questStepCompleted: "已完成",
+      questStepPending: "待完成",
       sessionIdLabel: "会话 ID",
       sceneLabel: "场景",
       sceneModeLabel: "场景模式",
@@ -1743,6 +1877,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       chatRateLimited: "聊天命令触发了限流，请稍后重试。",
       commandTypeMissing: "已接受命令缺少解析后的命令类型。",
       saveCooldownActive: "保存仍在冷却中。",
+      dialogueConfirm: "继续",
       inventoryAction: "物品操作",
       inventoryClose: "关闭背包",
       inventoryTitle: "背包",
@@ -1752,8 +1887,18 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       inventoryEmpty: "空",
       inventoryWeight: "重量",
       inventoryGold: "金币",
+      inventoryWeightPlaceholder: "0.0kg",
+      inventoryGoldPlaceholder: "0",
       inventoryManageHint: "使用背包指令来管理物品。",
       inventorySessionIdLabel: "ID",
+      inventoryUse: "使用",
+      inventoryEquip: "装备",
+      inventoryUnequip: "卸下",
+      inventoryEquipment: "装备栏",
+      inventoryWeapon: "武器",
+      inventoryArmor: "护甲",
+      inventoryAccessory: "饰品",
+      cutsceneAdvance: "继续",
       cutsceneAdvanceHint: "使用推进过场指令（空格 / 回车）继续。",
       cutsceneInProgress: "过场动画进行中……",
       cutsceneBadge: "过场",
@@ -1765,12 +1910,39 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       combatHostilesLabel: "敌方",
       combatLogEmpty: "战斗已开始……",
       combatActionHint: "使用战斗指令来推进当前遭遇战。",
+      combatAttack: "攻击",
+      combatDefend: "防御",
+      combatSkill: "技能",
+      combatFlee: "逃跑",
       combatPhaseIntro: "开场",
       combatPhasePlayerTurn: "玩家回合",
       combatPhaseEnemyTurn: "敌方回合",
       combatPhaseVictory: "胜利",
       combatPhaseDefeat: "失败",
       hitPointsShortLabel: "生命值",
+      saveAction: "保存",
+      loadAction: "读取",
+      saveSlotTitle: "保存游戏",
+      saveSlotNamePlaceholder: "存档名称（可选）",
+      saveSlotNameLabel: "存档名称",
+      saveSlotSuccess: "游戏已保存。",
+      loadSlotTitle: "读取游戏",
+      loadSlotEmpty: "暂无存档。",
+      loadSlotRestore: "读取",
+      loadSlotCreatedAt: "保存于",
+      keyBindingsTitle: "按键绑定",
+      keyBindingsDescription: "自定义操作按键。点击“设置”后按下要绑定的键。",
+      keyBindingsSetButton: "设置",
+      keyBindingsListeningHint: "请按下任意键...",
+      keyBindingsResetDefaults: "恢复默认",
+      keyBindingsUpdatedHint: "更改在重新聚焦游戏或刷新页面后生效。",
+      keyBindingsActionMoveUp: "向上移动",
+      keyBindingsActionMoveDown: "向下移动",
+      keyBindingsActionMoveLeft: "向左移动",
+      keyBindingsActionMoveRight: "向右移动",
+      keyBindingsActionInteract: "交互",
+      keyBindingsActionMenu: "菜单 / 背包",
+      keyBindingsActionClose: "关闭 / 返回",
     },
     builder: {
       projectNotFound: "项目未找到",
@@ -1816,6 +1988,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       mechanics: "机制",
       automation: "自动化",
       ai: "AI 工具",
+      navGroupContent: "内容",
+      navGroupSystems: "系统",
       animations: "动画",
       addScene: "添加场景",
       editScene: "编辑场景",
@@ -1987,6 +2161,11 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       sceneNodeTypeCamera: "镜头",
       sceneNodeTypeModel: "模型",
       sceneNodeTypeLight: "灯光",
+      tilemapTabLabel: "瓦片地图",
+      tilemapTileSetLabel: "瓦片集",
+      tilemapBrushLabel: "画笔",
+      tilemapFillLabel: "填充",
+      modelPathLabel: "模型路径 (glb/usdz)",
       assetKindPortrait: "立绘",
       assetKindSpriteSheet: "精灵表",
       assetKindBackground: "背景",
@@ -2063,6 +2242,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       clipTimelineDuration: "时长",
       clipTimelineLoop: "循环",
       clipTimelineNoLoop: "单次播放",
+      clipDurationEmpty: "—",
+      clipFrameStart: "0",
+      fpsUnit: "FPS",
       clipIdLabel: "片段 ID",
       generationJobsTitle: "生成任务",
       generationJobKindLabel: "任务类型",
@@ -2182,8 +2364,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       patchOperations: "补丁操作",
       activeProjectMissing: "当前选择的项目无法加载。请创建项目或切换到已有项目。",
       platformReadinessTitle: "平台完成度",
-      platformReadinessDescription:
-        "这里展示的是当前真实产品面：发布与回放链路已可用，但超出当前基线运行时的创作系统仍多为部分实现或缺失。",
+      platformReadinessDescription: "追踪已实现功能与尚在开发中的进度。",
       platformReadinessWarning:
         "构建器已经可以编辑并发布当前基线项目，但精灵生成、动画工具、复杂机制与自动化流程尚未真正接通。",
       readinessImplemented: "已实现",
@@ -2192,6 +2373,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       implementedCountLabel: "已实现",
       partialCountLabel: "部分实现",
       missingCountLabel: "缺失",
+      readinessSummaryExpand: "查看能力详情",
       sceneBaselineCountLabel: "基线场景数",
       spriteManifestCountLabel: "精灵清单数",
       draftVersionLabel: "草稿版本",

@@ -1,0 +1,1 @@
+var t=()=>{document.body.addEventListener("htmx:sseError",()=>{let e=document.getElementById("game-reconnect");if(e)e.classList.remove("hidden")})};if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",t,{once:!0});else t();

@@ -10,8 +10,8 @@ import { type OraclePanelState, renderOracleSection } from "./oracle.ts";
  * @param value Raw text value.
  * @returns Escaped HTML-safe string.
  */
-export const escapeHtml = (value: string): string =>
-  value
+export const escapeHtml = (value: unknown): string =>
+  String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -151,7 +151,11 @@ export const renderLayout = (input: LayoutInput): string => {
     hideFooter,
   } = input;
   const languageSwitch = locale === "en-US" ? "zh-CN" : "en-US";
-  const containerClass = `mx-auto flex w-full max-w-[1600px] flex-col gap-8 px-4 lg:px-8 py-8`;
+  const baseContainer =
+    "mx-auto flex w-full max-w-[1600px] flex-col gap-8 px-4 lg:px-8 py-6 lg:py-8";
+  const layoutModifier =
+    activeRoute === "game" ? "game-page-layout items-start" : "layout-asymmetric gap-8 lg:gap-12";
+  const containerClass = `${baseContainer} vt-main flex-1 ${layoutModifier}`;
   const pageScripts = scripts
     .map((script) => {
       const typeAttribute = script.type ? ` type="${script.type}"` : "";
@@ -162,10 +166,11 @@ export const renderLayout = (input: LayoutInput): string => {
   const globalEnhancementScripts = [
     assetRelativePaths.htmxExtensionLayoutControlsFile,
     `${assetRelativePaths.htmxExtensionsOutputDirectory}/server-toast.js`,
+    `${assetRelativePaths.clientModulesOutputDirectory}/scene-editor-tabs.js`,
   ]
     .map((relativePath) => {
       const scriptUrl = joinUrlPath(appConfig.staticAssets.publicPrefix, relativePath);
-      return `<script src="${escapeHtml(scriptUrl)}" defer></script>`;
+      return `<script src="${escapeHtml(scriptUrl)}" type="module"></script>`;
     })
     .join("");
   const boostEnabled = activeRoute === "game" ? "false" : "true";
@@ -178,8 +183,15 @@ export const renderLayout = (input: LayoutInput): string => {
     <meta name="view-transition" content="same-origin" />
     <title>${escapeHtml(title)} · ${escapeHtml(messages.metadata.appName)}</title>
     <meta name="description" content="${escapeHtml(messages.metadata.appSubtitle)}" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Syne:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Syne:wght@400;500;600;700&display=swap" /></noscript>
     <link rel="stylesheet" href="${escapeHtml(appConfig.stylesheetPath)}" />
     <script src="${escapeHtml(appConfig.htmxScriptPath)}" defer></script>
+    <script src="${escapeHtml(joinUrlPath(appConfig.staticAssets.publicPrefix, assetRelativePaths.htmxExtensionSseFile))}" defer></script>
+    <script src="${escapeHtml(joinUrlPath(appConfig.staticAssets.publicPrefix, assetRelativePaths.htmxExtensionOracleIndicatorFile))}" type="module"></script>
+    <script src="${escapeHtml(joinUrlPath(appConfig.staticAssets.publicPrefix, assetRelativePaths.htmxExtensionFocusPanelFile))}" type="module"></script>
   </head>
   <body class="min-h-screen bg-base-100 text-base-content antialiased" hx-boost="${boostEnabled}" hx-ext="layout-controls,focus-panel">
     <a
@@ -204,7 +216,7 @@ export const renderLayout = (input: LayoutInput): string => {
             <!-- Mobile Top Bar & Desktop Breadcrumbs -->
             ${hideTopBar ? "" : renderTopBar(messages, locale, languageSwitch, currentPathWithQuery, breadcrumbs)}
             
-            <main id="main-content" tabindex="-1" class="${escapeHtml(containerClass)} vt-main flex-1">
+            <main id="main-content" tabindex="-1" class="${escapeHtml(containerClass)}">
               ${body}
             </main>
             
@@ -212,7 +224,7 @@ export const renderLayout = (input: LayoutInput): string => {
           </div>
           
           <!-- Main Nav Sidebar (Left) -->
-          <div class="drawer-side z-40">
+          <div class="drawer-side z-40 is-drawer-close:overflow-visible">
             <label for="main-nav-drawer" aria-label="${escapeHtml(messages.common.closeSidebar)}" class="drawer-overlay"></label>
             ${
               customSidebarHtml
@@ -222,8 +234,8 @@ export const renderLayout = (input: LayoutInput): string => {
           </div>
         </div>
 
-        <!-- Global FAB for AI Chat -->
-        <div class="fab fixed bottom-6 right-6 z-50">
+        <!-- Global FAB for AI Chat (z-[90] ensures visibility above game canvas) -->
+        <div class="fab fixed bottom-6 right-6 z-[90]">
           ${renderDrawerToggleControl({
             targetId: "ai-chat-drawer",
             label: messages.common.openAiAssistant,
@@ -235,8 +247,8 @@ export const renderLayout = (input: LayoutInput): string => {
         </div>
       </div>
       
-      <!-- AI Chat Sidebar (Right) -->
-      <div class="drawer-side z-[60]">
+      <!-- AI Chat Sidebar (Right) (z-[95] ensures visibility above game canvas) -->
+      <div class="drawer-side z-[95]">
         <label for="ai-chat-drawer" aria-label="${escapeHtml(messages.common.closeAiChat)}" class="drawer-overlay"></label>
         <div class="menu min-h-full w-80 border-l border-base-300 bg-base-100 p-0 text-base-content sm:w-96" role="dialog" aria-modal="false" aria-label="${escapeHtml(messages.common.openAiAssistant)}">
           <div class="flex items-center justify-end border-b border-base-300 px-4 py-3">
@@ -281,24 +293,22 @@ const renderTopBar = (
       : messages.navigation.switchToChinese;
   const localeSwitchHref = withLocaleQuery(currentPathWithQuery, languageSwitch);
 
-  return `<nav aria-label="${escapeHtml(messages.common.mobileNavigation)}" class="navbar sticky top-0 z-30 w-full border-b border-base-300 bg-base-100/80 backdrop-blur-md px-4">
-    <div class="flex-none lg:hidden mr-2">
-      ${renderDrawerToggleControl({
-        targetId: "main-nav-drawer",
-        label: messages.common.openMenu,
-        className: "btn btn-square btn-ghost btn-sm",
-        content:
-          '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-5 h-5 stroke-current" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>',
-      })}
+  return `<nav aria-label="${escapeHtml(messages.common.mobileNavigation)}" class="navbar w-full bg-base-300">
+    ${renderDrawerToggleControl({
+      targetId: "main-nav-drawer",
+      label: messages.common.openMenu,
+      className: "btn btn-square btn-ghost",
+      content:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><path d="M4 4m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"></path><path d="M9 4v16"></path><path d="M14 10l2 2l-2 2"></path></svg>',
+    })}
+    <div class="px-4 grow min-w-0">
+      ${breadcrumbs && breadcrumbs.length > 0 ? renderBreadcrumbs(messages, breadcrumbs) : `<span class="font-bold text-lg">${escapeHtml(messages.metadata.appName)}</span>`}
     </div>
-    <div class="flex-1">
-      ${breadcrumbs && breadcrumbs.length > 0 ? renderBreadcrumbs(messages, breadcrumbs) : `<span class="font-bold text-lg lg:hidden">${escapeHtml(messages.metadata.appName)}</span>`}
-    </div>
-    <div class="flex-none gap-2">
+    <div class="flex gap-2 items-center">
       ${renderThemeDropdown(messages)}
       <a href="${escapeHtml(localeSwitchHref)}" class="btn btn-outline btn-xs font-medium" aria-label="${escapeHtml(localeSwitchAriaLabel)}">${escapeHtml(localeSwitchButtonText)}</a>
     </div>
-  </div>`;
+  </nav>`;
 };
 
 const renderThemeDropdown = (messages: Messages): string => {
@@ -349,27 +359,25 @@ const renderNavigation = (
       key: "home",
       label: messages.navigation.home,
       href: appRoutes.home,
-      icon: '<svg xmlns="http://www.w3.org/2000/svg" class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>',
+      icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>',
     },
     {
       key: "builder",
       label: messages.builder.scenes,
       href: appRoutes.builder,
-      icon: '<svg xmlns="http://www.w3.org/2000/svg" class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
+      icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg>',
     },
     {
       key: "game",
       label: messages.navigation.game,
       href: appRoutes.game,
-      icon: '<svg xmlns="http://www.w3.org/2000/svg" class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>',
+      icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>',
     },
   ];
 
   const renderItem = (item: (typeof items)[number]): string => {
     const isActive = item.key === activeRoute;
-    const classes = isActive
-      ? "active font-bold bg-base-300/50"
-      : "font-medium hover:bg-base-300/30";
+    const activeClass = isActive ? " active" : "";
     const ariaCurrent = isActive ? ' aria-current="page"' : "";
     const localizedHref = withLocaleQuery(item.href, locale);
     const href =
@@ -377,28 +385,36 @@ const renderNavigation = (
         ? withQueryParameters(localizedHref, { projectId: persistentProjectId })
         : localizedHref;
 
-    return `<li><a class="${classes} flex gap-3 rounded-xl py-3" href="${escapeHtml(href)}" aria-label="${escapeHtml(item.label)}"${ariaCurrent}>${item.icon} ${escapeHtml(item.label)}</a></li>`;
+    return `<li>
+      <a class="is-drawer-close:tooltip is-drawer-close:tooltip-right${activeClass}" href="${escapeHtml(href)}" data-tip="${escapeHtml(item.label)}" aria-label="${escapeHtml(item.label)}"${ariaCurrent}>
+        ${item.icon}
+        <span class="is-drawer-close:hidden">${escapeHtml(item.label)}</span>
+      </a>
+    </li>`;
   };
 
   const listItems = items.map(renderItem).join("");
 
-  return `<nav aria-label="${escapeHtml(messages.common.primaryNavigation)}" class="menu w-72 lg:w-80 min-h-full bg-base-200/80 backdrop-blur-3xl text-base-content border-r border-base-300 p-4 flex flex-col gap-8 shadow-2xl lg:shadow-none">
-    <div class="px-2 pt-2">
-      <a href="${withLocaleQuery(appRoutes.home, locale)}" class="flex items-center gap-2 text-2xl font-bold hover:opacity-80 transition-opacity tracking-tight" aria-label="${escapeHtml(messages.metadata.appName)}">
-        <svg xmlns="http://www.w3.org/2000/svg" class="size-7 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" /></svg>
-        ${escapeHtml(messages.metadata.appName)}
+  return `<div class="flex min-h-full flex-col items-start bg-base-200 is-drawer-close:w-14 is-drawer-open:w-64" role="navigation" aria-label="${escapeHtml(messages.common.primaryNavigation)}">
+    <div class="w-full p-3 is-drawer-close:p-2">
+      <a href="${withLocaleQuery(appRoutes.home, locale)}" class="is-drawer-close:tooltip is-drawer-close:tooltip-right flex items-center gap-2 px-2 py-1 text-xl font-bold" data-tip="${escapeHtml(messages.metadata.appName)}" aria-label="${escapeHtml(messages.metadata.appName)}">
+        <svg xmlns="http://www.w3.org/2000/svg" class="size-5 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" /></svg>
+        <span class="is-drawer-close:hidden">${escapeHtml(messages.metadata.appName)}</span>
       </a>
     </div>
-    <ul class="flex flex-col gap-2 flex-1 menu-md">
+    <ul class="menu w-full grow">
       ${listItems}
     </ul>
-    <div class="mt-auto pt-4 border-t border-base-300/50">
-      <div class="bg-base-100/50 rounded-box p-4 border border-base-300/50 flex flex-col gap-1">
-        <div class="text-xs font-bold uppercase tracking-widest text-primary/70">${escapeHtml(messages.common.contextLabel)}</div>
-        <div class="text-sm font-semibold truncate opacity-80">${persistentProjectId ? escapeHtml(messages.common.projectConfigured) : escapeHtml(messages.common.noProjectBound)}</div>
+    <div class="w-full p-3 is-drawer-close:p-2 border-t border-base-300/50">
+      <div class="bg-base-100/60 rounded-box p-3 is-drawer-close:p-1.5 flex flex-col gap-1">
+        <div class="text-xs font-bold uppercase tracking-widest text-primary/70 is-drawer-close:hidden">${escapeHtml(messages.common.contextLabel)}</div>
+        <div class="text-sm font-semibold truncate opacity-80 is-drawer-close:hidden">${persistentProjectId ? escapeHtml(messages.common.projectConfigured) : escapeHtml(messages.common.noProjectBound)}</div>
+        <div class="is-drawer-open:hidden flex justify-center">
+          <span class="status status-${persistentProjectId ? "success" : "warning"}"></span>
+        </div>
       </div>
     </div>
-  </nav>`;
+  </div>`;
 };
 
 const renderBreadcrumbs = (messages: Messages, items: readonly BreadcrumbItem[]): string => {
@@ -412,8 +428,8 @@ const renderBreadcrumbs = (messages: Messages, items: readonly BreadcrumbItem[])
     })
     .join("");
 
-  return `<nav aria-label="${escapeHtml(messages.common.breadcrumbLabel)}" class="breadcrumbs text-sm">
-    <ul class="m-0">${crumbs}</ul>
+  return `<nav aria-label="${escapeHtml(messages.common.breadcrumbLabel)}" class="breadcrumbs text-sm truncate max-w-[180px] sm:max-w-[280px] md:max-w-none">
+    <ul class="m-0 truncate">${crumbs}</ul>
   </nav>`;
 };
 

@@ -1,0 +1,29 @@
+@layer base {
+  :root {
+    /* Spacing scale (4px base) */
+    --spacing-xs: 0.25rem; /* 4px */
+    --spacing-sm: 0.5rem; /* 8px */
+    --spacing-md: 1rem; /* 16px */
+    --spacing-lg: 1.5rem; /* 24px */
+    --spacing-xl: 2rem; /* 32px */
+    --spacing-2xl: 3rem; /* 48px */
+
+    /* Radius */
+    --radius-sm: 0.25rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
+    --radius-2xl: 1.5rem;
+
+    /* Shadows (semantic) */
+    --shadow-subtle: 0 1px 3px color-mix(in oklab, var(--color-base-content) 5%, transparent);
+    --shadow-card: 0 4px 12px color-mix(in oklab, var(--color-base-content) 4%, transparent);
+    --shadow-elevated:
+      0 8px 24px -4px color-mix(in oklab, var(--color-base-content) 8%, transparent);
+
+    /* Motion */
+    --motion-fast: 150ms;
+    --motion-standard: 200ms;
+    --motion-slow: 300ms;
+  }
+}

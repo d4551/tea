@@ -5,7 +5,7 @@ import {
   parseGameClientBootstrap,
 } from "../shared/contracts/game-client-bootstrap.ts";
 import { readLocalStorage, writeLocalStorage } from "../shared/utils/browser-storage.ts";
-import { safeJsonParse } from "../shared/utils/safe-json.ts";
+import { acceptUnknown, safeJsonParse } from "../shared/utils/safe-json.ts";
 import type { PersistedSessionMeta } from "./game-client-types.ts";
 
 const SESSION_META_KEY = GAME_SESSION_STORAGE_KEY;
@@ -39,7 +39,7 @@ export const readGameClientBootstrap = (): GameClientBootstrapData | null => {
   }
 
   const bootstrap = parseGameClientBootstrap(
-    safeJsonParse<unknown>(bootstrapScript.textContent, null),
+    safeJsonParse<unknown>(bootstrapScript.textContent ?? "", null, acceptUnknown),
   );
   if (!bootstrap) {
     return null;
@@ -125,7 +125,13 @@ export const readSessionMeta = (
   runtimeConfig: GameClientRuntimeConfig,
 ): PersistedSessionMeta => {
   const storedRaw = readLocalStorage(SESSION_META_KEY);
-  const stored = storedRaw ? safeJsonParse<PersistedSessionMeta | null>(storedRaw, null) : null;
+  const stored = storedRaw
+    ? safeJsonParse<PersistedSessionMeta | null>(
+        storedRaw,
+        null,
+        (v): v is PersistedSessionMeta | null => true,
+      )
+    : null;
   return mergeStoredSessionMeta(bootstrap, runtimeConfig, stored);
 };
 

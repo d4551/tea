@@ -2,6 +2,8 @@ import { Elysia, t } from "elysia";
 import { type LocaleCode, normalizeLocale } from "../config/environment.ts";
 import { gameTextByLocale } from "../domain/game/data/game-text.ts";
 import { gameLoop } from "../domain/game/game-loop.ts";
+import { playerProgressStore } from "../domain/game/services/player-progress-store.ts";
+import { saveSlotStore } from "../domain/game/services/save-slot-store.ts";
 import { ensureCorrelationIdHeader } from "../lib/correlation-id.ts";
 import { ApplicationError, errorEnvelope } from "../lib/error-envelope.ts";
 import { createLogger } from "../lib/logger.ts";
@@ -22,7 +24,7 @@ import type {
 } from "../shared/contracts/game.ts";
 import { WS_CLOSE_SESSION_MISSING, WS_CLOSE_TOKEN_EXPIRED } from "../shared/contracts/game.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
-import { safeJsonParse } from "../shared/utils/safe-json.ts";
+import { acceptUnknown, safeJsonParse } from "../shared/utils/safe-json.ts";
 import { escapeHtml } from "../views/layout.ts";
 import { gameRequestContextPlugin, resolveGameWebSocketContext } from "./game-request-context.ts";
 import { type SseUtils, ssePlugin } from "./sse-plugin.ts";
@@ -40,7 +42,11 @@ const route = {
   command: endpoint(appRoutes.gameApiSessionCommand),
   dialogue: endpoint(appRoutes.gameApiSessionDialogue),
   save: endpoint(appRoutes.gameApiSessionSave),
+  saveSlot: endpoint(appRoutes.gameApiSessionSaveSlot),
+  saveSlots: endpoint(appRoutes.gameApiSessionSaveSlots),
+  restoreSlot: endpoint(appRoutes.gameApiSessionRestoreSlot),
   hud: endpoint(appRoutes.gameApiSessionHud),
+  itemTooltip: endpoint(appRoutes.gameApiSessionItemTooltip),
   invite: endpoint(appRoutes.gameApiSessionInvite),
   join: endpoint(appRoutes.gameApiSessionJoin),
 };
@@ -234,6 +240,26 @@ const saveSessionResponse = t.Object({
   }),
 });
 
+const saveSlotBodySchema = t.Object({
+  slotName: t.Optional(t.String()),
+  slotIndex: t.Optional(t.Number()),
+});
+
+const saveSlotResponse = t.Object({
+  ok: t.Literal(true),
+  data: t.Object({
+    slotId: t.String(),
+    slotName: t.Nullable(t.String()),
+    slotIndex: t.Nullable(t.Number()),
+    sceneTitle: t.String(),
+    createdAt: t.String(),
+  }),
+});
+
+const restoreSlotBodySchema = t.Object({
+  slotId: t.String(),
+});
+
 const deleteSessionResponse = t.Object({
   ok: t.Literal(true),
   data: t.Object({
@@ -325,7 +351,7 @@ const commandResponse = t.Object({
 });
 
 const getGameMessages = (locale: string) => getMessages(normalizeLocale(locale));
-const wsCloseCode: Record<string, number> = {
+const wsCloseCode: { readonly sessionNotFound: number; readonly sessionExpired: number } = {
   sessionNotFound: WS_CLOSE_SESSION_MISSING,
   sessionExpired: WS_CLOSE_TOKEN_EXPIRED,
 };
@@ -511,10 +537,6 @@ const createHudStream = async function* ({
     `<p id="game-objective-summary" sse-swap="objective-summary" hx-swap="outerHTML" aria-live="polite" role="status" class="text-sm text-base-content/70">${escapeHtml(
       title,
     )}</p>`;
-  const renderObjectiveCard = (title: string): string =>
-    `<p id="game-objective-card" sse-swap="objective-card" hx-swap="outerHTML" aria-live="polite" role="status" class="text-sm text-base-content/75">${escapeHtml(
-      title,
-    )}</p>`;
   const renderSceneMode = (sceneMode: GameHudState["sceneMode"]): string =>
     `<span id="game-scene-mode-value" sse-swap="scene-mode" hx-swap="outerHTML" aria-live="polite" role="status" class="font-medium">${escapeHtml(
       sceneMode === "3d" ? messages.game.sceneMode3d : messages.game.sceneMode2d,
@@ -571,10 +593,6 @@ const createHudStream = async function* ({
     id: `${sessionId}-objective-summary`,
     retry: retryMs,
   });
-  yield sse.event("objective-card", renderObjectiveCard(initialObjectiveTitle), {
-    id: `${sessionId}-objective-card`,
-    retry: retryMs,
-  });
   yield sse.event("scene-mode", renderSceneMode(session.state.sceneMode), {
     id: `${sessionId}-scene-mode`,
     retry: retryMs,
@@ -593,6 +611,7 @@ const createHudStream = async function* ({
   let lastCombatSignature = "";
   let lastInventorySignature = "";
   let lastCutsceneSignature = "";
+  let lastQuestSignature = "";
 
   while (!signal.aborted) {
     const hudState = await gameLoop.getHudState(sessionId, participantSessionId);
@@ -631,10 +650,6 @@ const createHudStream = async function* ({
     if (objectiveTitle !== lastObjectiveTitle) {
       yield sse.event("objective-summary", renderObjectiveSummary(objectiveTitle), {
         id: `${sessionId}-objective-summary-${sequence}`,
-        retry: retryMs,
-      });
-      yield sse.event("objective-card", renderObjectiveCard(objectiveTitle), {
-        id: `${sessionId}-objective-card-${sequence}`,
         retry: retryMs,
       });
       lastObjectiveTitle = objectiveTitle;
@@ -679,9 +694,10 @@ const createHudStream = async function* ({
 
     if (dialogueKey !== lastDialogueKey) {
       const html = dialogue
-        ? `<div id="hud-dialogue" class="card bg-base-200/95 shadow-xl p-4 text-sm backdrop-blur">
-             <p class="font-semibold text-primary mb-1">${escapeHtml(dialogue.npcLabel)}</p>
-             <p>${escapeHtml(dialogue.line)}</p>
+        ? `<div id="hud-dialogue" class="card bg-base-200/95 shadow-xl p-4 text-sm backdrop-blur pointer-events-auto animate-scale-in" role="dialog" aria-labelledby="hud-dialogue-speaker" aria-describedby="hud-dialogue-line">
+             <p id="hud-dialogue-speaker" class="font-semibold text-primary mb-1">${escapeHtml(dialogue.npcLabel)}</p>
+             <p id="hud-dialogue-line">${escapeHtml(dialogue.line)}</p>
+             <button class="btn btn-sm btn-primary mt-3" hx-post="${escapeHtml(commandPath)}" hx-vals='{"type":"confirmDialogue"}' hx-swap="none" aria-label="${escapeHtml(messages.game.dialogueConfirm)}">${escapeHtml(messages.game.dialogueConfirm)}</button>
            </div>`
         : `<div id="hud-dialogue" class="hidden"></div>`;
 
@@ -698,11 +714,18 @@ const createHudStream = async function* ({
 
     if (combatSignature !== lastCombatSignature) {
       if (combat) {
+        const activeActorId = combat.turnOrder[combat.activeActorIndex] ?? "";
+        const activeActor = combat.combatants.find((c) => c.id === activeActorId);
+        const isPlayerTurn =
+          combat.phase === "player_turn" && activeActor?.isPlayer && activeActor?.alive;
+        const aliveEnemies = combat.combatants.filter((c) => !c.isPlayer && c.alive);
+        const firstAliveEnemy = aliveEnemies[0];
+
         const playerRows = combat.combatants
           .filter((c) => c.isPlayer)
           .map(
             (c) =>
-              `<li class="flex items-center justify-between bg-base-100 p-2 rounded-box border border-base-200">
+              `<li class="flex items-center justify-between bg-base-100 p-2 rounded-box border border-base-200 ${!c.alive ? "opacity-60" : ""}">
              <span class="font-bold text-primary truncate max-w-[120px]">${escapeHtml(c.label)}</span>
              <div class="flex items-center gap-2">
                <span class="text-xs font-mono w-16 text-right">${c.stats.hp}/${c.stats.maxHp} ${escapeHtml(messages.game.hitPointsShortLabel)}</span>
@@ -714,39 +737,89 @@ const createHudStream = async function* ({
 
         const enemyRows = combat.combatants
           .filter((c) => !c.isPlayer)
-          .map(
-            (c) =>
-              `<li class="flex items-center justify-between bg-base-100 p-2 rounded-box border border-base-200">
+          .map((c) => {
+            const attackBtn =
+              isPlayerTurn && c.alive
+                ? `<button class="btn btn-xs btn-error" hx-post="${escapeHtml(commandPath)}" hx-vals='{"type":"combatAction","action":{"actorId":"${escapeHtml(activeActorId)}","type":"attack","targetIds":["${escapeHtml(c.id)}"]}}' hx-swap="none" aria-label="${escapeHtml(messages.game.combatAttack)} ${escapeHtml(c.label)}">${escapeHtml(messages.game.combatAttack)}</button>`
+                : "";
+            return `<li class="flex items-center justify-between bg-base-100 p-2 rounded-box border border-base-200 ${!c.alive ? "opacity-60" : ""}">
              <span class="font-bold text-error truncate max-w-[120px]">${escapeHtml(c.label)}</span>
              <div class="flex items-center gap-2">
                <span class="text-xs font-mono w-16 text-right">${c.stats.hp}/${c.stats.maxHp} ${escapeHtml(messages.game.hitPointsShortLabel)}</span>
                <progress class="progress progress-error w-24 border border-base-content/20" value="${c.stats.hp}" max="${c.stats.maxHp}"></progress>
+               ${attackBtn}
              </div>
-           </li>`,
-          )
+           </li>`;
+          })
           .join("");
+
+        const turnOrderHtml =
+          combat.turnOrder.length > 0
+            ? combat.turnOrder
+                .map((id) => {
+                  const c = combat.combatants.find((x) => x.id === id);
+                  const isActive = id === activeActorId;
+                  const isDead = c && !c.alive;
+                  return `<span class="badge badge-sm ${isActive ? "badge-primary" : "badge-ghost"} ${isDead ? "opacity-50" : ""}">${escapeHtml(c?.label ?? id)}</span>`;
+                })
+                .join(" ")
+            : "";
 
         const logs =
           combat.log && combat.log.length > 0
             ? combat.log
-                .slice(-3)
-                .map(
-                  (l) =>
-                    `<div><span class="text-base-content/50">></span> ${escapeHtml(l.logEntry)}</div>`,
-                )
+                .slice(-5)
+                .map((l) => {
+                  const damageParts =
+                    l.damages &&
+                    l.damages.length > 0 &&
+                    l.damages
+                      .filter((d) => d.finalDamage > 0)
+                      .map(
+                        (d) =>
+                          `<span class="text-error font-bold animate-hit-flash">-${d.finalDamage}</span>`,
+                      )
+                      .join(" ");
+                  return `<div class="flex items-center gap-2"><span class="text-base-content/50">></span> ${escapeHtml(l.logEntry)} ${damageParts ?? ""}</div>`;
+                })
                 .join("")
             : `<div class="text-base-content/50 italic">${escapeHtml(messages.game.combatLogEmpty)}</div>`;
 
+        const defendBtn =
+          isPlayerTurn && firstAliveEnemy
+            ? `<button class="btn btn-sm btn-outline" hx-post="${escapeHtml(commandPath)}" hx-vals='{"type":"combatAction","action":{"actorId":"${escapeHtml(activeActorId)}","type":"defend","targetIds":["${escapeHtml(activeActorId)}"]}}' hx-swap="none" aria-label="${escapeHtml(messages.game.combatDefend)}">${escapeHtml(messages.game.combatDefend)}</button>`
+            : "";
+        const skillBtn =
+          isPlayerTurn && firstAliveEnemy
+            ? `<button class="btn btn-sm btn-secondary" hx-post="${escapeHtml(commandPath)}" hx-vals='{"type":"combatAction","action":{"actorId":"${escapeHtml(activeActorId)}","type":"skill","targetIds":["${escapeHtml(firstAliveEnemy.id)}"]}}' hx-swap="none" aria-label="${escapeHtml(messages.game.combatSkill)}">${escapeHtml(messages.game.combatSkill)}</button>`
+            : "";
+        const fleeBtn =
+          isPlayerTurn && firstAliveEnemy
+            ? `<button class="btn btn-sm btn-ghost" hx-post="${escapeHtml(commandPath)}" hx-vals='{"type":"combatAction","action":{"actorId":"${escapeHtml(activeActorId)}","type":"flee","targetIds":[]}}' hx-swap="none" aria-label="${escapeHtml(messages.game.combatFlee)}">${escapeHtml(messages.game.combatFlee)}</button>`
+            : "";
+
+        const phaseClass =
+          combat.phase === "victory"
+            ? "border-success/50 bg-success/5"
+            : combat.phase === "defeat"
+              ? "border-error/50 bg-error/5"
+              : combat.phase === "player_turn"
+                ? "border-primary/30 bg-primary/5"
+                : combat.phase === "enemy_turn"
+                  ? "border-warning/30 bg-warning/5"
+                  : "border-base-content/10";
+
         const html = `
-          <div id="hud-combat" class="card bg-base-300/95 backdrop-blur shadow-2xl p-6 w-full max-w-4xl opacity-100 pointer-events-auto transition-all duration-300 scale-100 border border-base-content/10">
+          <div id="hud-combat" class="card bg-base-300/95 backdrop-blur shadow-2xl p-6 w-full max-w-4xl opacity-100 pointer-events-auto transition-all duration-300 scale-100 border-2 ${phaseClass}">
             
             <div class="flex justify-between items-center mb-6 border-b border-base-content/10 pb-4">
               <h3 class="text-2xl font-black text-base-content uppercase tracking-widest flex items-center gap-2">
                 <span class="text-error">⚔</span> ${escapeHtml(messages.game.combatTitle)}
               </h3>
-              <div class="flex gap-2">
+              <div class="flex flex-wrap gap-2 items-center">
                 <span class="badge badge-error badge-outline font-mono">${escapeHtml(messages.game.combatPhaseLabel)}: ${escapeHtml(renderCombatPhaseLabel(combat.phase))}</span>
                 <span class="badge badge-neutral font-mono shadow-sm">${escapeHtml(messages.game.combatTurnLabel)} ${combat.turnIndex + 1}</span>
+                <div class="flex items-center gap-1 ml-2">${turnOrderHtml}</div>
               </div>
             </div>
             
@@ -769,8 +842,11 @@ const createHudStream = async function* ({
               ${logs}
             </div>
 
-            <div class="mt-6 flex gap-2 justify-center">
-              <p class="text-xs text-base-content/50 font-mono">${escapeHtml(messages.game.combatActionHint)}</p>
+            <div class="mt-6 flex gap-2 justify-center flex-wrap items-center">
+              ${defendBtn}
+              ${skillBtn}
+              ${fleeBtn}
+              <p class="text-xs text-base-content/50 font-mono self-center">${escapeHtml(messages.game.combatActionHint)}</p>
             </div>
           </div>
         `;
@@ -791,6 +867,7 @@ const createHudStream = async function* ({
 
     if (inventorySignature !== lastInventorySignature) {
       if (inventory) {
+        const itemTooltipPath = `${interpolateRoutePath(appRoutes.gameApiSessionItemTooltip, { id: hudState.sessionId })}`;
         const capacityHTML = `
           <div class="flex justify-between text-xs text-base-content/70 mt-1 mb-4 font-mono">
             <span>${escapeHtml(messages.game.inventoryCapacity)}</span>
@@ -799,27 +876,67 @@ const createHudStream = async function* ({
           <progress class="progress progress-primary w-full h-1" value="${inventory.slots.length}" max="${inventory.capacity}"></progress>
         `;
 
+        const equip = inventory.equipment ?? {};
+        const itemDefs = hudState.itemDefinitions ?? [];
+        const resolveLabel = (itemId: string) =>
+          itemDefs.find((d) => d.id === itemId)?.labelKey ?? itemId;
+
+        const equipmentSlots = [
+          { key: "weapon" as const, label: messages.game.inventoryWeapon, itemId: equip.weapon },
+          { key: "armor" as const, label: messages.game.inventoryArmor, itemId: equip.armor },
+          {
+            key: "accessory" as const,
+            label: messages.game.inventoryAccessory,
+            itemId: equip.accessory,
+          },
+        ];
+
+        const equipmentHTML = equipmentSlots
+          .map((slot) => {
+            if (slot.itemId) {
+              return `<div class="flex items-center justify-between p-2 rounded bg-base-100 border border-base-content/10">
+                  <span class="text-xs text-base-content/60">${escapeHtml(slot.label)}</span>
+                  <div class="flex items-center gap-2">
+                    <span class="font-medium text-sm">${escapeHtml(resolveLabel(slot.itemId))}</span>
+                    <button class="btn btn-xs btn-ghost" hx-post="${escapeHtml(commandPath)}" hx-vals='{"type":"unequipItem","slot":"${slot.key}"}' hx-swap="none" aria-label="${escapeHtml(messages.game.inventoryUnequip)}">${escapeHtml(messages.game.inventoryUnequip)}</button>
+                  </div>
+                </div>`;
+            }
+            return `<div class="flex items-center justify-between p-2 rounded bg-base-100/50 border border-dashed border-base-content/20">
+                <span class="text-xs text-base-content/50">${escapeHtml(slot.label)}</span>
+                <span class="text-xs italic text-base-content/40">—</span>
+              </div>`;
+          })
+          .join("");
+
         const slotsHTML = inventory.slots
-          .map(
-            (s) => `
-          <div class="flex items-center justify-between p-2 rounded bg-base-100 hover:bg-base-200 cursor-pointer border border-base-content/5 transition-colors">
+          .map((s) => {
+            const itemDef = itemDefs.find((d) => d.id === s.itemId);
+            const canEquip = itemDef?.equipSlot != null;
+            const tooltipUrl = `${itemTooltipPath}?itemId=${encodeURIComponent(s.itemId)}`;
+            return `
+          <div class="flex items-center justify-between p-2 rounded bg-base-100 hover:bg-base-200 border border-base-content/5 transition-colors group" 
+               hx-get="${escapeHtml(tooltipUrl)}" hx-trigger="mouseenter delay:300ms" hx-swap="innerHTML" hx-target="#inventory-tooltip-zone">
             <div class="flex items-center gap-3">
               <div class="w-10 h-10 rounded bg-base-300 flex items-center justify-center font-bold text-lg border border-base-content/10 shadow-sm">
                 ${s.itemId.substring(0, 1).toUpperCase()}
               </div>
               <div class="flex flex-col">
-                <span class="font-bold text-sm text-base-content leading-tight">${escapeHtml(s.itemId)}</span>
+                <span class="font-bold text-sm text-base-content leading-tight">${escapeHtml(resolveLabel(s.itemId))}</span>
                 <span class="text-xs text-base-content/50">${s.quantity}x</span>
               </div>
             </div>
-            <button class="btn btn-xs btn-ghost text-base-content/40 hover:text-primary" aria-label="${escapeHtml(messages.game.inventoryAction)}">${escapeHtml(messages.game.inventoryAction)}</button>
+            <div class="flex gap-1">
+              ${itemDef?.useEffects?.length ? `<button class="btn btn-xs btn-primary" hx-post="${escapeHtml(commandPath)}" hx-vals='{"type":"useItem","slotIndex":${s.slotIndex}}' hx-swap="none" aria-label="${escapeHtml(messages.game.inventoryUse)} ${escapeHtml(resolveLabel(s.itemId))}">${escapeHtml(messages.game.inventoryUse)}</button>` : ""}
+              ${canEquip ? `<button class="btn btn-xs btn-outline" hx-post="${escapeHtml(commandPath)}" hx-vals='{"type":"equipItem","slotIndex":${s.slotIndex}}' hx-swap="none" aria-label="${escapeHtml(messages.game.inventoryEquip)} ${escapeHtml(resolveLabel(s.itemId))}">${escapeHtml(messages.game.inventoryEquip)}</button>` : ""}
+            </div>
           </div>
-        `,
-          )
+        `;
+          })
           .join("");
 
         const html = `
-          <div id="hud-inventory" class="card bg-base-300/95 backdrop-blur shadow-2xl p-6 w-full max-w-3xl opacity-100 pointer-events-auto transition-all duration-300 scale-100 border border-base-content/10">
+          <div id="hud-inventory" data-inventory-root class="card bg-base-300/95 backdrop-blur shadow-2xl p-6 w-full max-w-4xl opacity-100 pointer-events-auto transition-all duration-300 scale-100 border border-base-content/10">
             <div class="flex justify-between items-center mb-4 border-b border-base-content/10 pb-4">
               <h3 class="text-2xl font-black text-base-content uppercase tracking-widest flex items-center gap-2">
                 <span class="text-primary">🎒</span> ${escapeHtml(messages.game.inventoryTitle)}
@@ -829,21 +946,25 @@ const createHudStream = async function* ({
               </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div class="col-span-1 border-r border-base-content/10 pr-6">
                 <h4 class="text-sm font-bold uppercase tracking-wider text-base-content/70 mb-2">${escapeHtml(messages.game.inventoryStorage)}</h4>
                 ${capacityHTML}
                 <div class="divider my-2"></div>
                 <div class="text-xs font-mono text-base-content/50">
-                  <p>${escapeHtml(messages.game.inventoryWeight)}: 0.0kg</p>
-                  <p>${escapeHtml(messages.game.inventoryGold)}: 0</p>
+                  <p>${escapeHtml(messages.game.inventoryWeight)}: ${escapeHtml(messages.game.inventoryWeightPlaceholder)}</p>
+                  <p>${escapeHtml(messages.game.inventoryGold)}: ${String(inventory.currency ?? 0)}</p>
                 </div>
+                <div class="divider my-2"></div>
+                <h4 class="text-sm font-bold uppercase tracking-wider text-base-content/70 mb-2">${escapeHtml(messages.game.inventoryEquipment)}</h4>
+                <div class="space-y-2">${equipmentHTML}</div>
               </div>
               
-              <div class="col-span-2">
+              <div class="col-span-3 relative">
+                <div id="inventory-tooltip-zone" class="absolute right-0 top-0 w-64 min-h-[2rem] z-10" role="region" aria-label="${escapeHtml(messages.game.inventoryItems)}"></div>
                 <h4 class="text-sm font-bold uppercase tracking-wider text-base-content/70 mb-4">${escapeHtml(messages.game.inventoryItems)}</h4>
-                <div class="space-y-2 max-h-64 overflow-y-auto pr-2 rounded-box p-1 custom-scrollbar">
-                  ${slotsHTML.length > 0 ? slotsHTML : `<div class="text-center p-8 text-base-content/30 italic">${escapeHtml(messages.game.inventoryEmpty)}</div>`}
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 max-h-72 overflow-y-auto pr-2 rounded-box p-1 custom-scrollbar">
+                  ${slotsHTML.length > 0 ? slotsHTML : `<div class="col-span-full text-center p-8 text-base-content/30 italic">${escapeHtml(messages.game.inventoryEmpty)}</div>`}
                 </div>
               </div>
             </div>
@@ -871,10 +992,22 @@ const createHudStream = async function* ({
 
     const cutscene = hudState.cutscene;
     const cutsceneSignature = cutscene ? JSON.stringify(cutscene) : "";
+    const cutsceneStep = hudState.activeCutsceneStep;
+    const cutsceneSoundSource = hudState.activeCutsceneSoundAssetSource ?? "";
+    const cutsceneStepId = cutsceneStep?.id ?? "";
+    const cutsceneAction = cutsceneStep?.action ?? "";
+    const cutsceneDataAttributes = `
+      data-cutscene-step-id="${escapeHtml(cutsceneStepId)}"
+      data-cutscene-action="${escapeHtml(cutsceneAction)}"
+      data-cutscene-sound-asset-source="${escapeHtml(cutsceneSoundSource)}"
+      data-cutscene-duration-ms="${escapeHtml(String(cutsceneStep?.durationMs ?? 0))}"
+    `
+      .replace(/\s+/g, " ")
+      .trim();
 
     if (cutsceneSignature !== lastCutsceneSignature) {
       if (cutscene) {
-        const step = hudState.activeCutsceneStep;
+        const step = cutsceneStep;
         let contentHtml = "";
 
         if (step?.action === "dialogue") {
@@ -882,22 +1015,48 @@ const createHudStream = async function* ({
             <div class="card bg-base-200/95 shadow-2xl p-6 w-full max-w-2xl backdrop-blur relative border border-base-content/10">
               <p class="font-bold text-primary mb-2 text-lg uppercase tracking-wider">${escapeHtml(step.speakerKey ?? "")}</p>
               <p class="text-lg text-base-content">${escapeHtml(step.dialogueKey ?? "")}</p>
-              <div class="absolute bottom-3 right-6 text-xs text-base-content/50 font-mono animate-pulse">${escapeHtml(messages.game.cutsceneAdvanceHint)}</div>
+              <div class="flex items-center justify-between mt-4">
+                <span class="text-xs text-base-content/50 font-mono animate-pulse">${escapeHtml(messages.game.cutsceneAdvanceHint)}</span>
+                <button class="btn btn-sm btn-primary" hx-post="${escapeHtml(commandPath)}" hx-vals='{"type":"advanceCutscene"}' hx-swap="none">${escapeHtml(messages.game.cutsceneAdvance)}</button>
+              </div>
             </div>
           `;
         } else if (step?.action === "camera_pan" || step?.action === "wait") {
-          contentHtml = `<div class="text-xl font-mono text-base-content/50 uppercase tracking-[0.2em] italic animate-pulse">${escapeHtml(messages.game.cutsceneInProgress)}</div>`;
+          contentHtml = `<div class="flex flex-col items-center gap-4">
+            <div class="text-xl font-mono text-base-content/50 uppercase tracking-[0.2em] italic animate-pulse">${escapeHtml(messages.game.cutsceneInProgress)}</div>
+            <button class="btn btn-sm btn-primary" hx-post="${escapeHtml(commandPath)}" hx-vals='{"type":"advanceCutscene"}' hx-swap="none">${escapeHtml(messages.game.cutsceneAdvance)}</button>
+          </div>`;
+        } else if (step?.action === "play_sound") {
+          contentHtml = `<div class="flex flex-col items-center gap-4">
+            <div class="text-xl font-mono text-base-content/50 uppercase tracking-[0.2em] italic animate-pulse">${escapeHtml(messages.game.cutsceneInProgress)}</div>
+            <button class="btn btn-sm btn-primary" hx-post="${escapeHtml(commandPath)}" hx-vals='{"type":"advanceCutscene"}' hx-swap="none">${escapeHtml(messages.game.cutsceneAdvance)}</button>
+          </div>`;
+        } else {
+          contentHtml = `<div class="flex flex-col items-center gap-4">
+            <div class="text-xl font-mono text-base-content/50 uppercase tracking-[0.2em] italic animate-pulse">${escapeHtml(messages.game.cutsceneInProgress)}</div>
+            <button class="btn btn-sm btn-primary" hx-post="${escapeHtml(commandPath)}" hx-vals='{"type":"advanceCutscene"}' hx-swap="none">${escapeHtml(messages.game.cutsceneAdvance)}</button>
+          </div>`;
         }
 
+        const skipButtonHtml =
+          hudState.cutsceneSkippable !== false
+            ? `<div class="absolute top-6 left-6">
+               <button class="btn btn-sm btn-ghost text-base-content/40 hover:text-base-content" hx-post="${escapeHtml(commandPath)}" hx-vals='{"type":"skipCutscene"}' hx-swap="none" aria-label="${escapeHtml(messages.game.cutsceneSkip)}">${escapeHtml(messages.game.cutsceneSkip)}</button>
+            </div>`
+            : "";
+
         const html = `
-          <div id="hud-cutscene" class="fixed inset-0 z-50 flex flex-col items-center justify-end pb-[15vh] bg-black/70 backdrop-blur-sm pointer-events-auto transition-all duration-500">
+          <div
+            id="hud-cutscene"
+            class="fixed inset-0 z-[60] flex flex-col items-center justify-end pb-[15vh] bg-black/70 backdrop-blur-sm pointer-events-auto transition-all duration-500"
+            ${cutsceneDataAttributes}
+            aria-live="polite"
+          >
             <div class="absolute top-6 right-6">
               <span class="badge badge-neutral shadow-sm font-mono text-xs tracking-widest px-3 py-2">${escapeHtml(messages.game.cutsceneBadge)}</span>
             </div>
             ${contentHtml}
-            <div class="absolute top-6 left-6">
-               <button class="btn btn-sm btn-ghost text-base-content/40 hover:text-base-content" hx-post="${escapeHtml(commandPath)}" hx-vals='{"type":"skipCutscene"}' hx-swap="none" aria-label="${escapeHtml(messages.game.cutsceneSkip)}">${escapeHtml(messages.game.cutsceneSkip)}</button>
-            </div>
+            ${skipButtonHtml}
           </div>
         `;
         yield sse.event("cutscene", html, {
@@ -905,13 +1064,58 @@ const createHudStream = async function* ({
           retry: retryMs,
         });
       } else {
-        yield sse.event("cutscene", `<div id="hud-cutscene" class="hidden"></div>`, {
-          id: `${sessionId}-cutscene-${sequence}`,
-          retry: retryMs,
-        });
+        yield sse.event(
+          "cutscene",
+          `<div id="hud-cutscene" class="hidden" data-cutscene-step-id="" data-cutscene-action="" data-cutscene-sound-asset-source="" data-cutscene-duration-ms=""></div>`,
+          {
+            id: `${sessionId}-cutscene-${sequence}`,
+            retry: retryMs,
+          },
+        );
       }
 
       lastCutsceneSignature = cutsceneSignature;
+      sequence += 1;
+    }
+
+    const quests = hudState.quests;
+    const questSignature = quests ? JSON.stringify(quests) : "";
+
+    if (questSignature !== lastQuestSignature) {
+      const questHtml =
+        quests && quests.length > 0
+          ? `<div id="game-quest-log" sse-swap="quest" hx-swap="outerHTML" class="space-y-3 mt-4">
+              <details class="collapse collapse-arrow border border-base-content/10 rounded-box bg-base-200/50" open>
+                <summary class="collapse-title text-sm font-bold uppercase tracking-wider text-base-content/70 min-h-0 py-2 px-4 after:end-2">${escapeHtml(messages.game.questLogTitle)}</summary>
+                <div class="collapse-content px-0 pt-0">
+                  <ul class="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                    ${quests
+                      .map((q) => {
+                        const stepBadges =
+                          q.steps
+                            ?.map(
+                              (s) =>
+                                `<span class="badge badge-xs ${s.state === "completed" ? "badge-success" : s.state === "active" ? "badge-primary" : "badge-ghost"}">${escapeHtml(s.state === "completed" ? messages.game.questStepCompleted : s.state === "active" ? messages.game.questStepActive : messages.game.questStepPending)}</span>`,
+                            )
+                            .join(" ") ?? "";
+                        return `<li class="rounded-box bg-base-200/70 px-3 py-2 text-sm border border-base-content/5">
+                            <p class="font-semibold ${q.completed ? "line-through text-base-content/50" : ""}">${escapeHtml(q.title)}</p>
+                            <p class="text-xs text-base-content/60 mt-1">${escapeHtml(q.description ?? "")}</p>
+                            <div class="flex flex-wrap gap-1 mt-2">${stepBadges}</div>
+                          </li>`;
+                      })
+                      .join("")}
+                  </ul>
+                </div>
+              </details>
+            </div>`
+          : `<div id="game-quest-log" sse-swap="quest" hx-swap="outerHTML" class="hidden"></div>`;
+
+      yield sse.event("quest", questHtml, {
+        id: `${sessionId}-quest-${sequence}`,
+        retry: retryMs,
+      });
+      lastQuestSignature = questSignature;
       sequence += 1;
     }
 
@@ -925,15 +1129,21 @@ const createHudStreamHandler = async function* ({
   params,
   sse,
   request,
+  set,
   gameParticipantSessionId,
   gameRequestLocale,
 }: {
   params: { id: string };
   sse: SseUtils;
   request: Request;
+  set: { headers: Record<string, string> };
   gameParticipantSessionId: string;
   gameRequestLocale: string;
 }): AsyncGenerator<string> {
+  set.headers["cache-control"] = "no-cache, no-transform";
+  set.headers.connection = "keep-alive";
+  set.headers["content-type"] = "text/event-stream; charset=utf-8";
+
   const session = await requireAccessibleGameSession(
     params.id,
     gameParticipantSessionId,
@@ -1340,6 +1550,201 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
           },
         },
       )
+      .post(
+        route.saveSlot,
+        async ({ body, params, request, set, gameParticipantSessionId, gameRequestLocale }) => {
+          const ownerSessionId = gameParticipantSessionId;
+          const messages = getGameMessages(gameRequestLocale);
+          const session = await requireOwnedGameSession(
+            params.id,
+            ownerSessionId,
+            gameRequestLocale,
+          );
+          const saveCooldownRemainingMs = gameLoop.getSaveCooldownRemainingMs(params.id);
+          if (saveCooldownRemainingMs > 0) {
+            set.status = httpStatus.tooManyRequests;
+            throw new ApplicationError(
+              "CONFLICT",
+              `${messages.game.saveCooldownActive} (${saveCooldownRemainingMs}ms)`,
+              httpStatus.tooManyRequests,
+              true,
+            );
+          }
+
+          await gameLoop.saveSessionNow(session.id);
+          gameLoop.markManualSave(params.id);
+          const progress = await playerProgressStore.getSnapshot(session.id);
+          const result = await saveSlotStore.createSlot(
+            ownerSessionId,
+            session,
+            body?.slotName,
+            body?.slotIndex,
+            progress ?? undefined,
+          );
+          if (!result.ok) {
+            set.status = httpStatus.notFound;
+            throw new ApplicationError(
+              result.error,
+              messages.game.sessionNotFoundRequest,
+              httpStatus.notFound,
+              false,
+            );
+          }
+
+          if (wantsHtml(request.headers.get("accept"))) {
+            set.headers["HX-Trigger"] = JSON.stringify({ closeSaveModal: null });
+            return `<div id="save-slot-result" class="alert alert-success">
+              <span>${escapeHtml(messages.game.saveSlotSuccess)}</span>
+              <span class="font-mono text-sm">${escapeHtml(result.slot.sceneTitle)}</span>
+            </div>`;
+          }
+
+          return {
+            ok: true,
+            data: {
+              slotId: result.slot.id,
+              slotName: result.slot.slotName,
+              slotIndex: result.slot.slotIndex,
+              sceneTitle: result.slot.sceneTitle,
+              createdAt: result.slot.createdAt.toISOString(),
+            },
+          };
+        },
+        {
+          params: t.Object({ id: t.String() }),
+          body: saveSlotBodySchema,
+          response: {
+            [httpStatus.ok]: t.Union([saveSlotResponse, t.String()]),
+            [httpStatus.unauthorized]: errorResponse,
+            [httpStatus.tooManyRequests]: errorResponse,
+            [httpStatus.notFound]: errorResponse,
+            [httpStatus.gone]: errorResponse,
+          },
+        },
+      )
+      .get(
+        route.saveSlots,
+        async ({ params, request, gameParticipantSessionId, gameRequestLocale }) => {
+          const ownerSessionId = gameParticipantSessionId;
+          const messages = getGameMessages(gameRequestLocale);
+          await requireOwnedGameSession(params.id, ownerSessionId, gameRequestLocale);
+          const slots = await saveSlotStore.listSlots(ownerSessionId);
+
+          const restorePath = interpolateRoutePath(appRoutes.gameApiSessionRestoreSlot, {
+            id: params.id,
+          });
+          const slotRows = slots
+            .map(
+              (slot) =>
+                `<div class="flex items-center justify-between rounded-box bg-base-200/70 px-3 py-2">
+                  <div class="min-w-0">
+                    <span class="font-medium truncate block">${escapeHtml(slot.slotName ?? slot.sceneTitle)}</span>
+                    <span class="text-xs text-base-content/50">${escapeHtml(slot.sceneTitle)} · ${escapeHtml(messages.game.loadSlotCreatedAt)} ${new Date(slot.createdAt).toLocaleString()}</span>
+                  </div>
+                  <form hx-post="${escapeHtml(restorePath)}" hx-vals='{"slotId":"${escapeHtml(slot.id)}"}' hx-target="body" hx-push-url="true" hx-swap="none" class="shrink-0">
+                    <input type="hidden" name="slotId" value="${escapeHtml(slot.id)}" />
+                    <button type="submit" class="btn btn-sm btn-primary">${escapeHtml(messages.game.loadSlotRestore)}</button>
+                  </form>
+                </div>`,
+            )
+            .join("");
+
+          const html =
+            slots.length > 0
+              ? `<div id="load-slots-list" class="space-y-2">${slotRows}</div>`
+              : `<div id="load-slots-list" class="text-center py-6 text-base-content/50 italic">${escapeHtml(messages.game.loadSlotEmpty)}</div>`;
+
+          if (wantsHtml(request.headers.get("accept"))) {
+            return html;
+          }
+
+          return {
+            ok: true,
+            data: slots.map((s) => ({
+              id: s.id,
+              slotName: s.slotName,
+              slotIndex: s.slotIndex,
+              sceneTitle: s.sceneTitle,
+              createdAt: s.createdAt.toISOString(),
+            })),
+          };
+        },
+        {
+          params: t.Object({ id: t.String() }),
+          response: {
+            [httpStatus.ok]: t.Union([
+              t.Object({
+                ok: t.Literal(true),
+                data: t.Array(
+                  t.Object({
+                    id: t.String(),
+                    slotName: t.Nullable(t.String()),
+                    slotIndex: t.Nullable(t.Number()),
+                    sceneTitle: t.String(),
+                    createdAt: t.String(),
+                  }),
+                ),
+              }),
+              t.String(),
+            ]),
+            [httpStatus.unauthorized]: errorResponse,
+            [httpStatus.notFound]: errorResponse,
+            [httpStatus.gone]: errorResponse,
+          },
+        },
+      )
+      .post(
+        route.restoreSlot,
+        async ({ body, params, request, set, gameParticipantSessionId, gameRequestLocale }) => {
+          const ownerSessionId = gameParticipantSessionId;
+          const messages = getGameMessages(gameRequestLocale);
+          await requireOwnedGameSession(params.id, ownerSessionId, gameRequestLocale);
+          const slotId = body?.slotId;
+          if (!slotId || typeof slotId !== "string") {
+            set.status = httpStatus.badRequest;
+            throw new ApplicationError(
+              "VALIDATION_ERROR",
+              "slotId is required",
+              httpStatus.badRequest,
+              false,
+            );
+          }
+
+          const restored = await gameLoop.restoreFromSaveSlot(slotId, ownerSessionId);
+          if (!restored) {
+            set.status = httpStatus.notFound;
+            throw new ApplicationError(
+              "NOT_FOUND",
+              messages.game.sessionNotFoundRequest,
+              httpStatus.notFound,
+              false,
+            );
+          }
+
+          const gamePath = withQueryParameters(appRoutes.game, {
+            lang: gameRequestLocale,
+            sessionId: restored.sessionId,
+            projectId: restored.projectId,
+          });
+          if (request.headers.get("HX-Request") === "true") {
+            set.headers["HX-Redirect"] = gamePath;
+          } else {
+            set.status = 302;
+            set.headers.Location = gamePath;
+          }
+          return;
+        },
+        {
+          params: t.Object({ id: t.String() }),
+          body: restoreSlotBodySchema,
+          response: {
+            302: t.Undefined(),
+            [httpStatus.unauthorized]: errorResponse,
+            [httpStatus.notFound]: errorResponse,
+            [httpStatus.gone]: errorResponse,
+          },
+        },
+      )
       .delete(
         "/session/:id",
         async ({ params, set, gameParticipantSessionId, gameRequestLocale }) => {
@@ -1490,7 +1895,38 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
           },
         },
       )
-      .get(route.hud, createHudStreamHandler, {
+      .get(
+        route.itemTooltip,
+        async ({ params, query, gameParticipantSessionId, gameRequestLocale }) => {
+          await requireAccessibleGameSession(
+            params.id,
+            gameParticipantSessionId,
+            gameRequestLocale,
+          );
+          const sessionResult = await gameLoop.getStoredSession(params.id);
+          if (!sessionResult.ok) {
+            return `<div class="p-2 text-sm text-base-content/70">—</div>`;
+          }
+          const itemId = typeof query?.itemId === "string" ? query.itemId : "";
+          const itemDef = sessionResult.payload.itemDefinitions?.find((d) => d.id === itemId);
+          if (!itemDef) {
+            return `<div class="p-2 text-sm text-base-content/70">${escapeHtml(itemId || "—")}</div>`;
+          }
+          const label = itemDef.labelKey || itemDef.id;
+          const desc = itemDef.descriptionKey || "";
+          const rarity = itemDef.rarity ?? "common";
+          return `<div class="tooltip-content p-3 max-w-xs bg-base-200 rounded-box shadow-lg border border-base-content/10">
+            <p class="font-bold text-base-content">${escapeHtml(label)}</p>
+            ${desc ? `<p class="text-sm text-base-content/70 mt-1">${escapeHtml(desc)}</p>` : ""}
+            <p class="text-xs text-base-content/50 mt-2">${escapeHtml(rarity)}</p>
+          </div>`;
+        },
+        {
+          params: t.Object({ id: t.String() }),
+          query: t.Object({ itemId: t.Optional(t.String()) }),
+        },
+      )
+      .get(route.hud, createHudStreamHandler as (ctx: unknown) => AsyncGenerator<string>, {
         params: t.Object({ id: t.String() }),
         response: {
           [httpStatus.ok]: t.String(),
@@ -1586,7 +2022,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
             return;
           }
           const normalizedCommand =
-            typeof command === "string" ? safeJsonParse(command, null) : command;
+            typeof command === "string" ? safeJsonParse(command, null, acceptUnknown) : command;
           const result = gameLoop.processCommand(
             sessionId,
             participantSessionId,

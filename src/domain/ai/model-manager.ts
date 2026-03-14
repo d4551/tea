@@ -8,8 +8,13 @@
  *  - Keep circuit-breaker and pipeline-cache ownership behind one facade
  */
 
+import type { AutomaticSpeechRecognitionPipelineCallback } from "@huggingface/transformers";
 import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
+import {
+  MODEL_STT_EMPTY_TEXT_ERROR,
+  MODEL_STT_INVALID_PAYLOAD_ERROR,
+} from "../../shared/constants/errors.ts";
 import {
   type LocalEmbeddingOperationResult,
   type LocalModelFailure,
@@ -379,9 +384,9 @@ export class ModelManager implements LocalModelRuntime {
       operation: "speech-to-text.transcribe",
       modelKey: "speechToText",
       timeoutMs: appConfig.ai.pipelineTimeoutMs * 4,
-      execute: () => pipe.value(audio, {}),
+      execute: () => (pipe.value as AutomaticSpeechRecognitionPipelineCallback)(audio, {}),
       validate: isTranscriptionOutput,
-      invalidMessage: "Speech-to-text model returned an invalid payload.",
+      invalidMessage: MODEL_STT_INVALID_PAYLOAD_ERROR,
     });
     if (!result.ok) {
       return this._failOperation("model.stt.failed", result.failure);
@@ -391,7 +396,7 @@ export class ModelManager implements LocalModelRuntime {
     if (!text || text.length === 0) {
       return this._failOperation("model.stt.failed", {
         code: "invalid-output",
-        message: "Speech-to-text model returned empty text.",
+        message: MODEL_STT_EMPTY_TEXT_ERROR,
         retryable: false,
         operation: "speech-to-text.transcribe",
         modelKey: "speechToText",

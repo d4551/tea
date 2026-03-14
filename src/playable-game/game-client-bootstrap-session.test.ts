@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { GameClientBootstrapData } from "../shared/contracts/game-client-bootstrap.ts";
 import {
   createStoredSessionMeta,
+  isResumeTokenExpiredSoon,
   mergeStoredSessionMeta,
 } from "./game-client-bootstrap-session.ts";
 import type { PersistedSessionMeta } from "./game-client-types.ts";
@@ -72,6 +73,27 @@ describe("game client bootstrap session helpers", () => {
     expect(merged.commandQueueDepth).toBe(bootstrap.session.commandQueueDepth);
     expect(merged.version).toBe(bootstrap.session.version);
     expect(merged.participantRole).toBe(bootstrap.session.participantRole);
+  });
+
+  test("isResumeTokenExpiredSoon returns true when token expires within clock skew tolerance", () => {
+    const now = 1_700_000_000_000;
+    expect(isResumeTokenExpiredSoon(now + 2_000, now)).toBe(true);
+    expect(isResumeTokenExpiredSoon(now + 1, now)).toBe(true);
+    expect(isResumeTokenExpiredSoon(now, now)).toBe(true);
+    expect(isResumeTokenExpiredSoon(now - 1, now)).toBe(true);
+  });
+
+  test("isResumeTokenExpiredSoon returns false when token expires well in the future", () => {
+    const now = 1_700_000_000_000;
+    expect(isResumeTokenExpiredSoon(now + 10_000, now)).toBe(false);
+    expect(isResumeTokenExpiredSoon(now + 60_000, now)).toBe(false);
+  });
+
+  test("isResumeTokenExpiredSoon uses Date.now when now is omitted", () => {
+    const futureExpiry = Date.now() + 60_000;
+    expect(isResumeTokenExpiredSoon(futureExpiry)).toBe(false);
+    const pastExpiry = Date.now() - 1_000;
+    expect(isResumeTokenExpiredSoon(pastExpiry)).toBe(true);
   });
 
   test("extends persisted expiry to at least one command ttl window", () => {

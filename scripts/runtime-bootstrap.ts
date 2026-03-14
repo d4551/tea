@@ -5,6 +5,8 @@ import {
 } from "../src/bootstrap/runtime-readiness.ts";
 import { appConfig } from "../src/config/environment.ts";
 
+const projectRoot = Bun.fileURLToPath(new URL("../", import.meta.url));
+
 /**
  * One Bun-native command step executed by the setup workflow.
  */
@@ -82,10 +84,10 @@ const createCommandRunner =
   };
 
 const defaultDependencies = (): SetupWorkflowDependencies => ({
-  cwd: process.cwd(),
+  cwd: projectRoot,
   readCurrentBunVersion,
-  runCommand: createCommandRunner(process.cwd()),
-  ensureEnvFile: createEnvFileEnsurer(process.cwd()),
+  runCommand: createCommandRunner(projectRoot),
+  ensureEnvFile: createEnvFileEnsurer(projectRoot),
   collectReadinessReport: collectRuntimeReadinessReport,
 });
 

@@ -59,8 +59,8 @@ export const getHtmx = (): HtmxApi | null => globalThis.htmx ?? null;
  * @param value Raw text value.
  * @returns Escaped HTML string.
  */
-export const escapeHtml = (value: string): string =>
-  value
+export const escapeHtml = (value: unknown): string =>
+  String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")

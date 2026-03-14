@@ -100,6 +100,17 @@ export class PlayerProgressStore {
   }
 
   /**
+   * Restores XP and level from a save slot. Used when loading from a saved game.
+   */
+  public async restoreSnapshot(sessionId: string, xp: number, level: number): Promise<void> {
+    await prisma.playerProgress.upsert({
+      where: { sessionId },
+      update: { xp, level },
+      create: { sessionId, xp, level },
+    });
+  }
+
+  /**
    * Marks an interaction as completed once and awards XP on the first completion.
    *
    * @param sessionId Stable game session identifier.

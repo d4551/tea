@@ -6,6 +6,7 @@
  */
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
+import { cardClasses } from "../shared/ui-components.ts";
 
 /**
  * Renders a generic card skeleton placeholder.
@@ -17,7 +18,7 @@ export const renderCardSkeleton = (rows = 3): string => {
   const lines = Array.from({ length: rows }, () => `<div class="skeleton h-4 w-full"></div>`).join(
     "",
   );
-  return `<div class="card card-border bg-base-100">
+  return `<div class="${cardClasses.borderedNoShadow}">
     <div class="card-body gap-4">
       <div class="skeleton h-6 w-1/3"></div>
       ${lines}
@@ -32,7 +33,7 @@ export const renderCardSkeleton = (rows = 3): string => {
  * @returns HTML string with skeleton layout.
  */
 export const renderEditorSkeleton = (messages: Messages): string => `
-  <div class="space-y-6" aria-busy="true" aria-label="${escapeHtml(messages.common.loading)}">
+  <div class="space-y-6 min-h-[200px]" aria-busy="true" aria-label="${escapeHtml(messages.common.loading)}">
     <div class="flex items-center justify-between">
       <div class="skeleton h-8 w-48"></div>
       <div class="skeleton h-10 w-32"></div>
@@ -66,7 +67,7 @@ export const renderListSkeleton = (rowCount = 5): string => {
     </div>`,
   ).join("");
 
-  return `<div class="card card-border bg-base-100">
+  return `<div class="${cardClasses.borderedNoShadow}">
     <div class="card-body p-0 divide-y divide-base-300" aria-busy="true">
       ${rows}
     </div>
@@ -102,9 +103,9 @@ export const renderStatsSkeleton = (statCount = 4): string => {
 export const renderQuickActionsSkeleton = (cardCount = 4): string => {
   const cards = Array.from(
     { length: cardCount },
-    () => `<div class="card card-border bg-base-100">
+    () => `<div class="${cardClasses.borderedNoShadow}">
       <div class="card-body gap-3 p-4" aria-busy="true">
-        <div class="skeleton size-10 rounded-btn"></div>
+        <div class="skeleton size-10 rounded-box"></div>
         <div class="skeleton h-4 w-3/4"></div>
         <div class="skeleton h-3 w-1/2"></div>
       </div>

@@ -11,7 +11,7 @@ import { defaultGameConfig } from "../src/shared/config/game-config.ts";
 import { gameAssetUrls } from "../src/shared/constants/game-assets.ts";
 import { contentType, httpStatus } from "../src/shared/constants/http.ts";
 import { defaultOracleMode } from "../src/shared/constants/oracle.ts";
-import { appRoutes, withQueryParameters } from "../src/shared/constants/routes.ts";
+import { appRoutes, withLocaleQuery, withQueryParameters } from "../src/shared/constants/routes.ts";
 import { prisma, prismaBase } from "../src/shared/services/db.ts";
 import { readJsonResponse, settleAsync } from "../src/shared/utils/async-result.ts";
 
@@ -54,8 +54,19 @@ const readSseUntil = async (
         }
 
         const chunk = next.value;
-        if (chunk) {
-          collected += decoder.decode(chunk, { stream: true });
+        if (chunk !== undefined && chunk !== null) {
+          if (typeof chunk === "string") {
+            collected += chunk;
+          } else if (typeof chunk === "object" && chunk !== null) {
+            const obj: object = chunk;
+            if (
+              obj instanceof Uint8Array ||
+              obj instanceof ArrayBuffer ||
+              ArrayBuffer.isView(obj)
+            ) {
+              collected += decoder.decode(obj, { stream: true });
+            }
+          }
         }
 
         if (predicate(collected)) {
@@ -78,7 +89,16 @@ const readSseUntil = async (
 };
 
 const asRecord = (value: unknown): Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value) ? value : {};
+  value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (() => {
+        const entries = Object.entries(value);
+        const record: Record<string, unknown> = {};
+        for (const [key, entry] of entries) {
+          record[key] = entry;
+        }
+        return record;
+      })()
+    : {};
 
 const readResponsePayload = async <TPayload>(response: Response): Promise<TPayload> => {
   const parsed = await readJsonResponse<TPayload>(response);
@@ -87,6 +107,8 @@ const readResponsePayload = async <TPayload>(response: Response): Promise<TPaylo
   }
   return parsed.value;
 };
+const sceneModeHtmlIncludes = (source: string, mode: "2D" | "3D"): boolean =>
+  new RegExp(`id="game-scene-mode-value"[^>]*>\\s*${mode}\\s*<\\/span>`).test(source);
 const readSessionCookieHeader = (response: Response): string | null => {
   const setCookie = response.headers.get("set-cookie");
   if (!setCookie) {
@@ -204,6 +226,20 @@ describe("API contracts", () => {
     expect(payload.ok).toBe(true);
     expect(payload.data?.status).toBe("ok");
     expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  test("health endpoint at /health is available", async () => {
+    const response = await app.handle(new Request(toUrl(appRoutes.health)));
+    expect(response.status).toBe(httpStatus.ok);
+    const payload = await readResponsePayload<{
+      readonly ok: boolean;
+      readonly data?: {
+        readonly status: string;
+        readonly message: string;
+      };
+    }>(response);
+    expect(payload.ok).toBe(true);
+    expect(payload.data?.status).toBe("ok");
   });
 
   test("home route issues an anonymous session cookie", async () => {
@@ -2251,6 +2287,24 @@ describe("HTMX partial rendering", () => {
     expect(html.includes("Awaiting publication")).toBe(false);
   });
 
+  test("home page presents direct 2D and 3D scene launch links", async () => {
+    const response = await app.handle(new Request(toUrl(appRoutes.home)));
+    const html = await response.text();
+    const teaHouseLaunch = withQueryParameters(withLocaleQuery(appRoutes.game, "en-US"), {
+      sceneId: "teaHouse",
+    });
+    const crystalCavernLaunch = withQueryParameters(withLocaleQuery(appRoutes.game, "en-US"), {
+      sceneId: "crystalCavern",
+    });
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(html.includes(teaHouseLaunch)).toBe(true);
+    expect(html.includes(crystalCavernLaunch)).toBe(true);
+    expect(html.includes("Choose your scene mode")).toBe(true);
+    expect(html.includes("Launch Tea House")).toBe(true);
+    expect(html.includes("Launch Crystal Cavern")).toBe(true);
+  });
+
   test("oracle form preserves locale in progressive-enhancement flow", async () => {
     const response = await app.handle(new Request(toUrl(`${appRoutes.home}?lang=zh-CN`)));
     const html = await response.text();
@@ -2416,7 +2470,7 @@ describe("HTMX partial rendering", () => {
     expect(html.includes("/public/vendor/htmx-ext/game-hud.js")).toBe(false);
     expect(html.includes('hx-ext="sse"')).toBe(true);
     expect(html.includes('hx-ext="sse,game-hud"')).toBe(false);
-    expect(html.includes("/public/vendor/htmx-ext/oracle-indicator.js")).toBe(false);
+    expect(html.includes("/public/vendor/htmx-ext/oracle-indicator.js")).toBe(true);
     expect(countOccurrences(html, 'data-hud-slot="hud-xp"')).toBe(1);
     expect(html.includes('data-connected-label="connected"')).toBe(true);
     expect(html.includes('id="game-client-bootstrap"')).toBe(true);
@@ -2438,10 +2492,29 @@ describe("HTMX partial rendering", () => {
     expect(html.includes("Scene mode")).toBe(true);
     expect(html.includes('id="game-scene-title-heading"')).toBe(true);
     expect(html.includes('sse-swap="scene-title-heading"')).toBe(true);
-    expect(html.includes('id="game-objective-card"')).toBe(true);
-    expect(html.includes('sse-swap="objective-card"')).toBe(true);
+    expect(html.includes('id="game-objective-summary"')).toBe(true);
+    expect(html.includes('sse-swap="objective-summary"')).toBe(true);
     expect(html.includes('id="game-scene-mode-value"')).toBe(true);
     expect(html.includes('sse-swap="scene-mode"')).toBe(true);
+  });
+
+  test("game page starts in selected scene mode from sceneId query", async () => {
+    const scene2dUrl = withQueryParameters(withLocaleQuery(appRoutes.game, "en-US"), {
+      sceneId: "teaHouse",
+    });
+    const scene3dUrl = withQueryParameters(withLocaleQuery(appRoutes.game, "en-US"), {
+      sceneId: "crystalCavern",
+    });
+
+    const scene2dResponse = await app.handle(new Request(toUrl(scene2dUrl)));
+    const scene2dHtml = await scene2dResponse.text();
+    const scene3dResponse = await app.handle(new Request(toUrl(scene3dUrl)));
+    const scene3dHtml = await scene3dResponse.text();
+
+    expect(scene2dResponse.status).toBe(httpStatus.ok);
+    expect(sceneModeHtmlIncludes(scene2dHtml, "2D")).toBe(true);
+    expect(scene3dResponse.status).toBe(httpStatus.ok);
+    expect(sceneModeHtmlIncludes(scene3dHtml, "3D")).toBe(true);
   });
 
   test("builder dashboard preserves locale-aware navigation links", async () => {

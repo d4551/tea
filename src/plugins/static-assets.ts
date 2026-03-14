@@ -97,7 +97,7 @@ const resolveAssetRoot = (mountAssetsRoot: string): string => {
     return normalizedMountAssetsRoot;
   }
 
-  const projectRootUrl = Bun.pathToFileURL(`${process.cwd().replace(/\\+/gu, "/")}/`);
+  const projectRootUrl = new URL("../../", import.meta.url);
   const resolvedUrl = new URL(`${normalizedMountAssetsRoot}/`, projectRootUrl);
   return Bun.fileURLToPath(resolvedUrl);
 };

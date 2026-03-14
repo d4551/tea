@@ -3,6 +3,7 @@ import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts
 import type { AutomationRun, GenerationArtifact } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
+import { cardClasses, renderBuilderHiddenFields, spinnerClasses } from "../shared/ui-components.ts";
 import {
   getArtifactLabel,
   getArtifactSummaryLabel,
@@ -66,11 +67,11 @@ export const renderAutomationPanel = (
                   aria-label="${escapeHtml(messages.builder.cancelAction)}: ${escapeHtml(run.goal)}"
                 >${escapeHtml(messages.builder.cancelAction)}</button>
               </form>
-              <span id="${runSpinnerId}" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+              <span id="${runSpinnerId}" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
             </div>`
           : "";
 
-      return `<article class="card card-border bg-base-100 shadow-sm">
+      return `<article class="${cardClasses.bordered}">
         <div class="card-body gap-3">
           <div class="flex items-center justify-between gap-3">
             <h3 class="card-title text-base">${escapeHtml(run.goal)}</h3>
@@ -139,10 +140,9 @@ export const renderAutomationPanel = (
         { label: messages.builder.readinessImplemented, value: completedRuns },
       ],
     })}
-    <article class="card card-border bg-base-100 shadow-sm">
+    <article class="${cardClasses.bordered}">
       <form class="card-body gap-3" hx-post="${escapeHtml(createRunAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#automation-create-spinner" hx-disabled-elt="button, input, select, textarea">
-        <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
-        <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
+        ${renderBuilderHiddenFields(projectId, locale)}
         <h2 class="card-title text-2xl">${escapeHtml(messages.builder.createAutomationRun)}</h2>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.automationGoalLabel)}</legend>
@@ -164,7 +164,7 @@ export const renderAutomationPanel = (
         </fieldset>
         <div class="flex items-center gap-2">
           <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.createAutomationRun)}">${escapeHtml(messages.builder.createAutomationRun)}</button>
-          <span id="automation-create-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="${escapeHtml(messages.common.loading)}"></span>
+          <span id="automation-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
       </form>
     </article>

@@ -14,17 +14,17 @@
 
 SSR-first game runtime, builder workspace, and AI-enabled game platform built on Bun + TypeScript.
 
-Runtime stack: Bun 1.3+ · TypeScript Strict · Prisma 7+ · Tailwind 4 / DaisyUI 5.
+Runtime stack: Bun 1.3+ · TypeScript Strict · Prisma 7+ · Tailwind 4 / DaisyUI 5 · Pixi.js 8 (2D) · Three.js (3D/WebGPU).
 
-Documentation parity strategy: every concept is mirrored with English first, then Simplified Chinese.
+Documentation parity strategy: every concept is mirrored with English first, then Simplified Chinese. Library docs: llms-stack-refresh for core stack; Context7 MCP for Pixi.js, Three.js, Transformers, Playwright, Biome.
 
 ### 中文
 
 基于 Bun + TypeScript 的 SSR 优先游戏运行时、构建器工作区与 AI 游戏平台。
 
-技术栈：Bun 1.3+、TypeScript Strict、Prisma 7+、Tailwind 4 / DaisyUI 5。
+技术栈：Bun 1.3+、TypeScript Strict、Prisma 7+、Tailwind 4 / DaisyUI 5、Pixi.js 8（2D）、Three.js（3D/WebGPU）。
 
-文档对照策略：每个概念先写英文，再给出对应的简体中文。
+文档对照策略：每个概念先写英文，再给出对应的简体中文。库文档：llms-stack-refresh 覆盖核心栈；Context7 MCP 覆盖 Pixi.js、Three.js、Transformers、Playwright、Biome。
 
 ---
 
@@ -32,10 +32,13 @@ Documentation parity strategy: every concept is mirrored with English first, the
 
 ### English
 
+- [Documentation](#documentation--文档)
 - [Architecture at a glance](#architecture-at-a-glance--架构一览)
 - [Request and error lifecycle](#request-and-error-lifecycle--请求与错误流)
 - [Builder publish flow](#builder-to-playable-runtime-pipeline--构建器到运行时发布链路)
 - [End-to-end game creation (UI to runtime)](#end-to-end-game-creation-ui-runtime--游戏创建端到端流程)
+- [Game session lifecycle](#game-session-lifecycle--游戏会话生命周期)
+- [Data ownership and state model](#data-ownership-and-state-model--数据所有权与状态模型)
 - [AI routing and reliability](#ai-reliability-chain--ai-可靠性链路)
 - [Security and hardening](#security-and-hardening--安全与加固)
 - [Repository map](#repository-map--仓库结构)
@@ -45,10 +48,13 @@ Documentation parity strategy: every concept is mirrored with English first, the
 
 ### 中文
 
+- [文档](#documentation--文档)
 - [架构一览](#architecture-at-a-glance--架构一览)
 - [请求与错误流](#request-and-error-lifecycle--请求与错误流)
 - [构建器发布链路](#builder-to-playable-runtime-pipeline--构建器到运行时发布链路)
 - [游戏创建端到端流程](#end-to-end-game-creation-ui-runtime--游戏创建端到端流程)
+- [游戏会话生命周期](#game-session-lifecycle--游戏会话生命周期)
+- [数据所有权与状态模型](#data-ownership-and-state-model--数据所有权与状态模型)
 - [AI 可靠性链路](#ai-reliability-chain--ai-可靠性链路)
 - [安全与加固](#security-and-hardening--安全与加固)
 - [仓库结构](#repository-map--仓库结构)
@@ -65,6 +71,8 @@ Documentation parity strategy: every concept is mirrored with English first, the
 The source of truth is now a plaintext archive namespace in `notes/doc-archive/`.
 Markdown is no longer used as the runtime documentation source.
 
+Documentation workflow: project architecture and contracts live in `notes/doc-archive/`; library patterns use llms-stack-refresh (Bun, Elysia, htmx, Prisma, Tailwind, DaisyUI) and Context7 MCP (Pixi.js, Three.js, Transformers, Playwright, Biome). See `docs__context7-audit.txt` for coverage.
+
 Key archives:
 
 - Architecture: `notes/doc-archive/ARCHITECTURE.txt`
@@ -77,11 +85,15 @@ Key archives:
 - Operator runbook: `notes/doc-archive/docs__operator-runbook.txt`
 - RMMZ pack: `notes/doc-archive/docs__rmmz-pack.txt`
 - Companion pack status: `notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__STATUS.txt`
+- Maintenance audit: `notes/doc-archive/docs__maintenance-audit-2026-03-10.txt`
+- Context7 audit: `notes/doc-archive/docs__context7-audit.txt` (doc coverage and Context7 MCP usage)
 
 ### 中文
 
 文档源真相已迁移到 `notes/doc-archive/` 的纯文本归档空间。
 运行时文档不再使用 Markdown 作为源码。
+
+文档工作流：项目架构与契约在 `notes/doc-archive/`；库模式使用 llms-stack-refresh（Bun、Elysia、htmx、Prisma、Tailwind、DaisyUI）与 Context7 MCP（Pixi.js、Three.js、Transformers、Playwright、Biome）。详见 `docs__context7-audit.txt`。
 
 关键归档：
 
@@ -95,6 +107,8 @@ Key archives:
 - 运维手册：`notes/doc-archive/docs__operator-runbook.txt`
 - RMMZ 包：`notes/doc-archive/docs__rmmz-pack.txt`
 - 陪伴包状态：`notes/doc-archive/LOTFK_RMMZ_Agentic_Pack__STATUS.txt`
+- 维护审计：`notes/doc-archive/docs__maintenance-audit-2026-03-10.txt`
+- Context7 审计：`notes/doc-archive/docs__context7-audit.txt`（文档覆盖与 Context7 MCP 使用）
 
 ---
 
@@ -160,7 +174,14 @@ flowchart TB
     B_Page["SSR pages"]
     B_Frag["HTMX fragments"]
     B_Game["Playable client"]
-    B_Events["Websocket + polling"]
+    B_Events["WebSocket + SSE HUD"]
+    B_Post["Command POST"]
+  end
+
+  subgraph Playable["Playable client layers"]
+    P_Pixi["Pixi.js 2D"]
+    P_Three["Three.js 3D/WebGPU"]
+    P_Input["Input + config"]
   end
 
   subgraph App["Elysia app"]
@@ -192,6 +213,11 @@ flowchart TB
   B_Frag --> A_Route
   B_Game --> A_Route
   B_Events --> A_Route
+  B_Post --> A_Route
+
+  B_Game --> P_Pixi
+  B_Game --> P_Three
+  B_Game --> P_Input
 
   A_Plugin --> A_Locale --> A_Route
   A_Route --> D_Game --> P_DB
@@ -218,7 +244,14 @@ flowchart TB
     B_Page["SSR 页面"]
     B_Frag["HTMX 片段"]
     B_Game["可游玩客户端"]
-    B_Events["Websocket + 轮询"]
+    B_Events["WebSocket + SSE HUD"]
+    B_Post["命令 POST"]
+  end
+
+  subgraph Playable["可游玩客户端层"]
+    P_Pixi["Pixi.js 2D"]
+    P_Three["Three.js 3D/WebGPU"]
+    P_Input["输入 + 配置"]
   end
 
   subgraph App["Elysia 应用"]
@@ -250,6 +283,11 @@ flowchart TB
   B_Frag --> A_Route
   B_Game --> A_Route
   B_Events --> A_Route
+  B_Post --> A_Route
+
+  B_Game --> P_Pixi
+  B_Game --> P_Three
+  B_Game --> P_Input
 
   A_Plugin --> A_Locale --> A_Route
   A_Route --> D_Game --> P_DB
@@ -297,6 +335,7 @@ sequenceDiagram
   participant Browser
   participant Ctx as request-context
   participant I18n as i18n-context
+  participant Guard as auth/session guard
   participant Contract as contracts
   participant Route as route handler
   participant Service as domain service
@@ -306,7 +345,8 @@ sequenceDiagram
 
   Browser->>Ctx: HTTP request
   Ctx->>I18n: add locale + correlation id
-  I18n->>Contract: typed request context
+  I18n->>Guard: locale + session projection
+  Guard->>Contract: guarded typed context
   Contract->>Route: validated envelope
   Route->>Service: domain boundary call
   alt success
@@ -333,6 +373,7 @@ sequenceDiagram
   participant Browser
   participant Ctx as request-context
   participant I18n as i18n-context
+  participant Guard as 鉴权/会话守卫
   participant Contract as 契约层
   participant Route as 路由处理器
   participant Service as 领域服务
@@ -342,7 +383,8 @@ sequenceDiagram
 
   Browser->>Ctx: HTTP 请求
   Ctx->>I18n: 补齐语言与链路ID
-  I18n->>Contract: 结构化上下文
+  I18n->>Guard: 语言 + 会话投影
+  Guard->>Contract: 受保护的类型化上下文
   Contract->>Route: 校验通过的信封
   Route->>Service: 调用领域边界
   alt 成功
@@ -395,6 +437,7 @@ flowchart TD
   subgraph Publish["Publish boundary"]
     P_Validate["validateBuilderProjectForPublish"]
     P_Contract["contract checks + invariants"]
+    P_AssetCheck["asset consistency"]
     P_Release["immutable release snapshot"]
     P_Output["runtime contract payload"]
   end
@@ -408,8 +451,10 @@ flowchart TD
   end
 
   A_Draft --> A_Asset --> A_Audit --> P_Validate
-  P_Validate -->|pass| P_Contract --> P_Release --> P_Output --> R_Select
+  P_Validate -->|pass| P_Contract --> P_AssetCheck
+  P_AssetCheck -->|pass| P_Release --> P_Output --> R_Select
   P_Validate -->|fail| A_Report
+  P_AssetCheck -->|fail| A_Report
   R_Select --> R_Create --> R_Hydrate --> R_Join --> R_Result
   R_Join -->|reconnect| R_Create
   R_Join -->|blocked by policy| A_Report
@@ -432,6 +477,7 @@ flowchart TD
   subgraph Publish["发布边界"]
     P_Validate["validateBuilderProjectForPublish"]
     P_Contract["契约校验 + 不变量"]
+    P_AssetCheck["资源一致性"]
     P_Release["不可变发布快照"]
     P_Output["运行时契约输出"]
   end
@@ -445,8 +491,10 @@ flowchart TD
   end
 
   A_Draft --> A_Asset --> A_Audit --> P_Validate
-  P_Validate -->|通过| P_Contract --> P_Release --> P_Output --> R_Select
+  P_Validate -->|通过| P_Contract --> P_AssetCheck
+  P_AssetCheck -->|通过| P_Release --> P_Output --> R_Select
   P_Validate -->|不通过| A_Report
+  P_AssetCheck -->|不通过| A_Report
   R_Select --> R_Create --> R_Hydrate --> R_Join --> R_Result
   R_Join -->|重连成功| R_Create
   R_Join -->|被策略拦截| A_Report
@@ -540,7 +588,7 @@ flowchart TD
 
 ### English
 
-Session state is explicit, persisted, and resumable by design.
+Session state is explicit, persisted, and resumable by design. Created from immutable release snapshots only; heartbeat and TTL govern reconnection.
 
 <details>
 <summary>Session Lifecycle Charts / 会话生命周期图表</summary>
@@ -587,7 +635,7 @@ stateDiagram-v2
 
 ### 中文
 
-会话状态被设计为显式、可落库并可恢复。
+会话状态被设计为显式、可落库并可恢复。仅从不可变发布快照创建；心跳与 TTL 控制重连。
 
 ---
 
@@ -645,7 +693,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  subgraph 核心运行模型["核心运行模型"]
+  subgraph CoreZh["核心运行模型"]
     GS["GameSession"]
     SC["场景状态 + 碰撞"]
     AC["角色 + NPC"]
@@ -653,13 +701,13 @@ flowchart LR
     CB["战斗 + 过场动画"]
   end
 
-  subgraph 构建器模型["构建器模型"]
+  subgraph BuilderZh["构建器模型"]
     DR["草稿"]
     RL["发布快照"]
     CH["校验 + 自动化输出"]
   end
 
-  subgraph 知识模型["知识模型"]
+  subgraph KnowledgeZh["知识模型"]
     KD["KnowledgeDocument"]
     KC["KnowledgeChunk"]
     KT["KnowledgeChunkTerm"]
@@ -710,7 +758,7 @@ flowchart TD
   L -->|fail| O
   O -->|fail| R
   R -->|fail| F["fail-safe response + warning"]
-  S --> K["knowledge enrichment"]
+  S --> K["knowledge-base enrichment"]
   K --> V["validated response"]
   F --> V
 ```
@@ -730,7 +778,7 @@ flowchart TD
   L -->|失败| O
   O -->|失败| R
   R -->|再次失败| F["降级响应 + 告警"]
-  S --> K["知识增强"]
+  S --> K["knowledge-base 增强"]
   K --> V["校验后的返回"]
   F --> V
 ```
@@ -766,7 +814,7 @@ flowchart TD
   S2 -->|No| S4[Route boundary + typed contracts]
   S3 -->|pass| S5[Safe file read]
   S3 -->|fail| S6[404 + envelope]
-  S4 --> S7[Builder/AI payload parser]
+  S4 --> S7[Auth + CSRF + payload parser]
   S7 -->|invalid| S6
   S7 -->|valid| S8[Domain service]
   S8 --> S9[Audit log + persistence]
@@ -786,7 +834,7 @@ flowchart TD
   S2 -->|否| S4[路由边界 + 类型化契约]
   S3 -->|通过| S5[安全文件读取]
   S3 -->|拒绝| S6[返回 404 + 信封]
-  S4 --> S7[构建器/AI 载荷解析]
+  S4 --> S7[鉴权 + CSRF + 载荷解析]
   S7 -->|非法| S6
   S7 -->|合法| S8[领域服务]
   S8 --> S9[审计日志 + 落库]
@@ -813,11 +861,14 @@ flowchart TD
 - `src/routes/`: page, API, game, builder, and AI routing surfaces.
 - `src/domain/`: authoritative game runtime, builder flow, and AI orchestration.
 - `src/shared/`: contracts, configuration, and shared utilities.
-- `src/playable-game/`: browser transport and game bootstrapping.
-- `scripts/`: archive/doc checks, asset pipeline, and maintenance tooling.
+- `src/playable-game/`: browser transport, Pixi.js/Three.js layers, input, debug.
+- `src/htmx-extensions/`: layout-controls, focus-panel, SSE wiring.
+- `src/plugins/`: game-plugin (HUD SSE, commands), sse-plugin.
+- `scripts/`: archive/doc checks, asset pipeline, setup, maintenance tooling.
 - `prisma/`: schema and migration metadata.
-- `tests/`: unit and contract regression coverage.
+- `tests/`: unit and contract regression; `tests/e2e/` Playwright E2E.
 - `notes/doc-archive/`: plaintext documentation archive.
+- `.cursor/rules/`: llms-stack.mdc, context7.mdc (doc coverage rules).
 
 ### 中文
 
@@ -826,11 +877,14 @@ flowchart TD
 - `src/routes/`：页面、API、游戏、构建器、AI 路由面。
 - `src/domain/`：服务端权威游戏运行时、构建器与 AI 编排。
 - `src/shared/`：契约、配置和通用工具。
-- `src/playable-game/`：浏览器传输与游戏启动。
-- `scripts/`：文档归档检查、构建管线与维护脚本。
+- `src/playable-game/`：浏览器传输、Pixi.js/Three.js 层、输入、调试。
+- `src/htmx-extensions/`：layout-controls、focus-panel、SSE 布线。
+- `src/plugins/`：game-plugin（HUD SSE、命令）、sse-plugin。
+- `scripts/`：文档归档检查、构建管线、setup、维护脚本。
 - `prisma/`：schema 与迁移元数据。
-- `tests/`：单元与契约回归。
+- `tests/`：单元与契约回归；`tests/e2e/` Playwright E2E。
 - `notes/doc-archive/`：纯文档归档区。
+- `.cursor/rules/`：llms-stack.mdc、context7.mdc（文档覆盖规则）。
 
 ---
 
@@ -894,8 +948,20 @@ Any new documentation block should preserve bilingual block structure: English t
 
 - README moved to explicit EN/ZH block structure with clear section-level boundaries.
 - Language blocks are separated by headings and visual separators to reduce confusion.
+- Architecture charts: added Playable client layers (Pixi.js, Three.js, Input), WebSocket + SSE HUD, Command POST.
+- Request lifecycle: added auth/session guard step.
+- Builder publish: added asset consistency check.
+- Documentation: added Context7 audit, maintenance audit, and doc workflow (archive + llms-stack + Context7)
+- Repository map: added htmx-extensions, plugins, tests/e2e, .cursor/rules.
+- Quick reference: added Documentation, Game session lifecycle, Data ownership links.
 
 ### 中文
 
 - README 已改为明确的英中文块结构并按章节分隔。
 - 每个语言块使用独立标题和分隔符，降低阅读歧义。
+- 架构图：新增可游玩客户端层（Pixi.js、Three.js、输入）、WebSocket + SSE HUD、命令 POST。
+- 请求生命周期：新增鉴权/会话守卫步骤。
+- 构建器发布：新增资源一致性检查。
+- 文档：新增 Context7 审计、维护审计及文档工作流（归档 + llms-stack + Context7）。
+- 仓库结构：新增 htmx-extensions、plugins、tests/e2e、.cursor/rules。
+- 快速索引：新增文档、游戏会话生命周期、数据所有权链接。

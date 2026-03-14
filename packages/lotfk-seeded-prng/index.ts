@@ -34,7 +34,13 @@ export class SeededPrng {
       throw new RangeError("Cannot pick from an empty collection.");
     }
 
-    return arr[this.int(worldTimeMs, 0, arr.length, offset)];
+    const index = this.int(worldTimeMs, 0, arr.length, offset);
+    const value = arr[index];
+    if (value === undefined) {
+      throw new RangeError(`Deterministic selection out of bounds: index ${index} for length ${arr.length}.`);
+    }
+
+    return value;
   }
 }
 

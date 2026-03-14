@@ -1,6 +1,7 @@
 import { appConfig } from "../src/config/environment.ts";
 import {
   assetRelativePaths,
+  getClientModuleEntryPaths,
   getHtmxExtensionEntryPaths,
   joinLocalPath,
 } from "../src/shared/constants/assets.ts";
@@ -26,7 +27,11 @@ const normalizePath = (value: string): string => value.replace(/\\/gu, "/").repl
 const hasPackageManifest = async (path: string): Promise<boolean> => Bun.file(path).exists();
 
 const readPackageName = async (packageJsonPath: string): Promise<string | null> => {
-  const packageJson = safeJsonParse(await Bun.file(packageJsonPath).text(), emptyRecord);
+  const packageJson = safeJsonParse(
+    await Bun.file(packageJsonPath).text(),
+    emptyRecord,
+    (v): v is Record<string, unknown> => isRecord(v),
+  );
   if (!isRecord(packageJson) || typeof packageJson.name !== "string") {
     return null;
   }
@@ -60,6 +65,7 @@ const findPackageRoot = async (
 };
 
 const htmxBundlePath = resolvePackagePath("htmx.org/dist/htmx.min.js");
+const htmxSseExtensionSourcePath = resolveFromDirectory(htmxBundlePath, "../ext/sse.js");
 const transformersPackageRoot = await findPackageRoot(
   resolvePackagePath("@huggingface/transformers"),
   "@huggingface/transformers",
@@ -85,8 +91,10 @@ type AssetPipelinePathMap = Readonly<{
   gameClientOutdir: string;
   builderSceneEditorOutdir: string;
   htmxExtensionsOutdir: string;
+  clientModulesOutdir: string;
   htmxSourcePath: string;
   htmxDestinationPath: string;
+  htmxSseExtensionSourcePath: string;
   onnxWasmSourceDirectory: string;
   onnxWasmDestinationDirectory: string;
 }>;
@@ -119,9 +127,16 @@ export const assetPipelinePaths: AssetPipelinePathMap = {
   htmxDestinationPath: resolveInProject(
     joinLocalPath(appConfig.staticAssets.publicDirectory, assetRelativePaths.htmxPublicBundleFile),
   ),
+  htmxSseExtensionSourcePath,
   onnxWasmSourceDirectory: resolveFromRoot(transformersPackageRoot, "dist"),
   onnxWasmDestinationDirectory: resolveFromProjectRoot(
     joinLocalPath(appConfig.staticAssets.publicDirectory, assetRelativePaths.onnxPublicDirectory),
+  ),
+  clientModulesOutdir: resolveFromProjectRoot(
+    joinLocalPath(
+      appConfig.staticAssets.publicDirectory,
+      assetRelativePaths.clientModulesOutputDirectory,
+    ),
   ),
 };
 
@@ -138,6 +153,13 @@ export const htmxExtensionEntryPaths = getHtmxExtensionEntryPaths().map((entryPa
 export const gameClientEntryNaming = assetRelativePaths.gameClientBundleFile.replace(
   /\.js$/u,
   ".[ext]",
+);
+
+/**
+ * Canonical client module entrypoint paths.
+ */
+export const clientModuleEntryPaths = getClientModuleEntryPaths().map((entryPath) =>
+  resolveInProject(entryPath),
 );
 
 /**
@@ -250,4 +272,16 @@ export const resolveOnnxWasmCopyPaths = (
 } => ({
   sourcePath: resolveFromRoot(assetPipelinePaths.onnxWasmSourceDirectory, fileName),
   destinationPath: resolveFromRoot(assetPipelinePaths.onnxWasmDestinationDirectory, fileName),
+});
+
+/**
+ * Returns Bun.build options for standalone client module bundles.
+ *
+ * @returns Static-build options.
+ */
+export const createClientModulesBuildOptions = (): BunBuildOptions => ({
+  entrypoints: [...clientModuleEntryPaths],
+  outdir: assetPipelinePaths.clientModulesOutdir,
+  minify: true,
+  target: "browser",
 });

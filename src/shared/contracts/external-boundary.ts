@@ -1,3 +1,5 @@
+import { httpStatus } from "../constants/http.ts";
+
 /**
  * Stable source classification for external-boundary failures.
  */
@@ -150,17 +152,18 @@ export const createHttpExternalFailure = (input: {
 }): ExternalFailure => {
   const { response } = input;
   const code: ExternalFailureCode =
-    response.status === 400 || response.status === 422
+    response.status === httpStatus.badRequest || response.status === httpStatus.unprocessableEntity
       ? "validation"
-      : response.status === 401 || response.status === 403
+      : response.status === httpStatus.unauthorized || response.status === httpStatus.forbidden
         ? "auth"
-        : response.status === 404
+        : response.status === httpStatus.notFound
           ? "not-found"
-          : response.status === 408
+          : response.status === httpStatus.requestTimeout
             ? "timeout"
-            : response.status === 409
+            : response.status === httpStatus.conflict
               ? "conflict"
-              : response.status === 429 || response.status >= 500
+              : response.status === httpStatus.tooManyRequests ||
+                  response.status >= httpStatus.internalServerError
                 ? "unavailable"
                 : "unexpected";
 
@@ -169,10 +172,10 @@ export const createHttpExternalFailure = (input: {
     code,
     message: input.message,
     retryable:
-      response.status === 408 ||
-      response.status === 409 ||
-      response.status === 429 ||
-      response.status >= 500,
+      response.status === httpStatus.requestTimeout ||
+      response.status === httpStatus.conflict ||
+      response.status === httpStatus.tooManyRequests ||
+      response.status >= httpStatus.internalServerError,
     provider: input.provider,
     operation: input.operation,
     statusCode: response.status,

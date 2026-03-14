@@ -1,15 +1,13 @@
 import { assetRelativePaths, joinUrlPath, toPublicAssetUrl } from "../shared/constants/assets.ts";
+import { defaultAppRouteRoots } from "../shared/constants/route-defaults.ts";
+import { type LocaleCode, supportedLocaleCodes } from "../shared/types/locale.ts";
 
-/**
- * Supported locale codes for server rendering and API responses.
- */
-type LocaleCodeLiteral = "en-US" | "zh-CN";
-export const supportedLocales: readonly LocaleCodeLiteral[] = ["en-US", "zh-CN"];
+export type { LocaleCode } from "../shared/types/locale.ts";
 
 /**
  * Locale code union for i18n-aware routes and components.
  */
-export type LocaleCode = (typeof supportedLocales)[number];
+export const supportedLocales: readonly LocaleCode[] = supportedLocaleCodes;
 
 /**
  * Top-level application configuration.
@@ -19,6 +17,8 @@ export interface AppConfig {
   readonly applicationVersion: string;
   readonly host: string;
   readonly port: number;
+  /** Public origin URL for absolute links (e.g. SSE, WebSocket). */
+  readonly appOrigin: string;
   readonly defaultLocale: LocaleCode;
   readonly stylesheetPath: string;
   readonly htmxScriptPath: string;
@@ -278,7 +278,7 @@ const DEFAULT_STATIC_ASSET_CACHE_MAX_AGE_SECONDS = 3600;
 const DEFAULT_DOCS_PATH = "/docs";
 const DEFAULT_BUILDER_WORKER_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_BUILDER_AUTOMATION_PROBE_TIMEOUT_MS = 500;
-const DEFAULT_PLAYABLE_GAME_MOUNT_PATH = "/game";
+const DEFAULT_PLAYABLE_GAME_MOUNT_PATH = defaultAppRouteRoots.game;
 const DEFAULT_PLAYABLE_GAME_SOURCE_DIRECTORY = "public/game";
 const DEFAULT_THEME = "silk";
 const DEFAULT_MAX_CONTENT_WIDTH_CLASS = "max-w-6xl";
@@ -626,6 +626,7 @@ export const appConfig: AppConfig = {
   applicationVersion: resolvedApplicationVersion,
   host: resolvedHost,
   port: resolvedPort,
+  appOrigin: resolvedAppOrigin,
   defaultLocale: normalizeLocale(Bun.env.DEFAULT_LOCALE),
   stylesheetPath: resolvedStylesheetPath,
   htmxScriptPath: resolvedHtmxScriptPath,

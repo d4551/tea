@@ -1,4 +1,4 @@
-import type { LocaleCode } from "../../config/environment.ts";
+import type { LocaleCode } from "../types/locale.ts";
 import { safeJsonParse } from "../utils/safe-json.ts";
 
 /**
@@ -213,6 +213,28 @@ export interface Vector3 {
 }
 
 /**
+ * Particle emitter configuration for scene nodes.
+ */
+export interface ParticleEmitterConfig {
+  /** Asset ID for particle texture/sprite. */
+  readonly assetId?: string;
+  /** Max particle count. */
+  readonly maxCount: number;
+  /** Emission rate (particles per second). */
+  readonly rate: number;
+  /** Particle lifetime in ms. */
+  readonly lifetimeMs: number;
+  /** Initial speed range [min, max]. */
+  readonly speed: [number, number];
+  /** Spread angle in radians. */
+  readonly spread: number;
+  /** Size range [min, max]. */
+  readonly size: [number, number];
+  /** Whether to use gravity. */
+  readonly gravity?: boolean;
+}
+
+/**
  * Author-time 2D scene node.
  */
 export interface SceneNode2D {
@@ -230,6 +252,8 @@ export interface SceneNode2D {
   readonly size: Readonly<{ readonly width: number; readonly height: number }>;
   /** Painter's-order layer key. */
   readonly layer: string;
+  /** Optional particle emitter config. */
+  readonly particleEmitter?: ParticleEmitterConfig;
 }
 
 /**
@@ -240,7 +264,7 @@ export interface SceneNode3D {
   readonly id: string;
   /** Node role in the scene graph. */
   readonly nodeType: "model" | "light" | "camera" | "spawn" | "trigger";
-  /** Optional attached asset. */
+  /** Optional attached asset (model path: glb/usdz asset ID). */
   readonly assetId?: string;
   /** Optional attached clip. */
   readonly animationClipId?: string;
@@ -250,6 +274,8 @@ export interface SceneNode3D {
   readonly rotation: Vector3;
   /** Node scale multipliers. */
   readonly scale: Vector3;
+  /** Optional particle emitter config (3D: Points/PointsMaterial). */
+  readonly particleEmitter?: ParticleEmitterConfig;
 }
 
 /**
@@ -304,6 +330,34 @@ export interface NpcAiBlueprint {
 }
 
 /**
+ * Single tile layer in a tilemap.
+ */
+export interface TilemapLayer {
+  /** Layer identifier. */
+  readonly id: string;
+  /** Asset ID for tile set (tiles or tile-set kind). */
+  readonly tileSetAssetId: string;
+  /** Tile width in pixels. */
+  readonly tileWidth: number;
+  /** Tile height in pixels. */
+  readonly tileHeight: number;
+  /** 2D grid of tile indices (row-major: [row][col]). -1 = empty. */
+  readonly data: readonly (readonly number[])[];
+  /** Whether this layer contributes to collision. */
+  readonly collision?: boolean;
+  /** Painter's-order layer key. */
+  readonly layer?: string;
+}
+
+/**
+ * Tilemap definition for a 2D scene.
+ */
+export interface TilemapDefinition {
+  /** Tilemap layers (back to front). */
+  readonly layers: readonly TilemapLayer[];
+}
+
+/**
  * Scene static descriptor.
  */
 export interface SceneDefinition {
@@ -323,6 +377,8 @@ export interface SceneDefinition {
   readonly npcs: readonly SceneNpcDefinition[];
   /** Authored scene graph nodes. */
   readonly nodes?: readonly SceneNodeDefinition[];
+  /** Optional tilemap for 2D scenes. */
+  readonly tilemap?: TilemapDefinition;
   /** Static world collision rectangles. */
   readonly collisions: readonly CollisionMask[];
 }
@@ -1441,6 +1497,8 @@ export interface GameSceneState {
   readonly collisions: readonly CollisionMask[];
   /** Authored scene nodes active in this scene. */
   readonly nodes?: readonly SceneNodeDefinition[];
+  /** Optional tilemap for 2D scenes (PixiJS TilingSprite/tile grid). */
+  readonly tilemap?: TilemapDefinition;
   /** Runtime-visible authored assets needed for node resolution. */
   readonly assets?: readonly BuilderAsset[];
   /** Current viewport offset for rendering/scrolling. */
@@ -1535,7 +1593,8 @@ export type GameSseEventName =
   | "error"
   | "combat"
   | "inventory"
-  | "cutscene";
+  | "cutscene"
+  | "quest";
 
 /**
  * Deterministic stream close reasons for SSE clients.
@@ -2287,17 +2346,14 @@ export const validateGameCommandInput = (
   sessionLocale: LocaleCode,
 ): GameCommandEnvelopeValidation => {
   if (
-    payload &&
-    typeof payload === "object" &&
-    "command" in payload &&
     isRecord(payload) &&
+    "command" in payload &&
     typeof payload.command === "object" &&
     payload.command !== null
   ) {
-    const candidate = payload;
-    const locale = candidate.locale;
-    const source = candidate.source;
-    const commandPayload = candidate.command;
+    const locale = payload.locale;
+    const source = payload.source;
+    const commandPayload = payload.command;
 
     const commandValidation = validateGameCommand(
       commandPayload,
@@ -2311,15 +2367,15 @@ export const validateGameCommandInput = (
       };
     }
 
-    const sequenceValue = candidate.sequenceId;
-    const ttlValue = candidate.ttlMs;
+    const sequenceValue = payload.sequenceId;
+    const ttlValue = payload.ttlMs;
 
     return {
       ok: true,
       data: {
         commandId:
-          typeof candidate.commandId === "string" && candidate.commandId.length > 0
-            ? candidate.commandId
+          typeof payload.commandId === "string" && payload.commandId.length > 0
+            ? payload.commandId
             : crypto.randomUUID(),
         source: source === "ws" || source === "http" ? source : "http",
         locale: isSupportedLocale(locale) ? locale : sessionLocale,
@@ -2328,8 +2384,8 @@ export const validateGameCommandInput = (
             ? sequenceValue
             : 0,
         timestamp:
-          typeof candidate.timestamp === "string" && candidate.timestamp.length > 0
-            ? candidate.timestamp
+          typeof payload.timestamp === "string" && payload.timestamp.length > 0
+            ? payload.timestamp
             : new Date().toISOString(),
         ttlMs:
           typeof ttlValue === "number" && Number.isFinite(ttlValue) && ttlValue > 0
@@ -2596,6 +2652,8 @@ export interface GameHudState {
   readonly sceneMode?: SceneMode;
   /** Active quest title surfaced in the player-facing shell. */
   readonly activeQuestTitle?: string;
+  /** Full quest list for quest log UI. */
+  readonly quests?: readonly GameQuestState[];
   /** Active locale for runtime copy. */
   readonly locale: GameLocale;
   /** Role granted to the active participant. */
@@ -2614,8 +2672,14 @@ export interface GameHudState {
   readonly inventory?: PlayerInventoryState;
   /** Active cutscene state, if any. */
   readonly cutscene?: CutscenePlaybackState;
+  /** Whether the active cutscene can be skipped. */
+  readonly cutsceneSkippable?: boolean;
   /** The actively playing cutscene step, if any. */
   readonly activeCutsceneStep?: CutsceneStep;
+  /** Runtime-resolved active cutscene sound asset source, if the step includes audio. */
+  readonly activeCutsceneSoundAssetSource?: string;
+  /** Item definitions for inventory tooltips and labels. */
+  readonly itemDefinitions?: readonly ItemDefinition[];
 }
 
 /**
@@ -2872,9 +2936,13 @@ export interface PlayerProgressV2 {
 }
 
 /**
- * Parses JSON safely with a typed fallback.
+ * Parses JSON safely with a typed fallback and explicit validator.
  */
-export const parseJson = <T>(source: string, fallback: T): T => safeJsonParse(source, fallback);
+export const parseJson = <T>(
+  source: string,
+  fallback: T,
+  isExpected: (value: unknown) => value is T,
+): T => safeJsonParse(source, fallback, isExpected);
 
 /**
  * Normalizes persisted player progress into the v2 contract.
@@ -2894,6 +2962,7 @@ export const parsePlayerProgressV2 = (
     : parseJson(
         typeof visitedScenesValue === "string" ? visitedScenesValue : "[]",
         emptyVisitedScenes,
+        (v): v is readonly string[] => Array.isArray(v),
       );
 
   const parsedInteractions =
@@ -2904,6 +2973,8 @@ export const parsePlayerProgressV2 = (
       : parseJson(
           typeof interactionsValue === "string" ? interactionsValue : "{}",
           emptyInteractions,
+          (v): v is Readonly<Record<string, boolean>> =>
+            typeof v === "object" && v !== null && !Array.isArray(v),
         );
 
   return {

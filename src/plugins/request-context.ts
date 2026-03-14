@@ -1,6 +1,7 @@
 import { Elysia } from "elysia";
 import { ensureCorrelationIdHeader } from "../lib/correlation-id.ts";
 import { createLogger } from "../lib/logger.ts";
+import { httpStatus } from "../shared/constants/http.ts";
 import { resolveRequestPathname } from "../shared/constants/routes.ts";
 
 /**
@@ -25,7 +26,7 @@ export const requestLoggingPlugin = new Elysia({ name: "request-logging" })
   .use(requestScopedContextPlugin)
   .onAfterHandle(({ request, set, correlationId, requestStartMs }) => {
     const durationMs = Number((performance.now() - requestStartMs).toFixed(2));
-    const status = typeof set.status === "number" ? set.status : 200;
+    const status = typeof set.status === "number" ? set.status : httpStatus.ok;
     const requestLogger = createLogger("http.request", correlationId);
 
     requestLogger.info("request.completed", {

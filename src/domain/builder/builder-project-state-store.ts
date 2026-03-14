@@ -1,5 +1,7 @@
 import type { Prisma } from "@prisma/client";
-import type { LocaleCode } from "../../config/environment.ts";
+import { appConfig, type LocaleCode } from "../../config/environment.ts";
+import { builderGeometryPlaceholderPaths, joinUrlPath } from "../../shared/constants/assets.ts";
+import { DEFAULT_NPC_IDLE_PAUSE_MS } from "../../shared/constants/builder-defaults.ts";
 import type {
   AnimationClip,
   AnimationKeyframe,
@@ -13,6 +15,7 @@ import type {
   GameFlagDefinition,
   GenerationArtifact,
   GenerationJob,
+  ParticleEmitterConfig,
   QuestDefinition,
   SceneDefinition,
   SceneNode2D,
@@ -20,6 +23,7 @@ import type {
   SceneNodeDefinition,
   SceneNpcDefinition,
   SpriteAtlasManifest,
+  TilemapDefinition,
   TriggerDefinition,
 } from "../../shared/contracts/game.ts";
 import {
@@ -39,7 +43,7 @@ import {
   type BuilderProjectTriggerRow,
   prisma,
 } from "../../shared/services/db.ts";
-import { safeJsonParse } from "../../shared/utils/safe-json.ts";
+import { acceptUnknown, safeJsonParse } from "../../shared/utils/safe-json.ts";
 import { gameTextByLocale } from "../game/data/game-text.ts";
 import { gameScenes, gameSpriteManifests } from "../game/data/sprite-data.ts";
 
@@ -387,20 +391,28 @@ const buildBaselineAssets = (): Record<string, BuilderAsset> => {
       }) satisfies BuilderAsset,
   );
 
+  const placeholderGlb = joinUrlPath(
+    appConfig.staticAssets.assetsPrefix,
+    builderGeometryPlaceholderPaths.glb,
+  );
+  const placeholderUsdz = joinUrlPath(
+    appConfig.staticAssets.assetsPrefix,
+    builderGeometryPlaceholderPaths.usdz,
+  );
   const modelAssets: BuilderAsset[] = [
     {
       id: "asset.model.cavernModel",
       kind: "model",
       label: "Crystal Cavern (GLB)",
       sceneMode: "3d",
-      source: "/assets/geometry/placeholder.glb",
+      source: placeholderGlb,
       sourceFormat: "glb",
       tags: ["baseline", "environment", "3d"],
       variants: [
         {
           id: "variant.model.cavernModel.runtime",
           format: "glb",
-          source: "/assets/geometry/placeholder.glb",
+          source: placeholderGlb,
           usage: "runtime",
           mimeType: "model/gltf-binary",
         },
@@ -414,14 +426,14 @@ const buildBaselineAssets = (): Record<string, BuilderAsset> => {
       kind: "model",
       label: "Crystal Cavern (USDZ)",
       sceneMode: "3d",
-      source: "/assets/geometry/placeholder.usdz",
+      source: placeholderUsdz,
       sourceFormat: "usdz",
       tags: ["baseline", "environment", "3d", "usd"],
       variants: [
         {
           id: "variant.model.cavernUsd.runtime",
           format: "usdz",
-          source: "/assets/geometry/placeholder.usdz",
+          source: placeholderUsdz,
           usage: "runtime",
           mimeType: "model/vnd.usdz+zip",
         },
@@ -590,7 +602,11 @@ const toDraftStateInput = (state: BuilderProjectState): Prisma.InputJsonValue =>
     automationRuns: _automationRuns,
     ...draftState
   } = state;
-  return safeJsonParse<Prisma.InputJsonValue>(JSON.stringify(draftState), {});
+  return safeJsonParse<Prisma.InputJsonValue>(
+    JSON.stringify(draftState),
+    {},
+    (v): v is Prisma.InputJsonValue => true,
+  );
 };
 
 const toNumberValue = (value: unknown): number | null =>
@@ -804,6 +820,62 @@ const toCollisionMasks = (value: unknown): SceneDefinition["collisions"] =>
       })
     : [];
 
+const toParticleEmitterConfig = (value: unknown): ParticleEmitterConfig | undefined => {
+  const r = asRecord(value);
+  if (!r || typeof r.maxCount !== "number" || typeof r.rate !== "number") {
+    return undefined;
+  }
+  const speed = Array.isArray(r.speed) && r.speed.length >= 2 ? [r.speed[0], r.speed[1]] : [0, 1];
+  const size = Array.isArray(r.size) && r.size.length >= 2 ? [r.size[0], r.size[1]] : [4, 8];
+  return {
+    assetId: typeof r.assetId === "string" ? r.assetId : undefined,
+    maxCount: r.maxCount,
+    rate: r.rate,
+    lifetimeMs: typeof r.lifetimeMs === "number" ? r.lifetimeMs : 2000,
+    speed: [Number(speed[0]), Number(speed[1])],
+    spread: typeof r.spread === "number" ? r.spread : Math.PI,
+    size: [Number(size[0]), Number(size[1])],
+    gravity: typeof r.gravity === "boolean" ? r.gravity : undefined,
+  };
+};
+
+const toTilemapDefinition = (value: unknown): TilemapDefinition | undefined => {
+  const r = asRecord(value);
+  if (!r || !Array.isArray(r.layers) || r.layers.length === 0) {
+    return undefined;
+  }
+  const layers = r.layers.flatMap((item: unknown) => {
+    const layer = asRecord(item);
+    if (
+      !layer ||
+      typeof layer.id !== "string" ||
+      typeof layer.tileSetAssetId !== "string" ||
+      typeof layer.tileWidth !== "number" ||
+      typeof layer.tileHeight !== "number" ||
+      !Array.isArray(layer.data)
+    ) {
+      return [];
+    }
+    return [
+      {
+        id: layer.id,
+        tileSetAssetId: layer.tileSetAssetId,
+        tileWidth: layer.tileWidth,
+        tileHeight: layer.tileHeight,
+        data: layer.data.map((row: unknown) =>
+          Array.isArray(row) ? row.map((v) => (typeof v === "number" ? v : -1)) : [],
+        ),
+        collision: typeof layer.collision === "boolean" ? layer.collision : undefined,
+        layer: typeof layer.layer === "string" ? layer.layer : undefined,
+      },
+    ];
+  });
+  if (layers.length === 0) {
+    return undefined;
+  }
+  return { layers };
+};
+
 const toScenesFromRows = (
   rows: readonly BuilderProjectSceneRow[],
 ): Record<string, SceneDefinition> =>
@@ -829,7 +901,10 @@ const toScenesFromRows = (
             const ai: SceneNpcDefinition["ai"] = {
               wanderRadius: npc.wanderRadius ?? 0,
               wanderSpeed: npc.wanderSpeed ?? 0,
-              idlePauseMs: [npc.idlePauseMinMs ?? 2000, npc.idlePauseMaxMs ?? 5000],
+              idlePauseMs: [
+                npc.idlePauseMinMs ?? DEFAULT_NPC_IDLE_PAUSE_MS[0],
+                npc.idlePauseMaxMs ?? DEFAULT_NPC_IDLE_PAUSE_MS[1],
+              ],
               greetOnApproach: npc.greetOnApproach ?? false,
               greetLineKey: npc.greetLineKey ?? "",
             };
@@ -866,6 +941,10 @@ const toScenesFromRows = (
               if (!nodeType) {
                 return [];
               }
+              const particleEmitter =
+                node.particleEmitterData != null
+                  ? toParticleEmitterConfig(node.particleEmitterData)
+                  : undefined;
               const node3d: SceneNode3D = {
                 id: node.id,
                 nodeType,
@@ -882,6 +961,7 @@ const toScenesFromRows = (
                 },
                 ...(node.assetId ? { assetId: node.assetId } : {}),
                 ...(node.animationClipId ? { animationClipId: node.animationClipId } : {}),
+                ...(particleEmitter ? { particleEmitter } : {}),
               };
               return [node3d];
             }
@@ -891,6 +971,10 @@ const toScenesFromRows = (
             if (!nodeType) {
               return [];
             }
+            const particleEmitter =
+              node.particleEmitterData != null
+                ? toParticleEmitterConfig(node.particleEmitterData)
+                : undefined;
             const node2d: SceneNode2D = {
               id: node.id,
               nodeType,
@@ -902,10 +986,13 @@ const toScenesFromRows = (
               layer: node.layer ?? "foreground",
               ...(node.assetId ? { assetId: node.assetId } : {}),
               ...(node.animationClipId ? { animationClipId: node.animationClipId } : {}),
+              ...(particleEmitter ? { particleEmitter } : {}),
             };
             return [node2d];
           })
         : undefined;
+
+      const tilemap = row.tilemapData != null ? toTilemapDefinition(row.tilemapData) : undefined;
 
       return [
         [
@@ -919,6 +1006,7 @@ const toScenesFromRows = (
             spawn,
             npcs,
             nodes,
+            ...(tilemap ? { tilemap } : {}),
             collisions: toCollisionMasks(row.collisions),
           } satisfies SceneDefinition,
         ],
@@ -1103,7 +1191,7 @@ const toSpriteAtlasFromRows = (
  * Returns an empty array on malformed input.
  */
 const parseSpriteAtlasFrames = (raw: string): SpriteAtlasManifest["frames"] => {
-  const parsed = safeJsonParse<unknown[]>(raw, []);
+  const parsed = safeJsonParse<unknown[]>(raw, [], (v): v is unknown[] => Array.isArray(v));
   return parsed.filter((f): f is SpriteAtlasManifest["frames"][number] => {
     if (typeof f !== "object" || f === null) return false;
     const r = asRecord(f);
@@ -1125,7 +1213,7 @@ const isAnimationEasing = (value: string): value is AnimationKeyframe["easing"] 
  * Returns an empty array on malformed input.
  */
 const parseTrackKeyframes = (raw: string): AnimationTimeline["tracks"][number]["keyframes"] => {
-  const parsed = safeJsonParse<unknown[]>(raw, []);
+  const parsed = safeJsonParse<unknown[]>(raw, [], (v): v is unknown[] => Array.isArray(v));
   if (!Array.isArray(parsed)) {
     return [];
   }
@@ -1669,7 +1757,7 @@ const parseAutomationStepSpecValue = (value: unknown): AutomationStepSpec | unde
 };
 
 const parseAutomationStepSpec = (raw: string | null): AutomationStepSpec | undefined =>
-  raw ? parseAutomationStepSpecValue(safeJsonParse<unknown>(raw, null)) : undefined;
+  raw ? parseAutomationStepSpecValue(safeJsonParse<unknown>(raw, null, acceptUnknown)) : undefined;
 
 const toAutomationRunsFromRows = (
   rows: readonly BuilderProjectAutomationRunRow[],
@@ -2093,7 +2181,7 @@ const parseAutomationRunRecord = (runId: string, value: unknown): AutomationRun 
 };
 
 const parseProjectState = (state: Prisma.JsonValue): BuilderProjectState => {
-  const parsed = safeJsonParse<unknown>(JSON.stringify(state), {});
+  const parsed = safeJsonParse<unknown>(JSON.stringify(state), {}, acceptUnknown);
   const record = asRecord(parsed);
   const scenesRecord = asRecord(record.scenes);
   const dialoguesRecord = asRecord(record.dialogues);
@@ -2671,7 +2759,11 @@ export class BuilderProjectStateStore {
       return null;
     }
     const updated = await prisma.builderProject.publishStateSnapshot(sanitized, true, {
-      state: safeJsonParse<Prisma.InputJsonValue>(JSON.stringify(entry.state), {}),
+      state: safeJsonParse<Prisma.InputJsonValue>(
+        JSON.stringify(entry.state),
+        {},
+        (v): v is Prisma.InputJsonValue => true,
+      ),
       checksum: checksumOf(entry.state),
     });
     if (!updated) {

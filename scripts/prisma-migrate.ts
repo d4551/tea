@@ -4,6 +4,7 @@ import { prismaBase } from "../src/shared/services/db.ts";
 import { settleAsync } from "../src/shared/utils/async-result.ts";
 
 const logger = createLogger("prisma.migrate");
+const repositoryRoot = Bun.fileURLToPath(new URL("../", import.meta.url));
 
 const runCommand = async (command: readonly string[], description: string): Promise<void> => {
   logger.info("prisma.migrate.step.started", {
@@ -12,7 +13,7 @@ const runCommand = async (command: readonly string[], description: string): Prom
 
   const subprocess = Bun.spawn({
     cmd: [...command],
-    cwd: process.cwd(),
+    cwd: repositoryRoot,
     stdout: "inherit",
     stderr: "inherit",
     stdin: "ignore",
