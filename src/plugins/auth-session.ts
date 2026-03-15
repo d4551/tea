@@ -96,61 +96,6 @@ const readSessionId = (cookie: AuthCookieBag): string | null => {
     : null;
 };
 
-type AuthSessionSeedRecord = {
-  readonly seed: AuthPrincipalSeed;
-  readonly expiresAtMs: number;
-};
-
-const authSessionMigrationSeeds = new Map<string, AuthSessionSeedRecord>();
-const AUTH_SESSION_MIGRATION_LEEWAY_MS = 1000 * 60 * 60;
-
-const resolveAuthMigrationSeed = (cookie: AuthCookieBag): AuthPrincipalSeed | undefined => {
-  const sessionId = readSessionId(cookie);
-  if (sessionId === null) {
-    return undefined;
-  }
-
-  const candidate = authSessionMigrationSeeds.get(sessionId);
-  if (candidate === undefined) {
-    return undefined;
-  }
-
-  if (Date.now() > candidate.expiresAtMs) {
-    authSessionMigrationSeeds.delete(sessionId);
-    return undefined;
-  }
-
-  return candidate.seed;
-};
-
-/**
- * Registers a one-time migration seed for a legacy anonymous session id while
- * preserving anonymous fallback behavior for unresolved principals.
- */
-export const registerAuthSessionMigrationSeed = (
-  sessionId: string,
-  seed: AuthPrincipalSeed,
-  ttlMs = AUTH_SESSION_MIGRATION_LEEWAY_MS,
-): void => {
-  const trimmedSessionId = sessionId.trim();
-  if (trimmedSessionId.length === 0) {
-    return;
-  }
-
-  const filteredSeed: AuthPrincipalSeed = {
-    actorId: typeof seed.actorId === "string" ? seed.actorId.trim() : undefined,
-    organizationId:
-      typeof seed.organizationId === "string" ? seed.organizationId.trim() : undefined,
-    roleKeys:
-      seed.roleKeys?.filter(
-        (role): role is string => typeof role === "string" && role.trim().length > 0,
-      ) ?? [],
-  };
-
-  const expiresAtMs = Date.now() + Math.max(1000 * 60, Math.min(ttlMs, 1000 * 60 * 60 * 24));
-  authSessionMigrationSeeds.set(trimmedSessionId, { seed: filteredSeed, expiresAtMs });
-};
-
 const resolveAnonymousPrincipal = (): AuthPrincipal => ({
   actorType: "anonymous",
   actorId: null,
@@ -158,6 +103,12 @@ const resolveAnonymousPrincipal = (): AuthPrincipal => ({
   roleKeys: [],
 });
 
+/**
+ * Derives a user principal from an explicit seed, or falls back to anonymous.
+ *
+ * @param seed Optional principal seed from an upstream identity flow.
+ * @returns Resolved principal.
+ */
 const resolveUserPrincipalFromSeed = (seed: AuthPrincipalSeed | undefined): AuthPrincipal => {
   if (seed === undefined || typeof seed.actorId !== "string" || seed.actorId.trim().length === 0) {
     return resolveAnonymousPrincipal();
@@ -178,6 +129,7 @@ const resolveUserPrincipalFromSeed = (seed: AuthPrincipalSeed | undefined): Auth
  * Resolves the request auth session from Elysia's cookie context.
  *
  * @param cookie Elysia cookie bag for the current request.
+ * @param principalSeed Optional principal seed from an upstream identity flow.
  * @returns Anonymous session state derived from the session cookie.
  */
 export const resolveAuthSession = (
@@ -191,11 +143,10 @@ export const resolveAuthSession = (
   }
 
   const existingSessionId = readSessionId(cookie);
-  const migrationSeed = principalSeed === undefined ? resolveAuthMigrationSeed(cookie) : undefined;
   const authSession: AuthSession = {
     sessionId: existingSessionId ?? createAnonymousSessionId(),
     hasSession: existingSessionId !== null,
-    principal: resolveUserPrincipalFromSeed(principalSeed ?? migrationSeed),
+    principal: resolveUserPrincipalFromSeed(principalSeed),
   };
 
   if (principalSeed === undefined) {

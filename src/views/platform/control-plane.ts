@@ -223,10 +223,10 @@ const renderGameCard = (
       </div>
     </dl>
     <div class="card-actions flex-wrap justify-start">
-      <a href="${escapeHtml(buildProjectRoute(appRoutes.builderStart, locale, game.id))}" class="btn btn-primary btn-sm min-h-11 surface-tappable">${escapeHtml(messages.pages.controlPlane.openBuilder)}</a>
-      <a href="${escapeHtml(buildProjectRoute(appRoutes.builderAi, locale, game.id, "builder-brand-control-plane"))}" class="btn btn-outline btn-sm min-h-11 surface-tappable">${escapeHtml(messages.pages.controlPlane.openBrandControl)}</a>
-      <a href="${escapeHtml(buildProjectRoute(appRoutes.builderAutomation, locale, game.id, "builder-review-queue"))}" class="btn btn-ghost btn-sm min-h-11 surface-tappable">${escapeHtml(messages.pages.controlPlane.openReviewQueue)}</a>
-      <a href="${escapeHtml(buildWorkspaceHref("games", locale, game.id))}" class="btn btn-ghost btn-sm min-h-11 surface-tappable">${escapeHtml(messages.pages.controlPlane.focusProject)}</a>
+      <a href="${escapeHtml(buildProjectRoute(appRoutes.builderStart, locale, game.id))}" class="btn btn-primary btn-sm min-h-11 surface-tappable" aria-label="${escapeHtml(messages.pages.controlPlane.openBuilder)}: ${escapeHtml(game.name)}">${escapeHtml(messages.pages.controlPlane.openBuilder)}</a>
+      <a href="${escapeHtml(buildProjectRoute(appRoutes.builderAi, locale, game.id, "builder-brand-control-plane"))}" class="btn btn-outline btn-sm min-h-11 surface-tappable" aria-label="${escapeHtml(messages.pages.controlPlane.openBrandControl)}: ${escapeHtml(game.name)}">${escapeHtml(messages.pages.controlPlane.openBrandControl)}</a>
+      <a href="${escapeHtml(buildProjectRoute(appRoutes.builderAutomation, locale, game.id, "builder-review-queue"))}" class="btn btn-ghost btn-sm min-h-11 surface-tappable" aria-label="${escapeHtml(messages.pages.controlPlane.openReviewQueue)}: ${escapeHtml(game.name)}">${escapeHtml(messages.pages.controlPlane.openReviewQueue)}</a>
+      <a href="${escapeHtml(buildWorkspaceHref("games", locale, game.id))}" class="btn btn-ghost btn-sm min-h-11 surface-tappable" aria-label="${escapeHtml(messages.pages.controlPlane.focusProject)}: ${escapeHtml(game.name)}">${escapeHtml(messages.pages.controlPlane.focusProject)}</a>
     </div>
     <p class="text-xs uppercase tracking-[0.2em] text-base-content/45">${escapeHtml(messages.pages.controlPlane.lastUpdatedLabel)} ${escapeHtml(
       formatTimestamp(locale, game.lastUpdatedAtMs),
@@ -314,7 +314,7 @@ const renderTemplateCard = (
         withQueryParameters(withLocaleQuery(appRoutes.builder, locale), {
           [BUILDER_QUERY_PARAM_TEMPLATE_ID]: template.starterTemplateId,
         }),
-      )}" class="btn btn-outline btn-sm min-h-11 surface-tappable">${escapeHtml(messages.pages.controlPlane.createFromTemplate)}</a>
+      )}" class="btn btn-outline btn-sm min-h-11 surface-tappable" aria-label="${escapeHtml(messages.pages.controlPlane.createFromTemplate)}: ${escapeHtml(template.name)}">${escapeHtml(messages.pages.controlPlane.createFromTemplate)}</a>
     </div>
   </div>
 </article>`;
@@ -377,8 +377,8 @@ const renderReleaseCard = (
       )}</span>
     </div>
     <div class="card-actions justify-start">
-      <a href="${escapeHtml(buildProjectRoute(appRoutes.builderStart, locale, release.projectId))}" class="btn btn-outline btn-sm min-h-11 surface-tappable">${escapeHtml(messages.pages.controlPlane.openBuilder)}</a>
-      <a href="${escapeHtml(buildWorkspaceHref("releases", locale, release.projectId))}" class="btn btn-ghost btn-sm min-h-11 surface-tappable">${escapeHtml(messages.pages.controlPlane.focusProject)}</a>
+      <a href="${escapeHtml(buildProjectRoute(appRoutes.builderStart, locale, release.projectId))}" class="btn btn-outline btn-sm min-h-11 surface-tappable" aria-label="${escapeHtml(messages.pages.controlPlane.openBuilder)}: ${escapeHtml(release.projectName)}">${escapeHtml(messages.pages.controlPlane.openBuilder)}</a>
+      <a href="${escapeHtml(buildWorkspaceHref("releases", locale, release.projectId))}" class="btn btn-ghost btn-sm min-h-11 surface-tappable" aria-label="${escapeHtml(messages.pages.controlPlane.focusProject)}: ${escapeHtml(release.projectName)}">${escapeHtml(messages.pages.controlPlane.focusProject)}</a>
     </div>
     <p class="text-xs uppercase tracking-[0.2em] text-base-content/45">${escapeHtml(messages.pages.controlPlane.lastUpdatedLabel)} ${escapeHtml(
       formatTimestamp(locale, release.updatedAtMs),
@@ -403,8 +403,8 @@ const renderReviewItem = (
     <span class="badge badge-warning badge-soft">${escapeHtml(item.status)}</span>
   </div>
   <div class="mt-3 flex flex-wrap gap-2">
-    <a href="${escapeHtml(buildProjectRoute(appRoutes.builderAutomation, locale, item.projectId, "builder-review-queue"))}" class="btn btn-outline btn-xs min-h-11 surface-tappable">${escapeHtml(messages.pages.controlPlane.openReviewQueue)}</a>
-    <a href="${escapeHtml(buildWorkspaceHref("review", locale, item.projectId))}" class="btn btn-ghost btn-xs min-h-11 surface-tappable">${escapeHtml(messages.pages.controlPlane.focusProject)}</a>
+    <a href="${escapeHtml(buildProjectRoute(appRoutes.builderAutomation, locale, item.projectId, "builder-review-queue"))}" class="btn btn-outline btn-xs min-h-11 surface-tappable" aria-label="${escapeHtml(messages.pages.controlPlane.openReviewQueue)}: ${escapeHtml(item.title)}">${escapeHtml(messages.pages.controlPlane.openReviewQueue)}</a>
+    <a href="${escapeHtml(buildWorkspaceHref("review", locale, item.projectId))}" class="btn btn-ghost btn-xs min-h-11 surface-tappable" aria-label="${escapeHtml(messages.pages.controlPlane.focusProject)}: ${escapeHtml(item.projectName)}">${escapeHtml(messages.pages.controlPlane.focusProject)}</a>
   </div>
 </article>`;
 
@@ -421,7 +421,7 @@ const renderWorkspaceMain = (input: ControlPlanePageInput): string => {
             platformEmptyIcon,
             messages.pages.controlPlane.emptyGamesTitle,
             messages.pages.controlPlane.emptyGamesDescription,
-            `<a href="${escapeHtml(withLocaleQuery(appRoutes.builder, locale))}" class="btn btn-primary btn-sm min-h-11 surface-tappable">${escapeHtml(messages.pages.controlPlane.openBuilder)}</a>`,
+            `<a href="${escapeHtml(withLocaleQuery(appRoutes.builder, locale))}" class="btn btn-primary btn-sm min-h-11 surface-tappable" aria-label="${escapeHtml(messages.pages.controlPlane.openBuilder)}">${escapeHtml(messages.pages.controlPlane.openBuilder)}</a>`,
           );
     case "libraries":
       return `<div class="space-y-4">
@@ -489,9 +489,9 @@ export const renderControlPlanePage = (input: ControlPlanePageInput): string => 
     : null;
 
   const actions = [
-    `<a href="${escapeHtml(withLocaleQuery(appRoutes.builder, locale))}" class="btn btn-primary btn-sm min-h-11 surface-tappable">${escapeHtml(messages.pages.controlPlane.createProject)}</a>`,
+    `<a href="${escapeHtml(withLocaleQuery(appRoutes.builder, locale))}" class="btn btn-primary btn-sm min-h-11 surface-tappable" aria-label="${escapeHtml(messages.pages.controlPlane.createProject)}">${escapeHtml(messages.pages.controlPlane.createProject)}</a>`,
     focusedProject
-      ? `<a href="${escapeHtml(buildProjectRoute(appRoutes.builderStart, locale, focusedProject.id))}" class="btn btn-outline btn-sm min-h-11 surface-tappable">${escapeHtml(messages.pages.controlPlane.openBuilder)}</a>`
+      ? `<a href="${escapeHtml(buildProjectRoute(appRoutes.builderStart, locale, focusedProject.id))}" class="btn btn-outline btn-sm min-h-11 surface-tappable" aria-label="${escapeHtml(messages.pages.controlPlane.openBuilder)}: ${escapeHtml(focusedProject.name)}">${escapeHtml(messages.pages.controlPlane.openBuilder)}</a>`
       : "",
   ]
     .filter(Boolean)
@@ -533,8 +533,8 @@ export const renderControlPlanePage = (input: ControlPlanePageInput): string => 
           <h3 class="mt-2 text-lg font-semibold">${escapeHtml(focusedProject.name)}</h3>
           <p class="mt-1 text-sm leading-6 text-base-content/70">${escapeHtml(focusedProject.subtitle)}</p>
           <div class="mt-4 flex flex-wrap gap-2">
-            <a href="${escapeHtml(buildProjectRoute(appRoutes.builderAi, locale, focusedProject.id, "builder-brand-control-plane"))}" class="btn btn-outline btn-xs min-h-11 surface-tappable">${escapeHtml(messages.pages.controlPlane.openBrandControl)}</a>
-            <a href="${escapeHtml(buildProjectRoute(appRoutes.game, locale, focusedProject.id))}" class="btn btn-ghost btn-xs min-h-11 surface-tappable">${escapeHtml(messages.builder.playtest)}</a>
+            <a href="${escapeHtml(buildProjectRoute(appRoutes.builderAi, locale, focusedProject.id, "builder-brand-control-plane"))}" class="btn btn-outline btn-xs min-h-11 surface-tappable" aria-label="${escapeHtml(messages.pages.controlPlane.openBrandControl)}: ${escapeHtml(focusedProject.name)}">${escapeHtml(messages.pages.controlPlane.openBrandControl)}</a>
+            <a href="${escapeHtml(buildProjectRoute(appRoutes.game, locale, focusedProject.id))}" class="btn btn-ghost btn-xs min-h-11 surface-tappable" aria-label="${escapeHtml(messages.builder.playtest)}: ${escapeHtml(focusedProject.name)}">${escapeHtml(messages.builder.playtest)}</a>
           </div>
         </div>
       </div>`

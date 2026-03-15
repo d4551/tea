@@ -331,7 +331,7 @@ export const renderMechanicsEditor = (
       navigatorTitle: messages.builder.mechanics,
       navigatorDescription: messages.builder.capabilityMechanicsDescription,
       navigatorBody: `<details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100" open>
-          <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.questsTitle)}</summary>
+          <summary class="collapse-title text-sm font-semibold" aria-label="${escapeHtml(messages.builder.questsTitle)}">${escapeHtml(messages.builder.questsTitle)}</summary>
           <div class="collapse-content pt-2">
             <form class="space-y-3" hx-post="${escapeHtml(createQuestAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#quest-create-spinner" hx-disabled-elt="button, input, select, textarea">
               <fieldset class="fieldset">
@@ -347,7 +347,7 @@ export const renderMechanicsEditor = (
                 <input name="triggerId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.triggerIdPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.idLabel)}" />
               </fieldset>
               <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
-                <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
+                <summary class="collapse-title text-sm font-semibold" aria-label="${escapeHtml(messages.builder.advancedTools)}">${escapeHtml(messages.builder.advancedTools)}</summary>
                 <div class="collapse-content pt-2">
                   <fieldset class="fieldset">
                     <legend class="fieldset-legend">${escapeHtml(messages.builder.idLabel)}</legend>
@@ -363,7 +363,7 @@ export const renderMechanicsEditor = (
           </div>
         </details>
         <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
-          <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.triggersTitle)}</summary>
+          <summary class="collapse-title text-sm font-semibold" aria-label="${escapeHtml(messages.builder.triggersTitle)}">${escapeHtml(messages.builder.triggersTitle)}</summary>
           <div class="collapse-content pt-2">
             <form class="space-y-3" hx-post="${escapeHtml(createTriggerAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#trigger-create-spinner" hx-disabled-elt="button, input, select, textarea">
               <fieldset class="fieldset">
@@ -383,7 +383,7 @@ export const renderMechanicsEditor = (
                 <input name="npcId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.dialogueNpcIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.npcIdLabel)}" />
               </fieldset>
               <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
-                <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
+                <summary class="collapse-title text-sm font-semibold" aria-label="${escapeHtml(messages.builder.advancedTools)}">${escapeHtml(messages.builder.advancedTools)}</summary>
                 <div class="collapse-content pt-2">
                   <fieldset class="fieldset">
                   <legend class="fieldset-legend">${escapeHtml(messages.builder.idLabel)}</legend>
@@ -399,7 +399,7 @@ export const renderMechanicsEditor = (
           </div>
         </details>
         <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
-          <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.dialogueGraphsTitle)}</summary>
+          <summary class="collapse-title text-sm font-semibold" aria-label="${escapeHtml(messages.builder.dialogueGraphsTitle)}">${escapeHtml(messages.builder.dialogueGraphsTitle)}</summary>
           <div class="collapse-content pt-2">
             <form class="space-y-3" hx-post="${escapeHtml(createGraphAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#graph-create-spinner" hx-disabled-elt="button, input, select, textarea">
               <fieldset class="fieldset">
@@ -415,7 +415,7 @@ export const renderMechanicsEditor = (
                 <textarea name="line" class="textarea w-full" rows="3" placeholder="${escapeHtml(messages.builder.addLinePlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.dialogueLine)}"></textarea>
               </fieldset>
               <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
-                <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
+                <summary class="collapse-title text-sm font-semibold" aria-label="${escapeHtml(messages.builder.advancedTools)}">${escapeHtml(messages.builder.advancedTools)}</summary>
                 <div class="collapse-content pt-2">
                   <fieldset class="fieldset">
                     <legend class="fieldset-legend">${escapeHtml(messages.builder.idLabel)}</legend>

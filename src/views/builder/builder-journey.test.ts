@@ -3,10 +3,10 @@ import { getMessages } from "../../shared/i18n/translator.ts";
 import { buildBuilderJourneyConfig } from "./builder-journey.ts";
 
 describe("buildBuilderJourneyConfig", () => {
-  test("maps legacy workspace keys onto canonical creator journey steps", () => {
+  test("builds journey config for the visuals stage with correct navigation", () => {
     const locale = "en-US";
     const messages = getMessages(locale);
-    const config = buildBuilderJourneyConfig(messages, locale, "default", "assets");
+    const config = buildBuilderJourneyConfig(messages, locale, "default", "visuals");
 
     expect(config.activeStepKey).toBe("visuals");
     expect(config.ariaLabel).toBe(messages.builder.creatorWorkflowTitle);

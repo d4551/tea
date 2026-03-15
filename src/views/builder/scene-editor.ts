@@ -526,7 +526,7 @@ export const renderSceneEditor = (
             }
           </div>
           <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
-            <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.addScene)}</summary>
+            <summary class="collapse-title text-sm font-semibold" aria-label="${escapeHtml(messages.builder.addScene)}">${escapeHtml(messages.builder.addScene)}</summary>
             <div class="collapse-content pt-2">
               <form
                 class="space-y-4"
@@ -936,7 +936,7 @@ export const renderSceneDetail = (
                    </div>
                    <fieldset class="fieldset">
                      <legend class="fieldset-legend">${escapeHtml(messages.builder.tilemapTileSetLabel)}</legend>
-                     <input type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.tilemapTileSetLabel)}" data-tilemap-tileset value="${escapeHtml(layer.tileSetAssetId)}" />
+                     <input type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.tilemapTileSetLabel)}" data-tilemap-tileset value="${escapeHtml(layer.tileSetAssetId)}" />
                    </fieldset>
                    <div class="rounded-box border border-base-300 bg-base-200/50 p-2" data-tilemap-palette-container>
                      <div class="mb-2 flex flex-wrap items-center justify-between gap-2">

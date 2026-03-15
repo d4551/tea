@@ -2758,16 +2758,6 @@ export type BuilderWorkflowStageId =
   | "playtest";
 
 /**
- * Legacy identifiers used by existing views during migration.
- */
-export type LegacyBuilderWorkflowStageId = "assets" | "mechanics";
-
-/**
- * Combined stage identifier union.
- */
-export type BuilderWorkflowStageIdAny = BuilderWorkflowStageId | LegacyBuilderWorkflowStageId;
-
-/**
  * Creator workflow state for one canonical stage.
  */
 export type BuilderWorkflowStageStatus = "ready" | "in-progress" | "complete";
@@ -2775,13 +2765,13 @@ export type BuilderWorkflowStageStatus = "ready" | "in-progress" | "complete";
 /**
  * Shared creator workflow stage contract.
  *
- * `nextAction` and `completionRequirements` are used by the new editor surface,
- * while the legacy `primaryAction` / `secondaryAction` and `completionLabel`
- * fields are maintained for backward compatibility with existing builder views.
+ * `nextAction` and `completionRequirements` are used by the editor surface.
+ * `primaryAction` / `secondaryAction` and `completionLabel` drive the
+ * dashboard cards.
  */
 export interface BuilderWorkflowStage {
   /** Canonical stage identifier. */
-  readonly id: BuilderWorkflowStageIdAny;
+  readonly id: BuilderWorkflowStageId;
   /** Localized stage label. */
   readonly label: string;
   /** Short description for the stage. */

@@ -177,7 +177,7 @@ export const renderOracleSection = (
               <span>${escapeHtml(messages.aiPlayground.promptLabel)}</span>
               <input
                 id="oracle-question"
-                class="input input-bordered w-full input-sm"
+                class="input w-full input-sm"
                 type="text"
                 name="question"
                 value="${escapeHtml(panelState.question)}"

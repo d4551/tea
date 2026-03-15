@@ -362,7 +362,7 @@ const renderWorkbenchJumpLinks = (
     ${links
       .map(
         (link) =>
-          `<a class="btn btn-${escapeHtml(link.tone ?? "ghost")} btn-sm" href="${escapeHtml(link.href)}">${escapeHtml(link.label)}</a>`,
+          `<a class="btn btn-${escapeHtml(link.tone ?? "ghost")} btn-sm" href="${escapeHtml(link.href)}" aria-label="${escapeHtml(link.label)}">${escapeHtml(link.label)}</a>`,
       )
       .join("")}
   </div>
@@ -382,7 +382,7 @@ const renderWorkbenchSummaryCard = (
       ${actions
         .map(
           (action) =>
-            `<a class="btn btn-${escapeHtml(action.tone ?? "ghost")} btn-sm" href="${escapeHtml(action.href)}">${escapeHtml(action.label)}</a>`,
+            `<a class="btn btn-${escapeHtml(action.tone ?? "ghost")} btn-sm" href="${escapeHtml(action.href)}" aria-label="${escapeHtml(action.label)}">${escapeHtml(action.label)}</a>`,
         )
         .join("")}
     </div>
@@ -610,10 +610,10 @@ const renderAiSettingsForm = (
       value="${escapeHtml(String(setting.value))}"
       aria-label="${escapeHtml(setting.label)}"
     />
-    <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(submitLabel)}</button>
-    <button type="submit" name="reset" value="true" class="btn btn-ghost btn-sm">${escapeHtml(
+    <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(submitLabel)}">${escapeHtml(submitLabel)}</button>
+    <button type="submit" name="reset" value="true" class="btn btn-ghost btn-sm" aria-label="${escapeHtml(
       messages.builder.aiModelCatalogResetSubmit,
-    )}</button>
+    )}">${escapeHtml(messages.builder.aiModelCatalogResetSubmit)}</button>
   </form>`;
 };
 
@@ -664,9 +664,9 @@ export const renderAiProviderSearchPanel = (
                 >
                   <input type="hidden" name="key" value="${escapeHtml(searchState.settingKey)}" />
                   <input type="hidden" name="value" value="${escapeHtml(item.model)}" />
-                  <button type="submit" class="btn btn-primary btn-xs">${escapeHtml(
+                  <button type="submit" class="btn btn-primary btn-xs" aria-label="${escapeHtml(
                     messages.builder.save,
-                  )}</button>
+                  )}">${escapeHtml(messages.builder.save)}</button>
                 </form>
               </td>
             </tr>`,
@@ -761,9 +761,9 @@ export const renderAiModelSettingsWorkspace = (
                 placeholder="${escapeHtml(messages.builder.aiModelCatalogPullPlaceholder)}"
                 aria-label="${escapeHtml(messages.builder.aiModelCatalogPullPlaceholder)}"
               />
-              <button type="submit" class="btn btn-secondary btn-sm">${escapeHtml(
+              <button type="submit" class="btn btn-secondary btn-sm" aria-label="${escapeHtml(
                 messages.builder.aiModelCatalogPullSubmit,
-              )}</button>
+              )}">${escapeHtml(messages.builder.aiModelCatalogPullSubmit)}</button>
             </form>`
           : "";
       const settingRows = laneSettings
@@ -808,9 +808,9 @@ export const renderAiModelSettingsWorkspace = (
                     <input type="text" name="author" class="input input-sm w-full md:w-40" placeholder="${escapeHtml(
                       messages.builder.aiModelCatalogAuthorPlaceholder,
                     )}" aria-label="${escapeHtml(messages.builder.aiModelCatalogAuthorPlaceholder)}" />
-                    <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(
+                    <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(
                       messages.builder.aiModelCatalogSearchSubmit,
-                    )}</button>
+                    )}">${escapeHtml(messages.builder.aiModelCatalogSearchSubmit)}</button>
                     <button
                       type="button"
                       class="btn btn-ghost btn-sm"
@@ -820,6 +820,7 @@ export const renderAiModelSettingsWorkspace = (
                       hx-target="#ai-model-settings-workspace"
                       hx-swap="outerHTML"
                       hx-vals='${escapeHtml(JSON.stringify({ key: setting.key, reset: true }))}'
+                      aria-label="${escapeHtml(messages.builder.aiModelCatalogResetSubmit)}"
                     >
                       ${escapeHtml(messages.builder.aiModelCatalogResetSubmit)}
                     </button>
@@ -1229,7 +1230,7 @@ const renderAiFineTuneWorkspace = (
             <select
               id="hf-training-method"
               name="method"
-              class="select select-bordered w-full"
+              class="select w-full"
               aria-label="${escapeHtml(messages.builder.hfTrainingMethodLabel)}"
             >
               <option value="sft">${escapeHtml(messages.builder.hfTrainingMethodSft)}</option>

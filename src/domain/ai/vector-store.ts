@@ -46,29 +46,35 @@ const isSqliteVecModule = (value: unknown): value is SqliteVecModule => {
  * Attempts to dynamically load the sqlite-vec native module.
  * Returns null when the module is not installed or fails to load.
  *
+ * Uses Bun.resolveSync for resolution (Bun-native) and require() for loading
+ * Node-API modules, per Bun docs: https://bun.sh/docs/runtime/node-api
+ *
  * @returns The sqlite-vec module or null if unavailable.
  */
 const loadSqliteVecModule = (): SqliteVecModule | null => {
-  // SAFETY: sqlite-vec is an optional native dependency. When unavailable
-  // (e.g. CI, test environments, or unsupported platforms) the vector store
-  // degrades gracefully to a no-op implementation. The require() is wrapped
-  // in a conditional check rather than try/catch per project conventions.
-  const m = (() => {
-    const resolved = require.resolve("sqlite-vec");
-    if (!resolved) {
-      return null;
-    }
-    const loadedModule = require(resolved);
-    return isSqliteVecModule(loadedModule) ? loadedModule : null;
-  })();
-
-  if (m?.load) {
-    return m;
+  let resolved: string;
+  try {
+    resolved = Bun.resolveSync("sqlite-vec", import.meta.path);
+  } catch {
+    logger.warn("vector-store.sqlite-vec-unavailable", { reason: "module could not be resolved" });
+    return null;
   }
-  logger.warn("vector-store.sqlite-vec-unavailable", {
-    reason: "module could not be loaded or is missing the .load export",
-  });
-  return null;
+  let loadedModule: unknown;
+  try {
+    loadedModule = require(resolved);
+  } catch {
+    logger.warn("vector-store.sqlite-vec-unavailable", {
+      reason: "module could not be loaded",
+    });
+    return null;
+  }
+  if (!isSqliteVecModule(loadedModule)) {
+    logger.warn("vector-store.sqlite-vec-unavailable", {
+      reason: "module is missing the .load export",
+    });
+    return null;
+  }
+  return loadedModule;
 };
 
 /**

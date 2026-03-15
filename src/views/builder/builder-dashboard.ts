@@ -145,7 +145,7 @@ const renderWorkflowNavigatorItem = (
         ? messages.builder.workflowStatusInProgress
         : messages.builder.workflowStatusStart;
 
-  return `<a href="${escapeHtml(href)}" class="group surface-tappable flex items-start gap-3 rounded-[1.25rem] border border-base-300 bg-base-100 px-4 py-3 transition hover:border-primary/40 hover:bg-base-200/50">
+  return `<a href="${escapeHtml(href)}" class="group surface-tappable flex items-start gap-3 rounded-[1.25rem] border border-base-300 bg-base-100 px-4 py-3 transition hover:border-primary/40 hover:bg-base-200/50" aria-label="${escapeHtml(stage.label)}">
     <span class="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-base-200 text-xs font-semibold text-base-content/70">${escapeHtml(String(stepNumber))}</span>
     <span class="min-w-0 flex-1 space-y-1">
       <span class="flex flex-wrap items-center gap-2">

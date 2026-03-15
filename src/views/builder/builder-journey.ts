@@ -1,7 +1,7 @@
 import type { LocaleCode } from "../../config/environment.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes, withLocaleQuery } from "../../shared/constants/routes.ts";
-import type { BuilderWorkflowStageIdAny } from "../../shared/contracts/game.ts";
+import type { BuilderWorkflowStageId } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { buildBuilderWorkflowStages } from "./builder-flow.ts";
 import type { WorkspaceJourneyConfig } from "./workspace-shell.ts";
@@ -16,20 +16,14 @@ const emptyWorkflowCounts = {
   playtest: 0,
 } as const;
 
-const normalizeBuilderJourneyStageId = (
-  stageId: BuilderWorkflowStageIdAny,
-): WorkspaceJourneyConfig["activeStepKey"] => {
-  if (stageId === "assets") {
-    return "visuals";
-  }
-
-  if (stageId === "mechanics") {
-    return "rules";
-  }
-
-  return stageId;
-};
-
+/**
+ * Resolves the navigation href for a journey stage.
+ *
+ * @param stageId Canonical workflow stage identifier.
+ * @param locale Active locale.
+ * @param projectId Active project identifier.
+ * @returns App-relative href for the stage.
+ */
 const resolveJourneyStageHref = (
   stageId: WorkspaceJourneyConfig["activeStepKey"],
   locale: LocaleCode,
@@ -53,6 +47,12 @@ const resolveJourneyStageHref = (
   return withLocaleQuery(interpolateRoutePath(path, { projectId }), locale);
 };
 
+/**
+ * Builds HTMX attributes for in-page stage navigation.
+ *
+ * @param href Navigation href target.
+ * @returns HTMX attribute bag or undefined for external targets.
+ */
 const buildJourneyHtmx = (href: string) =>
   href.startsWith("/projects/")
     ? {
@@ -79,20 +79,19 @@ export const buildBuilderJourneyConfig = (
   messages: Messages,
   locale: LocaleCode,
   projectId: string,
-  activeStageId: BuilderWorkflowStageIdAny,
+  activeStageId: BuilderWorkflowStageId,
 ): WorkspaceJourneyConfig => {
   const stages = buildBuilderWorkflowStages(messages, locale, projectId, emptyWorkflowCounts);
-  const normalizedStageId = normalizeBuilderJourneyStageId(activeStageId);
   const currentIndex = Math.max(
     0,
-    stages.findIndex((stage) => stage.id === normalizedStageId),
+    stages.findIndex((stage) => stage.id === activeStageId),
   );
   const currentStage = stages[currentIndex] ?? stages[0];
   const previousStage = currentIndex > 0 ? (stages[currentIndex - 1] ?? null) : null;
   const nextStage = currentIndex < stages.length - 1 ? (stages[currentIndex + 1] ?? null) : null;
 
   return {
-    activeStepKey: normalizedStageId,
+    activeStepKey: activeStageId,
     ariaLabel: messages.builder.creatorWorkflowTitle,
     description: currentStage?.description ?? messages.builder.creatorWorkflowDescription,
     breadcrumbs: [

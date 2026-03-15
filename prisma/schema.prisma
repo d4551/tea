@@ -1,6 +1,6 @@
 generator client {
-  provider   = "prisma-client-js"
-  engineType = "binary"
+  provider = "prisma-client"
+  output   = "../generated/prisma"
 }
 
 datasource db {
@@ -71,7 +71,6 @@ model AccountCredential {
 
 model AppPrincipalSession {
   id                String   @id @default(cuid())
-  legacySessionId   String   @unique
   principalType     String   @default("anonymous")
   userId            String?
   organizationId    String?
@@ -86,7 +85,6 @@ model AppPrincipalSession {
   user         AppUser?      @relation(fields: [userId], references: [id], onDelete: SetNull)
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 
-  @@index([legacySessionId])
   @@index([userId])
   @@index([organizationId])
   @@index([status])

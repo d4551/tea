@@ -123,7 +123,7 @@ export const renderAssetsEditor = (
         [BUILDER_QUERY_PARAM_ASSET_ID]: asset.id,
       });
       const previewHtml = isImage
-        ? `<img src="${escapeHtml(asset.source)}" alt="${escapeHtml(asset.id)}" class="object-cover w-full h-full min-h-24 rounded-box bg-base-200" loading="lazy" onerror="this.outerHTML='<div class=\\'skeleton w-full min-h-24 rounded-box\\'></div>'" />`
+        ? `<img src="${escapeHtml(asset.source)}" alt="${escapeHtml(asset.id)}" class="object-cover w-full h-full min-h-24 rounded-box bg-base-200" loading="lazy" />`
         : `<div class="skeleton w-full h-24 rounded-box flex items-center justify-center text-base-content/40"><svg xmlns="http://www.w3.org/2000/svg" class="size-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg></div>`;
       return `<article class="${cardClasses.bordered} card-compact ${isSelected ? "border-primary bg-primary/8" : ""}">
         <figure class="px-4 pt-4">
@@ -301,7 +301,7 @@ export const renderAssetsEditor = (
             ${assets.length === 0 ? emptyAssetAlert : assetCards}
           </div>
           <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
-            <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.addAssetFile)}</summary>
+            <summary class="collapse-title text-sm font-semibold" aria-label="${escapeHtml(messages.builder.addAssetFile)}">${escapeHtml(messages.builder.addAssetFile)}</summary>
             <div class="collapse-content pt-2">
               <form class="space-y-3" hx-post="${escapeHtml(uploadAssetAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-encoding="multipart/form-data" hx-indicator="#asset-upload-spinner" hx-disabled-elt="button, input, select, textarea">
                 <fieldset class="fieldset">
@@ -324,7 +324,7 @@ export const renderAssetsEditor = (
                   <input name="file" type="file" class="file-input file-input-sm w-full" accept="image/*,audio/*,.glb,.gltf,.usd,.usda,.usdc,.usdz,.json" aria-required="true" required aria-label="${escapeHtml(messages.builder.assetSourceLabel)}" />
                 </fieldset>
                 <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
-                  <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
+                  <summary class="collapse-title text-sm font-semibold" aria-label="${escapeHtml(messages.builder.advancedTools)}">${escapeHtml(messages.builder.advancedTools)}</summary>
                   <div class="collapse-content pt-2">
                   <div class="rounded-box border border-base-300 bg-base-200/45 p-3 text-sm text-base-content/70">
                     ${escapeHtml(messages.builder.advancedTools)}
@@ -339,7 +339,7 @@ export const renderAssetsEditor = (
             </div>
           </details>
           <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
-            <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.addAssetPath)}</summary>
+            <summary class="collapse-title text-sm font-semibold" aria-label="${escapeHtml(messages.builder.addAssetPath)}">${escapeHtml(messages.builder.addAssetPath)}</summary>
             <div class="collapse-content pt-2">
               <form class="space-y-3" hx-post="${escapeHtml(createAssetAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#asset-create-spinner" hx-disabled-elt="button, input, select, textarea">
                 <fieldset class="fieldset">
@@ -362,7 +362,7 @@ export const renderAssetsEditor = (
                   <input name="source" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.sourcePathPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.assetSourceLabel)}" />
                 </fieldset>
                 <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
-                  <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
+                  <summary class="collapse-title text-sm font-semibold" aria-label="${escapeHtml(messages.builder.advancedTools)}">${escapeHtml(messages.builder.advancedTools)}</summary>
                   <div class="collapse-content pt-2">
                     <div class="rounded-box border border-base-300 bg-base-200/45 p-3 text-sm text-base-content/70">
                       ${escapeHtml(messages.builder.advancedTools)}
@@ -431,7 +431,7 @@ export const renderAssetsEditor = (
             <input name="playbackFps" type="number" class="input w-full" value="${DEFAULT_ANIMATION_PLAYBACK_FPS}" min="1" aria-label="${escapeHtml(messages.builder.clipPlaybackLabel)}" />
           </fieldset>
                 <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
-                  <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
+                  <summary class="collapse-title text-sm font-semibold" aria-label="${escapeHtml(messages.builder.advancedTools)}">${escapeHtml(messages.builder.advancedTools)}</summary>
                   <div class="collapse-content pt-2">
                     <div class="rounded-box border border-base-300 bg-base-200/45 p-3 text-sm text-base-content/70">
                       ${escapeHtml(messages.builder.advancedTools)}

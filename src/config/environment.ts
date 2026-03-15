@@ -369,7 +369,12 @@ const DEFAULT_AI_ALLOW_HIGH_COST_GENERATION = true;
 const DEFAULT_AI_GENERATION_KILL_SWITCH_ENABLED = false;
 const DEFAULT_AI_QUOTA_PER_USER_PER_HOUR = 120;
 const DEFAULT_AI_QUOTA_PER_PROJECT_PER_HOUR = 600;
-const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434";
+/** Default Ollama base URL when AI_OLLAMA_BASE_URL is unset. Override via AI_OLLAMA_BASE_URL or AI_OLLAMA_BASE_URL_DEFAULT. */
+const DEFAULT_OLLAMA_BASE_URL = Bun.env.AI_OLLAMA_BASE_URL_DEFAULT ?? "http://localhost:11434";
+
+/** Default local OpenAI-compatible API base URL for ramalama/custom presets. Override via AI_LOCAL_API_COMPATIBLE_BASE_URL or AI_LOCAL_API_COMPATIBLE_BASE_URL_DEFAULT. */
+const DEFAULT_LOCAL_API_COMPATIBLE_BASE_URL =
+  Bun.env.AI_LOCAL_API_COMPATIBLE_BASE_URL_DEFAULT ?? "http://127.0.0.1:8080/v1";
 const DEFAULT_OLLAMA_CHAT_MODEL = "llama3.2";
 const DEFAULT_OLLAMA_VISION_MODEL = "llava";
 const DEFAULT_OLLAMA_TIMEOUT_MS = 30_000;
@@ -493,14 +498,14 @@ const LOCAL_API_COMPATIBLE_VENDOR_PRESETS: Readonly<
 > = {
   ramalama: {
     providerLabel: "ramalama",
-    baseUrl: "http://127.0.0.1:8080/v1",
+    baseUrl: DEFAULT_LOCAL_API_COMPATIBLE_BASE_URL,
     chatModel: DEFAULT_OLLAMA_CHAT_MODEL,
     endpoints: OPENAI_STYLE_ENDPOINTS,
     auth: DEFAULT_BEARER_AUTH,
   },
   custom: {
     providerLabel: "openai-compatible-local",
-    baseUrl: "http://127.0.0.1:8080/v1",
+    baseUrl: DEFAULT_LOCAL_API_COMPATIBLE_BASE_URL,
     chatModel: DEFAULT_OLLAMA_CHAT_MODEL,
     endpoints: OPENAI_STYLE_ENDPOINTS,
     auth: DEFAULT_BEARER_AUTH,
@@ -993,8 +998,7 @@ export const normalizeLocale = (value: string | undefined): LocaleCode => {
 };
 
 /**
- * Normalizes configured UI theme names and maps legacy aliases to supported
- * DaisyUI v5 tea themes.
+ * Normalizes configured UI theme names to supported DaisyUI v5 tea themes.
  *
  * @param value Raw configured theme value.
  * @returns Supported application theme identifier.

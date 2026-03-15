@@ -17,8 +17,8 @@ export const UI_THEME_STORAGE_KEY = "app-theme-preference";
 const uiThemeAliases: Readonly<Record<string, UiTheme>> = {
   silk: "tea-light",
   autumn: "tea-dark",
-  "forge-dark": "tea-dark",
   "forge-light": "tea-light",
+  "forge-dark": "tea-dark",
 };
 
 /**
@@ -31,7 +31,7 @@ export const isUiTheme = (value: string): value is UiTheme =>
   supportedUiThemes.some((theme) => theme === value);
 
 /**
- * Resolves an incoming theme string or legacy alias to a supported theme.
+ * Resolves an incoming theme string to a supported theme.
  *
  * @param value Raw theme string.
  * @returns Supported theme or null when the input is empty or unknown.

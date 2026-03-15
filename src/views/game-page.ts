@@ -89,6 +89,8 @@ const resolveParticipantRoleLabel = (
       ? messages.game.participantRoleController
       : messages.game.participantRoleSpectator;
 
+const modalCloseIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>`;
+
 const renderInactiveState = (
   messages: Messages,
   locale: LocaleCode,
@@ -638,7 +640,7 @@ export function GamePage(props: GamePageProps) {
       <dialog id="save_slot_modal" class="modal" role="dialog" aria-labelledby="save-slot-modal-title" aria-modal="true">
         <div class="modal-box">
           <form method="dialog">
-            <button type="button" class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 min-h-11 surface-tappable" aria-label="${escapeHtml(messages.common.closeMenu)}">✕</button>
+            <button type="submit" class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 min-h-11 surface-tappable" aria-label="${escapeHtml(messages.common.closeMenu)}">${modalCloseIcon}</button>
           </form>
           <h3 id="save-slot-modal-title" class="font-bold text-lg">${escapeHtml(messages.game.saveSlotTitle)}</h3>
           <form
@@ -649,26 +651,24 @@ export function GamePage(props: GamePageProps) {
             hx-disabled-elt="button[type=submit]"
             class="mt-4 space-y-4"
           >
-            <div class="form-control">
-              <label class="label" for="save-slot-name">
-                <span class="label-text">${escapeHtml(messages.game.saveSlotNameLabel)}</span>
-              </label>
+            <fieldset class="fieldset">
+              <legend class="fieldset-legend">${escapeHtml(messages.game.saveSlotNameLabel)}</legend>
               <input
                 type="text"
                 id="save-slot-name"
                 name="slotName"
                 placeholder="${escapeHtml(messages.game.saveSlotNamePlaceholder)}"
-                class="input input-bordered w-full"
+                class="input w-full"
                 required
                 aria-required="true"
               />
-            </div>
+            </fieldset>
             <div id="save-slot-result" role="status" aria-live="polite"></div>
-              <div class="modal-action">
-              <form method="dialog" class="inline"><button type="submit" class="btn btn-ghost min-h-11 surface-tappable" aria-label="${escapeHtml(messages.builder.cancel)}">${escapeHtml(messages.builder.cancel)}</button></form>
-              <button type="submit" class="btn btn-primary min-h-11 surface-tappable" aria-label="${escapeHtml(messages.game.saveAction)}">${escapeHtml(messages.game.saveAction)}</button>
-            </div>
           </form>
+          <div class="modal-action">
+            <form method="dialog" class="inline"><button type="submit" class="btn btn-ghost min-h-11 surface-tappable" aria-label="${escapeHtml(messages.builder.cancel)}">${escapeHtml(messages.builder.cancel)}</button></form>
+            <button type="submit" form="save-slot-form" class="btn btn-primary min-h-11 surface-tappable" aria-label="${escapeHtml(messages.game.saveAction)}">${escapeHtml(messages.game.saveAction)}</button>
+          </div>
         </div>
         <form method="dialog" class="modal-backdrop">
           <button type="submit" class="surface-tappable min-h-11" aria-label="${escapeHtml(messages.common.closeMenu)}">${escapeHtml(messages.common.closeMenu)}</button>
@@ -679,7 +679,7 @@ export function GamePage(props: GamePageProps) {
       <dialog id="load_slot_modal" class="modal" role="dialog" aria-labelledby="load-slot-modal-title" aria-modal="true">
         <div class="modal-box">
           <form method="dialog">
-          <button type="button" class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 min-h-11 surface-tappable" aria-label="${escapeHtml(messages.common.closeMenu)}">✕</button>
+            <button type="submit" class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 min-h-11 surface-tappable" aria-label="${escapeHtml(messages.common.closeMenu)}">${modalCloseIcon}</button>
           </form>
           <h3 id="load-slot-modal-title" class="font-bold text-lg">${escapeHtml(messages.game.loadSlotTitle)}</h3>
           <div
@@ -712,74 +712,74 @@ export function GamePage(props: GamePageProps) {
       <dialog id="key_bindings_modal" class="modal" role="dialog" aria-labelledby="key-bindings-modal-title" aria-modal="true" data-listening-hint="${escapeHtml(messages.game.keyBindingsListeningHint)}" data-set-label="${escapeHtml(messages.game.keyBindingsSetButton)}">
         <div class="modal-box max-w-md">
           <form method="dialog">
-            <button type="button" class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 min-h-11 surface-tappable" aria-label="${escapeHtml(messages.common.closeMenu)}">✕</button>
+            <button type="submit" class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 min-h-11 surface-tappable" aria-label="${escapeHtml(messages.common.closeMenu)}">${modalCloseIcon}</button>
           </form>
           <h3 id="key-bindings-modal-title" class="font-bold text-lg">${escapeHtml(messages.game.keyBindingsTitle)}</h3>
           <p class="text-sm text-base-content/70 mt-1">${escapeHtml(messages.game.keyBindingsDescription)}</p>
           <div class="mt-4 space-y-3">
-            <div class="form-control key-binding-row" data-action="move-up">
+            <fieldset class="fieldset key-binding-row" data-action="move-up">
               <div class="flex items-center justify-between gap-4">
-                <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionMoveUp)}</span></label>
+                <legend class="fieldset-legend py-0">${escapeHtml(messages.game.keyBindingsActionMoveUp)}</legend>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
             <button type="button" class="btn btn-sm btn-outline min-h-11 surface-tappable" data-action-set="move-up" aria-label="${escapeHtml(messages.game.keyBindingsActionMoveUp)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
-            </div>
-            <div class="form-control key-binding-row" data-action="move-down">
+            </fieldset>
+            <fieldset class="fieldset key-binding-row" data-action="move-down">
               <div class="flex items-center justify-between gap-4">
-                <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionMoveDown)}</span></label>
+                <legend class="fieldset-legend py-0">${escapeHtml(messages.game.keyBindingsActionMoveDown)}</legend>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
                   <button type="button" class="btn btn-sm btn-outline min-h-11 surface-tappable" data-action-set="move-down" aria-label="${escapeHtml(messages.game.keyBindingsActionMoveDown)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
-            </div>
-            <div class="form-control key-binding-row" data-action="move-left">
+            </fieldset>
+            <fieldset class="fieldset key-binding-row" data-action="move-left">
               <div class="flex items-center justify-between gap-4">
-                <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionMoveLeft)}</span></label>
+                <legend class="fieldset-legend py-0">${escapeHtml(messages.game.keyBindingsActionMoveLeft)}</legend>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
                   <button type="button" class="btn btn-sm btn-outline min-h-11 surface-tappable" data-action-set="move-left" aria-label="${escapeHtml(messages.game.keyBindingsActionMoveLeft)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
-            </div>
-            <div class="form-control key-binding-row" data-action="move-right">
+            </fieldset>
+            <fieldset class="fieldset key-binding-row" data-action="move-right">
               <div class="flex items-center justify-between gap-4">
-                <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionMoveRight)}</span></label>
+                <legend class="fieldset-legend py-0">${escapeHtml(messages.game.keyBindingsActionMoveRight)}</legend>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
                   <button type="button" class="btn btn-sm btn-outline min-h-11 surface-tappable" data-action-set="move-right" aria-label="${escapeHtml(messages.game.keyBindingsActionMoveRight)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
-            </div>
-            <div class="form-control key-binding-row" data-action="interact">
+            </fieldset>
+            <fieldset class="fieldset key-binding-row" data-action="interact">
               <div class="flex items-center justify-between gap-4">
-                <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionInteract)}</span></label>
+                <legend class="fieldset-legend py-0">${escapeHtml(messages.game.keyBindingsActionInteract)}</legend>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
                   <button type="button" class="btn btn-sm btn-outline min-h-11 surface-tappable" data-action-set="interact" aria-label="${escapeHtml(messages.game.keyBindingsActionInteract)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
-            </div>
-            <div class="form-control key-binding-row" data-action="menu">
+            </fieldset>
+            <fieldset class="fieldset key-binding-row" data-action="menu">
               <div class="flex items-center justify-between gap-4">
-                <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionMenu)}</span></label>
+                <legend class="fieldset-legend py-0">${escapeHtml(messages.game.keyBindingsActionMenu)}</legend>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
                   <button type="button" class="btn btn-sm btn-outline min-h-11 surface-tappable" data-action-set="menu" aria-label="${escapeHtml(messages.game.keyBindingsActionMenu)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
-            </div>
-            <div class="form-control key-binding-row" data-action="close">
+            </fieldset>
+            <fieldset class="fieldset key-binding-row" data-action="close">
               <div class="flex items-center justify-between gap-4">
-                <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionClose)}</span></label>
+                <legend class="fieldset-legend py-0">${escapeHtml(messages.game.keyBindingsActionClose)}</legend>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
                   <button type="button" class="btn btn-sm btn-outline min-h-11 surface-tappable" data-action-set="close" aria-label="${escapeHtml(messages.game.keyBindingsActionClose)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
-            </div>
+            </fieldset>
           </div>
           <p class="text-xs text-base-content/50 mt-3">${escapeHtml(messages.game.keyBindingsUpdatedHint)}</p>
           <div class="modal-action mt-4">

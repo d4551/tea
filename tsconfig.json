@@ -1,5 +1,10 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@prisma/client": ["./generated/prisma"],
+      "@prisma/client/*": ["./generated/prisma/*"]
+    },
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "target": "ESNext",
     "module": "Preserve",
@@ -15,6 +20,6 @@
     "skipLibCheck": true,
     "types": ["bun"]
   },
-  "include": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"],
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "generated/**/*.ts"],
   "exclude": ["node_modules", "LOTFK_RMMZ_Agentic_Pack"]
 }

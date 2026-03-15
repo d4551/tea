@@ -24,7 +24,10 @@ export const toCreatorCapabilities = (
 };
 
 /**
- * Shared helper retained for legacy imports that use workflow status type directly.
+ * Derives workflow stage status from a count of authored entities.
+ *
+ * @param count Number of entities authored for this stage.
+ * @returns Workflow stage status.
  */
 export const toWorkflowStageStatus = (count: number): BuilderWorkflowStageStatus =>
   count <= 0 ? "ready" : count >= 2 ? "complete" : "in-progress";

@@ -2,23 +2,29 @@ import type { GameSession } from "../../../shared/contracts/game.ts";
 import { prismaBase } from "../../../shared/services/db.ts";
 import { safeJsonParse } from "../../../shared/utils/safe-json.ts";
 
-/** Minimal guard for legacy save-slot format where session was stored directly. */
-const isLegacyGameSession = (v: unknown): v is GameSession => {
-  if (typeof v !== "object" || v === null) return false;
-  const r = v as Record<string, unknown>;
-  return (
-    typeof r.id === "string" && "scene" in r && typeof r.scene === "object" && r.scene !== null
-  );
-};
+/**
+ * Type guard for the canonical save-slot snapshot envelope.
+ *
+ * @param v Parsed JSON candidate.
+ * @returns Whether the value matches the SaveSlotSnapshot shape.
+ */
+const isSaveSlotSnapshot = (v: unknown): v is SaveSlotSnapshot =>
+  typeof v === "object" &&
+  v !== null &&
+  "session" in v &&
+  typeof (v as SaveSlotSnapshot).session === "object";
 
-const isSaveSlotSnapshot = (v: SaveSlotSnapshot | GameSession): v is SaveSlotSnapshot =>
-  "session" in v && typeof v.session === "object";
-
+/**
+ * Serialized save-slot envelope containing a frozen session state.
+ */
 export interface SaveSlotSnapshot {
   readonly session: GameSession;
   readonly progress?: { readonly xp: number; readonly level: number };
 }
 
+/**
+ * Public-facing save-slot metadata record (no session payload).
+ */
 export interface SaveSlotRecord {
   readonly id: string;
   readonly ownerSessionId: string;
@@ -28,11 +34,17 @@ export interface SaveSlotRecord {
   readonly createdAt: Date;
 }
 
+/**
+ * Successful slot creation outcome.
+ */
 export interface CreateSlotResult {
   readonly ok: true;
   readonly slot: SaveSlotRecord;
 }
 
+/**
+ * Failed slot creation outcome.
+ */
 export interface CreateSlotError {
   readonly ok: false;
   readonly error: "SESSION_NOT_FOUND" | "SESSION_EXPIRED";
@@ -40,11 +52,17 @@ export interface CreateSlotError {
 
 export type CreateSlotOutcome = CreateSlotResult | CreateSlotError;
 
+/**
+ * Successful slot restoration outcome.
+ */
 export interface RestoreSlotResult {
   readonly ok: true;
   readonly sessionId: string;
 }
 
+/**
+ * Failed slot restoration outcome.
+ */
 export interface RestoreSlotError {
   readonly ok: false;
   readonly error: "SLOT_NOT_FOUND" | "UNAUTHORIZED" | "INVALID_SNAPSHOT";
@@ -58,6 +76,13 @@ export type RestoreSlotOutcome = RestoreSlotResult | RestoreSlotError;
 export class SaveSlotStore {
   /**
    * Creates a save slot from the current session state.
+   *
+   * @param ownerSessionId Session owner identity.
+   * @param session Current game session to snapshot.
+   * @param slotName Optional human-readable slot label.
+   * @param slotIndex Optional positional slot index.
+   * @param progress Optional player progression data.
+   * @returns Creation outcome with slot metadata on success.
    */
   public async createSlot(
     ownerSessionId: string,
@@ -67,14 +92,14 @@ export class SaveSlotStore {
     progress?: { xp: number; level: number } | null,
   ): Promise<CreateSlotOutcome> {
     const sceneTitle = session.scene?.sceneTitle ?? session.scene?.sceneId ?? "Unknown";
-    const snapshot = JSON.stringify({
+    const snapshot: SaveSlotSnapshot = {
       session: {
         ...session,
         id: session.id,
         participants: session.participants,
       },
       progress: progress ?? undefined,
-    });
+    };
 
     const slot = await prismaBase.gameSaveSlot.create({
       data: {
@@ -82,7 +107,7 @@ export class SaveSlotStore {
         slotName: slotName?.trim() || null,
         slotIndex: slotIndex ?? null,
         sceneTitle,
-        sessionSnapshot: snapshot,
+        sessionSnapshot: JSON.stringify(snapshot),
       },
     });
 
@@ -101,6 +126,9 @@ export class SaveSlotStore {
 
   /**
    * Lists save slots for an owner, newest first.
+   *
+   * @param ownerSessionId Session owner identity.
+   * @returns Ordered list of save-slot metadata records.
    */
   public async listSlots(ownerSessionId: string): Promise<readonly SaveSlotRecord[]> {
     const rows = await prismaBase.gameSaveSlot.findMany({
@@ -121,6 +149,10 @@ export class SaveSlotStore {
 
   /**
    * Returns the session snapshot for a slot. Caller must create a new session from it.
+   *
+   * @param slotId Slot identifier to restore.
+   * @param ownerSessionId Session owner identity for authorization.
+   * @returns Deserialized snapshot or null when not found or unauthorized.
    */
   public async getSlotSnapshot(
     slotId: string,
@@ -134,29 +166,21 @@ export class SaveSlotStore {
       return null;
     }
 
-    type SnapshotOrLegacy = SaveSlotSnapshot | GameSession;
-    const parsed = safeJsonParse<SnapshotOrLegacy | null>(
+    const parsed = safeJsonParse<SaveSlotSnapshot | null>(
       row.sessionSnapshot,
-      null as SnapshotOrLegacy | null,
-      (v): v is SnapshotOrLegacy | null =>
-        v === null ||
-        (typeof v === "object" &&
-          v !== null &&
-          (("session" in v && typeof (v as SaveSlotSnapshot).session === "object") ||
-            isLegacyGameSession(v))),
+      null,
+      (v): v is SaveSlotSnapshot | null => v === null || isSaveSlotSnapshot(v),
     );
 
-    if (parsed === null) return null;
-    const session: GameSession = isSaveSlotSnapshot(parsed) ? parsed.session : parsed;
-    const progress =
-      "progress" in parsed && parsed?.progress && typeof parsed.progress === "object"
-        ? { xp: parsed.progress.xp, level: parsed.progress.level }
-        : undefined;
-    return { session, progress };
+    return parsed;
   }
 
   /**
    * Deletes a save slot. Returns true if deleted.
+   *
+   * @param slotId Slot identifier to remove.
+   * @param ownerSessionId Session owner identity for authorization.
+   * @returns Whether a slot was successfully deleted.
    */
   public async deleteSlot(slotId: string, ownerSessionId: string): Promise<boolean> {
     const result = await prismaBase.gameSaveSlot.deleteMany({

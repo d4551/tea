@@ -183,11 +183,11 @@ export const createHttpExternalFailure = (input: {
 };
 
 /**
- * Converts an external failure into the legacy retryable string envelope used by
+ * Converts an external failure into the retryable string envelope used by
  * AI-provider response types.
  *
  * @param failure External failure record.
- * @returns Legacy retryable error envelope.
+ * @returns Retryable error envelope consumed by provider callers.
  */
 export const toRetryableError = (
   failure: ExternalFailure,

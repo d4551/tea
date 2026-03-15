@@ -235,7 +235,7 @@ export const renderDialogueEditor = (
                   <textarea name="text" class="textarea w-full" rows="3" placeholder="${escapeHtml(messages.builder.addLinePlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.dialogueLine)}"></textarea>
                 </fieldset>
                 <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
-                  <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
+                  <summary class="collapse-title text-sm font-semibold" aria-label="${escapeHtml(messages.builder.advancedTools)}">${escapeHtml(messages.builder.advancedTools)}</summary>
                   <div class="collapse-content pt-2">
                     <fieldset class="fieldset">
                       <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueKey)}</legend>
@@ -352,17 +352,17 @@ export const renderDialogueDetail = (
         >${escapeHtml(messages.builder.delete)}</button>
           <span id="dialogue-delete-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>
-        <div class="form-control">
-          <label class="label" for="dialogue-text"><span class="label-text">${escapeHtml(messages.builder.dialogueLine)}</span></label>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueLine)}</legend>
           <textarea
             id="dialogue-text"
             name="text"
-            class="textarea textarea-bordered w-full min-h-28"
+            class="textarea w-full min-h-28"
             required
             aria-required="true"
             aria-label="${escapeHtml(messages.builder.dialogueLine)}"
           >${escapeHtml(text)}</textarea>
-        </div>
+        </fieldset>
         <div class="flex items-center justify-end gap-2">
           <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.save)}">${escapeHtml(messages.builder.save)}</button>
           <span id="dialogue-detail-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>

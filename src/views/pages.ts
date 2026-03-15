@@ -98,18 +98,18 @@ export const renderHomePage = (input: PageRenderInput): string => {
         ${renderStats({
           stats: [
             {
-          title: messages.pages.home.statsScenes,
-          value: messages.pages.home.statsScenes,
+              title: messages.pages.home.statsScenes,
+              value: messages.pages.home.statsScenes,
               description: messages.pages.home.architectureTitle,
             },
             {
-          title: messages.pages.home.statsNpcs,
-          value: messages.pages.home.statsNpcs,
+              title: messages.pages.home.statsNpcs,
+              value: messages.pages.home.statsNpcs,
               description: messages.pages.home.reliabilityTitle,
             },
             {
-          title: messages.pages.home.statsGenerations,
-          value: messages.pages.home.statsGenerations,
+              title: messages.pages.home.statsGenerations,
+              value: messages.pages.home.statsGenerations,
               description: messages.pages.home.progressiveEnhancementTitle,
             },
           ],
@@ -192,12 +192,12 @@ export const renderHomePage = (input: PageRenderInput): string => {
               <svg xmlns="http://www.w3.org/2000/svg" class="size-4 transition-transform group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
             </a>
       ${renderDrawerToggleControl({
-              targetId: "ai-chat-drawer",
-              label: messages.pages.home.talkToAiOracle,
+        targetId: "ai-chat-drawer",
+        label: messages.pages.home.talkToAiOracle,
         className: "btn btn-outline btn-block gap-2 surface-tappable min-h-11",
-              hasPopup: "dialog",
-              content: `<svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>${escapeHtml(messages.pages.home.talkToAiOracle)}`,
-            })}
+        hasPopup: "dialog",
+        content: `<svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>${escapeHtml(messages.pages.home.talkToAiOracle)}`,
+      })}
           </div>
         </div>
       </article>

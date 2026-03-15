@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readJsonResponse, resultFromSync, settleAsync, toError } from "./async-result.ts";
+import { readJsonResponse, settleAsync, toError } from "./async-result.ts";
 
 describe("async-result", () => {
   test("returns resolved values in a typed success envelope", async () => {
@@ -41,19 +41,11 @@ describe("async-result", () => {
     expect(toError(error)).toBe(error);
   });
 
-  test("resultFromSync returns success for non-throwing functions", () => {
-    const result = resultFromSync(() => 42);
-
-    expect(result).toEqual({ ok: true, value: 42 });
-  });
-
-  test("resultFromSync normalizes thrown values into Error instances", () => {
-    const result = resultFromSync(() => {
-      throw "oops";
-    });
+  test("supports async operations that throw plain values", async () => {
+    const result = await settleAsync(Promise.reject("oops"));
 
     expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("Expected failed sync result.");
+    if (result.ok) throw new Error("Expected failed async result.");
     expect(result.error).toBeInstanceOf(Error);
     expect(result.error.message).toBe("oops");
   });
