@@ -1,4 +1,5 @@
 import type { LocaleCode } from "../../config/environment.ts";
+import { humanizeBuilderIdentifier } from "../../domain/builder/builder-display.ts";
 import {
   BUILDER_LIBRARY_PAGE_SIZE,
   DEFAULT_ANIMATION_FRAME_COUNT,
@@ -10,7 +11,6 @@ import {
 } from "../../shared/constants/builder-query.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
-import { humanizeBuilderIdentifier } from "../../domain/builder/builder-display.ts";
 import type { AnimationClip, BuilderAsset, BuilderAssetKind } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";

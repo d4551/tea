@@ -4,6 +4,7 @@ import { appConfig } from "../src/config/environment.ts";
 import { resetEmbeddingFallback } from "../src/domain/ai/knowledge-base-service.ts";
 import { ProviderRegistry } from "../src/domain/ai/providers/provider-registry.ts";
 import { vectorStore } from "../src/domain/ai/vector-store.ts";
+import { deriveDialogueGraphIdentity } from "../src/domain/builder/builder-display.ts";
 import { builderService } from "../src/domain/builder/builder-service.ts";
 import { gameLoop } from "../src/domain/game/game-loop.ts";
 import { correlationIdHeader } from "../src/lib/correlation-id.ts";
@@ -3188,7 +3189,6 @@ describe("HTMX partial rendering", () => {
     expect(assetHtml.includes('hx-swap-oob="outerHTML"')).toBe(true);
     expect(assetHtml.includes(assetId)).toBe(true);
 
-    const clipId = "creatorPortrait.idleDown";
     const clipResponse = await app.handle(
       new Request(toUrl("/api/builder/animation-clips/create/form"), {
         method: "POST",
@@ -3208,7 +3208,8 @@ describe("HTMX partial rendering", () => {
     );
     const clipHtml = await clipResponse.text();
     expect(clipResponse.status).toBe(httpStatus.ok);
-    expect(clipHtml.includes(clipId)).toBe(true);
+    expect(clipHtml.includes(assetId)).toBe(true);
+    expect(clipHtml.includes("idle-down")).toBe(true);
 
     const generationResponse = await app.handle(
       new Request(toUrl("/api/builder/generation-jobs/create/form"), {
@@ -3321,7 +3322,7 @@ describe("HTMX partial rendering", () => {
     );
     const triggerHtml = await triggerResponse.text();
     expect(triggerResponse.status).toBe(httpStatus.ok);
-    expect(triggerHtml.includes(triggerId)).toBe(true);
+    expect(triggerHtml.includes("Meet the builder guide")).toBe(true);
     const createdTrigger = (await builderService.listTriggers(projectId)).find(
       (candidate) => candidate.id === triggerId,
     );
@@ -3355,7 +3356,7 @@ describe("HTMX partial rendering", () => {
     );
     const questHtml = await questResponse.text();
     expect(questResponse.status).toBe(httpStatus.ok);
-    expect(questHtml.includes(questId)).toBe(true);
+    expect(questHtml.includes("Builder intro")).toBe(true);
     const createdQuest = (await builderService.listQuests(projectId)).find(
       (candidate) => candidate.id === questId,
     );
@@ -3373,7 +3374,10 @@ describe("HTMX partial rendering", () => {
       ],
     });
 
-    const graphId = "teaMonk.guideIntroGraph";
+    const graphId = deriveDialogueGraphIdentity({
+      title: "Guide intro graph",
+      npcId: "teaMonk",
+    }).id;
     const graphResponse = await app.handle(
       new Request(
         toUrl(interpolateRoutePath(appRoutes.builderApiDialogueGraphsCreateForm, { projectId })),
@@ -3395,7 +3399,7 @@ describe("HTMX partial rendering", () => {
     );
     const graphHtml = await graphResponse.text();
     expect(graphResponse.status).toBe(httpStatus.ok);
-    expect(graphHtml.includes(graphId)).toBe(true);
+    expect(graphHtml.includes("Guide intro graph")).toBe(true);
     const createdGraph = (await builderService.listDialogueGraphs(projectId)).find(
       (candidate) => candidate.id === graphId,
     );
