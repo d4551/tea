@@ -337,16 +337,6 @@ export const renderBuilderProjectShell = (
 
   const projectMenuItems: readonly MenuActionItem[] = [
     {
-      key: "settings",
-      label: messages.builder.projectSettings,
-      href: withBuilderQuery(appRoutes.builderAi, locale, project?.id ?? projectId),
-    },
-    {
-      key: "review-queue",
-      label: messages.builder.operations,
-      href: withBuilderQuery(appRoutes.builderAutomation, locale, project?.id ?? projectId),
-    },
-    {
       key: "switch",
       label: messages.builder.switchProject,
       contentHtml: `<div class="divider my-1"></div><form method="get" action="${escapeHtml(switchAction)}" class="space-y-2 px-1 py-1">

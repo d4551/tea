@@ -58,10 +58,7 @@ export const renderDialogueEditor = (
     lang: locale,
   });
   const createAction = `${appRoutes.builderApiDialogue}/create/form`;
-  const generateHref = withQueryParameters(`${appRoutes.builderApiDialogue}/generate`, {
-    locale,
-    projectId,
-  });
+  const generateHref = appRoutes.builderApiDialogueGenerate;
   const creatorJourney = buildBuilderJourneyConfig(messages, locale, projectId, "story");
   const totalLines = Array.from(npcGroups.values()).reduce(
     (total, lines) => total + lines.length,
@@ -73,13 +70,11 @@ export const renderDialogueEditor = (
       const npcName = npcId.split(".")[1] ?? npcId;
       const lineRows = lines
         .map((line) => {
-          const detailHref = withQueryParameters(
-            `${appRoutes.builderApiDialogue}/${encodeURIComponent(line.key)}`,
-            {
-              locale,
-              projectId,
-            },
-          );
+          const detailPath = interpolateRoutePath(appRoutes.builderApiDialogueEntry, {
+            projectId,
+            key: line.key,
+          });
+          const detailHref = withQueryParameters(detailPath, { locale });
           return `<div class="rounded-box bg-base-200/60 p-3">
             <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div class="min-w-0 flex-1">
@@ -249,18 +244,18 @@ export const renderDialogueDetail = (
   projectId: string,
 ): string => {
   const formAction = withQueryParameters(
-    `${appRoutes.builderApiDialogue}/${encodeURIComponent(key)}/form`,
-    {
-      locale,
+    interpolateRoutePath(appRoutes.builderApiDialogueEntryForm, {
       projectId,
-    },
+      key,
+    }),
+    { locale },
   );
   const deleteAction = withQueryParameters(
-    `${appRoutes.builderApiDialogue}/${encodeURIComponent(key)}`,
-    {
-      locale,
+    interpolateRoutePath(appRoutes.builderApiDialogueEntry, {
       projectId,
-    },
+      key,
+    }),
+    { locale },
   );
 
   return `

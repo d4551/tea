@@ -27,7 +27,8 @@ const withProjectPagePath = (
   projectId: string,
   locale = "en-US",
   params: Readonly<Record<string, string | undefined>> = {},
-): string => withQueryParameters(path, { lang: locale, projectId, ...params });
+): string =>
+  withQueryParameters(interpolateRoutePath(path, { projectId }), { lang: locale, ...params });
 const withSessionId = (pattern: string, sessionId: string): string =>
   pattern.replace(":id", encodeURIComponent(sessionId));
 const countOccurrences = (source: string, fragment: string): number =>
@@ -177,6 +178,14 @@ const createBuilderProject = async (projectId = `contract-${Date.now()}`) => {
   }>(response);
 
   return { response, payload };
+};
+
+const createPublishedBuilderProject = async (
+  projectId = `published-${crypto.randomUUID()}`,
+): Promise<string> => {
+  await createBuilderProject(projectId);
+  await builderService.publishProject(projectId, true);
+  return projectId;
 };
 
 beforeAll(async () => {
@@ -1234,7 +1243,13 @@ describe("API contracts", () => {
     const detailResponse = await app.handle(
       new Request(
         toUrl(
-          `/api/builder/dialogue/${encodeURIComponent(dialogueKey)}?projectId=${projectId}&locale=en-US`,
+          withQueryParameters(
+            interpolateRoutePath(appRoutes.builderApiDialogueEntry, {
+              projectId,
+              key: dialogueKey,
+            }),
+            { locale: "en-US" },
+          ),
         ),
       ),
     );
@@ -1245,7 +1260,13 @@ describe("API contracts", () => {
     const removePayloadResponse = await app.handle(
       new Request(
         toUrl(
-          `/api/builder/dialogue/${encodeURIComponent(dialogueKey)}?projectId=${projectId}&locale=en-US`,
+          withQueryParameters(
+            interpolateRoutePath(appRoutes.builderApiDialogueEntry, {
+              projectId,
+              key: dialogueKey,
+            }),
+            { locale: "en-US" },
+          ),
         ),
         {
           method: "DELETE",
@@ -1299,7 +1320,7 @@ describe("API contracts", () => {
     });
 
     const response = await app.handle(
-      new Request(toUrl(`/api/builder/scenes/${teaHouse.id}/nodes`), {
+      new Request(toUrl(interpolateRoutePath(appRoutes.builderApiSceneNodes, { projectId, sceneId: teaHouse.id })), {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -1360,7 +1381,7 @@ describe("API contracts", () => {
     });
 
     const response = await app.handle(
-      new Request(toUrl(`/api/builder/scenes/${teaHouse.id}/form`), {
+      new Request(toUrl(interpolateRoutePath(appRoutes.builderApiSceneForm, { projectId, sceneId: teaHouse.id })), {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -1532,7 +1553,7 @@ describe("API contracts", () => {
     });
 
     const response = await app.handle(
-      new Request(toUrl("/api/builder/npcs/guide/form"), {
+      new Request(toUrl(interpolateRoutePath(appRoutes.builderApiNpcForm, { projectId, npcId: "guide" })), {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -1595,7 +1616,7 @@ describe("API contracts", () => {
     });
 
     const response = await app.handle(
-      new Request(toUrl("/api/builder/quests/quest.branching/form"), {
+      new Request(toUrl(interpolateRoutePath(appRoutes.builderApiQuestForm, { projectId, questId: "quest.branching" })), {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -2021,7 +2042,7 @@ describe("API contracts", () => {
     const projectId = `readiness-${crypto.randomUUID()}`;
     await createBuilderProject(projectId);
     const response = await app.handle(
-      new Request(toUrl(`${appRoutes.builderPlatformReadiness}?projectId=${projectId}`)),
+      new Request(toUrl(withQueryParameters(appRoutes.builderPlatformReadiness, { projectId }))),
     );
     const payload = await readResponsePayload<{
       readonly ok: boolean;
@@ -2172,7 +2193,7 @@ describe("API contracts", () => {
       }>(ingestResponse);
 
       const listResponse = await app.handle(
-        new Request(toUrl(`${appRoutes.aiKnowledgeDocuments}?projectId=${projectId}`)),
+        new Request(toUrl(withQueryParameters(appRoutes.aiKnowledgeDocuments, { projectId }))),
       );
       const listPayload = await readResponsePayload<{
         readonly ok: boolean;
@@ -2279,7 +2300,9 @@ describe("API contracts", () => {
       const deleteResponse = await app.handle(
         new Request(
           toUrl(
-            `${appRoutes.aiKnowledgeDocuments}/${ingestPayload.data?.id}?projectId=${encodeURIComponent(projectId)}`,
+            withQueryParameters(`${appRoutes.aiKnowledgeDocuments}/${ingestPayload.data?.id}`, {
+              projectId,
+            }),
           ),
           {
             method: "DELETE",
@@ -2504,8 +2527,9 @@ describe("HTMX partial rendering", () => {
   });
 
   test("game page renders a single canonical HUD target and page-scoped assets", async () => {
+    const projectId = await createPublishedBuilderProject();
     const response = await app.handle(
-      new Request(toUrl(withProjectPagePath(appRoutes.game, "default"))),
+      new Request(toUrl(withProjectPagePath(appRoutes.game, projectId))),
     );
     const html = await response.text();
 
@@ -2531,7 +2555,8 @@ describe("HTMX partial rendering", () => {
     expect(html.includes("data-runtime-focus-active-label=")).toBe(true);
     expect(html.includes('id="game-runtime-help"')).toBe(true);
     expect(html.includes('id="game-controls-list"')).toBe(true);
-    expect(html.includes("No project bound")).toBe(true);
+    expect(html.includes("No project bound")).toBe(false);
+    expect(html.includes(projectId)).toBe(true);
     expect(html.includes(">English<")).toBe(true);
     expect(html.includes("Scene mode")).toBe(true);
     expect(html.includes('id="game-scene-title-heading"')).toBe(true);
@@ -2543,10 +2568,11 @@ describe("HTMX partial rendering", () => {
   });
 
   test("game page starts in selected scene mode from sceneId query", async () => {
-    const scene2dUrl = withQueryParameters(withLocaleQuery(appRoutes.game, "en-US"), {
+    const projectId = await createPublishedBuilderProject();
+    const scene2dUrl = withProjectPagePath(appRoutes.game, projectId, "en-US", {
       sceneId: "teaHouse",
     });
-    const scene3dUrl = withQueryParameters(withLocaleQuery(appRoutes.game, "en-US"), {
+    const scene3dUrl = withProjectPagePath(appRoutes.game, projectId, "en-US", {
       sceneId: "crystalCavern",
     });
 
@@ -2573,7 +2599,6 @@ describe("HTMX partial rendering", () => {
     expect(html.includes(`/projects/${projectId}/playtest?lang=zh-CN`)).toBe(true);
     expect(html.includes(`/projects/${projectId}/world?lang=zh-CN`)).toBe(true);
     expect(html.includes(`/projects/${projectId}/characters?lang=zh-CN`)).toBe(true);
-    expect(html.includes(`/projects/${projectId}/settings?lang=zh-CN`)).toBe(true);
     expect(html.includes("/public/vendor/htmx-ext/focus-panel.js")).toBe(true);
     expect(html.includes("/public/vendor/htmx-ext/layout-controls.js")).toBe(true);
     expect(html.includes("/public/vendor/builder-scene-editor.js")).toBe(true);
@@ -3016,7 +3041,7 @@ describe("HTMX partial rendering", () => {
     const dialogueKey = `npc.${npcId}.intro`;
 
     const sceneResponse = await app.handle(
-      new Request(toUrl("/api/builder/scenes/create/form"), {
+      new Request(toUrl(interpolateRoutePath(appRoutes.builderApiScenesCreateForm, { projectId })), {
         method: "POST",
         headers: {
           "content-type": "application/x-www-form-urlencoded",
@@ -3046,7 +3071,7 @@ describe("HTMX partial rendering", () => {
     expect(sceneHtml.includes('data-focus-panel="true"')).toBe(true);
 
     const npcResponse = await app.handle(
-      new Request(toUrl("/api/builder/npcs/create/form"), {
+      new Request(toUrl(interpolateRoutePath(appRoutes.builderApiNpcsCreateForm, { projectId })), {
         method: "POST",
         headers: {
           "content-type": "application/x-www-form-urlencoded",
@@ -3202,11 +3227,11 @@ describe("HTMX partial rendering", () => {
     const generationHtml = await generationResponse.text();
     expect(generationResponse.status).toBe(httpStatus.ok);
 
-    // Job evaluates synchronously now, so we skip the Queued check
-    // and immediately see the generated draft awaiting approval in the response HTML.
-    expect(generationHtml.includes("Awaiting approval")).toBe(true);
-    expect(generationHtml.includes("Review Portrait")).toBe(true);
-    expect(generationHtml.includes("Generated draft for")).toBe(true);
+    // Creator-facing assets now return the scoped assist workspace instead of
+    // surfacing generic review-job copy directly in the main editor.
+    expect(generationHtml.includes('id="creator-ai-actions"')).toBe(true);
+    expect(generationHtml.includes(assetId)).toBe(true);
+    expect(generationHtml.includes("Awaiting approval")).toBe(false);
     expect(generationHtml.includes("generation.artifact.label.review:portrait")).toBe(false);
     expect(generationHtml.includes("generation.artifact.summary.target:")).toBe(false);
     const projectAfterGeneration = await builderService.getProject(projectId);
@@ -3265,14 +3290,15 @@ describe("HTMX partial rendering", () => {
     );
     const generationApproveHtml = await generationApproveResponse.text();
     expect(generationApproveResponse.status).toBe(httpStatus.ok);
-    expect(generationApproveHtml.includes("Succeeded")).toBe(true);
+    expect(generationApproveHtml.includes('id="creator-ai-actions"')).toBe(true);
+    expect(generationApproveHtml.includes("badge-success")).toBe(true);
     expect(generationApproveHtml.includes(`asset.generated.${generationJobId}`)).toBe(true);
-    expect(generationApproveHtml.includes("Generated Portrait")).toBe(true);
+    expect(generationApproveHtml.includes("approved")).toBe(true);
     expect(generationApproveHtml.includes("generation.asset.label.generated:portrait")).toBe(false);
 
     const triggerId = `trigger-${crypto.randomUUID().slice(0, 8)}`;
     const triggerResponse = await app.handle(
-      new Request(toUrl("/api/builder/triggers/create/form"), {
+      new Request(toUrl(interpolateRoutePath(appRoutes.builderApiTriggersCreateForm, { projectId })), {
         method: "POST",
         headers: {
           "content-type": "application/x-www-form-urlencoded",
@@ -3305,7 +3331,7 @@ describe("HTMX partial rendering", () => {
 
     const questId = `quest-${crypto.randomUUID().slice(0, 8)}`;
     const questResponse = await app.handle(
-      new Request(toUrl("/api/builder/quests/create/form"), {
+      new Request(toUrl(interpolateRoutePath(appRoutes.builderApiQuestsCreateForm, { projectId })), {
         method: "POST",
         headers: {
           "content-type": "application/x-www-form-urlencoded",
@@ -3343,7 +3369,7 @@ describe("HTMX partial rendering", () => {
 
     const graphId = `graph-${crypto.randomUUID().slice(0, 8)}`;
     const graphResponse = await app.handle(
-      new Request(toUrl("/api/builder/dialogue-graphs/create/form"), {
+      new Request(toUrl(interpolateRoutePath(appRoutes.builderApiDialogueGraphsCreateForm, { projectId })), {
         method: "POST",
         headers: {
           "content-type": "application/x-www-form-urlencoded",
@@ -3378,7 +3404,7 @@ describe("HTMX partial rendering", () => {
     ]);
 
     const automationResponse = await app.handle(
-      new Request(toUrl("/api/builder/automation-runs/create/form"), {
+      new Request(toUrl(interpolateRoutePath(appRoutes.builderApiAutomationRunsCreateForm, { projectId })), {
         method: "POST",
         headers: {
           "content-type": "application/x-www-form-urlencoded",
@@ -3499,13 +3525,14 @@ describe("HTMX partial rendering", () => {
   });
 
   test("game route renders a deterministic session-unavailable state when hydration fails", async () => {
+    const projectId = await createPublishedBuilderProject();
     const originalGetSessionState = gameLoop.getSessionState.bind(gameLoop);
 
     gameLoop.getSessionState = async () => null;
     const hydrationStateResult = await settleAsync(
       (async () => {
         const response = await app.handle(
-          new Request(toUrl(`/projects/default/playtest?lang=en-US`)),
+          new Request(toUrl(withProjectPagePath(appRoutes.game, projectId))),
         );
         return {
           response,

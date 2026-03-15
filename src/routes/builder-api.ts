@@ -2130,10 +2130,19 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   )
   .post(
     route(appRoutes.builderApiScenesCreateForm),
-    async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
+    async ({
+      params,
+      body,
+      request,
+      set,
+      status,
+      builderLocale,
+      builderProjectId,
+      builderCurrentPath,
+    }) => {
       const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { body },
+        { body, params },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
@@ -2181,8 +2190,10 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
+      params: t.Object({
+        projectId: t.String(),
+      }),
       body: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
         id: t.Optional(t.String()),
         displayTitle: t.Optional(t.String()),
@@ -2204,10 +2215,19 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   )
   .post(
     route(appRoutes.builderApiScenes),
-    async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
+    async ({
+      params,
+      body,
+      request,
+      set,
+      status,
+      builderLocale,
+      builderProjectId,
+      builderCurrentPath,
+    }) => {
       const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { body },
+        { body, params },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
@@ -2236,8 +2256,10 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
+      params: t.Object({
+        projectId: t.String(),
+      }),
       body: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
         scene: t.Object({
           id: t.String(),
@@ -2290,7 +2312,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     async ({ params, query, builderLocale, builderProjectId, builderCurrentPath }) => {
       const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { query },
+        { query, params },
       );
       const [scene, assets] = await Promise.all([
         builderService.getScene(projectId, params.sceneId),
@@ -2304,9 +2326,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       return renderSceneDetail(messages, scene, locale, projectId, assets);
     },
     {
-      params: t.Object({ sceneId: t.String() }),
+      params: t.Object({ projectId: t.String(), sceneId: t.String() }),
       query: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
       }),
     },
@@ -2325,7 +2346,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     }) => {
       const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { body },
+        { body, params },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
@@ -2358,9 +2379,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
-      params: t.Object({ sceneId: t.String() }),
+      params: t.Object({ projectId: t.String(), sceneId: t.String() }),
       body: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
         displayTitle: t.Optional(t.String()),
         titleKey: t.Optional(t.String()),
@@ -2483,7 +2503,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     }) => {
       const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { query },
+        { query, params },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
@@ -2513,9 +2533,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
-      params: t.Object({ sceneId: t.String() }),
+      params: t.Object({ projectId: t.String(), sceneId: t.String() }),
       query: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
       }),
       response: {
@@ -2540,7 +2559,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     }) => {
       const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { body },
+        { body, params },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
@@ -2583,9 +2602,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
-      params: t.Object({ sceneId: t.String() }),
+      params: t.Object({ projectId: t.String(), sceneId: t.String() }),
       body: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
         id: t.String(),
         nodeKind: t.Optional(t.String()),
@@ -2626,7 +2644,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     }) => {
       const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { query },
+        { query, params },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
@@ -2651,9 +2669,12 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
-      params: t.Object({ sceneId: t.String(), nodeId: t.String() }),
+      params: t.Object({
+        projectId: t.String(),
+        sceneId: t.String(),
+        nodeId: t.String(),
+      }),
       query: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
       }),
       response: {
@@ -2665,10 +2686,19 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   )
   .post(
     route(appRoutes.builderApiNpcsCreateForm),
-    async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
+    async ({
+      params,
+      body,
+      request,
+      set,
+      status,
+      builderLocale,
+      builderProjectId,
+      builderCurrentPath,
+    }) => {
       const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { body },
+        { body, params },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
@@ -2727,8 +2757,10 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
+      params: t.Object({
+        projectId: t.String(),
+      }),
       body: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
         sceneId: t.String(),
         characterKey: t.Optional(t.String()),
@@ -2744,10 +2776,19 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   )
   .post(
     route(appRoutes.builderApiNpcs),
-    async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
+    async ({
+      params,
+      body,
+      request,
+      set,
+      status,
+      builderLocale,
+      builderProjectId,
+      builderCurrentPath,
+    }) => {
       const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { body },
+        { body, params },
       );
       const { builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
@@ -2774,8 +2815,10 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
+      params: t.Object({
+        projectId: t.String(),
+      }),
       body: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
         sceneId: t.String(),
         npc: t.Object({
@@ -2808,7 +2851,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     async ({ params, query, builderLocale, builderProjectId, builderCurrentPath }) => {
       const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { query },
+        { query, params },
       );
       const npc = await builderService.findNpc(projectId, params.npcId);
       const messages = getMessages(locale);
@@ -2839,9 +2882,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
-      params: t.Object({ npcId: t.String() }),
+      params: t.Object({ projectId: t.String(), npcId: t.String() }),
       query: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
         sceneId: t.Optional(t.String()),
       }),
@@ -2861,7 +2903,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     }) => {
       const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { body },
+        { body, params },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
@@ -2937,9 +2979,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
-      params: t.Object({ npcId: t.String() }),
+      params: t.Object({ projectId: t.String(), npcId: t.String() }),
       body: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
         sceneId: t.Optional(t.String()),
         displayName: t.Optional(t.String()),
@@ -3053,7 +3094,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     }) => {
       const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { query },
+        { query, params },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
@@ -3099,9 +3140,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
-      params: t.Object({ npcId: t.String() }),
+      params: t.Object({ projectId: t.String(), npcId: t.String() }),
       query: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
       }),
       response: {
@@ -3218,7 +3258,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     async ({ params, query, builderLocale, builderProjectId, builderCurrentPath }) => {
       const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { query },
+        { query, params },
       );
       const messages = getMessages(locale);
       const catalog = await projectDialogues(projectId, locale);
@@ -3231,9 +3271,11 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       return renderDialogueDetail(messages, key, value, locale, projectId);
     },
     {
-      params: t.Object({ key: t.String() }),
+      params: t.Object({
+        projectId: t.String(),
+        key: t.String(),
+      }),
       query: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
       }),
     },
@@ -3252,7 +3294,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     }) => {
       const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { body },
+        { body, params },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
@@ -3288,7 +3330,10 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
-      params: t.Object({ key: t.String() }),
+      params: t.Object({
+        projectId: t.String(),
+        key: t.String(),
+      }),
       body: t.Object({
         projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
@@ -3381,7 +3426,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     }) => {
       const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { query },
+        { query, params },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
@@ -3412,9 +3457,11 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
-      params: t.Object({ key: t.String() }),
+      params: t.Object({
+        projectId: t.String(),
+        key: t.String(),
+      }),
       query: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
       }),
       response: {
@@ -3865,10 +3912,19 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   )
   .post(
     route(appRoutes.builderApiQuestsCreateForm),
-    async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
+    async ({
+      params,
+      body,
+      request,
+      set,
+      status,
+      builderLocale,
+      builderProjectId,
+      builderCurrentPath,
+    }) => {
       const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { body },
+        { body, params },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
@@ -3888,8 +3944,10 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
+      params: t.Object({
+        projectId: t.String(),
+      }),
       body: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
         id: t.String(),
         title: t.String(),
@@ -3916,7 +3974,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     }) => {
       const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { query },
+        { query, params },
       );
       const quests = await builderService.listQuests(projectId);
       const quest = quests.find((q) => q.id === decodePathValue(params.questId));
@@ -3929,9 +3987,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       return renderQuestEditForm(getMessages(locale), locale, projectId, quest);
     },
     {
-      params: t.Object({ questId: t.String() }),
+      params: t.Object({ projectId: t.String(), questId: t.String() }),
       query: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
       }),
       response: {
@@ -3954,7 +4011,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     }) => {
       const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { body },
+        { body, params },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
@@ -3990,9 +4047,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
-      params: t.Object({ questId: t.String() }),
+      params: t.Object({ projectId: t.String(), questId: t.String() }),
       body: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
         id: t.String(),
         title: t.String(),
@@ -4019,7 +4075,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     }) => {
       const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { query },
+        { query, params },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
@@ -4039,9 +4095,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
-      params: t.Object({ questId: t.String() }),
+      params: t.Object({ projectId: t.String(), questId: t.String() }),
       query: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
       }),
       response: {
@@ -4052,10 +4107,19 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   )
   .post(
     route(appRoutes.builderApiTriggersCreateForm),
-    async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
+    async ({
+      params,
+      body,
+      request,
+      set,
+      status,
+      builderLocale,
+      builderProjectId,
+      builderCurrentPath,
+    }) => {
       const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { body },
+        { body, params },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
@@ -4075,8 +4139,10 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
+      params: t.Object({
+        projectId: t.String(),
+      }),
       body: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
         id: t.String(),
         label: t.String(),
@@ -4099,10 +4165,19 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   )
   .post(
     route(appRoutes.builderApiDialogueGraphsCreateForm),
-    async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
+    async ({
+      params,
+      body,
+      request,
+      set,
+      status,
+      builderLocale,
+      builderProjectId,
+      builderCurrentPath,
+    }) => {
       const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { body },
+        { body, params },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
@@ -4122,8 +4197,10 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
+      params: t.Object({
+        projectId: t.String(),
+      }),
       body: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
         id: t.String(),
         title: t.String(),
@@ -4138,10 +4215,19 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
   )
   .post(
     route(appRoutes.builderApiAutomationRunsCreateForm),
-    async ({ body, request, set, status, builderLocale, builderProjectId, builderCurrentPath }) => {
+    async ({
+      params,
+      body,
+      request,
+      set,
+      status,
+      builderLocale,
+      builderProjectId,
+      builderCurrentPath,
+    }) => {
       const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { body },
+        { body, params },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
@@ -4250,8 +4336,10 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
+      params: t.Object({
+        projectId: t.String(),
+      }),
       body: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
         goal: t.String(),
         stepsJson: t.Optional(t.String()),
@@ -4280,7 +4368,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     }) => {
       const actionContext = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { body },
+        { body, params },
       );
       const { builderLocale: locale, builderProjectId: projectId } = actionContext;
       const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
@@ -4313,9 +4401,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
-      params: t.Object({ runId: t.String() }),
+      params: t.Object({ projectId: t.String(), runId: t.String() }),
       body: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
         approved: t.Union([t.Boolean(), t.String()]),
       }),
@@ -4340,7 +4427,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
     }) {
       const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
         { builderLocale, builderProjectId, builderCurrentPath },
-        { query },
+        { query, params },
       );
       const run = (await builderService.listAutomationRuns(projectId)).find(
         (candidate) => candidate.id === params.runId,
@@ -4368,9 +4455,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       yield sse.event("status", payload);
     },
     {
-      params: t.Object({ runId: t.String() }),
+      params: t.Object({ projectId: t.String(), runId: t.String() }),
       query: t.Object({
-        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
       }),
       response: {

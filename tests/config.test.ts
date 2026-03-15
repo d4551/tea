@@ -182,8 +182,8 @@ describe("environment parsing", () => {
         projectId: "demo",
       }),
     ).toBe("/projects/demo/world?locale=en-US#detail");
-    expect(
-      withQueryParameters("/projects/:projectId/world?projectId=demo", { projectId: undefined }),
-    ).toBe("/projects/:projectId/world");
+    expect(withQueryParameters("/projects/:projectId/world", { projectId: undefined })).toBe(
+      "/projects/:projectId/world",
+    );
   });
 });

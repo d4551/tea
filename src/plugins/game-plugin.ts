@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia";
 import { appConfig, type LocaleCode, normalizeLocale } from "../config/environment.ts";
 import { auditService } from "../domain/audit/audit-service.ts";
 import { type PrincipalIdentity, requireGameAction } from "../domain/auth/authorization.ts";
+import { defaultBuilderProjectId } from "../domain/builder/builder-service.ts";
 import { gameTextByLocale } from "../domain/game/data/game-text.ts";
 import { gameLoop } from "../domain/game/game-loop.ts";
 import { playerProgressStore } from "../domain/game/services/player-progress-store.ts";
@@ -1928,8 +1929,9 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
             );
           }
 
+          const restoredProjectId = restored.projectId ?? defaultBuilderProjectId;
           const gamePath = withQueryParameters(
-            interpolateRoutePath(appRoutes.game, { projectId: restored.projectId }),
+            interpolateRoutePath(appRoutes.game, { projectId: restoredProjectId }),
             {
               lang: gameRequestLocale,
               sessionId: restored.sessionId,

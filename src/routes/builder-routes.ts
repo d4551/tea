@@ -218,6 +218,14 @@ const resolveBuilderPage = (request: Request): number => {
   return Number.isFinite(page) && page > 0 ? page : 1;
 };
 
+const resolveRouteProjectId = (
+  routeProjectId: string | undefined,
+  fallbackProjectId: string,
+): string => {
+  const normalized = routeProjectId?.trim() ?? "";
+  return normalized.length > 0 ? normalized : fallbackProjectId;
+};
+
 export const builderRoutes = new Elysia({ prefix: "/projects" })
   .use(builderRequestContextPlugin)
   .get("/new", async ({ request, builderLocale, builderCurrentPath }) => {
@@ -240,9 +248,10 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
   })
   .get(
     "/:projectId/start",
-    async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
+    async ({ request, params, builderLocale, builderProjectId, builderCurrentPath }) => {
+      const projectId = resolveRouteProjectId(params.projectId, builderProjectId);
       const messages = getMessages(builderLocale);
-      const project = await builderService.getProject(builderProjectId);
+      const project = await builderService.getProject(projectId);
       const chromeProject = toChromeProject(project);
       if (!project) {
         return wrapMissingProject(
@@ -251,7 +260,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           messages,
           "start",
           builderCurrentPath,
-          builderProjectId,
+          projectId,
           chromeProject,
         );
       }
@@ -300,7 +309,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         messages,
         builderLocale,
         dashboard,
-        builderProjectId,
+        projectId,
         project.published,
       );
       return wrapOrPartial(
@@ -309,7 +318,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         messages,
         "start",
         builderCurrentPath,
-        builderProjectId,
+        projectId,
         chromeProject,
         body,
       );
@@ -317,9 +326,17 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
   )
   .get(
     "/:projectId/world",
-    async ({ request, builderLocale, builderProjectId, builderCurrentPath, builderSearch }) => {
+    async ({
+      request,
+      params,
+      builderLocale,
+      builderProjectId,
+      builderCurrentPath,
+      builderSearch,
+    }) => {
+      const projectId = resolveRouteProjectId(params.projectId, builderProjectId);
       const messages = getMessages(builderLocale);
-      const project = await builderService.getProject(builderProjectId);
+      const project = await builderService.getProject(projectId);
       const chromeProject = toChromeProject(project);
       if (!project) {
         return wrapMissingProject(
@@ -328,7 +345,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           messages,
           "world",
           builderCurrentPath,
-          builderProjectId,
+          projectId,
           chromeProject,
         );
       }
@@ -338,7 +355,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         messages,
         scenes,
         builderLocale,
-        builderProjectId,
+        projectId,
         builderSearch,
         resolveBuilderPage(request),
         searchParams.get(BUILDER_QUERY_PARAM_SCENE_ID) ?? "",
@@ -349,7 +366,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         messages,
         "world",
         builderCurrentPath,
-        builderProjectId,
+        projectId,
         chromeProject,
         body,
       );
@@ -357,9 +374,10 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
   )
   .get(
     "/:projectId/characters",
-    async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
+    async ({ request, params, builderLocale, builderProjectId, builderCurrentPath }) => {
+      const projectId = resolveRouteProjectId(params.projectId, builderProjectId);
       const messages = getMessages(builderLocale);
-      const project = await builderService.getProject(builderProjectId);
+      const project = await builderService.getProject(projectId);
       const chromeProject = toChromeProject(project);
       if (!project) {
         return wrapMissingProject(
@@ -368,25 +386,19 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           messages,
           "characters",
           builderCurrentPath,
-          builderProjectId,
+          projectId,
           chromeProject,
         );
       }
       const scenes = toRecord(project.scenes);
-      const body = renderNpcEditor(
-        messages,
-        scenes,
-        gameSpriteManifests,
-        builderLocale,
-        builderProjectId,
-      );
+      const body = renderNpcEditor(messages, scenes, gameSpriteManifests, builderLocale, projectId);
       return wrapOrPartial(
         request,
         builderLocale,
         messages,
         "characters",
         builderCurrentPath,
-        builderProjectId,
+        projectId,
         chromeProject,
         body,
       );
@@ -394,9 +406,17 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
   )
   .get(
     "/:projectId/story",
-    async ({ request, builderLocale, builderProjectId, builderCurrentPath, builderSearch }) => {
+    async ({
+      request,
+      params,
+      builderLocale,
+      builderProjectId,
+      builderCurrentPath,
+      builderSearch,
+    }) => {
+      const projectId = resolveRouteProjectId(params.projectId, builderProjectId);
       const messages = getMessages(builderLocale);
-      const project = await builderService.getProject(builderProjectId);
+      const project = await builderService.getProject(projectId);
       const chromeProject = toChromeProject(project);
       if (!project) {
         return wrapMissingProject(
@@ -405,25 +425,19 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           messages,
           "story",
           builderCurrentPath,
-          builderProjectId,
+          projectId,
           chromeProject,
         );
       }
-      const catalog = await builderService.getDialogues(builderProjectId, builderLocale);
-      const body = renderDialogueEditor(
-        messages,
-        catalog,
-        builderLocale,
-        builderProjectId,
-        builderSearch,
-      );
+      const catalog = await builderService.getDialogues(projectId, builderLocale);
+      const body = renderDialogueEditor(messages, catalog, builderLocale, projectId, builderSearch);
       return wrapOrPartial(
         request,
         builderLocale,
         messages,
         "story",
         builderCurrentPath,
-        builderProjectId,
+        projectId,
         chromeProject,
         body,
       );
@@ -431,9 +445,17 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
   )
   .get(
     "/:projectId/assets",
-    async ({ request, builderLocale, builderProjectId, builderCurrentPath, builderSearch }) => {
+    async ({
+      request,
+      params,
+      builderLocale,
+      builderProjectId,
+      builderCurrentPath,
+      builderSearch,
+    }) => {
+      const projectId = resolveRouteProjectId(params.projectId, builderProjectId);
       const messages = getMessages(builderLocale);
-      const project = await builderService.getProject(builderProjectId);
+      const project = await builderService.getProject(projectId);
       const chromeProject = toChromeProject(project);
       if (!project) {
         return wrapMissingProject(
@@ -442,7 +464,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           messages,
           "assets",
           builderCurrentPath,
-          builderProjectId,
+          projectId,
           chromeProject,
         );
       }
@@ -450,7 +472,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       const body = renderAssetsEditor(
         messages,
         builderLocale,
-        builderProjectId,
+        projectId,
         Array.from(project.assets.values()),
         Array.from(project.animationClips.values()),
         builderSearch,
@@ -463,7 +485,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         messages,
         "assets",
         builderCurrentPath,
-        builderProjectId,
+        projectId,
         chromeProject,
         body,
       );
@@ -471,9 +493,10 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
   )
   .get(
     "/:projectId/systems",
-    async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
+    async ({ request, params, builderLocale, builderProjectId, builderCurrentPath }) => {
+      const projectId = resolveRouteProjectId(params.projectId, builderProjectId);
       const messages = getMessages(builderLocale);
-      const project = await builderService.getProject(builderProjectId);
+      const project = await builderService.getProject(projectId);
       const chromeProject = toChromeProject(project);
       if (!project) {
         return wrapMissingProject(
@@ -482,14 +505,14 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           messages,
           "systems",
           builderCurrentPath,
-          builderProjectId,
+          projectId,
           chromeProject,
         );
       }
       const body = renderMechanicsEditor(
         messages,
         builderLocale,
-        builderProjectId,
+        projectId,
         Array.from(project.quests.values()),
         Array.from(project.triggers.values()),
         Array.from(project.dialogueGraphs.values()),
@@ -501,7 +524,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         messages,
         "systems",
         builderCurrentPath,
-        builderProjectId,
+        projectId,
         chromeProject,
         body,
       );
@@ -509,9 +532,10 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
   )
   .get(
     "/:projectId/operations",
-    async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
+    async ({ request, params, builderLocale, builderProjectId, builderCurrentPath }) => {
+      const projectId = resolveRouteProjectId(params.projectId, builderProjectId);
       const messages = getMessages(builderLocale);
-      const project = await builderService.getProject(builderProjectId);
+      const project = await builderService.getProject(projectId);
       const chromeProject = toChromeProject(project);
       if (!project) {
         return wrapMissingProject(
@@ -520,14 +544,14 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           messages,
           "operations",
           builderCurrentPath,
-          builderProjectId,
+          projectId,
           chromeProject,
         );
       }
       const body = renderAutomationPanel(
         messages,
         builderLocale,
-        builderProjectId,
+        projectId,
         Array.from(project.automationRuns.values()),
         Array.from(project.artifacts.values()),
       );
@@ -537,7 +561,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         messages,
         "operations",
         builderCurrentPath,
-        builderProjectId,
+        projectId,
         chromeProject,
         body,
       );
@@ -545,9 +569,10 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
   )
   .get(
     "/:projectId/settings",
-    async ({ request, builderLocale, builderProjectId, builderCurrentPath }) => {
+    async ({ request, params, builderLocale, builderProjectId, builderCurrentPath }) => {
+      const projectId = resolveRouteProjectId(params.projectId, builderProjectId);
       const messages = getMessages(builderLocale);
-      const project = await builderService.getProject(builderProjectId);
+      const project = await builderService.getProject(projectId);
       const chromeProject = toChromeProject(project);
       if (!project) {
         return wrapMissingProject(
@@ -556,7 +581,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           messages,
           "settings",
           builderCurrentPath,
-          builderProjectId,
+          projectId,
           chromeProject,
         );
       }
@@ -573,9 +598,9 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         features,
         getAiRuntimeProfile(),
         builderLocale,
-        builderProjectId,
+        projectId,
         readiness,
-        await knowledgeBaseService.listDocuments(builderProjectId),
+        await knowledgeBaseService.listDocuments(projectId),
       );
       return wrapOrPartialConsole(
         request,
@@ -583,7 +608,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         messages,
         "settings",
         builderCurrentPath,
-        builderProjectId,
+        projectId,
         chromeProject,
         body,
       );
