@@ -16,6 +16,7 @@ import type {
 import { settleAsync } from "../../shared/utils/async-result.ts";
 import { sha256Hex } from "../../shared/utils/crypto.ts";
 import { encodeMonoWavAudio } from "../../shared/utils/wav-audio.ts";
+import { fetchHfDatasetSnippets } from "../ai/hf-dataset-source.ts";
 import { ProviderRegistry } from "../ai/providers/provider-registry.ts";
 import { AiAuthoringService } from "./ai-authoring.ts";
 import { persistBuilderFile } from "./asset-storage.ts";
@@ -182,6 +183,18 @@ const runWorkerStep = async <TPayload>(
   return { ok: true, data: result.value };
 };
 
+const enrichPromptWithDataset = async (prompt: string): Promise<string> => {
+  const snippets = await fetchHfDatasetSnippets(prompt, 3);
+  if (snippets.length === 0) {
+    return prompt;
+  }
+
+  const context = snippets
+    .map((snippet, index) => `[${index + 1}] ${snippet.text}`)
+    .join("\n\n");
+  return `${prompt.trim()}\n\nReference corpus excerpts:\n${context}`;
+};
+
 const probeAutomationOrigin = async (targetUrl: URL): Promise<boolean> => {
   const probeResult = await runWorkerStep(async () => {
     const response = await fetch(targetUrl, {
@@ -212,13 +225,14 @@ const buildGenerationArtifact = async (
 ): Promise<WorkerResult<GenerationArtifact>> => {
   const artifactId = `artifact.${job.id}`;
   const createdAtMs = Date.now();
+  const enrichedPrompt = await enrichPromptWithDataset(job.prompt);
 
   switch (job.kind) {
     case "voice-line": {
       const speechResult = await runWorkerStep(async () => {
         const registry = await ProviderRegistry.getInstance();
         return registry.synthesizeSpeech({
-          text: job.prompt,
+          text: enrichedPrompt,
         });
       });
 
@@ -258,7 +272,7 @@ const buildGenerationArtifact = async (
       const imageResult = await runWorkerStep(async () => {
         const registry = await ProviderRegistry.getInstance();
         return registry.generateImage({
-          prompt: job.prompt,
+          prompt: enrichedPrompt,
           aspectRatio: job.kind === "portrait" ? "portrait" : "square",
           targetId: job.targetId,
           governance: {
@@ -304,7 +318,7 @@ const buildGenerationArtifact = async (
         const registry = await ProviderRegistry.getInstance();
         const authoring = createAuthoringService(projectId, registry);
         return authoring.generateAnimationPlan({
-          prompt: job.prompt,
+          prompt: enrichedPrompt,
           targetId: job.targetId,
         });
       });
@@ -347,7 +361,7 @@ const buildGenerationArtifact = async (
         const authoring = createAuthoringService(projectId, registry);
         if (job.kind === "combat-encounter") {
           const encounter = await authoring.generateCombatEncounter({
-            prompt: job.prompt,
+            prompt: enrichedPrompt,
             sceneId: job.targetId,
           });
           if (!encounter.ok) {
@@ -363,7 +377,7 @@ const buildGenerationArtifact = async (
         }
         if (job.kind === "item-set") {
           const items = await authoring.generateItemSet({
-            prompt: job.prompt,
+            prompt: enrichedPrompt,
           });
           if (!items.ok) {
             return {
@@ -378,7 +392,7 @@ const buildGenerationArtifact = async (
         }
 
         const cutscene = await authoring.generateCutsceneScript({
-          prompt: job.prompt,
+          prompt: enrichedPrompt,
           sceneId: job.targetId,
         });
         if (!cutscene.ok) {

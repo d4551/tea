@@ -25,6 +25,9 @@ const oracleQuerySchema = t.Object({
   lang: t.Optional(t.String()),
   question: t.Optional(t.String()),
   mode: t.Optional(t.String()),
+  context_path: t.Optional(t.String()),
+  context_route: t.Optional(t.String()),
+  context_project: t.Optional(t.String()),
 });
 
 /**
@@ -79,12 +82,21 @@ export const createPageRoutes = (oracleService: OracleService) =>
           async ({ query, locale, messages, authHasSession }) => {
             const mode = parseOracleMode(query.mode);
             const question = query.question ?? "";
+            const pageContext =
+              query.context_path && query.context_route
+                ? {
+                    currentPath: query.context_path,
+                    activeRoute: query.context_route,
+                    projectId: query.context_project,
+                  }
+                : undefined;
 
             const outcome = await oracleService.evaluate({
               locale,
               mode,
               question,
               hasSession: authHasSession,
+              pageContext,
             });
 
             const panelState: OraclePanelState = toOraclePanelState(outcome, mode, question);

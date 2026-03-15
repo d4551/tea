@@ -741,7 +741,7 @@ export class KnowledgeBaseService {
       return ranked;
     }
 
-    const targetLocale = normalizeLocale(options.locale);
+    const fallbackLocale = normalizeLocale(options.locale);
     return [
       ...ranked,
       ...supplemental.map((snippet, index) => ({
@@ -749,7 +749,7 @@ export class KnowledgeBaseService {
         chunkId: snippet.id,
         title: appConfig.ai.ragHfDataset ?? "hf-dataset",
         source: snippet.source,
-        locale: targetLocale,
+        locale: fallbackLocale,
         ordinal: index,
         text: snippet.text,
         score: snippet.score,

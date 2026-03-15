@@ -10,6 +10,7 @@ import type {
   OracleFatalErrorState,
   OracleMode,
   OracleOutcome,
+  OraclePageContext,
   OracleRequest,
   OracleRetryableErrorState,
   OracleSuccessState,
@@ -74,7 +75,7 @@ export const createOracleService = (): OracleService => ({
       } satisfies OracleFatalErrorState;
     }
 
-    const answer = await buildAnswer(trimmedQuestion, messages);
+    const answer = await buildAnswer(trimmedQuestion, messages, request.pageContext);
     if (!answer.ok) {
       return {
         state: "error",
@@ -111,6 +112,7 @@ export const createOracleService = (): OracleService => ({
 const buildAnswer = async (
   question: string,
   messages: ReturnType<typeof getMessages>,
+  pageContext?: OraclePageContext,
 ): Promise<OracleAnswer | OracleAnswerFailure> => {
   const registry = await settleAsync(ProviderRegistry.getInstance());
   if (!registry.ok) {
@@ -130,13 +132,13 @@ const buildAnswer = async (
     };
   }
 
+  const contextHint = pageContext
+    ? ` [Context: user is on ${pageContext.activeRoute}${pageContext.projectId ? `, project ${pageContext.projectId}` : ""}]`
+    : "";
+  const userPrompt = `Respond creatively and helpfully to this game design prompt: "${question}"${contextHint}`;
+
   const generation = await registry.value.chat({
-    messages: [
-      {
-        role: "user",
-        content: `Respond creatively and helpfully to this game design prompt: "${question}"`,
-      },
-    ],
+    messages: [{ role: "user", content: userPrompt }],
     temperature: 0.85,
     maxTokens: 80,
   });

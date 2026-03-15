@@ -11,6 +11,15 @@ export type OracleMode =
   | "force-unauthorized";
 
 /**
+ * Optional page context for grounded, page-aware oracle responses.
+ */
+export interface OraclePageContext {
+  readonly currentPath: string;
+  readonly activeRoute: string;
+  readonly projectId?: string;
+}
+
+/**
  * Oracle request payload.
  */
 export interface OracleRequest {
@@ -18,6 +27,8 @@ export interface OracleRequest {
   readonly locale: LocaleCode;
   readonly mode: OracleMode;
   readonly hasSession: boolean;
+  /** Optional page context for grounded responses (builder, game, etc.). */
+  readonly pageContext?: OraclePageContext;
 }
 
 /**

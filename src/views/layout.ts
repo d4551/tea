@@ -284,10 +284,10 @@ export const renderLayout = (input: LayoutInput): string => {
           ${renderDrawerToggleControl({
             targetId: "ai-chat-drawer",
             label: messages.common.openAiAssistant,
-            className: "btn btn-circle btn-primary h-16 w-16 shrink-0 shadow-2xl",
+            className: "btn btn-circle btn-primary drawer-button h-14 w-14 sm:h-16 sm:w-16 shrink-0 shadow-2xl",
             hasPopup: "dialog",
             content:
-              '<svg xmlns="http://www.w3.org/2000/svg" class="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>',
+              '<svg xmlns="http://www.w3.org/2000/svg" class="size-6 sm:size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>',
           })}
         </div>
       </div>
@@ -295,8 +295,8 @@ export const renderLayout = (input: LayoutInput): string => {
       <!-- AI Chat Sidebar (Right) (z-[95] ensures visibility above game canvas) -->
       <div class="drawer-side z-[95]">
         <label for="ai-chat-drawer" aria-label="${escapeHtml(messages.common.closeAiChat)}" class="drawer-overlay"></label>
-        <div class="menu min-h-full w-80 border-l border-base-300 bg-base-100 p-0 text-base-content sm:w-96" role="dialog" aria-modal="false" aria-label="${escapeHtml(messages.common.openAiAssistant)}">
-          <div class="flex items-center justify-end border-b border-base-300 px-4 py-3">
+        <aside class="flex min-h-full w-80 flex-col border-l border-base-300 bg-base-100 text-base-content sm:w-96" role="dialog" aria-modal="false" aria-label="${escapeHtml(messages.common.openAiAssistant)}">
+          <div class="flex shrink-0 items-center justify-end border-b border-base-300 px-4 py-3">
             ${renderDrawerToggleControl({
               targetId: "ai-chat-drawer",
               label: messages.common.closeAiChat,
@@ -305,12 +305,22 @@ export const renderLayout = (input: LayoutInput): string => {
               content: escapeHtml(messages.common.closeAiChat),
             })}
           </div>
+          <div class="flex-1 overflow-y-auto p-4">
           ${renderOracleSection(
             messages,
             input.oraclePanelState ?? { state: "idle", mode: "auto", question: "" },
             locale,
+            {
+              variant: "drawer",
+              pageContext: {
+                currentPath: currentPathWithQuery,
+                activeRoute,
+                projectId: persistentProjectId,
+              },
+            },
           )}
-        </div>
+          </div>
+        </aside>
       </div>
     </div>
     

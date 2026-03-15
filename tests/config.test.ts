@@ -162,6 +162,10 @@ describe("environment parsing", () => {
     expect(appConfig.ai.ragChunkOverlap).toBeGreaterThanOrEqual(0);
     expect(appConfig.ai.ragSearchLimit).toBeGreaterThan(0);
     expect(appConfig.ai.ragHashDimension).toBeGreaterThanOrEqual(8);
+    expect(
+      appConfig.ai.ragHfDataset === null || appConfig.ai.ragHfDataset.includes("/"),
+    ).toBe(true);
+    expect(appConfig.ai.ragHfDatasetSplit.length).toBeGreaterThan(0);
     expect(appConfig.ai.audioInputSampleRateHz).toBeGreaterThanOrEqual(8000);
     expect(appConfig.ai.audioUploadMaxBytes).toBeGreaterThan(0);
     expect(appRoutes.aiCatalog).toBe("/api/ai/catalog");
@@ -175,6 +179,7 @@ describe("environment parsing", () => {
     expect(appRoutes.aiBuilderKnowledgeDocuments).toBe("/api/builder/ai/knowledge/documents");
     expect(appRoutes.aiBuilderKnowledgeSearch).toBe("/api/builder/ai/knowledge/search");
     expect(appRoutes.aiBuilderToolPlan).toBe("/api/builder/ai/plan/tools");
+    expect(appRoutes.aiBuilderHfTraining).toBe("/api/builder/ai/training/hf-jobs");
   });
 
   test("asset path helpers normalize url and local paths", () => {

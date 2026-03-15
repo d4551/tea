@@ -1,9 +1,28 @@
 import { appConfig, type LocaleCode } from "../config/environment.ts";
 import type { OracleMode, OracleOutcome } from "../domain/oracle/oracle-types.ts";
-import { appRoutes } from "../shared/constants/routes.ts";
+import { appRoutes, type AppRouteKey } from "../shared/constants/routes.ts";
 import type { UiErrorState } from "../shared/contracts/ui-state.ts";
 import type { Messages } from "../shared/i18n/messages.ts";
 import { escapeHtml } from "./layout.ts";
+
+/**
+ * Page context passed to the oracle for grounded, page-aware responses.
+ */
+export interface OraclePageContext {
+  readonly currentPath: string;
+  readonly activeRoute: AppRouteKey;
+  readonly projectId?: string;
+}
+
+/**
+ * Context for rendering the oracle section (drawer vs full page).
+ */
+export interface OracleSectionContext {
+  /** Layout variant: drawer uses single-column, page uses responsive grid. */
+  readonly variant: "drawer" | "page";
+  /** Optional page context for grounded AI responses. */
+  readonly pageContext?: OraclePageContext;
+}
 
 type BaseOraclePanelState = {
   readonly mode: OracleMode;
@@ -95,18 +114,41 @@ export const toOraclePanelState = (
  * @param messages Localized message catalog.
  * @param panelState Oracle UI state.
  * @param locale Active locale code for deterministic form submissions.
+ * @param sectionContext Optional layout variant and page context.
  * @returns HTML section.
  */
 export const renderOracleSection = (
   messages: Messages,
   panelState: OraclePanelState,
   locale: LocaleCode,
+  sectionContext?: OracleSectionContext,
 ): string => {
-  return `<section aria-labelledby="oracle-title" class="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
-    <article class="card card-border bg-base-100 shadow-sm">
+  const variant = sectionContext?.variant ?? "page";
+  const pageContext = sectionContext?.pageContext;
+  const isDrawer = variant === "drawer";
+
+  const sectionClass = isDrawer
+    ? "flex flex-col gap-4 overflow-y-auto"
+    : "grid gap-4 lg:grid-cols-[1.5fr_1fr]";
+  const titleClass = isDrawer ? "text-lg" : "text-2xl";
+
+  const contextInputs = pageContext
+    ? [
+        `<input type="hidden" name="context_path" value="${escapeHtml(pageContext.currentPath)}" />`,
+        `<input type="hidden" name="context_route" value="${escapeHtml(pageContext.activeRoute)}" />`,
+        pageContext.projectId
+          ? `<input type="hidden" name="context_project" value="${escapeHtml(pageContext.projectId)}" />`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("")
+    : "";
+
+  return `<section aria-labelledby="oracle-title" class="${escapeHtml(sectionClass)}">
+    <article class="card card-border bg-base-100 shadow-sm shrink-0">
       <div class="card-body gap-4">
-        <h2 id="oracle-title" class="card-title text-2xl">${escapeHtml(messages.aiPlayground.cardTitle)}</h2>
-        <p class="opacity-90">${escapeHtml(messages.aiPlayground.cardDescription)}</p>
+        <h2 id="oracle-title" class="card-title ${escapeHtml(titleClass)}">${escapeHtml(messages.aiPlayground.cardTitle)}</h2>
+        <p class="opacity-90 text-sm">${escapeHtml(messages.aiPlayground.cardDescription)}</p>
         <form
           id="oracle-form"
           method="get"
@@ -129,12 +171,13 @@ export const renderOracleSection = (
           aria-label="${escapeHtml(messages.aiPlayground.cardTitle)}"
         >
           <input type="hidden" name="lang" value="${escapeHtml(locale)}" />
+          ${contextInputs}
           <fieldset class="fieldset">
             <label class="floating-label w-full">
               <span>${escapeHtml(messages.aiPlayground.promptLabel)}</span>
               <input
                 id="oracle-question"
-                class="input input-bordered w-full"
+                class="input input-bordered w-full input-sm"
                 type="text"
                 name="question"
                 value="${escapeHtml(panelState.question)}"
@@ -146,11 +189,11 @@ export const renderOracleSection = (
             </label>
           </fieldset>
           <input type="hidden" name="mode" value="auto" />
-          <button type="submit" class="btn btn-primary w-full sm:w-max" aria-label="${escapeHtml(
+          <button type="submit" class="btn btn-primary btn-sm w-full" aria-label="${escapeHtml(
             messages.aiPlayground.submit,
           )}">
             <span>${escapeHtml(messages.aiPlayground.submit)}</span>
-            <span id="oracle-loading" class="loading loading-dots loading-md text-primary" aria-label="${escapeHtml(
+            <span id="oracle-loading" class="loading loading-dots loading-sm text-primary" aria-label="${escapeHtml(
               messages.common.loading,
             )}"></span>
           </button>

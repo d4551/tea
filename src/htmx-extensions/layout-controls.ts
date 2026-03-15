@@ -114,6 +114,7 @@ const toggleDrawer = (control: DrawerToggleControl): void => {
 
   checkbox.checked = control.dataset.drawerToggleMode === "close" ? false : !checkbox.checked;
   syncDrawerControlState(targetId);
+  manageDrawerFocus(checkbox);
 };
 
 const syncAllDrawerControls = (): void => {
