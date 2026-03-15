@@ -502,6 +502,7 @@ export interface Messages {
     readonly hfTrainingSplitLabel: string;
     readonly hfTrainingBaseModelLabel: string;
     readonly hfTrainingOutputModelLabel: string;
+    readonly hfTrainingOutputModelPlaceholder: string;
     readonly hfTrainingMethodLabel: string;
     readonly hfTrainingMethodSft: string;
     readonly hfTrainingMethodDpo: string;
@@ -1136,7 +1137,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         heroTitle: "Ship playable worlds from one SSR workspace",
         heroDescription:
           "TEA unifies scene design, NPC authoring, local-first AI operations, and runtime playtest into a single release-grade workspace.",
-        welcomeBack: "Initial release control room for worldbuilding, automation, and runtime verification.",
+        welcomeBack:
+          "Initial release control room for worldbuilding, automation, and runtime verification.",
         quickStartHint:
           "Start in Builder to shape the first scene, then pressure-test the runtime before you publish.",
         builderCardTitle: "Worldbuilding Workspace",
@@ -1176,8 +1178,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         architectureTitle: "Scene system",
         architectureDescription:
           "Scenes, interactables, and authored beats stay structured so the runtime can launch cleanly.",
-      reliabilityTitle: "Character systems",
-      reliabilityDescription:
+        reliabilityTitle: "Character systems",
+        reliabilityDescription:
           "NPCs, dialogue graphs, and encounter logic stay editable without collapsing into throwaway early-stage content.",
         progressiveEnhancementTitle: "Local-first AI",
         progressiveEnhancementDescription:
@@ -1645,6 +1647,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       hfTrainingSplitLabel: "Dataset split",
       hfTrainingBaseModelLabel: "Base model",
       hfTrainingOutputModelLabel: "Output model repository",
+      hfTrainingOutputModelPlaceholder: "username/tea-builder-ft",
       hfTrainingMethodLabel: "Training method",
       hfTrainingMethodSft: "SFT",
       hfTrainingMethodDpo: "DPO",
@@ -2286,14 +2289,12 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         welcomeBack: "这是面向首个版本发布的控制台，用于世界构建、自动化与运行时验证。",
         quickStartHint: "先进入构建器完成首个场景，再对运行时进行压力验证后发布。",
         builderCardTitle: "世界构建工作区",
-        builderCardDescription:
-          "设计环境、布置交互对象，并定义玩家真正会进入的叙事与空间表面。",
+        builderCardDescription: "设计环境、布置交互对象，并定义玩家真正会进入的叙事与空间表面。",
         builderCardCta: "开始构建世界",
         openUnifiedBuilder: "打开构建器工作区",
         talkToAiOracle: "打开故事 Oracle",
         playerCardTitle: "运行时试玩",
-        playerCardDescription:
-          "直接启动运行时界面，验证操作反馈、节奏与机制，再进入首个公开版本。",
+        playerCardDescription: "直接启动运行时界面，验证操作反馈、节奏与机制，再进入首个公开版本。",
         playerCardCta: "启动运行时",
         playtestBuild: "运行时试玩",
         playtestBuildDescription: "从创作场景直接进入运行时，不离开当前产品表面。",
@@ -2314,13 +2315,13 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         statsNpcs: "运行时质检",
         statsGenerations: "本地 AI",
         loopTitle: "发布循环",
-        loopDescription: "从第一份创意简报到可玩的运行时，整个系统始终保持在同一套创作与验证闭环内。",
+        loopDescription:
+          "从第一份创意简报到可玩的运行时，整个系统始终保持在同一套创作与验证闭环内。",
         loopSteps: ["定义世界", "借助 AI 创作", "验证运行时"],
         architectureTitle: "场景系统",
-        architectureDescription:
-          "场景、交互对象与叙事节点保持结构化，确保运行时能够稳定启动。",
-      reliabilityTitle: "角色系统",
-      reliabilityDescription:
+        architectureDescription: "场景、交互对象与叙事节点保持结构化，确保运行时能够稳定启动。",
+        reliabilityTitle: "角色系统",
+        reliabilityDescription:
           "NPC、对话图与遭遇机制可以持续编辑，而不会退化成只适合早期演示的内容。",
         progressiveEnhancementTitle: "本地优先 AI",
         progressiveEnhancementDescription:
@@ -2751,6 +2752,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       hfTrainingSplitLabel: "数据集划分",
       hfTrainingBaseModelLabel: "基础模型",
       hfTrainingOutputModelLabel: "输出模型仓库",
+      hfTrainingOutputModelPlaceholder: "username/tea-builder-ft",
       hfTrainingMethodLabel: "训练方法",
       hfTrainingMethodSft: "SFT",
       hfTrainingMethodDpo: "DPO",

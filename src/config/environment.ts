@@ -5,7 +5,11 @@ import {
   normalizeUiTheme as normalizeSupportedUiTheme,
   type UiTheme,
 } from "../shared/constants/ui-theme.ts";
-import { type LocaleCode, supportedLocaleCodes } from "../shared/types/locale.ts";
+import {
+  defaultLocaleCode,
+  type LocaleCode,
+  supportedLocaleCodes,
+} from "../shared/types/locale.ts";
 
 export {
   DEFAULT_UI_THEME,
@@ -282,6 +286,7 @@ export interface AppConfig {
     readonly ragHfDatasetConfig: string | null;
     readonly ragHfDatasetSplit: string;
     readonly ragHfDatasetTextColumn: string | null;
+    readonly ragHfDatasetServerBaseUrl: string;
     readonly audioInputSampleRateHz: number;
     readonly audioUploadMaxBytes: number;
     readonly textToSpeechSpeakerEmbeddings: string;
@@ -389,6 +394,7 @@ const DEFAULT_AI_RAG_CHUNK_OVERLAP = 120;
 const DEFAULT_AI_RAG_SEARCH_LIMIT = 5;
 const DEFAULT_AI_RAG_CANDIDATE_LIMIT = 24;
 const DEFAULT_AI_RAG_HASH_DIMENSION = 64;
+const DEFAULT_AI_RAG_HF_DATASET_SERVER_BASE_URL = "https://datasets-server.huggingface.co";
 const DEFAULT_AI_LOCAL_TTS_SPEAKER_EMBEDDINGS =
   "https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/speaker_embeddings.bin";
 const DEFAULT_PUBLIC_PREFIX = "/public";
@@ -417,7 +423,7 @@ const DEFAULT_MAX_CONTENT_WIDTH_CLASS = "max-w-6xl";
 const DEFAULT_SESSION_COOKIE_NAME = "lotfk_session";
 const DEFAULT_SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 const DEFAULT_ANSWER_HASH_MULTIPLIER = 7;
-const DEFAULT_LOCALE: LocaleCode = "en-US";
+const DEFAULT_LOCALE: LocaleCode = defaultLocaleCode;
 const DEFAULT_SUPPORTED_BUN_RANGE = "1.3.x";
 const DEFAULT_INSTALL_BUN_VERSION = "1.3.10";
 const DEFAULT_BUILDER_UPLOADS_DIRECTORY = "uploads/builder";
@@ -1632,6 +1638,11 @@ export const appConfig: AppConfig = {
     ragHfDatasetConfig: parseOptionalString(Bun.env.AI_RAG_HF_DATASET_CONFIG) ?? null,
     ragHfDatasetSplit: parseOptionalString(Bun.env.AI_RAG_HF_DATASET_SPLIT) ?? "train",
     ragHfDatasetTextColumn: parseOptionalString(Bun.env.AI_RAG_HF_DATASET_TEXT_COLUMN) ?? null,
+    ragHfDatasetServerBaseUrl: parseConfiguredAbsoluteUrl(
+      Bun.env.AI_RAG_HF_DATASET_SERVER_BASE_URL,
+      DEFAULT_AI_RAG_HF_DATASET_SERVER_BASE_URL,
+      "AI_RAG_HF_DATASET_SERVER_BASE_URL",
+    ),
     audioInputSampleRateHz: parseInteger(
       Bun.env.AI_AUDIO_INPUT_SAMPLE_RATE_HZ,
       DEFAULT_AI_AUDIO_INPUT_SAMPLE_RATE_HZ,

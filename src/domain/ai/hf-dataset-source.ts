@@ -1,5 +1,6 @@
 import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
+import { safeJsonParse } from "../../shared/utils/safe-json.ts";
 
 const logger = createLogger("ai.hf-dataset-source");
 const DATASET_SERVER_BASE_URL = "https://datasets-server.huggingface.co";
@@ -16,6 +17,19 @@ interface HfDatasetRowsResponse {
     readonly row?: Record<string, unknown>;
   }[];
 }
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const isHfDatasetRowsResponse = (
+  value: unknown,
+): value is HfDatasetRowsResponse => {
+  if (!isRecord(value) || !("rows" in value)) {
+    return false;
+  }
+  const rows = value.rows;
+  return rows === undefined || Array.isArray(rows);
+};
 
 const tokenize = (value: string): readonly string[] =>
   value
@@ -46,7 +60,7 @@ const toTextFromRecord = (record: Record<string, unknown>): string => {
     appConfig.ai.ragHfDatasetTextColumn &&
     typeof record[appConfig.ai.ragHfDatasetTextColumn] === "string"
   ) {
-    return (record[appConfig.ai.ragHfDatasetTextColumn] as string).trim();
+    return record[appConfig.ai.ragHfDatasetTextColumn].trim();
   }
 
   let longest = "";
@@ -94,57 +108,56 @@ export const fetchHfDatasetSnippets = async (
   url.searchParams.set("offset", "0");
   url.searchParams.set("length", String(sampleLength));
 
-  try {
-    const response = await fetch(url, {
-      headers: resolveAuthHeaders(),
-      signal: AbortSignal.timeout(appConfig.ai.requestTimeoutMs),
-    });
-    if (!response.ok) {
-      logger.warn("hf.dataset.rows.failed", {
-        dataset,
-        config,
-        split,
-        status: response.status,
-      });
-      return [];
-    }
-
-    const payload = (await response.json()) as HfDatasetRowsResponse;
-    const rows = Array.isArray(payload.rows) ? payload.rows : [];
-    const snippets = rows
-      .map((entry, index) => {
-        const row = entry.row;
-        if (!row || typeof row !== "object") {
-          return null;
-        }
-        const text = toTextFromRecord(row);
-        if (text.length === 0) {
-          return null;
-        }
-        const score = scoreSnippet(normalizedQuery, text);
-        if (score <= 0) {
-          return null;
-        }
-        return {
-          id: `hf:${dataset}:${config}:${split}:${index}`,
-          text,
-          source: `hf://${dataset}/${config}/${split}`,
-          score,
-        } satisfies HfDatasetSnippet;
-      })
-      .filter((snippet): snippet is HfDatasetSnippet => snippet !== null)
-      .sort((left, right) => right.score - left.score)
-      .slice(0, Math.max(1, limit));
-
-    return snippets;
-  } catch (error) {
+  const response = await fetch(url, {
+    headers: resolveAuthHeaders(),
+    signal: AbortSignal.timeout(appConfig.ai.requestTimeoutMs),
+  }).catch(() => null);
+  if (!response) {
     logger.warn("hf.dataset.rows.exception", {
       dataset,
       config,
       split,
-      message: error instanceof Error ? error.message : String(error),
+      message: "Failed to connect to Hugging Face dataset server.",
     });
     return [];
   }
+  if (!response.ok) {
+    logger.warn("hf.dataset.rows.failed", {
+      dataset,
+      config,
+      split,
+      status: response.status,
+    });
+    return [];
+  }
+
+  const payload = safeJsonParse(await response.text().catch(() => ""), null, isHfDatasetRowsResponse);
+  const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+  const snippets = rows
+    .map((entry, index) => {
+      const row = entry.row;
+      if (!row || typeof row !== "object") {
+        return null;
+      }
+      const text = toTextFromRecord(row);
+      if (text.length === 0) {
+        return null;
+      }
+      const score = scoreSnippet(normalizedQuery, text);
+      if (score <= 0) {
+        return null;
+      }
+      return {
+        id: `hf:${dataset}:${config}:${split}:${index}`,
+        text,
+        source: `hf://${dataset}/${config}/${split}`,
+        score,
+      } satisfies HfDatasetSnippet;
+    })
+    .filter((snippet): snippet is HfDatasetSnippet => snippet !== null)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, Math.max(1, limit));
+
+  return snippets;
 };
 

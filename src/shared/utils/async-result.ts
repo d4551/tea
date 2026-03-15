@@ -37,6 +37,46 @@ export const toError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
 
 /**
+ * Successful synchronous operation result.
+ *
+ * @template TValue Resolved value type.
+ */
+export interface SyncSuccessResult<TValue> {
+  readonly ok: true;
+  readonly value: TValue;
+}
+
+/**
+ * Failed synchronous operation result.
+ */
+export interface SyncFailureResult {
+  readonly ok: false;
+  readonly error: Error;
+}
+
+/**
+ * Typed result envelope for sync operations that may throw.
+ *
+ * @template TValue Resolved value type.
+ */
+export type SyncResult<TValue> = SyncSuccessResult<TValue> | SyncFailureResult;
+
+/**
+ * Wraps a synchronous throwing function in a result envelope.
+ * Use only at boundaries where exceptions must be converted to Result.
+ *
+ * @param fn Synchronous function that may throw.
+ * @returns Structured sync result.
+ */
+export const resultFromSync = <TValue>(fn: () => TValue): SyncResult<TValue> => {
+  try {
+    return { ok: true, value: fn() };
+  } catch (error: unknown) {
+    return { ok: false, error: toError(error) };
+  }
+};
+
+/**
  * Resolves an async operation into a typed result envelope.
  *
  * @param operation Promise-producing operation.

@@ -1901,7 +1901,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
-      body: t.Any(),
+      body: t.Object({}, { additionalProperties: t.String() }),
       response: {
         [httpStatus.ok]: t.Union([t.String(), builderOkResponse]),
         [httpStatus.badRequest]: builderErrorResponse,

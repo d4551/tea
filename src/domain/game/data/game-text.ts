@@ -1,4 +1,5 @@
 import type { GameLocale } from "../../../shared/contracts/game.ts";
+import { defaultLocaleCode } from "../../../shared/types/locale.ts";
 
 /**
  * Locale-indexed game strings for dialogue and labels.
@@ -124,6 +125,6 @@ export const gameTextByLocale: Record<GameLocale, GameTextCatalog> = {
  * @returns localized label.
  */
 export const resolveGameText = (locale: GameLocale, key: string): string => {
-  const localeCatalog = gameTextByLocale[locale] ?? gameTextByLocale["en-US"];
+  const localeCatalog = gameTextByLocale[locale] ?? gameTextByLocale[defaultLocaleCode];
   return localeCatalog.npcs[key] ?? localeCatalog.scenes[key] ?? key;
 };

@@ -40,18 +40,13 @@ export interface GameWebSocketContext {
   readonly gameResumeToken: string | null;
 }
 
-type WebSocketTransportObject = Record<string, unknown>;
+type TransportValue = string | readonly string[];
+type TransportRecord = Readonly<Record<string, TransportValue | undefined>>;
 
-const isWebSocketTransportObject = (value: unknown): value is WebSocketTransportObject =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
+const normalizeTransportRecord = (value: TransportRecord | undefined): TransportRecord =>
+  value ?? {};
 
-const toWebSocketTransportObject = (value: unknown): WebSocketTransportObject =>
-  isWebSocketTransportObject(value) ? value : {};
-
-const isAuthCookieBag = (value: unknown): value is AuthCookieBag =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
-
-const readStringProperty = (source: WebSocketTransportObject, key: string): string | undefined =>
+const readStringProperty = (source: TransportRecord, key: string): string | undefined =>
   typeof source[key] === "string" ? source[key] : undefined;
 
 const normalizeTransportString = (value: unknown): string | null => {
@@ -75,11 +70,13 @@ const normalizeTransportString = (value: unknown): string | null => {
 const resolveTrimmedQueryValue = (request: Request, key: string): string | null =>
   normalizeTransportString(resolveRequestQueryParam(request, key));
 
-const resolveTrimmedParamValue = (params: unknown, key: string): string | null => {
+type RouteParams = Readonly<Record<string, string | readonly string[]>>;
+
+const resolveTrimmedParamValue = (params: RouteParams | undefined, key: string): string | null => {
   if (!params || typeof params !== "object") {
     return null;
   }
-  return normalizeTransportString((params as Record<string, unknown>)[key]);
+  return normalizeTransportString(params[key]);
 };
 
 /**
@@ -92,7 +89,7 @@ const resolveTrimmedParamValue = (params: unknown, key: string): string | null =
 export const resolveGameRequestContext = (
   request: Request,
   cookie: AuthCookieBag,
-  params?: unknown,
+  params?: RouteParams,
 ): GameRequestContext => {
   const authSession = resolveAuthSession(cookie);
 
@@ -119,12 +116,11 @@ export const resolveGameRequestContext = (
  * @returns Canonical websocket participant identity and resume token.
  */
 export const resolveGameWebSocketContext = (input: {
-  readonly cookie: unknown;
-  readonly query: unknown;
+  readonly cookie: AuthCookieBag;
+  readonly query: TransportRecord | undefined;
 }): GameWebSocketContext => {
-  const cookieSource = isAuthCookieBag(input.cookie) ? input.cookie : {};
-  const querySource = toWebSocketTransportObject(input.query);
-  const authSession = resolveAuthSession(cookieSource);
+  const querySource = normalizeTransportRecord(input.query);
+  const authSession = resolveAuthSession(input.cookie);
 
   return {
     gameParticipantSessionId: authSession.sessionId,

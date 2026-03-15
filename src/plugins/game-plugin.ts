@@ -27,6 +27,7 @@ import type {
 } from "../shared/contracts/game.ts";
 import { WS_CLOSE_SESSION_MISSING, WS_CLOSE_TOKEN_EXPIRED } from "../shared/contracts/game.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
+import { defaultLocaleCode } from "../shared/types/locale.ts";
 import { acceptUnknown, safeJsonParse } from "../shared/utils/safe-json.ts";
 import { escapeHtml } from "../views/layout.ts";
 import { gameRequestContextPlugin, resolveGameWebSocketContext } from "./game-request-context.ts";
@@ -549,7 +550,7 @@ const createHudStream = async function* ({
   const sessionId = session.sessionId;
   const commandPath = interpolateRoutePath(appRoutes.gameApiSessionCommand, { id: sessionId });
   const normalizedLocale = normalizeLocale(session.locale);
-  const catalog = gameTextByLocale[normalizedLocale] ?? gameTextByLocale["en-US"];
+  const catalog = gameTextByLocale[normalizedLocale] ?? gameTextByLocale[defaultLocaleCode];
   const messages = getMessages(normalizedLocale);
   const retryMs = defaultGameConfig.hudRetryDelayMs;
   let sequence = 0;
@@ -2335,7 +2336,7 @@ export const gamePlugin = new Elysia({ prefix: "/api/game" })
           query: t.Object({ itemId: t.Optional(t.String()) }),
         },
       )
-      .get(route.hud, createHudStreamHandler as (ctx: unknown) => AsyncGenerator<string>, {
+      .get(route.hud, createHudStreamHandler, {
         params: t.Object({ id: t.String() }),
         response: {
           [httpStatus.ok]: t.String(),

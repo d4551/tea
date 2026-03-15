@@ -1,4 +1,4 @@
-import { type Cookie, Elysia, t } from "elysia";
+import { Elysia, t } from "elysia";
 import { appConfig } from "../config/environment.ts";
 
 /**
@@ -61,8 +61,8 @@ interface AuthSessionCookieOptions {
 }
 
 interface AuthSessionCookie {
-  readonly value?: Cookie<unknown>["value"];
-  readonly set: (...args: Parameters<Cookie<unknown>["set"]>) => void;
+  readonly value?: string;
+  readonly set: (value: string) => void;
 }
 
 export type AuthCookieBag = Record<string, AuthSessionCookie>;

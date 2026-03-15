@@ -80,7 +80,18 @@ interface HuggingFaceHubModelRecord {
   readonly likes?: number;
 }
 
+type JsonPrimitive = string | number | boolean | null;
+type JsonArray = readonly JsonValue[];
+type JsonRecord = Readonly<Record<string, JsonValue>>;
+type JsonValue = JsonPrimitive | JsonArray | JsonRecord;
+
 const searchableProviderSet = new Set<string>(SEARCHABLE_PROVIDER_LANES);
+
+const isRecord = (value: JsonValue): value is JsonRecord =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const extractModelId = (value: JsonValue): string =>
+  isRecord(value) && typeof value.id === "string" ? value.id : "";
 
 const slotToCapability = (slot: string): string | null => {
   switch (slot) {
@@ -178,37 +189,27 @@ const toOpenAiCompatibleModelDiscoveryUrl = (
   return new URL(modelsPath, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`).toString();
 };
 
-const parseOpenAiModelIds = (value: unknown): readonly string[] => {
+const parseOpenAiModelIds = (value: JsonValue): readonly string[] => {
   if (Array.isArray(value)) {
     return value
-      .map((entry) => {
-        const record = typeof entry === "object" && entry !== null ? (entry as { id?: unknown }) : null;
-        return typeof record?.id === "string" ? record.id : "";
-      })
+      .map((entry) => extractModelId(entry))
       .filter((entry) => entry.length > 0);
   }
 
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    Array.isArray((value as { readonly data?: unknown[] }).data)
-  ) {
-    return ((value as { readonly data: readonly unknown[] }).data ?? [])
-      .map((entry) => {
-        const record = typeof entry === "object" && entry !== null ? (entry as { id?: unknown }) : null;
-        return typeof record?.id === "string" ? record.id : "";
-      })
+  if (isRecord(value) && Array.isArray(value.data)) {
+    return value.data
+      .map((entry) => extractModelId(entry))
       .filter((entry) => entry.length > 0);
   }
 
   return [];
 };
 
-const parseHuggingFaceModels = (value: unknown): readonly HuggingFaceHubModelRecord[] =>
+const parseHuggingFaceModels = (value: JsonValue): readonly HuggingFaceHubModelRecord[] =>
   Array.isArray(value)
     ? value.filter(
         (entry): entry is HuggingFaceHubModelRecord =>
-          typeof entry === "object" && entry !== null && typeof entry.id === "string",
+          isRecord(entry) && typeof entry.id === "string",
       )
     : [];
 

@@ -35,6 +35,7 @@ import { LocalModelPipelineCache } from "./model-pipeline-cache.ts";
 import { type AnyPipeline, loadModelPipeline } from "./model-pipeline-loader.ts";
 import { MODEL_REGISTRY, type ModelKey } from "./model-registry.ts";
 import { LocalModelRuntimeHealth } from "./model-runtime-health.ts";
+import { settleAsync } from "../../shared/utils/async-result.ts";
 
 const logger = createLogger("ai.model-manager");
 
@@ -82,28 +83,16 @@ const isLikelyBase64 = (value: string): boolean =>
 
 const decodeBase64ToBytes = (encoded: string): Uint8Array | null => {
   const normalized = encoded.replace(/[\r\n\s]/g, "");
-  try {
-    if (typeof atob !== "undefined") {
-      const binary = atob(normalized);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i += 1) {
-        bytes[i] = binary.charCodeAt(i);
-      }
-      return bytes;
-    }
-  } catch {
+  if (!isLikelyBase64(normalized) || typeof atob === "undefined") {
     return null;
   }
 
-  try {
-    if (typeof Buffer !== "undefined") {
-      return new Uint8Array(Buffer.from(normalized, "base64"));
-    }
-  } catch {
-    return null;
+  const binary = atob(normalized);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
   }
-
-  return null;
+  return bytes;
 };
 
 const decodeImageDataUrl = (value: string): { bytes: Uint8Array; mimeType: string } | null => {
@@ -137,17 +126,17 @@ const fetchImageBytes = async (url: string): Promise<Uint8Array | null> => {
     return null;
   }
 
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      return null;
-    }
-
-    const buffer = await response.arrayBuffer();
-    return new Uint8Array(buffer);
-  } catch {
+  const responseResult = await settleAsync(fetch(url));
+  if (!responseResult.ok || !responseResult.value.ok) {
     return null;
   }
+
+  const bufferResult = await settleAsync(responseResult.value.arrayBuffer());
+  if (!bufferResult.ok) {
+    return null;
+  }
+
+  return new Uint8Array(bufferResult.value);
 };
 
 const normalizeImageOutput = async (

@@ -66,10 +66,25 @@ interface SettingDescriptor {
   readonly getCurrentValue: SettingGetter;
   readonly setCurrentValue: SettingSetter;
 }
-const mutableAiConfig = appConfig.ai as unknown as Record<string, unknown>;
-const mutableLocalApiConfig = appConfig.ai.openAiCompatible.local as unknown as Record<string, unknown>;
-const mutableCloudApiConfig = appConfig.ai.openAiCompatible.cloud as unknown as Record<string, unknown>;
-const mutableHfInferenceConfig = appConfig.ai.huggingfaceInference as unknown as Record<string, unknown>;
+<<<<<<< Current (Your changes)
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
+
+type MutableAiConfig = Mutable<typeof appConfig.ai>;
+type MutableOpenAiCompatibleConfig = Mutable<typeof appConfig.ai.openAiCompatible.local>;
+type MutableHfInferenceConfig = Mutable<typeof appConfig.ai.huggingfaceInference>;
+
+const mutableAiConfig = appConfig.ai as MutableAiConfig;
+const mutableLocalApiConfig = appConfig.ai.openAiCompatible.local as MutableOpenAiCompatibleConfig;
+const mutableCloudApiConfig = appConfig.ai.openAiCompatible.cloud as MutableOpenAiCompatibleConfig;
+const mutableHfInferenceConfig = appConfig.ai.huggingfaceInference as MutableHfInferenceConfig;
+=======
+const mutableAiConfig: Record<string, SettingPrimitive | undefined> = {};
+const mutableLocalApiConfig: Record<string, SettingPrimitive | undefined> = {};
+const mutableCloudApiConfig: Record<string, SettingPrimitive | undefined> = {};
+const mutableHfInferenceConfig: Record<string, SettingPrimitive | undefined> = {};
+
+const runtimeSettingOverrides = new Map<string, SettingPrimitive>();
+>>>>>>> Incoming (Background Agent changes)
 
 const parseNonEmptyString = (value: string | number | boolean, key: string): string => {
   const normalized = String(value ?? "").trim();
@@ -108,9 +123,14 @@ const parseDescriptorFloat = (
 
 const defineSetting = (descriptor: SettingDescriptor): SettingDescriptor => {
   const baseValue = descriptor.getBaseValue();
+  const baseCurrentValue = descriptor.getCurrentValue;
   return {
     ...descriptor,
     getBaseValue: () => baseValue,
+    getCurrentValue: () => {
+      const override = runtimeSettingOverrides.get(descriptor.key);
+      return override ?? baseCurrentValue();
+    },
   };
 };
 
@@ -655,7 +675,11 @@ export const listAiRuntimeSettingDescriptors = (): readonly AiRuntimeSettingValu
     key: descriptor.key,
     value: descriptor.getCurrentValue(),
     valueType: descriptor.valueType,
-    source: Bun.env[descriptor.envKey] !== undefined ? "env" : "default",
+    source: runtimeSettingOverrides.has(descriptor.key)
+      ? "override"
+      : Bun.env[descriptor.envKey] !== undefined
+        ? "env"
+        : "default",
     editable: descriptor.editable,
     providerLane: descriptor.providerLane,
     slot: descriptor.slot,
@@ -796,6 +820,7 @@ export class AiRuntimeSettingsService {
     this.overrideKeys.clear();
     for (const descriptor of editableSettingDescriptors) {
       descriptor.setCurrentValue(descriptor.getBaseValue());
+      runtimeSettingOverrides.delete(descriptor.key);
     }
     synchronizeModelRegistry();
   }
@@ -809,11 +834,13 @@ export class AiRuntimeSettingsService {
       const override = overrides.get(descriptor.key);
       if (!override) {
         descriptor.setCurrentValue(descriptor.getBaseValue());
+        runtimeSettingOverrides.delete(descriptor.key);
         continue;
       }
 
       const parsedValue = this.parseStoredValue(descriptor, override.value);
       descriptor.setCurrentValue(parsedValue);
+      runtimeSettingOverrides.set(descriptor.key, parsedValue);
     }
     synchronizeModelRegistry();
 

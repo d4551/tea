@@ -170,7 +170,7 @@ export const clientModuleEntryPaths = getClientModuleEntryPaths().map((entryPath
  */
 export const createTailwindCommand = (watch: boolean): readonly string[] => [
   "bunx",
-  "tailwindcss",
+  "@tailwindcss/cli",
   "-i",
   assetRelativePaths.sourceStylesheet,
   "-o",

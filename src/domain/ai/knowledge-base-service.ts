@@ -7,13 +7,13 @@ import {
 } from "../../shared/constants/errors.ts";
 import { prismaBase } from "../../shared/services/db.ts";
 import { settleAsync } from "../../shared/utils/async-result.ts";
+import { fetchHfDatasetSnippets } from "./hf-dataset-source.ts";
 import {
   extractKnowledgeSearchTerms,
   type KnowledgeSearchTerm,
   normalizeKnowledgeSearchText,
   tokenizeKnowledgeSearchTerms,
 } from "./knowledge-search-text.ts";
-import { fetchHfDatasetSnippets } from "./hf-dataset-source.ts";
 import { ProviderRegistry } from "./providers/provider-registry.ts";
 import { vectorStore } from "./vector-store.ts";
 
@@ -36,7 +36,7 @@ export const resetEmbeddingFallback = (): void => {
  */
 export interface KnowledgeDocumentInput {
   /** Builder project scope for project-specific retrieval. */
-  readonly projectId: string;
+  readonly projectId?: string;
   /** Human-readable document title. */
   readonly title: string;
   /** Source identifier such as a file path, URL, or note label. */
@@ -493,10 +493,10 @@ export class KnowledgeBaseService {
    * @param projectId Project scope for listing documents.
    * @returns Persisted document summaries sorted by update time.
    */
-  async listDocuments(projectId: string): Promise<readonly KnowledgeDocumentRecord[]> {
+  async listDocuments(projectId?: string): Promise<readonly KnowledgeDocumentRecord[]> {
     const rows = await prismaBase.aiKnowledgeDocument.findMany({
       where: {
-        projectId,
+        ...(projectId ? { projectId } : {}),
       },
       include: {
         _count: {
@@ -539,16 +539,21 @@ export class KnowledgeBaseService {
    * @param projectId Project scope guard.
    * @returns Whether a document was deleted.
    */
-  async deleteDocument(documentId: string, projectId: string): Promise<boolean> {
+  async deleteDocument(documentId: string, projectId?: string): Promise<boolean> {
     const existingChunks = await prismaBase.aiKnowledgeChunk.findMany({
-      where: { document: { id: documentId, projectId } },
+      where: {
+        document: {
+          id: documentId,
+          ...(projectId ? { projectId } : {}),
+        },
+      },
       select: { id: true },
     });
 
     const deleted = await prismaBase.aiKnowledgeDocument.deleteMany({
       where: {
         id: documentId,
-        projectId,
+        ...(projectId ? { projectId } : {}),
       },
     });
 
@@ -562,7 +567,7 @@ export class KnowledgeBaseService {
   private async shortlistChunkIds(
     query: string,
     options: {
-      readonly projectId: string;
+      readonly projectId?: string;
       readonly locale?: string;
       readonly limit: number;
     },
@@ -572,7 +577,7 @@ export class KnowledgeBaseService {
       const rows = await prismaBase.aiKnowledgeChunk.findMany({
         where: {
           document: {
-            projectId: options.projectId,
+            ...(options.projectId ? { projectId: options.projectId } : {}),
             ...(options.locale ? { locale: options.locale } : {}),
           },
         },
@@ -598,7 +603,11 @@ export class KnowledgeBaseService {
         INNER JOIN "AiKnowledgeDocument"
           ON "AiKnowledgeDocument"."id" = "AiKnowledgeChunk"."documentId"
         WHERE 1 = 1
-          ${Prisma.sql`AND "AiKnowledgeDocument"."projectId" = ${options.projectId}`}
+          ${
+            options.projectId
+              ? Prisma.sql`AND "AiKnowledgeDocument"."projectId" = ${options.projectId}`
+              : Prisma.empty
+          }
           ${
             options.locale
               ? Prisma.sql`AND "AiKnowledgeDocument"."locale" = ${options.locale}`
@@ -620,7 +629,7 @@ export class KnowledgeBaseService {
     const fallbackRows = await prismaBase.aiKnowledgeChunk.findMany({
       where: {
         document: {
-          projectId: options.projectId,
+          ...(options.projectId ? { projectId: options.projectId } : {}),
           ...(options.locale ? { locale: options.locale } : {}),
         },
       },
@@ -648,7 +657,7 @@ export class KnowledgeBaseService {
   async search(
     query: string,
     options: {
-      readonly projectId: string;
+      readonly projectId?: string;
       readonly locale?: string;
       readonly limit?: number;
     },
@@ -682,7 +691,7 @@ export class KnowledgeBaseService {
       where: {
         id: { in: [...candidateIds] },
         document: {
-          projectId: options.projectId,
+          ...(options.projectId ? { projectId: options.projectId } : {}),
           ...(targetLocale ? { locale: targetLocale } : {}),
         },
       },
@@ -734,10 +743,11 @@ export class KnowledgeBaseService {
       return ranked;
     }
 
-    const supplemental = await fetchHfDatasetSnippets(
+    const supplementalResult = await fetchHfDatasetSnippets(
       trimmedQuery,
       Math.max(1, effectiveLimit - ranked.length),
     );
+    const supplemental = supplementalResult.ok ? supplementalResult.value : [];
     if (supplemental.length === 0) {
       return ranked;
     }
@@ -768,7 +778,7 @@ export class KnowledgeBaseService {
   async assist(
     prompt: string,
     options: {
-      readonly projectId: string;
+      readonly projectId?: string;
       readonly locale?: string;
       readonly limit?: number;
     },

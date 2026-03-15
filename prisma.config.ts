@@ -1,12 +1,13 @@
-import { defineConfig, env } from "prisma/config";
+import { defineConfig } from "prisma/config";
 
 /**
  * Prisma CLI configuration.
- * Datasource URLs are defined here for the Bun-native Prisma CLI.
+ * Uses process.env so prisma generate can run without DATABASE_URL (e.g. CI, fresh clone).
+ * Database-dependent commands (migrate, db push) require DATABASE_URL.
  */
 export default defineConfig({
   schema: "prisma/schema.prisma",
   datasource: {
-    url: env("DATABASE_URL"),
+    url: process.env.DATABASE_URL ?? "",
   },
 });

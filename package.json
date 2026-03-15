@@ -40,7 +40,7 @@
     "test:e2e": "playwright test",
     "prisma:generate": "bunx --bun prisma generate",
     "prisma:migrate": "bun run scripts/prisma-migrate.ts",
-    "verify": "bun run build:assets && bun run dependency:drift && bun run docs:check && bun run lint && bun run typecheck && bun test"
+    "verify": "bun run prisma:generate && bun run build:assets && bun run dependency:drift && bun run docs:check && bun run lint && bun run typecheck && bun test"
   },
   "dependencies": {
     "@elysiajs/openapi": "1.4.14",

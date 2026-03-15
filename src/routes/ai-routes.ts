@@ -575,37 +575,36 @@ const delayWithAbort = (signal: AbortSignal, delayMs: number): Promise<void> =>
     signal.addEventListener("abort", onAbort, { once: true });
   });
 
-const normalizeAiSettingsMutations = (body: unknown): readonly AiRuntimeSettingMutation[] => {
-  if (typeof body !== "object" || body === null) {
-    throw new Error("AI runtime settings payload must be an object.");
+type BulkAiRuntimeSettingMutationBody = {
+  readonly updates: readonly AiRuntimeSettingMutation[];
+};
+type SingleAiRuntimeSettingMutationBody = {
+  readonly key: string;
+  readonly value?: string | number | boolean;
+  readonly reset?: string | boolean;
+};
+type AiRuntimeSettingsMutationBody = BulkAiRuntimeSettingMutationBody | SingleAiRuntimeSettingMutationBody;
+
+const normalizeAiSettingsMutations = (body: AiRuntimeSettingsMutationBody): readonly AiRuntimeSettingMutation[] => {
+  if (Array.isArray(body.updates)) {
+    return body.updates;
   }
 
-  const record = body as {
-    readonly updates?: readonly AiRuntimeSettingMutation[];
-    readonly key?: string;
-    readonly value?: string | number | boolean;
-    readonly reset?: string | boolean;
-  };
-
-  if (Array.isArray(record.updates)) {
-    return record.updates;
-  }
-
-  if (typeof record.key !== "string" || record.key.trim().length === 0) {
+  if (body.key.trim().length === 0) {
     throw new Error("AI runtime setting key is required.");
   }
 
   const reset =
-    typeof record.reset === "boolean"
-      ? record.reset
-      : typeof record.reset === "string"
-        ? parseBoolean(record.reset, false, "reset")
+    typeof body.reset === "boolean"
+      ? body.reset
+      : typeof body.reset === "string"
+        ? parseBoolean(body.reset, false, "reset")
         : false;
 
   return [
     {
-      key: record.key,
-      value: record.value,
+      key: body.key,
+      value: body.value,
       reset,
     },
   ];
@@ -785,57 +784,23 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
   .get(
     appRoutes.aiProviderModels,
     async ({ query, request }) => {
-      const provider = query.provider as
-        | "ollama"
-        | "openai-compatible-local"
-        | "openai-compatible-cloud"
-        | "huggingface-inference"
-        | "huggingface-endpoints"
-        | "transformers-local";
+      const provider = query.provider;
       const locale = normalizeLocale(query.locale);
       const messages = getMessages(locale);
 
-      try {
-        const result = await searchProviderModels({
-          provider,
-          slot: query.slot,
-          search: query.search,
-          author: query.author,
-          cursor: query.cursor,
-          limit: query.limit,
-        });
+      const providerModelSearch = await searchProviderModels({
+        provider,
+        slot: query.slot,
+        search: query.search,
+        author: query.author,
+        cursor: query.cursor,
+        limit: query.limit,
+      }).then(
+        (result) => ({ ok: true as const, result }),
+        (error) => ({ ok: false as const, error }),
+      );
 
-        if (request.headers.get("HX-Request") === "true") {
-        return renderAiProviderSearchPanel(messages, locale, query.projectId, {
-            settingKey: query.settingKey ?? "",
-            provider: result.provider,
-            slot: result.slot,
-            search: query.search ?? "",
-            author: query.author ?? "",
-            items: result.items,
-          });
-        }
-
-        return {
-          ok: true as const,
-          data: {
-            provider: result.provider,
-            slot: result.slot,
-            items: result.items.map((item) => ({
-              provider: item.provider,
-              model: item.model,
-              label: item.label,
-              summary: item.summary,
-              capabilities: [...item.capabilities],
-              tags: [...item.tags],
-              installed: item.installed,
-              available: item.available,
-              source: item.source,
-            })),
-            nextCursor: result.nextCursor,
-          },
-        };
-      } catch (error) {
+      if (!providerModelSearch.ok) {
         if (request.headers.get("HX-Request") === "true") {
           return renderAiProviderSearchPanel(messages, locale, query.projectId, {
             settingKey: query.settingKey ?? "",
@@ -844,15 +809,57 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
             search: query.search ?? "",
             author: query.author ?? "",
             items: [],
-            error: error instanceof Error ? error.message : String(error),
+            error:
+              providerModelSearch.error instanceof Error
+                ? providerModelSearch.error.message
+                : "Unable to query provider model catalog.",
           });
         }
-        throw error;
+        throw providerModelSearch.error;
       }
+
+      const result = providerModelSearch.result;
+      if (request.headers.get("HX-Request") === "true") {
+        return renderAiProviderSearchPanel(messages, locale, query.projectId, {
+          settingKey: query.settingKey ?? "",
+          provider: result.provider,
+          slot: result.slot,
+          search: query.search ?? "",
+          author: query.author ?? "",
+          items: result.items,
+        });
+      }
+
+      return {
+        ok: true as const,
+        data: {
+          provider: result.provider,
+          slot: result.slot,
+          items: result.items.map((item) => ({
+            provider: item.provider,
+            model: item.model,
+            label: item.label,
+            summary: item.summary,
+            capabilities: [...item.capabilities],
+            tags: [...item.tags],
+            installed: item.installed,
+            available: item.available,
+            source: item.source,
+          })),
+          nextCursor: result.nextCursor,
+        },
+      };
     },
     {
       query: t.Object({
-        provider: t.String({ minLength: 1 }),
+        provider: t.Union([
+          t.Literal("ollama"),
+          t.Literal("openai-compatible-local"),
+          t.Literal("openai-compatible-cloud"),
+          t.Literal("huggingface-inference"),
+          t.Literal("huggingface-endpoints"),
+          t.Literal("transformers-local"),
+        ]),
         slot: t.String({ minLength: 1 }),
         search: t.Optional(t.String()),
         author: t.Optional(t.String()),

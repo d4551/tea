@@ -6,13 +6,11 @@ import {
   resolveRequestQueryParam,
 } from "../shared/constants/routes.ts";
 import { resolveRequestLocale } from "../shared/i18n/translator.ts";
-import type { AuthCookieBag, AuthPrincipal, AuthRequestContext } from "./auth-session.ts";
+import type { AuthCookieBag, AuthRequestContext } from "./auth-session.ts";
 import { resolveAuthSession } from "./auth-session.ts";
 
-type ContextSource = Record<string, unknown>;
-
-const isContextSource = (value: unknown): value is ContextSource =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
+type ContextSourceValue = string;
+type ContextSource = Readonly<Record<string, ContextSourceValue | undefined>>;
 
 /**
  * Derived builder request context available to builder page and API handlers.
@@ -37,7 +35,18 @@ export interface BuilderRequestContext {
   readonly builderPrincipalRoleKeys: AuthRequestContext["authPrincipalRoleKeys"];
 }
 
-const toContextSource = (value: unknown): ContextSource => (isContextSource(value) ? value : {});
+const toContextSource = (value: unknown): ContextSource => {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  const next: ContextSource = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (typeof raw === "string") {
+      next[key] = raw;
+    }
+  }
+  return next;
+};
 
 const toSearchParamSource = (request: Request | undefined): ContextSource => {
   if (!request) {
@@ -68,8 +77,16 @@ const toSearchParamSource = (request: Request | undefined): ContextSource => {
 const readStringField = (source: ContextSource, key: string): string | undefined =>
   typeof source[key] === "string" ? source[key] : undefined;
 
-const resolveBuilderProjectId = (_querySource: ContextSource, _bodySource: ContextSource, paramSource: ContextSource): string => {
-  const candidate = readStringField(paramSource, "projectId") ?? "";
+const resolveBuilderProjectId = (
+  querySource: ContextSource,
+  bodySource: ContextSource,
+  paramSource: ContextSource,
+): string => {
+  const candidate =
+    readStringField(paramSource, "projectId") ??
+    readStringField(bodySource, "projectId") ??
+    readStringField(querySource, "projectId") ??
+    "";
   const normalized = candidate.trim();
   return normalized.length > 0 ? normalized : "";
 };
@@ -118,19 +135,19 @@ const resolveBuilderSearch = (
  */
 export const resolveBuilderRequestContext = (input: {
   readonly request?: Request;
-  readonly query?: unknown;
-  readonly body?: unknown;
-  readonly params?: unknown;
-  readonly auth?: unknown;
+  readonly query?: ContextSource;
+  readonly body?: ContextSource;
+  readonly params?: ContextSource;
+  readonly auth?: AuthCookieBag;
 }): BuilderRequestContext => {
   const querySource =
     input.query === undefined ? toSearchParamSource(input.request) : toContextSource(input.query);
   const bodySource = toContextSource(input.body);
   const paramSource = toContextSource(input.params);
-  const authCookieSource = isAuthCookieSource(input.auth) ? input.auth : {};
+  const authCookieSource = input.auth ?? {};
 
   const authSession = resolveAuthSession(authCookieSource);
-  const principal = authSession.principal as AuthPrincipal;
+  const principal = authSession.principal;
 
   return {
     builderLocale: resolveBuilderLocale(input.request, querySource, bodySource),
@@ -144,21 +161,15 @@ export const resolveBuilderRequestContext = (input: {
   };
 };
 
-const isAuthCookieSource = (value: unknown): value is AuthCookieBag =>
-  value !== null &&
-  typeof value === "object" &&
-  !Array.isArray(value) &&
-  Object.keys(value).length >= 0;
-
 /**
  * Merges validated body/query/params overrides onto an existing request-derived builder context.
  */
 export const mergeBuilderRequestContext = (
   base: BuilderRequestContext,
   input: {
-    readonly body?: unknown;
-    readonly query?: unknown;
-    readonly params?: unknown;
+    readonly body?: ContextSource;
+    readonly query?: ContextSource;
+    readonly params?: ContextSource;
   },
 ): BuilderRequestContext => {
   const querySource = toContextSource(input.query);
@@ -171,7 +182,11 @@ export const mergeBuilderRequestContext = (
         ? resolveBuilderLocale(undefined, querySource, bodySource)
         : base.builderLocale,
     builderProjectId:
-      readStringField(paramSource, "projectId")
+      (
+        readStringField(paramSource, "projectId") ??
+        readStringField(bodySource, "projectId") ??
+        readStringField(querySource, "projectId")
+      )
         ? resolveBuilderProjectId(querySource, bodySource, paramSource)
         : base.builderProjectId,
     builderCurrentPath:
@@ -212,9 +227,9 @@ export const readBuilderScopedContext = (
       >
     >,
   input: {
-    readonly body?: unknown;
-    readonly query?: unknown;
-    readonly params?: unknown;
+    readonly body?: ContextSource;
+    readonly query?: ContextSource;
+    readonly params?: ContextSource;
   },
 ): BuilderRequestContext =>
   mergeBuilderRequestContext(

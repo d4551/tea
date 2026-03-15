@@ -1,0 +1,815 @@
+#!/usr/bin/env bash
+# ============================================================================
+#  cursor-worktree.sh — Divide & Conquer with Cursor Parallel Agents
+# ============================================================================
+#  Combines best practices from:
+#    • Cursor Docs (worktrees.json setup, parallel agents)
+#    • egghead.io  (wtree / wtmerge shell functions)
+#    • Cursor Forum (automatic agent-id coordination)
+#    • CodeRabbit   (git-worktree-runner patterns)
+#    • worktree-cli (safe merge, atomic rollback)
+#    • Community patterns (.trees/ layout, env sync, dep install)
+#
+#  Usage:
+#    source cursor-worktree.sh        # Load all functions into your shell
+#
+#  Commands:
+#    cwt new   <branch> [branch...]   # Create worktrees + open Cursor
+#    cwt list                         # Show all active worktrees
+#    cwt status                       # Status of every worktree (dirty/clean)
+#    cwt merge <branch>               # Merge a branch into main, cleanup
+#    cwt remove <branch> [branch...]  # Remove specific worktrees
+#    cwt clean                        # Remove ALL project worktrees
+#    cwt setup                        # Generate .cursor/worktrees.json
+#    cwt divide <file>                # Parse a task file & spawn agents
+#    cwt help                         # Show this help
+# ============================================================================
+
+# NOTE: We intentionally do NOT set -euo pipefail at the top level
+# because this script is designed to be sourced into interactive shells.
+# Individual functions handle errors explicitly instead.
+
+# ── Configuration ───────────────────────────────────────────────────────────
+CWT_EDITOR="${CWT_EDITOR:-cursor}"              # Editor command
+CWT_PKG_MANAGER="${CWT_PKG_MANAGER:-}"          # auto-detect if empty
+CWT_WORKTREE_DIR="${CWT_WORKTREE_DIR:-}"        # auto: ../<repo>-<branch>
+CWT_COPY_FILES="${CWT_COPY_FILES:-.env .env.local .env.development .env.development.local}"
+CWT_MAIN_BRANCH="${CWT_MAIN_BRANCH:-main}"      # or "master"
+CWT_MAX_AGENTS="${CWT_MAX_AGENTS:-8}"           # max parallel agents
+CWT_COLOR="${CWT_COLOR:-true}"                  # colorized output
+
+# ── Colors ──────────────────────────────────────────────────────────────────
+if [[ "$CWT_COLOR" == "true" ]]; then
+    _R='\033[0;31m' _G='\033[0;32m' _Y='\033[0;33m'
+    _B='\033[0;34m' _M='\033[0;35m' _C='\033[0;36m'
+    _W='\033[1;37m' _D='\033[0;90m' _N='\033[0m'
+else
+    _R='' _G='' _Y='' _B='' _M='' _C='' _W='' _D='' _N=''
+fi
+
+_info()  { echo -e "${_B}ℹ${_N}  $*"; }
+_ok()    { echo -e "${_G}✓${_N}  $*"; }
+_warn()  { echo -e "${_Y}⚠${_N}  $*"; }
+_err()   { echo -e "${_R}✗${_N}  $*" >&2; }
+_head()  { echo -e "\n${_W}━━━ $* ━━━${_N}"; }
+_dim()   { echo -e "${_D}$*${_N}"; }
+
+# ── Helpers ─────────────────────────────────────────────────────────────────
+
+_ensure_git_repo() {
+    if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+        _err "Not inside a git repository."
+        return 1
+    fi
+}
+
+_repo_root() {
+    git rev-parse --show-toplevel
+}
+
+_repo_name() {
+    basename "$(_repo_root)"
+}
+
+_current_branch() {
+    git rev-parse --abbrev-ref HEAD
+}
+
+# Auto-detect package manager
+_detect_pkg_manager() {
+    if [[ -n "$CWT_PKG_MANAGER" ]]; then
+        echo "$CWT_PKG_MANAGER"
+        return
+    fi
+    local root
+    root="$(_repo_root)"
+    if [[ -f "$root/bun.lockb" ]] || [[ -f "$root/bun.lock" ]]; then
+        echo "bun"
+    elif [[ -f "$root/pnpm-lock.yaml" ]]; then
+        echo "pnpm"
+    elif [[ -f "$root/yarn.lock" ]]; then
+        echo "yarn"
+    elif [[ -f "$root/package-lock.json" ]]; then
+        echo "npm"
+    elif [[ -f "$root/Pipfile.lock" ]]; then
+        echo "pipenv"
+    elif [[ -f "$root/poetry.lock" ]]; then
+        echo "poetry"
+    elif [[ -f "$root/requirements.txt" ]]; then
+        echo "pip"
+    elif [[ -f "$root/Gemfile.lock" ]]; then
+        echo "bundle"
+    elif [[ -f "$root/go.sum" ]]; then
+        echo "go"
+    else
+        echo ""
+    fi
+}
+
+_install_deps() {
+    local dir="$1"
+    local mgr
+    mgr="$(_detect_pkg_manager)"
+    if [[ -z "$mgr" ]]; then
+        _dim "   No package manager detected, skipping dependency install."
+        return 0
+    fi
+    _info "Installing deps with ${_C}${mgr}${_N} in $(basename "$dir")..."
+    (
+        cd "$dir"
+        case "$mgr" in
+            npm)     npm install --silent 2>/dev/null ;;
+            pnpm)    pnpm install --silent 2>/dev/null ;;
+            yarn)    yarn install --silent 2>/dev/null ;;
+            bun)     bun install 2>/dev/null ;;
+            pipenv)  pipenv install 2>/dev/null ;;
+            poetry)  poetry install 2>/dev/null ;;
+            pip)     pip install -r requirements.txt -q 2>/dev/null ;;
+            bundle)  bundle install --quiet 2>/dev/null ;;
+            go)      go mod download 2>/dev/null ;;
+        esac
+    ) && _ok "Dependencies installed." || _warn "Dependency install had warnings."
+}
+
+_copy_env_files() {
+    local src="$1" dest="$2"
+    local copied=0
+    for pattern in $CWT_COPY_FILES; do
+        # Support globbing and nested paths
+        while IFS= read -r -d '' file; do
+            local rel="${file#$src/}"
+            local target_dir
+            target_dir="$(dirname "$dest/$rel")"
+            mkdir -p "$target_dir"
+            cp "$file" "$dest/$rel"
+            ((copied++))
+        done < <(find "$src" -maxdepth 3 -name "$pattern" -print0 2>/dev/null)
+    done
+    if ((copied > 0)); then
+        _dim "   Copied $copied config file(s) (.env, etc.)"
+    fi
+}
+
+_worktree_path() {
+    local branch="$1"
+    local repo
+    repo="$(_repo_name)"
+    if [[ -n "$CWT_WORKTREE_DIR" ]]; then
+        echo "${CWT_WORKTREE_DIR}/${branch}"
+    else
+        echo "$(_repo_root)/../${repo}-${branch}"
+    fi
+}
+
+_list_project_worktrees() {
+    # Returns worktree paths that belong to this repo (excluding the main one)
+    local root
+    root="$(_repo_root)"
+    git worktree list --porcelain | awk -v root="$root" '
+        /^worktree / {
+            path = substr($0, 10)
+            if (path != root) print path
+        }
+    '
+}
+
+# ── Core Commands ───────────────────────────────────────────────────────────
+
+cwt_new() {
+    local branches=()
+    local install_deps=true
+    local open_editor=true
+    local base_branch=""
+
+    # Parse flags
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --no-install|-ni)  install_deps=false; shift ;;
+            --no-open|-no)     open_editor=false; shift ;;
+            --base|-b)         base_branch="$2"; shift 2 ;;
+            -*)                _err "Unknown flag: $1"; return 1 ;;
+            *)                 branches+=("$1"); shift ;;
+        esac
+    done
+
+    if [[ ${#branches[@]} -eq 0 ]]; then
+        _err "Usage: cwt new <branch> [branch...] [--no-install] [--no-open] [--base <branch>]"
+        return 1
+    fi
+
+    _ensure_git_repo
+    local root
+    root="$(_repo_root)"
+    local current
+    current="$(_current_branch)"
+    base_branch="${base_branch:-$current}"
+
+    _head "Creating ${#branches[@]} worktree(s) from '${base_branch}'"
+
+    for branch in "${branches[@]}"; do
+        local target
+        target="$(_worktree_path "$branch")"
+
+        echo ""
+        _info "Branch: ${_C}${branch}${_N} → ${_D}${target}${_N}"
+
+        # Create branch if it doesn't exist
+        if ! git show-ref --verify --quiet "refs/heads/${branch}"; then
+            _dim "   Creating branch '${branch}' from '${base_branch}'..."
+            if ! git branch "$branch" "$base_branch" 2>/dev/null; then
+                _err "Failed to create branch '${branch}'. Skipping."
+                continue
+            fi
+        else
+            _dim "   Branch '${branch}' already exists."
+        fi
+
+        # Create worktree
+        if [[ -d "$target" ]]; then
+            _warn "Worktree directory already exists: ${target}"
+        else
+            if ! git worktree add "$target" "$branch" 2>/dev/null; then
+                _err "Failed to create worktree for '${branch}'. Skipping."
+                continue
+            fi
+        fi
+
+        # Sync env/config files
+        _copy_env_files "$root" "$target"
+
+        # Install dependencies
+        if $install_deps; then
+            _install_deps "$target"
+        fi
+
+        # Open in editor
+        if $open_editor; then
+            if command -v "$CWT_EDITOR" &>/dev/null; then
+                "$CWT_EDITOR" "$target" &
+                _ok "Opened in ${_C}${CWT_EDITOR}${_N}"
+            else
+                _warn "Editor '${CWT_EDITOR}' not found. Set CWT_EDITOR."
+            fi
+        fi
+
+        _ok "Worktree ${_G}${branch}${_N} ready!"
+        echo "  ─────────────────────────────────────────────"
+    done
+
+    echo ""
+    _ok "All worktrees created. Run ${_C}cwt list${_N} to see them."
+}
+
+cwt_list() {
+    _ensure_git_repo
+    _head "Active Worktrees"
+    echo ""
+
+    local count=0
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^/ ]]; then
+            local path branch
+            path=$(echo "$line" | awk '{print $1}')
+            branch=$(echo "$line" | grep -oP '\[.*?\]' | tr -d '[]')
+            local status_icon="${_G}●${_N}"
+
+            # Check if worktree is dirty
+            if (cd "$path" 2>/dev/null && [[ -n "$(git status --porcelain 2>/dev/null)" ]]); then
+                status_icon="${_Y}●${_N}"
+            fi
+
+            printf "  %b  %-30s %b%s%b\n" "$status_icon" "$branch" "$_D" "$path" "$_N"
+            count=$((count + 1))
+        fi
+    done < <(git worktree list)
+
+    echo ""
+    _dim "  ${_G}●${_N} clean  ${_Y}●${_N} uncommitted changes"
+    _info "Total: $count worktree(s)"
+}
+
+cwt_status() {
+    _ensure_git_repo
+    _head "Worktree Status"
+    echo ""
+
+    while IFS= read -r wt_path; do
+        local branch
+        branch=$(cd "$wt_path" && git rev-parse --abbrev-ref HEAD 2>/dev/null)
+        local changes
+        changes=$(cd "$wt_path" && git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+        local ahead_behind
+        ahead_behind=$(cd "$wt_path" && git rev-list --left-right --count "${CWT_MAIN_BRANCH}...HEAD" 2>/dev/null || echo "0	0")
+        local behind ahead
+        behind=$(echo "$ahead_behind" | awk '{print $1}')
+        ahead=$(echo "$ahead_behind" | awk '{print $2}')
+
+        local status_line=""
+        if [[ "$changes" -gt 0 ]]; then
+            status_line+="${_Y}${changes} uncommitted${_N}  "
+        fi
+        if [[ "$ahead" -gt 0 ]]; then
+            status_line+="${_G}↑${ahead}${_N}  "
+        fi
+        if [[ "$behind" -gt 0 ]]; then
+            status_line+="${_R}↓${behind}${_N}  "
+        fi
+        if [[ -z "$status_line" ]]; then
+            status_line="${_G}clean, up to date${_N}"
+        fi
+
+        printf "  ${_C}%-25s${_N} %b\n" "$branch" "$status_line"
+    done < <(_list_project_worktrees)
+    echo ""
+}
+
+cwt_merge() {
+    local branch_to_keep="$1"
+    local auto_commit="${2:-true}"
+
+    if [[ -z "$branch_to_keep" ]]; then
+        _err "Usage: cwt merge <branch-to-keep>"
+        return 1
+    fi
+
+    _ensure_git_repo
+    local root
+    root="$(_repo_root)"
+
+    _head "Merging '${branch_to_keep}' → '${CWT_MAIN_BRANCH}'"
+
+    # Find the worktree for this branch
+    local wt_path=""
+    wt_path="$(_worktree_path "$branch_to_keep")"
+
+    if [[ ! -d "$wt_path" ]]; then
+        # Try to find it via git worktree list
+        wt_path=$(git worktree list --porcelain | awk -v b="$branch_to_keep" '
+            /^worktree / { path = substr($0, 10) }
+            /^branch / { if ($0 ~ b) print path }
+        ')
+    fi
+
+    if [[ -n "$wt_path" ]] && [[ -d "$wt_path" ]]; then
+        # Check for uncommitted changes in the worktree
+        local changes
+        changes=$(cd "$wt_path" && git status --porcelain 2>/dev/null)
+        if [[ -n "$changes" ]]; then
+            _warn "Uncommitted changes found in worktree."
+            if [[ "$auto_commit" == "true" ]]; then
+                _info "Auto-committing changes..."
+                (
+                    cd "$wt_path"
+                    git add -A
+                    git commit -m "chore: auto-commit before merge from worktree [cwt]" --no-verify
+                ) || {
+                    _err "Failed to auto-commit. Please commit manually."
+                    return 1
+                }
+                _ok "Changes committed."
+            else
+                _err "Please commit changes in the worktree first."
+                return 1
+            fi
+        fi
+    fi
+
+    # Switch to main branch and merge
+    _info "Switching to '${CWT_MAIN_BRANCH}'..."
+    cd "$root"
+    git checkout "$CWT_MAIN_BRANCH" 2>/dev/null || {
+        _err "Failed to checkout '${CWT_MAIN_BRANCH}'."
+        return 1
+    }
+
+    _info "Merging '${branch_to_keep}'..."
+    if ! git merge "$branch_to_keep" --no-ff -m "Merge branch '${branch_to_keep}' [cwt divide-and-conquer]"; then
+        _err "Merge conflicts detected! Resolve manually, then run: cwt clean"
+        return 1
+    fi
+
+    _ok "Merge successful!"
+
+    # Cleanup all worktrees
+    _info "Cleaning up worktrees..."
+    cwt_clean_impl
+    _ok "All worktrees removed. Branch '${branch_to_keep}' merged into '${CWT_MAIN_BRANCH}'."
+}
+
+cwt_remove() {
+    local branches=("$@")
+    if [[ ${#branches[@]} -eq 0 ]]; then
+        _err "Usage: cwt remove <branch> [branch...]"
+        return 1
+    fi
+
+    _ensure_git_repo
+
+    for branch in "${branches[@]}"; do
+        local target
+        target="$(_worktree_path "$branch")"
+
+        if [[ -d "$target" ]]; then
+            _info "Removing worktree: ${branch} (${target})"
+            git worktree remove "$target" --force 2>/dev/null && _ok "Removed worktree." || _warn "Force cleanup..."
+            [[ -d "$target" ]] && rm -rf "$target"
+        fi
+
+        # Delete branch (unless it's main)
+        if [[ "$branch" != "$CWT_MAIN_BRANCH" ]] && [[ "$branch" != "master" ]]; then
+            git branch -D "$branch" 2>/dev/null && _dim "   Deleted branch '${branch}'." || true
+        fi
+    done
+
+    git worktree prune 2>/dev/null
+    _ok "Cleanup complete."
+}
+
+cwt_clean_impl() {
+    _ensure_git_repo
+    local repo_name
+    repo_name="$(_repo_name)"
+
+    while IFS= read -r wt_path; do
+        local branch
+        branch=$(cd "$wt_path" 2>/dev/null && git rev-parse --abbrev-ref HEAD 2>/dev/null || basename "$wt_path")
+
+        _info "Removing: ${branch} → ${wt_path}"
+        git worktree remove "$wt_path" --force 2>/dev/null || rm -rf "$wt_path"
+
+        if [[ "$branch" != "$CWT_MAIN_BRANCH" ]] && [[ "$branch" != "master" ]]; then
+            git branch -D "$branch" 2>/dev/null || true
+        fi
+    done < <(_list_project_worktrees)
+
+    git worktree prune 2>/dev/null
+}
+
+cwt_clean() {
+    _ensure_git_repo
+    local worktrees
+    worktrees=$(_list_project_worktrees)
+
+    if [[ -z "$worktrees" ]]; then
+        _info "No worktrees to clean."
+        return 0
+    fi
+
+    _head "Removing ALL project worktrees"
+    echo "$worktrees" | while IFS= read -r wt; do
+        _dim "  • $wt"
+    done
+    echo ""
+
+    read -r -p "$(echo -e "${_Y}Are you sure? [y/N]:${_N} ")" confirm
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        cwt_clean_impl
+        _ok "All worktrees removed."
+    else
+        _info "Cancelled."
+    fi
+}
+
+# ── Divide & Conquer ────────────────────────────────────────────────────────
+# Parse a task file and automatically spawn worktrees per agent
+
+cwt_divide() {
+    local task_file="${1:-}"
+
+    if [[ -z "$task_file" ]]; then
+        _err "Usage: cwt divide <task-file.md>"
+        _dim "  Task file format (each line = one agent's work):"
+        _dim "    branch-name: Description of what to do"
+        _dim ""
+        _dim "  Example tasks.md:"
+        _dim "    auth-refactor: Refactor authentication module to use JWT"
+        _dim "    dark-mode: Add dark mode support to UI components"
+        _dim "    db-optimize: Optimize database queries in UserService"
+        _dim "    payment-tests: Write integration tests for PaymentController"
+        return 1
+    fi
+
+    if [[ ! -f "$task_file" ]]; then
+        _err "Task file not found: $task_file"
+        return 1
+    fi
+
+    _ensure_git_repo
+    _head "Divide & Conquer — Parsing Tasks"
+
+    local branches=()
+    local tasks=()
+    local agent_num=0
+
+    while IFS= read -r line; do
+        # Skip empty lines and comments
+        [[ -z "$line" ]] && continue
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+
+        local branch desc
+        branch=$(echo "$line" | cut -d: -f1 | xargs)
+        desc=$(echo "$line" | cut -d: -f2- | xargs)
+
+        # Sanitize branch name
+        branch=$(echo "$branch" | tr ' ' '-' | tr -cd 'a-zA-Z0-9_-')
+
+        if [[ -n "$branch" ]]; then
+            ((agent_num++))
+            branches+=("$branch")
+            tasks+=("$desc")
+            printf "  ${_C}Agent %d${_N}  %-25s  %s\n" "$agent_num" "$branch" "$desc"
+        fi
+
+        if ((agent_num >= CWT_MAX_AGENTS)); then
+            _warn "Hit max agent limit (${CWT_MAX_AGENTS}). Remaining tasks skipped."
+            break
+        fi
+    done < "$task_file"
+
+    echo ""
+    if [[ ${#branches[@]} -eq 0 ]]; then
+        _err "No valid tasks found in $task_file"
+        return 1
+    fi
+
+    _info "Spawning ${#branches[@]} worktrees..."
+    echo ""
+
+    # Create all worktrees (no editor open yet)
+    cwt_new "${branches[@]}" --no-open
+
+    # Write agent-id and task description into each worktree
+    for i in "${!branches[@]}"; do
+        local target
+        target="$(_worktree_path "${branches[$i]}")"
+        local agent_id=$((i + 1))
+
+        echo "$agent_id" > "$target/.agent-id"
+        echo "${tasks[$i]}" > "$target/.agent-task"
+
+        # Create a TASK.md with instructions for the agent
+        cat > "$target/TASK.md" << TASKEOF
+# Agent $agent_id — Task Assignment
+
+**Branch:** ${branches[$i]}
+**Task:** ${tasks[$i]}
+
+---
+
+## Instructions
+
+You are Agent $agent_id. Your .agent-id file confirms your number.
+
+Work ONLY on the task described above. Do not modify files outside
+the scope of this task. When complete:
+
+1. Ensure all changes compile / lint / pass tests
+2. Commit with a descriptive message
+3. Signal completion (the TASK.md can be updated with a status)
+
+## Context
+
+This is part of a divide-and-conquer workflow. ${#branches[@]} agents
+are working in parallel on separate branches. Your work will be
+merged back into '${CWT_MAIN_BRANCH}' when all agents complete.
+TASKEOF
+    done
+
+    # Now open all in editor
+    for branch in "${branches[@]}"; do
+        local target
+        target="$(_worktree_path "$branch")"
+        if command -v "$CWT_EDITOR" &>/dev/null; then
+            "$CWT_EDITOR" "$target" &
+        fi
+    done
+
+    echo ""
+    _head "Agents Deployed!"
+    _info "${#branches[@]} Cursor windows should be opening."
+    _info "Each has a ${_C}TASK.md${_N} and ${_C}.agent-id${_N} file."
+    _dim ""
+    _dim "  Next steps:"
+    _dim "    cwt status                  # Check progress"
+    _dim "    cwt merge <best-branch>     # Merge winner into main"
+    _dim "    cwt clean                   # Remove all worktrees"
+}
+
+# ── Generate .cursor/worktrees.json ─────────────────────────────────────────
+# This enables Cursor's built-in parallel agent coordination
+
+cwt_setup() {
+    _ensure_git_repo
+    local root
+    root="$(_repo_root)"
+    local cursor_dir="$root/.cursor"
+    local config_file="$cursor_dir/worktrees.json"
+
+    mkdir -p "$cursor_dir"
+
+    if [[ -f "$config_file" ]]; then
+        _warn "File already exists: $config_file"
+        read -r -p "$(echo -e "${_Y}Overwrite? [y/N]:${_N} ")" confirm
+        [[ ! "$confirm" =~ ^[Yy]$ ]] && return 0
+    fi
+
+    cat > "$config_file" << 'JSONEOF'
+{
+  "setup-worktree-unix": [
+    "COORD_PARENT='..'",
+    "NOW=$(date +%s)",
+    "find \"$COORD_PARENT\" -maxdepth 1 -type d -name '.coord-*' -mmin +60 -exec rm -rf {} + 2>/dev/null || true",
+    "SESSION=''",
+    "for dir in $COORD_PARENT/.coord-*; do",
+    "  if [ -d \"$dir\" ]; then",
+    "    CREATED=$(stat -c %W \"$dir\" 2>/dev/null || stat -f %B \"$dir\" 2>/dev/null || echo 0)",
+    "    AGE=$((NOW - CREATED))",
+    "    if [ $AGE -lt 10 ]; then",
+    "      SESSION=$(basename \"$dir\" | sed 's/^\\.coord-//')",
+    "      break",
+    "    fi",
+    "  fi",
+    "done",
+    "if [ -z \"$SESSION\" ]; then",
+    "  SESSION=\"s-$(date +%Y%m%d%H%M%S)-$$\"",
+    "fi",
+    "COORD_DIR=\"$COORD_PARENT/.coord-$SESSION\"",
+    "mkdir -p \"$COORD_DIR\"",
+    "CURRENT_WORKTREE=$(pwd)",
+    "for claim in \"$COORD_DIR\"/task-*.json; do",
+    "  if [ -f \"$claim\" ]; then",
+    "    WORKTREE=$(grep -o '\"worktree\":\"[^\"]*\"' \"$claim\" | cut -d'\"' -f4)",
+    "    if [ -n \"$WORKTREE\" ] && [ ! -d \"$WORKTREE\" ]; then",
+    "      rm -f \"$claim\"",
+    "    fi",
+    "  fi",
+    "done",
+    "TASK_NUM=0",
+    "for i in 1 2 3 4 5 6 7 8; do",
+    "  LOCK_DIR=\"$COORD_DIR/task-$i.lock\"",
+    "  CLAIM_FILE=\"$COORD_DIR/task-$i.json\"",
+    "  if mkdir \"$LOCK_DIR\" 2>/dev/null; then",
+    "    if [ ! -f \"$CLAIM_FILE\" ]; then",
+    "      TASK_NUM=$i",
+    "      printf '{\"task\":%d,\"worktree\":\"%s\",\"claimed_at\":\"%s\",\"pid\":%d}' \"$i\" \"$CURRENT_WORKTREE\" \"$(date -Iseconds)\" \"$$\" > \"$CLAIM_FILE\"",
+    "      rmdir \"$LOCK_DIR\"",
+    "      break",
+    "    fi",
+    "    rmdir \"$LOCK_DIR\"",
+    "  fi",
+    "  sleep 0.05",
+    "done",
+    "echo \"$TASK_NUM\" > .agent-id",
+    "echo \"$SESSION\" > .session-id",
+    "echo \"Agent $TASK_NUM ready in $(pwd)\""
+  ],
+  "setup-worktree-windows": [
+    "$coordParent = '..'",
+    "$now = Get-Date",
+    "Get-ChildItem -Path $coordParent -Directory -Filter '.coord-*' -ErrorAction SilentlyContinue | Where-Object { ($now - $_.CreationTime).TotalSeconds -gt 3600 } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue",
+    "$session = $null",
+    "Get-ChildItem -Path $coordParent -Directory -Filter '.coord-*' -ErrorAction SilentlyContinue | Where-Object { ($now - $_.CreationTime).TotalSeconds -lt 10 } | Select-Object -First 1 | ForEach-Object {",
+    "  $session = $_.Name -replace '^\\.coord-',''",
+    "}",
+    "if (-not $session) {",
+    "  $session = \"s-$(Get-Date -Format 'yyyyMMddHHmmss')-$PID\"",
+    "}",
+    "$coordDir = \"$coordParent/.coord-$session\"",
+    "New-Item -ItemType Directory -Path $coordDir -Force | Out-Null",
+    "$currentWorktree = (Get-Location).Path",
+    "Get-ChildItem -Path $coordDir -Filter 'task-*.json' -ErrorAction SilentlyContinue | ForEach-Object {",
+    "  try {",
+    "    $claim = Get-Content $_.FullName | ConvertFrom-Json",
+    "    if (-not (Test-Path $claim.worktree)) {",
+    "      Remove-Item $_.FullName -Force",
+    "    }",
+    "  } catch { }",
+    "}",
+    "$taskNum = 0",
+    "for ($i = 1; $i -le 8; $i++) {",
+    "  $lockDir = \"$coordDir/task-$i.lock\"",
+    "  $claimFile = \"$coordDir/task-$i.json\"",
+    "  try {",
+    "    New-Item -ItemType Directory -Path $lockDir -ErrorAction Stop | Out-Null",
+    "    if (-not (Test-Path $claimFile)) {",
+    "      $taskNum = $i",
+    "      $claim = @{ task = $i; worktree = $currentWorktree; claimed_at = (Get-Date -Format 'o'); pid = $PID }",
+    "      $claim | ConvertTo-Json | Out-File -FilePath $claimFile -Encoding UTF8",
+    "      Remove-Item -Path $lockDir -Force",
+    "      break",
+    "    }",
+    "    Remove-Item -Path $lockDir -Force",
+    "  } catch { }",
+    "  Start-Sleep -Milliseconds 50",
+    "}",
+    "$taskNum | Out-File -FilePath '.agent-id' -Encoding UTF8 -NoNewline",
+    "$session | Out-File -FilePath '.session-id' -Encoding UTF8 -NoNewline"
+  ]
+}
+JSONEOF
+
+    # Also add coordination files to .gitignore
+    local gitignore="$root/.gitignore"
+    local entries=(".agent-id" ".session-id" ".agent-task" "TASK.md" ".coord-*")
+    for entry in "${entries[@]}"; do
+        if ! grep -qxF "$entry" "$gitignore" 2>/dev/null; then
+            echo "$entry" >> "$gitignore"
+        fi
+    done
+
+    _ok "Created ${_C}${config_file}${_N}"
+    _ok "Updated ${_C}.gitignore${_N} with coordination file patterns"
+    echo ""
+    _dim "  Cursor will now auto-assign agent IDs when using Parallel Agents."
+    _dim "  Each worktree gets a .agent-id file (1, 2, 3...) for task routing."
+    echo ""
+    _dim "  Example prompt for Cursor:"
+    _dim '    Read your .agent-id file. Based on your number, execute ONLY your task:'
+    _dim '    Agent 1: Refactor authentication module'
+    _dim '    Agent 2: Add dark mode support'
+    _dim '    Agent 3: Optimize database queries'
+    _dim '    Agent 4: Write integration tests'
+}
+
+# ── Help ────────────────────────────────────────────────────────────────────
+
+cwt_help() {
+    cat << 'HELPEOF'
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │          cursor-worktree — Divide & Conquer CLI             │
+  └─────────────────────────────────────────────────────────────┘
+
+  COMMANDS
+    cwt new <branch> [branch...]   Create worktrees, install deps, open Cursor
+        --no-install               Skip dependency installation
+        --no-open                  Don't open editor
+        --base <branch>            Base branch (default: current)
+
+    cwt list                       List all active worktrees with status
+    cwt status                     Detailed status (dirty/clean, ahead/behind)
+
+    cwt merge <branch>             Merge branch into main + cleanup all worktrees
+    cwt remove <branch> [...]      Remove specific worktree(s)
+    cwt clean                      Remove ALL project worktrees (interactive)
+
+    cwt divide <tasks.md>          Parse task file → spawn one agent per task
+    cwt setup                      Generate .cursor/worktrees.json for auto agent-id
+
+  CONFIGURATION (environment variables)
+    CWT_EDITOR=cursor              Editor to open worktrees in
+    CWT_PKG_MANAGER=               Auto-detect | npm | pnpm | yarn | bun | pip...
+    CWT_WORKTREE_DIR=              Custom worktree parent dir (default: ../<repo>-<branch>)
+    CWT_COPY_FILES=".env ..."      Space-separated file patterns to copy
+    CWT_MAIN_BRANCH=main           Primary branch name
+    CWT_MAX_AGENTS=8               Max concurrent agents
+    CWT_COLOR=true                 Colorized output
+
+  TASK FILE FORMAT (for cwt divide)
+    # Lines starting with # are comments
+    branch-name: Description of the task
+    another-branch: Another task description
+
+  WORKFLOW EXAMPLE
+    1.  cwt setup                   # One-time: generate worktrees.json
+    2.  Write a tasks.md file
+    3.  cwt divide tasks.md         # Spawn agents
+    4.  cwt status                  # Monitor progress
+    5.  cwt merge best-branch       # Merge winner
+    6.  cwt clean                   # Cleanup
+
+HELPEOF
+}
+
+# ── Main Dispatcher ─────────────────────────────────────────────────────────
+
+cwt() {
+    local cmd="${1:-help}"
+    shift 2>/dev/null || true
+
+    case "$cmd" in
+        new|create|add)   cwt_new "$@" ;;
+        list|ls)          cwt_list ;;
+        status|st)        cwt_status ;;
+        merge|m)          cwt_merge "$@" ;;
+        remove|rm|del)    cwt_remove "$@" ;;
+        clean|purge)      cwt_clean ;;
+        divide|d|split)   cwt_divide "$@" ;;
+        setup|init)       cwt_setup ;;
+        help|h|-h|--help) cwt_help ;;
+        *)
+            _err "Unknown command: $cmd"
+            _dim "Run 'cwt help' for usage."
+            return 1
+            ;;
+    esac
+}
+
+# If this script is sourced, the `cwt` function is available.
+# If executed directly, dispatch immediately.
+# If this script is sourced, the `cwt` function is available.
+# If executed directly, dispatch immediately with strict mode.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    set -euo pipefail
+    cwt "$@"
+fi

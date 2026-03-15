@@ -8,6 +8,7 @@
 
 import { createLogger } from "../../../lib/logger.ts";
 import type { GameLocale } from "../../../shared/contracts/game.ts";
+import { defaultLocaleCode } from "../../../shared/types/locale.ts";
 import { getLocalModelCatalog } from "../../ai/model-registry.ts";
 import { ProviderRegistry } from "../../ai/providers/provider-registry.ts";
 import type { AiCapability, AiGenerationResult } from "../../ai/providers/provider-types.ts";
@@ -69,7 +70,7 @@ export interface AvailableAiFeatures {
  */
 const buildNpcSystemPrompt = (npcId: string, locale: GameLocale, sceneId: string): string => {
   const npcLabel = resolveGameText(locale, toNpcCatalogKey(npcId, "label"));
-  const catalog = gameTextByLocale[locale] ?? gameTextByLocale["en-US"];
+  const catalog = gameTextByLocale[locale] ?? gameTextByLocale[defaultLocaleCode];
   const sceneTitle = catalog.scenes[toSceneCatalogKey(sceneId)] ?? sceneId;
 
   const languageInstruction =

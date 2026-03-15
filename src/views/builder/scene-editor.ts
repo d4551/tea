@@ -814,6 +814,12 @@ export const renderSceneDetail = (
             </fieldset>
 
             <fieldset class="fieldset">
+              <legend class="fieldset-legend">${escapeHtml(messages.builder.idLabel)}</legend>
+              <input type="hidden" name="titleKey" value="${escapeHtml(scene.titleKey)}" />
+              <input id="scene-title-key" type="text" class="input w-full builder-mono" value="${escapeHtml(scene.titleKey)}" readonly aria-label="${escapeHtml(messages.builder.idLabel)}" />
+            </fieldset>
+
+            <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneBackgroundLabel)}</legend>
               <input id="scene-background" name="background" type="text" class="input w-full" value="${escapeHtml(scene.background)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.sceneBackgroundLabel)}" />
             </fieldset>

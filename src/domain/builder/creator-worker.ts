@@ -184,14 +184,13 @@ const runWorkerStep = async <TPayload>(
 };
 
 const enrichPromptWithDataset = async (prompt: string): Promise<string> => {
-  const snippets = await fetchHfDatasetSnippets(prompt, 3);
+  const result = await fetchHfDatasetSnippets(prompt, 3);
+  const snippets = result.ok ? result.value : [];
   if (snippets.length === 0) {
     return prompt;
   }
 
-  const context = snippets
-    .map((snippet, index) => `[${index + 1}] ${snippet.text}`)
-    .join("\n\n");
+  const context = snippets.map((snippet, index) => `[${index + 1}] ${snippet.text}`).join("\n\n");
   return `${prompt.trim()}\n\nReference corpus excerpts:\n${context}`;
 };
 
