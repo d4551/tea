@@ -152,7 +152,10 @@ describe("renderControlPlanePage", () => {
     expect(html).toContain("/games?lang=en-US&amp;projectId=harbor");
     expect(html).toContain("/projects/harbor/start?lang=en-US");
     expect(html).toContain("/projects/harbor/settings?lang=en-US#builder-brand-control-plane");
-    expect(html).toContain('class="overflow-x-auto pb-1"');
+    expect(html).toContain(
+      'class="surface-scroll surface-scroll-x surface-scroll-fade-x touch-pan-x px-1 pb-1"',
+    );
+    expect(html).toContain('aria-current="page"');
     expect(html).toContain("xl:grid-cols-[22rem_minmax(0,1fr)]");
     expect(html).toContain("2xl:grid-cols-[22rem_minmax(0,1fr)_22rem]");
   });

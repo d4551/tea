@@ -55,6 +55,7 @@ describe("shared navigation renderers", () => {
     expect(html).toContain('hx-target="#main-content"');
     expect(html).toContain('hx-swap="innerHTML"');
     expect(html).toContain('hx-push-url="true"');
+    expect(html).toContain("surface-scroll-fade-y");
   });
 
   test("renders secondary navigation with horizontal overflow wrapper", () => {
@@ -79,8 +80,9 @@ describe("shared navigation renderers", () => {
     );
 
     expect(html).toContain(
-      'class="surface-scroll surface-scroll-x surface-scroll-fade-x touch-pan-x pb-1"',
+      'class="surface-scroll surface-scroll-x surface-scroll-fade-x touch-pan-x px-1 pb-1"',
     );
+    expect(html).toContain('tabindex="0"');
     expect(html).toContain('role="tablist"');
     expect(html).toContain('aria-label="AI tabs"');
     expect(html).toContain('aria-selected="true"');

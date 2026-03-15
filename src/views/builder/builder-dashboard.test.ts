@@ -61,9 +61,10 @@ describe("renderBuilderDashboard", () => {
     );
 
     expect(html).toContain(
-      'class="surface-scroll surface-scroll-x surface-scroll-fade-x touch-pan-x pb-1"',
+      'class="surface-scroll surface-scroll-x surface-scroll-fade-x touch-pan-x px-1 pb-1"',
     );
-    expect(html).toContain('class="workspace-grid has-side-rail"');
+    expect(html).toContain("surface-scroll-fade-y");
+    expect(html).toContain('class="workspace-grid min-h-0 has-side-rail"');
     expect(html).toContain("xl:surface-sticky");
     expect(html).toContain("workspace-card-grid");
   });

@@ -258,15 +258,15 @@ const renderBrandControlPlane = (messages: Messages, branding: ProjectBranding):
             </div>
             <div class="grid grid-cols-3 gap-3">
               <div class="rounded-box border border-base-300 p-3" style="background:${escapeHtml(branding.primaryColor)};">
-                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-white/80">Primary</p>
+                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-white/80">${escapeHtml(messages.builder.brandPrimaryColorLabel)}</p>
                 <p class="mt-6 text-xs font-medium text-white">${escapeHtml(branding.primaryColor)}</p>
               </div>
               <div class="rounded-box border border-base-300 p-3" style="background:${escapeHtml(branding.secondaryColor)};">
-                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-white/80">Secondary</p>
+                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-white/80">${escapeHtml(messages.builder.brandSecondaryColorLabel)}</p>
                 <p class="mt-6 text-xs font-medium text-white">${escapeHtml(branding.secondaryColor)}</p>
               </div>
               <div class="rounded-box border border-base-300 p-3" style="background:${escapeHtml(branding.accentColor)};">
-                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-white/80">Accent</p>
+                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-white/80">${escapeHtml(messages.builder.brandAccentColorLabel)}</p>
                 <p class="mt-6 text-xs font-medium text-white">${escapeHtml(branding.accentColor)}</p>
               </div>
             </div>
@@ -357,8 +357,8 @@ const countAvailableCapabilities = (features: AvailableAiFeatures): number =>
 const renderWorkbenchJumpLinks = (
   ariaLabel: string,
   links: ReadonlyArray<{ label: string; href: string; tone?: "primary" | "ghost" | "outline" }>,
-): string => `<nav class="overflow-x-auto" aria-label="${escapeHtml(ariaLabel)}">
-  <div class="flex min-w-max flex-wrap gap-2">
+): string => `<nav class="surface-scroll surface-scroll-x surface-scroll-fade-x touch-pan-x px-1" tabindex="0" aria-label="${escapeHtml(ariaLabel)}">
+  <div class="flex min-w-max flex-nowrap gap-2 pb-1">
     ${links
       .map(
         (link) =>
@@ -494,7 +494,7 @@ const renderAiModelInventory = (messages: Messages, runtimeProfile: AiRuntimePro
     <div class="card-body">
       <h2 class="card-title">${escapeHtml(messages.builder.availableModels)}</h2>
       <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.aiLaneDescription)}</p>
-      <div class="overflow-x-auto">
+      <div class="surface-scroll surface-scroll-x surface-scroll-fade-x touch-pan-x px-1" tabindex="0">
         <table class="table table-sm" aria-label="${escapeHtml(messages.builder.availableModels)}">
           <thead>
             <tr>
@@ -685,7 +685,7 @@ export const renderAiProviderSearchPanel = (
         </div>
         <span class="badge badge-outline">${escapeHtml(`${searchState.items.length}`)}</span>
       </div>
-      <div class="overflow-x-auto">
+      <div class="surface-scroll surface-scroll-x surface-scroll-fade-x touch-pan-x px-1" tabindex="0">
         <table class="table table-sm">
           <thead>
             <tr>
@@ -848,7 +848,7 @@ export const renderAiModelSettingsWorkspace = (
             ${laneActionMarkup}
             ${
               laneSettings.length > 0
-                ? `<div class="overflow-x-auto">
+                ? `<div class="surface-scroll surface-scroll-x surface-scroll-fade-x touch-pan-x px-1" tabindex="0">
                     <table class="table table-sm">
                       <thead>
                         <tr>

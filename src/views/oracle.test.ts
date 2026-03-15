@@ -146,7 +146,9 @@ describe("oracle view contract", () => {
 
     expect(pageVariant).toContain('class="grid gap-4 lg:grid-cols-[1.5fr_1fr]"');
     expect(pageVariant).toContain('class="card-title text-2xl"');
-    expect(drawerVariant).toContain('class="flex flex-col gap-4 overflow-y-auto"');
+    expect(drawerVariant).toContain(
+      'class="surface-scroll surface-scroll-y surface-scroll-fade-y touch-pan-y flex min-h-0 flex-col gap-4 overflow-y-auto pr-1 py-2"',
+    );
     expect(drawerVariant).toContain('class="card-title text-lg"');
   });
 });

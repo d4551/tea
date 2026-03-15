@@ -20,6 +20,8 @@ describe("renderDocument", () => {
     expect(html).toContain('lang="zh-CN"');
     expect(html).toContain(`data-theme="${appConfig.ui.defaultTheme}"`);
     expect(html).toContain('hx-ext="layout-controls,focus-panel"');
+    expect(html).toContain("overflow-x-clip");
+    expect(html).toContain("pt-[env(safe-area-inset-top)]");
     expect(html).toContain(messages.common.skipToContent);
     expect(html).toContain(messages.common.openAiAssistant);
     expect(html).toContain(messages.navigation.controlPlane);

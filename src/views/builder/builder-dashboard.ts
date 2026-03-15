@@ -84,7 +84,7 @@ const renderWorkflowStageCard = (stage: BuilderWorkflowStage, messages: Messages
         ? messages.builder.workflowStatusInProgress
         : messages.builder.workflowStatusStart;
 
-return `<article class="${cardClasses.bordered} surface-tappable transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
+  return `<article class="${cardClasses.bordered} surface-tappable transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
     <div class="card-body gap-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="space-y-2">

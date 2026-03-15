@@ -429,7 +429,7 @@ export const renderWorkspaceFrame = (config: WorkspaceFrameConfig): string => {
                 : ""
             }
           </div>
-          <div class="surface-scroll surface-scroll-y touch-pan-y space-y-3 2xl:max-h-[calc(100vh-14rem)] 2xl:overflow-auto 2xl:pr-1">${section.body}</div>
+          <div class="surface-scroll surface-scroll-y surface-scroll-fade-y touch-pan-y space-y-3 2xl:max-h-[calc(100vh-14rem)] 2xl:overflow-auto 2xl:pr-1">${section.body}</div>
         </div>
       </section>`,
     )
@@ -447,7 +447,7 @@ export const renderWorkspaceFrame = (config: WorkspaceFrameConfig): string => {
                 : ""
             }
           </div>
-          <div class="surface-scroll surface-scroll-y touch-pan-y space-y-4 xl:max-h-[calc(100vh-14rem)] xl:overflow-auto xl:pr-1">${config.navigatorBody}</div>
+          <div class="surface-scroll surface-scroll-y surface-scroll-fade-y touch-pan-y space-y-4 xl:max-h-[calc(100vh-14rem)] xl:overflow-auto xl:pr-1">${config.navigatorBody}</div>
         </div>
       </section>
     </aside>

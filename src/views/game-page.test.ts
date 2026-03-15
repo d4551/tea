@@ -40,5 +40,8 @@ describe("GamePage", () => {
     expect(html).toContain("breadcrumbs");
     expect(html).toContain("Station Runtime");
     expect(html).toContain("Orbital Foundry");
+    expect(html).toContain("surface-scroll-fade-y");
+    expect(html).toContain('id="game-participants-list"');
+    expect(html).toContain("rounded-[1.5rem]");
   });
 });

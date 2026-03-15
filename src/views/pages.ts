@@ -53,14 +53,14 @@ export const renderHomePage = (input: PageRenderInput): string => {
     ariaLabel: messages.pages.home.sceneLauncherTitle,
     className: "rounded-box border border-base-300/50 bg-base-100/70",
     content: `<div class="grid gap-2">
-      <a href="${teaHouseLaunchUrl}" class="btn btn-secondary btn-block gap-2 group surface-tappable" aria-label="${escapeHtml(messages.pages.home.launch2dScene)}">
+        <a href="${teaHouseLaunchUrl}" class="btn btn-secondary btn-block gap-2 group min-h-11 surface-tappable" aria-label="${escapeHtml(messages.pages.home.launch2dScene)}">
         <span class="text-left">
           <span class="text-xs uppercase tracking-wide text-secondary">${escapeHtml(messages.game.sceneMode2d)}</span><br />
           ${escapeHtml(messages.pages.home.launch2dScene)}
         </span>
         <svg xmlns="http://www.w3.org/2000/svg" class="size-4 transition-transform group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
       </a>
-      <a href="${crystalCavernLaunchUrl}" class="btn btn-outline btn-block gap-2 group surface-tappable" aria-label="${escapeHtml(messages.pages.home.launch3dScene)}">
+      <a href="${crystalCavernLaunchUrl}" class="btn btn-outline btn-block gap-2 group min-h-11 surface-tappable" aria-label="${escapeHtml(messages.pages.home.launch3dScene)}">
         <span class="text-left">
           <span class="text-xs uppercase tracking-wide text-primary">${escapeHtml(messages.game.sceneMode3d)}</span><br />
           ${escapeHtml(messages.pages.home.launch3dScene)}
@@ -77,7 +77,7 @@ export const renderHomePage = (input: PageRenderInput): string => {
     actions: `${renderDrawerToggleControl({
       targetId: "ai-chat-drawer",
       label: messages.pages.home.talkToAiOracle,
-      className: "btn btn-outline gap-2 min-h-11",
+      className: "btn btn-outline gap-2 min-h-11 surface-tappable",
       hasPopup: "dialog",
       content: `<svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>${escapeHtml(messages.pages.home.talkToAiOracle)}`,
     })}
@@ -98,18 +98,18 @@ export const renderHomePage = (input: PageRenderInput): string => {
         ${renderStats({
           stats: [
             {
-              title: messages.pages.home.statsScenes,
-              value: "SSR",
+          title: messages.pages.home.statsScenes,
+          value: messages.pages.home.statsScenes,
               description: messages.pages.home.architectureTitle,
             },
             {
-              title: messages.pages.home.statsNpcs,
-              value: "HTMX",
+          title: messages.pages.home.statsNpcs,
+          value: messages.pages.home.statsNpcs,
               description: messages.pages.home.reliabilityTitle,
             },
             {
-              title: messages.pages.home.statsGenerations,
-              value: "Local",
+          title: messages.pages.home.statsGenerations,
+          value: messages.pages.home.statsGenerations,
               description: messages.pages.home.progressiveEnhancementTitle,
             },
           ],
@@ -135,26 +135,26 @@ export const renderHomePage = (input: PageRenderInput): string => {
     <div id="welcome-strip" class="surface-shell surface-section hidden rounded-box border border-primary/30 bg-primary/5 p-4 text-sm" role="status">
       <p class="font-medium">${escapeHtml(messages.pages.home.welcomeBack)}</p>
       <p class="text-base-content/70 mt-1">${escapeHtml(messages.pages.home.quickStartHint)}</p>
-      <button type="button" class="btn btn-ghost btn-sm mt-2" aria-label="${escapeHtml(messages.common.dismiss)}">${escapeHtml(messages.common.dismiss)}</button>
+      <button type="button" class="btn btn-ghost btn-sm mt-2 surface-tappable min-h-11" aria-label="${escapeHtml(messages.common.dismiss)}">${escapeHtml(messages.common.dismiss)}</button>
     </div>
 
     ${renderStats({
       stats: [
         {
           title: messages.pages.home.statsScenes,
-          value: "Author",
+          value: messages.pages.home.statsScenes,
           description: messages.pages.home.architectureDescription,
           figure: `<svg xmlns="http://www.w3.org/2000/svg" class="size-6 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
         },
         {
           title: messages.builder.npcs,
-          value: "Refine",
+          value: messages.pages.home.statsNpcs,
           description: messages.pages.home.reliabilityDescription,
           figure: `<svg xmlns="http://www.w3.org/2000/svg" class="size-6 text-secondary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
         },
         {
           title: messages.pages.home.statsGenerations,
-          value: "Deploy",
+          value: messages.pages.home.statsGenerations,
           description: messages.pages.home.progressiveEnhancementDescription,
           figure: `<svg xmlns="http://www.w3.org/2000/svg" class="size-6 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`,
         },
@@ -191,10 +191,10 @@ export const renderHomePage = (input: PageRenderInput): string => {
               ${escapeHtml(messages.pages.home.openUnifiedBuilder)}
               <svg xmlns="http://www.w3.org/2000/svg" class="size-4 transition-transform group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
             </a>
-            ${renderDrawerToggleControl({
+      ${renderDrawerToggleControl({
               targetId: "ai-chat-drawer",
               label: messages.pages.home.talkToAiOracle,
-              className: "btn btn-outline btn-block gap-2",
+        className: "btn btn-outline btn-block gap-2 surface-tappable min-h-11",
               hasPopup: "dialog",
               content: `<svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>${escapeHtml(messages.pages.home.talkToAiOracle)}`,
             })}
@@ -262,7 +262,7 @@ export const renderHomePage = (input: PageRenderInput): string => {
                 activityEmptyIcon,
                 messages.pages.home.activityEmptyTitle,
                 messages.pages.home.activityEmptyDescription,
-                `<a href="${builderUrl}" class="btn btn-ghost btn-sm surface-tappable" aria-label="${escapeHtml(messages.pages.home.openUnifiedBuilder)}">${escapeHtml(messages.pages.home.openUnifiedBuilder)}</a>`,
+                `<a href="${builderUrl}" class="btn btn-ghost btn-sm min-h-11 surface-tappable" aria-label="${escapeHtml(messages.pages.home.openUnifiedBuilder)}">${escapeHtml(messages.pages.home.openUnifiedBuilder)}</a>`,
               )}
               <div class="grid gap-3 pt-4 lg:grid-cols-3">
                 <article class="card interactive-surface card-border bg-base-100/80">

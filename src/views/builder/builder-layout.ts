@@ -840,7 +840,7 @@ const renderShellFrame = (config: ShellFrameConfig): string => {
 
       <!-- Mobile Builder Top Bar -->
       <div class="flex min-h-0 flex-col flex-1 w-full max-w-[100vw]">
-        <nav class="navbar border-b border-base-300/80 bg-base-100 sticky top-0 z-40 lg:hidden" role="navigation" aria-label="${escapeHtml(shellLabel)}">
+        <nav class="navbar sticky top-0 z-40 border-b border-base-300/80 bg-base-100 pt-[env(safe-area-inset-top)] lg:hidden" role="navigation" aria-label="${escapeHtml(shellLabel)}">
           <div class="flex-none">
             ${renderDrawerToggleControl({
               targetId: "main-nav-drawer",
@@ -867,7 +867,7 @@ const renderShellFrame = (config: ShellFrameConfig): string => {
         </nav>
 
         ${renderBuilderProjectShell(messages, locale, projectId, currentPath, project, activeTab)}
-        <div id="builder-content" class="flex-1 min-h-0 overflow-x-clip overflow-y-auto surface-scroll surface-scroll-y touch-pan-y px-4 py-4 pb-[calc(8.5rem+env(safe-area-inset-bottom))] md:pb-36 lg:px-6 lg:py-6 lg:pb-6" role="region" aria-live="polite">
+        <div id="builder-content" class="surface-scroll surface-scroll-y surface-scroll-fade-y touch-pan-y flex-1 min-h-0 overflow-x-clip overflow-y-auto px-4 py-4 pb-[calc(8.5rem+env(safe-area-inset-bottom))] md:pb-36 lg:px-6 lg:py-6 lg:pb-6" role="region" aria-live="polite">
           ${body}
         </div>
 

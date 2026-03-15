@@ -277,7 +277,7 @@ export const renderLayout = (input: LayoutInput): string => {
     <script src="${escapeHtml(joinUrlPath(appConfig.staticAssets.publicPrefix, assetRelativePaths.htmxExtensionOracleIndicatorFile))}" type="module"></script>
     <script src="${escapeHtml(joinUrlPath(appConfig.staticAssets.publicPrefix, assetRelativePaths.htmxExtensionFocusPanelFile))}" type="module"></script>
   </head>
-  <body class="min-h-screen bg-base-100 text-base-content antialiased" hx-boost="${boostEnabled}" hx-target="#main-content" hx-select="#main-content" hx-ext="layout-controls,focus-panel"${bodyStyleAttribute}>
+  <body class="min-h-screen overflow-x-clip bg-base-100 text-base-content antialiased" hx-boost="${boostEnabled}" hx-target="#main-content" hx-select="#main-content" hx-ext="layout-controls,focus-panel"${bodyStyleAttribute}>
     <a
       href="#main-content"
       class="sr-only z-[100] m-2 inline-flex items-center gap-2 rounded-lg border-2 border-primary bg-base-100 px-4 py-3 text-sm font-semibold text-primary shadow-lg transition-all duration-200 focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:ring-2 focus:ring-primary focus:ring-offset-2 hover:bg-primary hover:text-primary-content"
@@ -299,7 +299,7 @@ export const renderLayout = (input: LayoutInput): string => {
       <div class="drawer-content relative flex min-h-screen flex-col">
 
         <!-- Main Nav Wrapper (Left Drawer) -->
-        <div class="${escapeHtml(`${drawerClassName} min-w-0`)}">
+        <div class="${escapeHtml(`${drawerClassName} min-w-0 overflow-x-clip`)}">
           <input id="main-nav-drawer" type="checkbox" class="drawer-toggle" aria-label="${escapeHtml(messages.common.openMenu)}" />
           <div class="drawer-content flex w-full max-w-[100vw] min-w-0 flex-col">
 
@@ -331,12 +331,12 @@ export const renderLayout = (input: LayoutInput): string => {
         </div>
 
         <!-- Global FAB for AI Chat (z-[90] ensures visibility above game canvas) -->
-        <div class="fab fixed right-6 ${activeRoute === "builder" ? "bottom-24 sm:bottom-6" : "bottom-6"} z-[90]">
+        <div class="fab pointer-events-none sticky z-[90] mt-auto self-end mr-4 sm:mr-6 ${activeRoute === "builder" ? "mb-16 sm:mb-6" : "mb-6"} ml-auto">
           ${renderDrawerToggleControl({
             targetId: "ai-chat-drawer",
             label: messages.common.openAiAssistant,
             className:
-              "btn btn-circle btn-primary drawer-button h-14 w-14 sm:h-16 sm:w-16 shrink-0 shadow-2xl fab-attention-pulse",
+              "pointer-events-auto btn btn-circle btn-primary drawer-button h-14 w-14 sm:h-16 sm:w-16 shrink-0 shadow-2xl fab-attention-pulse transition-transform hover:scale-[1.04] active:scale-[0.98]",
             hasPopup: "dialog",
             expanded: isOracleDrawerOpen,
             content:
@@ -348,7 +348,7 @@ export const renderLayout = (input: LayoutInput): string => {
       <!-- AI Chat Sidebar (Right) (z-[95] ensures visibility above game canvas) -->
       <div class="drawer-side z-[95]">
         <label for="ai-chat-drawer" aria-label="${escapeHtml(messages.common.closeAiChat)}" class="drawer-overlay"></label>
-        <aside class="surface-shell surface-section flex min-h-full w-80 flex-col border-l border-base-300 bg-base-100 text-base-content sm:w-96" role="dialog" aria-modal="false" aria-label="${escapeHtml(messages.common.openAiAssistant)}">
+        <aside class="surface-shell surface-section relative flex h-full w-[min(92vw,22rem)] flex-col border-l border-base-300 bg-base-100 pb-[env(safe-area-inset-bottom)] text-base-content sm:w-96 lg:w-[28rem] xl:w-[30rem]" role="dialog" aria-modal="false" aria-label="${escapeHtml(messages.common.openAiAssistant)}">
           <div class="flex shrink-0 items-center justify-end border-b border-base-300 px-4 py-3">
             ${renderDrawerToggleControl({
               targetId: "ai-chat-drawer",
@@ -425,7 +425,7 @@ const renderTopBar = (
     },
   ];
 
-  return `<div class="sticky top-0 z-30">
+  return `<div class="sticky top-0 z-30 pt-[env(safe-area-inset-top)]">
     ${renderHeaderNavbar(renderBrand(messages, locale, brand), navigationItems, headerActions, {
       ariaLabel: messages.common.primaryNavigation,
       className:

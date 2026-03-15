@@ -25,8 +25,8 @@ import {
 const renderWorkbenchJumpLinks = (
   ariaLabel: string,
   links: ReadonlyArray<{ label: string; href: string; tone?: "primary" | "ghost" | "outline" }>,
-): string => `<nav class="overflow-x-auto" aria-label="${escapeHtml(ariaLabel)}">
-  <div class="flex min-w-max flex-wrap gap-2">
+): string => `<nav class="surface-scroll surface-scroll-x surface-scroll-fade-x touch-pan-x px-1" tabindex="0" aria-label="${escapeHtml(ariaLabel)}">
+  <div class="flex min-w-max flex-nowrap gap-2 pb-1">
     ${links
       .map(
         (link) =>

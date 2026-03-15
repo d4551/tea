@@ -343,14 +343,14 @@ export const renderHeaderNavbar = (
     .join("");
 
   return `<nav aria-label="${escapeHtml(options.ariaLabel)}" class="${escapeHtml(options.className ?? "navbar border-b border-base-300/80 bg-base-100/90 backdrop-blur")}">
-    <div class="navbar-start gap-2">
+    <div class="navbar-start min-w-0 gap-2">
       ${options.mobileLead ?? ""}
       ${brand}
     </div>
-    <div class="navbar-center hidden lg:flex">
-      <ul class="menu menu-horizontal gap-1 px-1">${desktopItems}</ul>
+    <div class="navbar-center hidden min-w-0 flex-1 lg:flex lg:justify-center">
+      <ul class="menu menu-horizontal flex-nowrap gap-1 px-1">${desktopItems}</ul>
     </div>
-    <div class="navbar-end flex items-center gap-2">
+    <div class="navbar-end flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-3">
       ${renderNavigationActions(actions)}
     </div>
   </nav>`;
@@ -396,9 +396,9 @@ export const renderMobileDrawerMenu = (
     })
     .join("");
 
-  return `<div class="${escapeHtml(options.className ?? "surface-shell surface-section flex min-h-full w-80 max-w-[85vw] flex-col bg-base-100")}">
+  return `<div class="${escapeHtml(options.className ?? "surface-shell surface-section flex min-h-full w-80 max-w-[85vw] flex-col bg-base-100 pb-[env(safe-area-inset-bottom)]")}">
     ${options.brandHtml ? `<div class="border-b border-base-300 px-4 py-4">${options.brandHtml}</div>` : ""}
-    <div role="navigation" aria-label="${escapeHtml(options.ariaLabel)}" class="surface-scroll surface-scroll-y touch-pan-y flex-1 space-y-4 px-0 py-4">
+    <div role="navigation" aria-label="${escapeHtml(options.ariaLabel)}" class="surface-scroll surface-scroll-y surface-scroll-fade-y touch-pan-y flex-1 space-y-4 px-0 py-4">
       ${sections}
     </div>
     ${options.footerHtml ? `<div class="border-t border-base-300 px-4 py-4">${options.footerHtml}</div>` : ""}
@@ -463,10 +463,10 @@ export const renderCollapsibleSidebarMenu = (
     })
     .join("");
 
-  return `<aside class="${escapeHtml(options.className ?? "surface-shell surface-section flex min-h-full w-[20rem] max-w-[85vw] flex-col border-r border-base-300 bg-base-200 text-base-content shadow-2xl lg:w-72 lg:max-w-none")}" aria-label="${escapeHtml(options.ariaLabel)}">
+  return `<aside class="${escapeHtml(options.className ?? "surface-shell surface-section flex min-h-full w-[20rem] max-w-[85vw] flex-col border-r border-base-300 bg-base-200 pb-[env(safe-area-inset-bottom)] text-base-content shadow-2xl lg:w-72 lg:max-w-none lg:pb-0")}" aria-label="${escapeHtml(options.ariaLabel)}">
     ${options.brandHtml ? `<div class="w-full border-b border-base-300 px-4 py-4">${options.brandHtml}</div>` : ""}
     ${options.mastheadHtml ? `<div class="w-full border-b border-base-300/70 px-4 py-4">${options.mastheadHtml}</div>` : ""}
-    <ul class="menu surface-scroll surface-scroll-y touch-pan-y w-full grow gap-1 overflow-y-auto px-3 py-2">${sections}</ul>
+    <ul class="menu surface-scroll surface-scroll-y surface-scroll-fade-y touch-pan-y w-full grow gap-1 overflow-y-auto px-3 py-2">${sections}</ul>
     ${options.footerHtml ? `<div class="w-full border-t border-base-300/70 p-4">${options.footerHtml}</div>` : ""}
   </aside>`;
 };
@@ -555,8 +555,8 @@ export const renderSecondaryNav = (
     })
     .join("");
 
-  return `<div class="surface-scroll surface-scroll-x surface-scroll-fade-x touch-pan-x pb-1">
-    <nav class="tabs tabs-lg tabs-box interactive-surface min-w-max border border-base-300/70 bg-base-200/85 p-1 shadow-sm" role="tablist" aria-orientation="horizontal" aria-label="${escapeHtml(ariaLabel)}">
+  return `<div class="surface-scroll surface-scroll-x surface-scroll-fade-x touch-pan-x px-1 pb-1" tabindex="0">
+    <nav class="tabs tabs-lg tabs-box interactive-surface min-w-max whitespace-nowrap border border-base-300/70 bg-base-200/85 p-1 shadow-sm" role="tablist" aria-orientation="horizontal" aria-label="${escapeHtml(ariaLabel)}">
       ${renderedItems}
     </nav>
   </div>`;

@@ -128,7 +128,7 @@ export const renderOracleSection = (
   const isDrawer = variant === "drawer";
 
   const sectionClass = isDrawer
-    ? "flex flex-col gap-4 overflow-y-auto"
+    ? "surface-scroll surface-scroll-y surface-scroll-fade-y touch-pan-y flex min-h-0 flex-col gap-4 overflow-y-auto pr-1 py-2"
     : "grid gap-4 lg:grid-cols-[1.5fr_1fr]";
   const titleClass = isDrawer ? "text-lg" : "text-2xl";
 
@@ -145,7 +145,7 @@ export const renderOracleSection = (
     : "";
 
   return `<section aria-labelledby="oracle-title" class="${escapeHtml(sectionClass)}">
-    <article class="card card-border bg-base-100 shadow-sm shrink-0">
+    <article class="card card-border bg-base-100 shadow-sm shrink-0 rounded-box">
       <div class="card-body gap-4">
         <h2 id="oracle-title" class="card-title ${escapeHtml(titleClass)}">${escapeHtml(messages.aiPlayground.cardTitle)}</h2>
         <p class="opacity-90 text-sm">${escapeHtml(messages.aiPlayground.cardDescription)}</p>
@@ -189,7 +189,7 @@ export const renderOracleSection = (
             </label>
           </fieldset>
           <input type="hidden" name="mode" value="auto" />
-          <button type="submit" class="btn btn-primary btn-sm w-full" aria-label="${escapeHtml(
+          <button type="submit" class="btn btn-primary btn-sm w-full min-h-11 surface-tappable" aria-label="${escapeHtml(
             messages.aiPlayground.submit,
           )}">
             <span>${escapeHtml(messages.aiPlayground.submit)}</span>
@@ -223,7 +223,7 @@ export const renderOraclePanel = (messages: Messages, panelState: OraclePanelSta
         <h3 class="card-title text-info text-sm">${escapeHtml(messages.aiPlayground.loadingTitle)}</h3>
         <div class="chat chat-start">
           ${renderOracleChatHeader(messages.aiPlayground.promptLabel, panelState.mode)}
-          <div class="chat-bubble chat-bubble-info opacity-60" data-oracle-loading-question="true">${escapeHtml(panelState.question)}</div>
+          <div class="chat-bubble chat-bubble-info max-w-[90%] whitespace-pre-wrap opacity-60" data-oracle-loading-question="true">${escapeHtml(panelState.question)}</div>
           ${renderOracleChatFooter()}
         </div>
         <div class="chat chat-end">
@@ -238,7 +238,7 @@ export const renderOraclePanel = (messages: Messages, panelState: OraclePanelSta
   }
 
   if (panelState.state === "idle") {
-    return `<article id="oracle-panel" class="card card-dash border-base-300 bg-base-200/40" aria-live="polite" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
+    return `<article id="oracle-panel" class="card card-dash border-base-300 bg-base-200/40" role="status" aria-live="polite" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
       <div class="card-body">
         <div class="empty-state">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
@@ -255,14 +255,14 @@ export const renderOraclePanel = (messages: Messages, panelState: OraclePanelSta
     return `<article id="oracle-panel" class="card border border-success/30 bg-success/5" role="status" aria-live="polite" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
       <div class="card-body gap-3">
         <h3 class="card-title text-success text-sm">${escapeHtml(messages.aiPlayground.successTitle)}</h3>
-        <div class="chat chat-start">
+          <div class="chat chat-start">
           ${renderOracleChatHeader(messages.aiPlayground.promptLabel, panelState.mode)}
-          <div class="chat-bubble chat-bubble-primary">${escapeHtml(panelState.question)}</div>
+          <div class="chat-bubble chat-bubble-primary max-w-[90%] whitespace-pre-wrap">${escapeHtml(panelState.question)}</div>
           ${renderOracleChatFooter()}
         </div>
-        <div class="chat chat-end">
+          <div class="chat chat-end">
           ${renderOracleChatHeader(messages.aiPlayground.cardTitle, panelState.mode)}
-          <div class="chat-bubble chat-bubble-success whitespace-pre-wrap">${escapeHtml(panelState.answer)}</div>
+          <div class="chat-bubble chat-bubble-success max-w-[90%] whitespace-pre-wrap">${escapeHtml(panelState.answer)}</div>
           ${renderOracleChatFooter()}
         </div>
       </div>
@@ -304,7 +304,7 @@ export const renderOraclePanel = (messages: Messages, panelState: OraclePanelSta
             <div class="text-sm">${escapeHtml(panelState.message)}</div>
           </div>
         </div>
-        <button class="btn btn-sm btn-outline" type="submit" form="oracle-form" aria-label="${escapeHtml(
+        <button class="btn btn-sm btn-outline min-h-11 surface-tappable" type="submit" form="oracle-form" aria-label="${escapeHtml(
           messages.common.retry,
         )}">${escapeHtml(messages.common.retry)}</button>
       </div>

@@ -723,10 +723,10 @@ const createHudStream = async function* ({
 
     if (dialogueKey !== lastDialogueKey) {
       const html = dialogue
-        ? `<div id="hud-dialogue" class="card bg-base-200/95 shadow-xl p-4 text-sm backdrop-blur pointer-events-auto animate-scale-in" role="dialog" aria-labelledby="hud-dialogue-speaker" aria-describedby="hud-dialogue-line">
+        ? `<div id="hud-dialogue" class="card bg-base-200/95 shadow-xl p-4 text-sm backdrop-blur pointer-events-auto animate-scale-in w-full max-w-[min(95vw,40rem)] touch-pan-y" role="dialog" aria-labelledby="hud-dialogue-speaker" aria-describedby="hud-dialogue-line">
              <p id="hud-dialogue-speaker" class="font-semibold text-primary mb-1">${escapeHtml(dialogue.npcLabel)}</p>
-             <p id="hud-dialogue-line">${escapeHtml(dialogue.line)}</p>
-             <button class="btn btn-sm btn-primary mt-3" hx-post="${escapeHtml(commandPath)}" hx-vals='{"type":"confirmDialogue"}' hx-swap="none" aria-label="${escapeHtml(messages.game.dialogueConfirm)}">${escapeHtml(messages.game.dialogueConfirm)}</button>
+             <p id="hud-dialogue-line" class="leading-relaxed">${escapeHtml(dialogue.line)}</p>
+             <button class="btn btn-sm btn-primary mt-3 w-auto min-w-[5.5rem]" hx-post="${escapeHtml(commandPath)}" hx-vals='{"type":"confirmDialogue"}' hx-swap="none" aria-label="${escapeHtml(messages.game.dialogueConfirm)}">${escapeHtml(messages.game.dialogueConfirm)}</button>
            </div>`
         : `<div id="hud-dialogue" class="hidden"></div>`;
 
@@ -839,7 +839,7 @@ const createHudStream = async function* ({
                   : "border-base-content/10";
 
         const html = `
-          <div id="hud-combat" class="card bg-base-300/95 backdrop-blur shadow-2xl p-6 w-full max-w-4xl opacity-100 pointer-events-auto transition-all duration-300 scale-100 border-2 ${phaseClass}">
+          <div id="hud-combat" class="card bg-base-300/95 backdrop-blur shadow-2xl p-4 sm:p-6 w-full max-w-4xl opacity-100 pointer-events-auto transition-all duration-300 scale-100 border-2 ${phaseClass}">
             
             <div class="flex justify-between items-center mb-6 border-b border-base-content/10 pb-4">
               <h3 class="text-2xl font-black text-base-content uppercase tracking-widest flex items-center gap-2">
@@ -852,7 +852,7 @@ const createHudStream = async function* ({
               </div>
             </div>
             
-            <div class="grid grid-cols-2 gap-8 mb-6">
+            <div class="game-hud-combat-layout mb-6">
               <div class="space-y-3">
                 <h4 class="text-sm font-bold uppercase tracking-wider text-base-content/70">${escapeHtml(messages.game.combatPartyLabel)}</h4>
                 <ul class="space-y-2">
@@ -867,7 +867,7 @@ const createHudStream = async function* ({
               </div>
             </div>
 
-            <div class="bg-base-100/50 rounded-box p-3 font-mono text-sm h-28 overflow-y-auto border border-base-content/5 shadow-inner flex flex-col justify-end">
+            <div class="game-hud-slot-scroll bg-base-100/50 rounded-box p-3 font-mono text-sm min-h-24 max-h-40 border border-base-content/5 shadow-inner flex flex-col justify-end">
               ${logs}
             </div>
 
@@ -965,7 +965,7 @@ const createHudStream = async function* ({
           .join("");
 
         const html = `
-          <div id="hud-inventory" data-inventory-root class="card bg-base-300/95 backdrop-blur shadow-2xl p-6 w-full max-w-4xl opacity-100 pointer-events-auto transition-all duration-300 scale-100 border border-base-content/10">
+          <div id="hud-inventory" data-inventory-root class="card bg-base-300/95 backdrop-blur shadow-2xl p-4 sm:p-6 w-full max-w-4xl opacity-100 pointer-events-auto transition-all duration-300 scale-100 border border-base-content/10">
             <div class="flex justify-between items-center mb-4 border-b border-base-content/10 pb-4">
               <h3 class="text-2xl font-black text-base-content uppercase tracking-widest flex items-center gap-2">
                 <span class="text-primary">🎒</span> ${escapeHtml(messages.game.inventoryTitle)}
@@ -975,8 +975,8 @@ const createHudStream = async function* ({
               </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div class="col-span-1 border-r border-base-content/10 pr-6">
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
+              <div class="col-span-1 border-b border-base-content/10 pb-4 lg:border-b-0 lg:border-r lg:pr-6">
                 <h4 class="text-sm font-bold uppercase tracking-wider text-base-content/70 mb-2">${escapeHtml(messages.game.inventoryStorage)}</h4>
                 ${capacityHTML}
                 <div class="divider my-2"></div>
@@ -992,13 +992,13 @@ const createHudStream = async function* ({
               <div class="col-span-3 relative">
                 <div id="inventory-tooltip-zone" class="absolute right-0 top-0 w-64 min-h-[2rem] z-10" role="region" aria-label="${escapeHtml(messages.game.inventoryItems)}"></div>
                 <h4 class="text-sm font-bold uppercase tracking-wider text-base-content/70 mb-4">${escapeHtml(messages.game.inventoryItems)}</h4>
-                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 max-h-72 overflow-y-auto pr-2 rounded-box p-1 custom-scrollbar">
+                <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 game-hud-slot-scroll rounded-box p-1">
                   ${slotsHTML.length > 0 ? slotsHTML : `<div class="col-span-full text-center p-8 text-base-content/30 italic">${escapeHtml(messages.game.inventoryEmpty)}</div>`}
                 </div>
               </div>
             </div>
             
-            <div class="mt-6 pt-4 border-t border-base-content/10 flex justify-between items-center">
+            <div class="mt-6 pt-4 border-t border-base-content/10 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
               <p class="text-xs text-base-content/50 font-mono">${escapeHtml(messages.game.inventoryManageHint)}</p>
               <button class="btn btn-sm btn-outline shadow-sm" hx-post="${escapeHtml(commandPath)}" hx-vals='{"type":"closeInventory"}' hx-swap="none" aria-label="${escapeHtml(messages.game.inventoryClose)}">${escapeHtml(messages.game.inventoryClose)}</button>
             </div>
@@ -1069,7 +1069,7 @@ const createHudStream = async function* ({
 
         const skipButtonHtml =
           hudState.cutsceneSkippable !== false
-            ? `<div class="absolute top-6 left-6">
+            ? `<div class="absolute top-3 left-3 sm:top-4 sm:left-4">
                <button class="btn btn-sm btn-ghost text-base-content/40 hover:text-base-content" hx-post="${escapeHtml(commandPath)}" hx-vals='{"type":"skipCutscene"}' hx-swap="none" aria-label="${escapeHtml(messages.game.cutsceneSkip)}">${escapeHtml(messages.game.cutsceneSkip)}</button>
             </div>`
             : "";
@@ -1077,14 +1077,16 @@ const createHudStream = async function* ({
         const html = `
           <div
             id="hud-cutscene"
-            class="fixed inset-0 z-[60] flex flex-col items-center justify-end pb-[15vh] bg-black/70 backdrop-blur-sm pointer-events-auto transition-all duration-500"
+            class="relative z-[60] flex h-full w-full max-w-full flex-col items-center justify-end rounded-box bg-black/50 px-3 pb-[clamp(0.75rem,5vh,3rem)] touch-pan-y backdrop-blur-sm transition-all duration-500"
             ${cutsceneDataAttributes}
             aria-live="polite"
           >
-            <div class="absolute top-6 right-6">
+            <div class="absolute top-3 right-3 sm:top-4 sm:right-4">
               <span class="badge badge-neutral shadow-sm font-mono text-xs tracking-widest px-3 py-2">${escapeHtml(messages.game.cutsceneBadge)}</span>
             </div>
-            ${contentHtml}
+            <div class="card card-dash bg-black/75 border border-base-content/20 shadow-2xl backdrop-blur-sm w-full max-w-[min(95vw,38rem)] p-4 sm:p-6 pt-8">
+              ${contentHtml}
+            </div>
             ${skipButtonHtml}
           </div>
         `;
@@ -1117,7 +1119,7 @@ const createHudStream = async function* ({
               <details class="collapse collapse-arrow border border-base-content/10 rounded-box bg-base-200/50" open>
                 <summary class="collapse-title text-sm font-bold uppercase tracking-wider text-base-content/70 min-h-0 py-2 px-4 after:end-2">${escapeHtml(messages.game.questLogTitle)}</summary>
                 <div class="collapse-content px-0 pt-0">
-                  <ul class="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                  <ul class="space-y-2 max-h-48 game-hud-slot-scroll px-1">
                     ${quests
                       .map((q) => {
                         const stepBadges =

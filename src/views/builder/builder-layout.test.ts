@@ -36,8 +36,12 @@ describe("renderBuilderLayout", () => {
     expect(html).toContain('for="main-nav-drawer"');
     expect(html).toContain('id="builder-content"');
     expect(html).toContain("pb-[calc(8.5rem+env(safe-area-inset-bottom))]");
-    expect(html).toContain('class="dock dock-sm fixed inset-x-0 bottom-0 z-30');
+    expect(html).toContain(
+      'class="surface-scroll surface-scroll-x surface-scroll-fade-x touch-pan-x dock dock-sm fixed inset-x-0 bottom-0 z-30',
+    );
     expect(html).toContain("pb-[env(safe-area-inset-bottom)]");
+    expect(html).toContain("surface-scroll-fade-y");
+    expect(html).toContain("pt-[env(safe-area-inset-top)]");
     expect(html).toContain(`aria-label="${messages.builder.title}"`);
     expect(html).toContain("/projects/default/assets?lang=en-US");
     expect(html).toContain("/projects/default/playtest?lang=en-US");

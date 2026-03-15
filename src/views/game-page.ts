@@ -136,7 +136,7 @@ const renderInactiveState = (
             ? `<div class="rounded-box bg-base-300/50 p-4 font-mono text-sm mb-4">${escapeHtml(projectId)}</div>`
             : ""
         }
-        <a href="${escapeHtml(builderHref)}" class="btn btn-primary" aria-label="${escapeHtml(messages.game.returnToBuilder)}">${escapeHtml(messages.game.returnToBuilder)}</a>
+        <a href="${escapeHtml(builderHref)}" class="btn btn-primary min-h-11 surface-tappable" aria-label="${escapeHtml(messages.game.returnToBuilder)}">${escapeHtml(messages.game.returnToBuilder)}</a>
       </div>
     </div>
   </section>`;
@@ -289,7 +289,7 @@ export function GamePage(props: GamePageProps) {
                 </div>
                 ${
                   creatorJourney.previousStep
-                    ? `<a class="btn btn-outline btn-sm" href="${escapeHtml(creatorJourney.previousStep.href)}" aria-label="${escapeHtml(creatorJourney.previousStep.label)}">
+                    ? `<a class="btn btn-outline btn-sm min-h-11 surface-tappable" href="${escapeHtml(creatorJourney.previousStep.href)}" aria-label="${escapeHtml(creatorJourney.previousStep.label)}">
                         <span aria-hidden="true">←</span>
                         <span>${escapeHtml(creatorJourney.previousStep.label)}</span>
                       </a>`
@@ -311,11 +311,11 @@ export function GamePage(props: GamePageProps) {
 
   const content = `
     <script id="game-client-bootstrap" type="application/json">${serializeGameClientBootstrap(clientBootstrap)}</script>
-    <div class="game-page-grid gap-5 font-serif stagger-children animate-fade-in-up" hx-boost="false" hx-ext="sse" sse-connect="${escapeHtml(gameHudStreamUrl)}" data-sse-url="${escapeHtml(gameHudStreamUrl)}" data-builder-href="${escapeHtml(builderHref)}" data-back-to-builder-label="${escapeHtml(messages.game.builderReturn)}" data-connecting-to-realm="${escapeHtml(messages.game.connectingToRealm)}">
+    <div class="game-page-grid gap-5 lg:gap-6 font-serif stagger-children animate-fade-in-up" hx-boost="false" hx-ext="sse" sse-connect="${escapeHtml(gameHudStreamUrl)}" data-sse-url="${escapeHtml(gameHudStreamUrl)}" data-builder-href="${escapeHtml(builderHref)}" data-back-to-builder-label="${escapeHtml(messages.game.builderReturn)}" data-connecting-to-realm="${escapeHtml(messages.game.connectingToRealm)}">
       ${playtestJourney}
       <!-- Game Header Bar -->
-      <header class="bg-base-200 card shadow">
-        <div class="card-body p-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <header class="card overflow-hidden border border-base-300/70 bg-base-200/90 shadow-lg">
+        <div class="card-body p-4 sm:p-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div class="flex items-center gap-3 min-w-0 shrink" role="group" aria-label="${escapeHtml(messages.game.sceneLabel)}">
             ${
               props.brand?.logoImagePath
@@ -340,24 +340,24 @@ export function GamePage(props: GamePageProps) {
               >${escapeHtml(activeQuestTitle ?? messages.game.objectiveDescription)}</p>
             </div>
           </div>
-          <div class="flex flex-wrap items-center gap-4 lg:gap-6">
-            <div class="flex gap-2" role="group" aria-label="${escapeHtml(messages.builder.title)}">
-              <a href="${escapeHtml(builderHref)}" class="btn btn-outline btn-sm gap-2" aria-label="${escapeHtml(messages.game.builderReturn)}">
+          <div class="flex w-full flex-col gap-3 xl:w-auto xl:items-end">
+            <div class="flex w-full flex-wrap items-center gap-2 xl:w-auto xl:justify-end" role="group" aria-label="${escapeHtml(messages.builder.title)}">
+              <a href="${escapeHtml(builderHref)}" class="btn btn-outline btn-sm gap-2 min-h-11 surface-tappable" aria-label="${escapeHtml(messages.game.builderReturn)}">
                 <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
                 <span class="hidden sm:inline">${escapeHtml(messages.game.builderReturn)}</span>
               </a>
-              <button type="button" class="btn btn-ghost btn-sm gap-2" data-modal-trigger="key_bindings_modal" aria-label="${escapeHtml(messages.game.keyBindingsTitle)}">
+              <button type="button" class="btn btn-ghost btn-sm gap-2 min-h-11 surface-tappable" data-modal-trigger="key_bindings_modal" aria-label="${escapeHtml(messages.game.keyBindingsTitle)}">
                 <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-1.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h1.09a1.65 1.65 0 001-1.51 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v1.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-1.09a1.65 1.65 0 00-1.51 1z"/></svg>
                 <span class="hidden sm:inline">${escapeHtml(messages.game.keyBindingsTitle)}</span>
               </button>
             ${
               participantRole === "owner"
                 ? `
-              <button type="button" class="btn btn-ghost btn-sm gap-2" data-modal-trigger="save_slot_modal" aria-label="${escapeHtml(messages.game.saveAction)}">
+                <button type="button" class="btn btn-ghost btn-sm gap-2 min-h-11 surface-tappable" data-modal-trigger="save_slot_modal" aria-label="${escapeHtml(messages.game.saveAction)}">
                 <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                 <span class="hidden sm:inline">${escapeHtml(messages.game.saveAction)}</span>
               </button>
-              <button type="button" class="btn btn-ghost btn-sm gap-2" data-modal-trigger="load_slot_modal" aria-label="${escapeHtml(messages.game.loadAction)}">
+                <button type="button" class="btn btn-ghost btn-sm gap-2 min-h-11 surface-tappable" data-modal-trigger="load_slot_modal" aria-label="${escapeHtml(messages.game.loadAction)}">
                 <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 <span class="hidden sm:inline">${escapeHtml(messages.game.loadAction)}</span>
               </button>
@@ -365,7 +365,7 @@ export function GamePage(props: GamePageProps) {
                 : ""
             }
             </div>
-            <div class="flex items-center gap-2 flex-wrap" role="group" aria-label="${escapeHtml(messages.game.connectionStatus)}">
+            <div class="flex w-full flex-wrap items-center gap-2 xl:w-auto xl:justify-end" role="group" aria-label="${escapeHtml(messages.game.connectionStatus)}">
             <span id="game-session-meta" class="hidden"
               data-session-id="${escapeHtml(sessionId)}"
               data-participant-session-id="${escapeHtml(participantSessionId)}"
@@ -403,7 +403,7 @@ export function GamePage(props: GamePageProps) {
             <button
               id="game-reconnect"
               type="button"
-              class="btn btn-xs btn-warning hidden gap-1"
+              class="btn btn-xs btn-warning hidden gap-1 min-h-11 surface-tappable"
               aria-label="${escapeHtml(messages.game.reconnectAction)}"
               data-reconnect-label="${escapeHtml(messages.game.reconnectAction)}"
             >
@@ -440,8 +440,8 @@ export function GamePage(props: GamePageProps) {
         </div>
       </header>
 
-      <section class="grid gap-6 lg:grid-cols-[0.82fr_0.18fr]" aria-label="${escapeHtml(messages.game.runtimeSurfaceLabel)}">
-          <div class="relative aspect-video overflow-hidden rounded-xl border border-base-content/20 bg-black shadow-2xl">
+      <section class="grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,0.82fr)_minmax(18rem,0.18fr)]" aria-label="${escapeHtml(messages.game.runtimeSurfaceLabel)}">
+          <div class="relative min-w-0 aspect-video overflow-hidden rounded-[1.5rem] border border-base-content/20 bg-black shadow-2xl">
             <div
               id="game-canvas-wrapper"
               class="absolute inset-0 h-full w-full cursor-auto outline-none data-[runtime-active=true]:cursor-none"
@@ -454,16 +454,14 @@ export function GamePage(props: GamePageProps) {
               data-spectator-control-denied-label="${escapeHtml(messages.game.spectatorControlDenied)}"
             ></div>
 
-            <div
-              class="pointer-events-none absolute inset-0 flex flex-col justify-between p-6 backdrop-blur-sm"
-            >
+            <div class="game-hud-overlay pointer-events-none">
               <div class="flex justify-between items-start pt-2">
                 <div id="hud-scene" sse-swap="scene-badge" hx-swap="outerHTML" aria-live="polite" role="status" class="pointer-events-auto rounded-full border border-base-content/10 bg-base-100/80 backdrop-blur-sm px-6 py-2 text-lg font-bold shadow">
                   ${escapeHtml(messages.game.connectingToRealm)}
                 </div>
               </div>
 
-              <div class="flex w-full justify-center pb-8">
+              <div class="game-hud-slot flex w-full justify-center pb-[clamp(0.5rem,1.75rem,2rem)]">
                 <div
                   id="hud-dialogue"
                   data-hud-slot="hud-dialogue"
@@ -471,7 +469,7 @@ export function GamePage(props: GamePageProps) {
                   hx-swap="outerHTML"
                   aria-live="polite"
                   role="log"
-                  class="hidden w-full max-w-2xl pointer-events-auto transform opacity-0 transition-all duration-300 scale-95"
+                  class="game-hud-slot hidden w-full max-w-2xl pointer-events-auto transform opacity-0 transition-all duration-300 scale-95"
                 >
                 </div>
 
@@ -482,7 +480,7 @@ export function GamePage(props: GamePageProps) {
                   hx-swap="outerHTML"
                   aria-live="polite"
                   role="log"
-                  class="hidden w-full max-w-4xl pointer-events-auto transform opacity-0 transition-all duration-300 scale-95"
+                  class="game-hud-slot hidden w-full max-w-4xl pointer-events-auto transform opacity-0 transition-all duration-300 scale-95"
                 >
                 </div>
 
@@ -493,7 +491,7 @@ export function GamePage(props: GamePageProps) {
                   hx-swap="outerHTML"
                   aria-live="polite"
                   role="region"
-                  class="hidden w-full max-w-3xl pointer-events-auto transform opacity-0 transition-all duration-300 scale-95"
+                  class="game-hud-slot hidden w-full max-w-3xl pointer-events-auto transform opacity-0 transition-all duration-300 scale-95"
                 >
                 </div>
 
@@ -504,14 +502,14 @@ export function GamePage(props: GamePageProps) {
                   hx-swap="outerHTML"
                   aria-live="polite"
                   role="region"
-                  class="hidden w-full h-full pointer-events-auto transform transition-all duration-500"
+                  class="game-hud-slot hidden w-full max-w-full pointer-events-auto transform transition-all duration-500"
                 >
                 </div>
               </div>
             </div>
           </div>
 
-          <aside class="order-2 lg:order-none space-y-4 game-sidebar" aria-label="${escapeHtml(messages.game.objectiveTitle)}">
+          <aside class="surface-scroll surface-scroll-y surface-scroll-fade-y touch-pan-y order-2 min-h-0 space-y-4 game-sidebar lg:surface-sticky lg:order-none lg:max-h-[calc(100vh-8rem)] lg:pr-1" aria-label="${escapeHtml(messages.game.objectiveTitle)}">
             <article class="bg-base-200 card flex-1">
               <div class="card-body">
                 <h2 class="card-title text-lg">${escapeHtml(messages.game.objectiveTitle)}</h2>
@@ -577,18 +575,20 @@ export function GamePage(props: GamePageProps) {
                   <div class="text-xs font-semibold uppercase tracking-wide text-base-content/60">${escapeHtml(
                     messages.game.participantsLabel,
                   )}</div>
-                  <div class="avatar-group -space-x-6" id="game-participants-list" sse-swap="participants" hx-swap="outerHTML" role="list" aria-live="polite">
-                    ${participants
-                      .map(
-                        (
-                          participant,
-                        ) => `<div class="avatar tooltip" data-tip="${escapeHtml(participant.sessionId)}">
-                          <div class="w-12 rounded-full bg-base-200 ring ring-base-300">
-                            <span class="text-sm uppercase font-semibold">${escapeHtml(participant.role.slice(0, 1))}</span>
-                          </div>
-                        </div>`,
-                      )
-                      .join("")}
+                  <div class="surface-scroll surface-scroll-x touch-pan-x pb-1">
+                    <div class="avatar-group min-w-max -space-x-6" id="game-participants-list" sse-swap="participants" hx-swap="outerHTML" role="list" aria-live="polite">
+                      ${participants
+                        .map(
+                          (
+                            participant,
+                          ) => `<div class="avatar tooltip" data-tip="${escapeHtml(participant.sessionId)}">
+                            <div class="w-12 rounded-full bg-base-200 ring ring-base-300">
+                              <span class="text-sm uppercase font-semibold">${escapeHtml(participant.role.slice(0, 1))}</span>
+                            </div>
+                          </div>`,
+                        )
+                        .join("")}
+                    </div>
                   </div>
                 </div>
                 ${
@@ -597,16 +597,16 @@ export function GamePage(props: GamePageProps) {
                         <form hx-post="${escapeHtml(inviteAction)}" hx-target="#game-multiplayer-share-result" hx-swap="outerHTML" hx-disabled-elt="button" hx-indicator="#invite-controller-spinner" class="flex flex-wrap items-center gap-2">
                           <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
                           <input type="hidden" name="role" value="controller" />
-                          <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.game.inviteControllerAction)}">${escapeHtml(messages.game.inviteControllerAction)}</button>
+                          <button type="submit" class="btn btn-primary btn-sm min-h-11 surface-tappable" aria-label="${escapeHtml(messages.game.inviteControllerAction)}">${escapeHtml(messages.game.inviteControllerAction)}</button>
                           <span id="invite-controller-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
                         </form>
                         <form hx-post="${escapeHtml(inviteAction)}" hx-target="#game-multiplayer-share-result" hx-swap="outerHTML" hx-disabled-elt="button" hx-indicator="#invite-spectator-spinner" class="flex flex-wrap items-center gap-2">
                           <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
                           <input type="hidden" name="role" value="spectator" />
-                          <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.game.inviteSpectatorAction)}">${escapeHtml(messages.game.inviteSpectatorAction)}</button>
+                          <button type="submit" class="btn btn-outline btn-sm min-h-11 surface-tappable" aria-label="${escapeHtml(messages.game.inviteSpectatorAction)}">${escapeHtml(messages.game.inviteSpectatorAction)}</button>
                           <span id="invite-spectator-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
                         </form>
-                        <div id="game-multiplayer-share-result" class="hidden"></div>
+                        <div id="game-multiplayer-share-result" class="hidden" role="status" aria-live="polite"></div>
                       </div>`
                     : participantRole === "spectator"
                       ? `<div class="alert alert-soft">
@@ -638,7 +638,7 @@ export function GamePage(props: GamePageProps) {
       <dialog id="save_slot_modal" class="modal" role="dialog" aria-labelledby="save-slot-modal-title" aria-modal="true">
         <div class="modal-box">
           <form method="dialog">
-            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" aria-label="${escapeHtml(messages.common.closeMenu)}">✕</button>
+            <button type="button" class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 min-h-11 surface-tappable" aria-label="${escapeHtml(messages.common.closeMenu)}">✕</button>
           </form>
           <h3 id="save-slot-modal-title" class="font-bold text-lg">${escapeHtml(messages.game.saveSlotTitle)}</h3>
           <form
@@ -663,15 +663,15 @@ export function GamePage(props: GamePageProps) {
                 aria-required="true"
               />
             </div>
-            <div id="save-slot-result"></div>
-            <div class="modal-action">
-              <form method="dialog" class="inline"><button type="submit" class="btn btn-ghost" aria-label="${escapeHtml(messages.builder.cancel)}">${escapeHtml(messages.builder.cancel)}</button></form>
-              <button type="submit" class="btn btn-primary" aria-label="${escapeHtml(messages.game.saveAction)}">${escapeHtml(messages.game.saveAction)}</button>
+            <div id="save-slot-result" role="status" aria-live="polite"></div>
+              <div class="modal-action">
+              <form method="dialog" class="inline"><button type="submit" class="btn btn-ghost min-h-11 surface-tappable" aria-label="${escapeHtml(messages.builder.cancel)}">${escapeHtml(messages.builder.cancel)}</button></form>
+              <button type="submit" class="btn btn-primary min-h-11 surface-tappable" aria-label="${escapeHtml(messages.game.saveAction)}">${escapeHtml(messages.game.saveAction)}</button>
             </div>
           </form>
         </div>
         <form method="dialog" class="modal-backdrop">
-          <button type="submit" aria-label="${escapeHtml(messages.common.closeMenu)}">${escapeHtml(messages.common.closeMenu)}</button>
+          <button type="submit" class="surface-tappable min-h-11" aria-label="${escapeHtml(messages.common.closeMenu)}">${escapeHtml(messages.common.closeMenu)}</button>
         </form>
       </dialog>
 
@@ -679,15 +679,17 @@ export function GamePage(props: GamePageProps) {
       <dialog id="load_slot_modal" class="modal" role="dialog" aria-labelledby="load-slot-modal-title" aria-modal="true">
         <div class="modal-box">
           <form method="dialog">
-            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" aria-label="${escapeHtml(messages.common.closeMenu)}">✕</button>
+          <button type="button" class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 min-h-11 surface-tappable" aria-label="${escapeHtml(messages.common.closeMenu)}">✕</button>
           </form>
           <h3 id="load-slot-modal-title" class="font-bold text-lg">${escapeHtml(messages.game.loadSlotTitle)}</h3>
           <div
             id="load-slots-list"
-            class="mt-4 space-y-2 max-h-64 overflow-y-auto"
+            class="surface-scroll surface-scroll-y surface-scroll-fade-y touch-pan-y mt-4 space-y-2 max-h-64 overflow-y-auto pr-1"
             hx-get="${escapeHtml(saveSlotsAction)}"
             hx-trigger="revealed"
             hx-swap="innerHTML"
+            role="status"
+            aria-live="polite"
           >
             <div class="flex flex-col gap-2" aria-busy="true" aria-label="${escapeHtml(messages.common.loading)}">
               <div class="skeleton h-12 w-full rounded-box"></div>
@@ -698,7 +700,7 @@ export function GamePage(props: GamePageProps) {
           </div>
         </div>
         <form method="dialog" class="modal-backdrop">
-          <button type="submit" aria-label="${escapeHtml(messages.common.closeMenu)}">${escapeHtml(messages.common.closeMenu)}</button>
+          <button type="submit" class="surface-tappable min-h-11" aria-label="${escapeHtml(messages.common.closeMenu)}">${escapeHtml(messages.common.closeMenu)}</button>
         </form>
       </dialog>
       `
@@ -710,7 +712,7 @@ export function GamePage(props: GamePageProps) {
       <dialog id="key_bindings_modal" class="modal" role="dialog" aria-labelledby="key-bindings-modal-title" aria-modal="true" data-listening-hint="${escapeHtml(messages.game.keyBindingsListeningHint)}" data-set-label="${escapeHtml(messages.game.keyBindingsSetButton)}">
         <div class="modal-box max-w-md">
           <form method="dialog">
-            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" aria-label="${escapeHtml(messages.common.closeMenu)}">✕</button>
+            <button type="button" class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 min-h-11 surface-tappable" aria-label="${escapeHtml(messages.common.closeMenu)}">✕</button>
           </form>
           <h3 id="key-bindings-modal-title" class="font-bold text-lg">${escapeHtml(messages.game.keyBindingsTitle)}</h3>
           <p class="text-sm text-base-content/70 mt-1">${escapeHtml(messages.game.keyBindingsDescription)}</p>
@@ -720,7 +722,7 @@ export function GamePage(props: GamePageProps) {
                 <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionMoveUp)}</span></label>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
-                  <button type="button" class="btn btn-sm btn-outline" data-action-set="move-up" aria-label="${escapeHtml(messages.game.keyBindingsActionMoveUp)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+            <button type="button" class="btn btn-sm btn-outline min-h-11 surface-tappable" data-action-set="move-up" aria-label="${escapeHtml(messages.game.keyBindingsActionMoveUp)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
             </div>
@@ -729,7 +731,7 @@ export function GamePage(props: GamePageProps) {
                 <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionMoveDown)}</span></label>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
-                  <button type="button" class="btn btn-sm btn-outline" data-action-set="move-down" aria-label="${escapeHtml(messages.game.keyBindingsActionMoveDown)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+                  <button type="button" class="btn btn-sm btn-outline min-h-11 surface-tappable" data-action-set="move-down" aria-label="${escapeHtml(messages.game.keyBindingsActionMoveDown)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
             </div>
@@ -738,7 +740,7 @@ export function GamePage(props: GamePageProps) {
                 <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionMoveLeft)}</span></label>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
-                  <button type="button" class="btn btn-sm btn-outline" data-action-set="move-left" aria-label="${escapeHtml(messages.game.keyBindingsActionMoveLeft)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+                  <button type="button" class="btn btn-sm btn-outline min-h-11 surface-tappable" data-action-set="move-left" aria-label="${escapeHtml(messages.game.keyBindingsActionMoveLeft)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
             </div>
@@ -747,7 +749,7 @@ export function GamePage(props: GamePageProps) {
                 <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionMoveRight)}</span></label>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
-                  <button type="button" class="btn btn-sm btn-outline" data-action-set="move-right" aria-label="${escapeHtml(messages.game.keyBindingsActionMoveRight)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+                  <button type="button" class="btn btn-sm btn-outline min-h-11 surface-tappable" data-action-set="move-right" aria-label="${escapeHtml(messages.game.keyBindingsActionMoveRight)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
             </div>
@@ -756,7 +758,7 @@ export function GamePage(props: GamePageProps) {
                 <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionInteract)}</span></label>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
-                  <button type="button" class="btn btn-sm btn-outline" data-action-set="interact" aria-label="${escapeHtml(messages.game.keyBindingsActionInteract)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+                  <button type="button" class="btn btn-sm btn-outline min-h-11 surface-tappable" data-action-set="interact" aria-label="${escapeHtml(messages.game.keyBindingsActionInteract)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
             </div>
@@ -765,7 +767,7 @@ export function GamePage(props: GamePageProps) {
                 <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionMenu)}</span></label>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
-                  <button type="button" class="btn btn-sm btn-outline" data-action-set="menu" aria-label="${escapeHtml(messages.game.keyBindingsActionMenu)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+                  <button type="button" class="btn btn-sm btn-outline min-h-11 surface-tappable" data-action-set="menu" aria-label="${escapeHtml(messages.game.keyBindingsActionMenu)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
             </div>
@@ -774,19 +776,19 @@ export function GamePage(props: GamePageProps) {
                 <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionClose)}</span></label>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
-                  <button type="button" class="btn btn-sm btn-outline" data-action-set="close" aria-label="${escapeHtml(messages.game.keyBindingsActionClose)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+                  <button type="button" class="btn btn-sm btn-outline min-h-11 surface-tappable" data-action-set="close" aria-label="${escapeHtml(messages.game.keyBindingsActionClose)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
             </div>
           </div>
           <p class="text-xs text-base-content/50 mt-3">${escapeHtml(messages.game.keyBindingsUpdatedHint)}</p>
           <div class="modal-action mt-4">
-            <button type="button" class="btn btn-ghost btn-sm" data-reset-bindings aria-label="${escapeHtml(messages.game.keyBindingsResetDefaults)}">${escapeHtml(messages.game.keyBindingsResetDefaults)}</button>
-            <form method="dialog" class="inline"><button type="submit" class="btn btn-ghost" aria-label="${escapeHtml(messages.common.closeMenu)}">${escapeHtml(messages.common.closeMenu)}</button></form>
+            <button type="button" class="btn btn-ghost btn-sm min-h-11 surface-tappable" data-reset-bindings aria-label="${escapeHtml(messages.game.keyBindingsResetDefaults)}">${escapeHtml(messages.game.keyBindingsResetDefaults)}</button>
+            <form method="dialog" class="inline"><button type="submit" class="btn btn-ghost min-h-11 surface-tappable" aria-label="${escapeHtml(messages.common.closeMenu)}">${escapeHtml(messages.common.closeMenu)}</button></form>
           </div>
         </div>
         <form method="dialog" class="modal-backdrop">
-          <button type="submit" aria-label="${escapeHtml(messages.common.closeMenu)}">${escapeHtml(messages.common.closeMenu)}</button>
+          <button type="submit" class="surface-tappable min-h-11" aria-label="${escapeHtml(messages.common.closeMenu)}">${escapeHtml(messages.common.closeMenu)}</button>
         </form>
       </dialog>
     </div>
