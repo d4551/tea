@@ -23,7 +23,12 @@ import {
 import type { Messages } from "../shared/i18n/messages.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
 import { buildBuilderJourneyConfig } from "./builder/builder-journey.ts";
-import { escapeHtml, type LayoutContext, renderDocument } from "./layout.ts";
+import {
+  escapeHtml,
+  type LayoutContext,
+  type OraclePanelState,
+  renderDocument,
+} from "./layout.ts";
 import { renderBreadcrumbRow, renderSecondaryNav } from "./shared/navigation.ts";
 import { spinnerClasses } from "./shared/ui-components.ts";
 
@@ -48,6 +53,7 @@ interface PlayableGamePageProps {
   readonly clientRuntimeConfig: GameClientBootstrapData["runtime"];
   /** Request origin for absolute SSE/WS URLs; uses appConfig.appOrigin when omitted. */
   readonly appOrigin?: string;
+  readonly oraclePanelState?: OraclePanelState;
 }
 
 /**
@@ -61,6 +67,7 @@ interface InactiveGamePageProps {
     | "session-unavailable";
   readonly locale: LocaleCode;
   readonly projectId?: string;
+  readonly oraclePanelState?: OraclePanelState;
 }
 
 /**
@@ -155,6 +162,7 @@ export function GamePage(props: GamePageProps) {
       activeRoute: "game",
       currentPathWithQuery,
       persistentProjectId: props.projectId,
+    oraclePanelState: props.oraclePanelState,
     };
 
     return renderDocument(
@@ -195,6 +203,7 @@ export function GamePage(props: GamePageProps) {
     persistentProjectId: projectId,
     hideTopBar: true,
     hideFooter: true,
+    oraclePanelState: props.oraclePanelState,
   };
   const gameHudStreamPath = interpolateRoutePath(appRoutes.gameApiSessionHud, { id: sessionId });
   const origin = props.appOrigin ?? appConfig.appOrigin;

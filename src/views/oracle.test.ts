@@ -63,4 +63,86 @@ describe("oracle view contract", () => {
     expect(html).toContain('<template id="oracle-loading-template">');
     expect(html).toContain('data-oracle-loading-question="true"');
   });
+
+  test("renders page context hidden inputs for context-aware oracle requests", () => {
+    const messages = getMessages("en-US");
+
+    const html = renderOracleSection(
+      messages,
+      {
+        state: "idle",
+        mode: "auto",
+        question: "",
+      },
+      "en-US",
+      {
+        variant: "drawer",
+        pageContext: {
+          currentPath: "/projects/abc/world",
+          activeRoute: "builderScenes",
+          projectId: "abc-123",
+        },
+      },
+    );
+
+    expect(html).toContain('<input type="hidden" name="context_path" value="/projects/abc/world" />');
+    expect(html).toContain('<input type="hidden" name="context_route" value="builderScenes" />');
+    expect(html).toContain('<input type="hidden" name="context_project" value="abc-123" />');
+  });
+
+  test("omits optional context_project when projectId is absent", () => {
+    const messages = getMessages("en-US");
+
+    const html = renderOracleSection(
+      messages,
+      {
+        state: "idle",
+        mode: "auto",
+        question: "",
+      },
+      "en-US",
+      {
+        variant: "drawer",
+        pageContext: {
+          currentPath: "/projects/abc/world",
+          activeRoute: "builderScenes",
+        },
+      },
+    );
+
+    expect(html).toContain('<input type="hidden" name="context_path" value="/projects/abc/world" />');
+    expect(html).toContain('<input type="hidden" name="context_route" value="builderScenes" />');
+    expect(html).not.toContain('name="context_project"');
+  });
+
+  test("switches layout classes between drawer and page variants", () => {
+    const messages = getMessages("en-US");
+    const panelState = {
+      state: "idle",
+      mode: "auto",
+      question: "",
+    } as const;
+
+    const pageVariant = renderOracleSection(messages, panelState, "en-US", {
+      variant: "page",
+      pageContext: {
+        currentPath: "/projects/abc/world",
+        activeRoute: "builderScenes",
+        projectId: "abc-123",
+      },
+    });
+    const drawerVariant = renderOracleSection(messages, panelState, "en-US", {
+      variant: "drawer",
+      pageContext: {
+        currentPath: "/projects/abc/world",
+        activeRoute: "builderScenes",
+        projectId: "abc-123",
+      },
+    });
+
+    expect(pageVariant).toContain('class="grid gap-4 lg:grid-cols-[1.5fr_1fr]"');
+    expect(pageVariant).toContain('class="card-title text-2xl"');
+    expect(drawerVariant).toContain('class="flex flex-col gap-4 overflow-y-auto"');
+    expect(drawerVariant).toContain('class="card-title text-lg"');
+  });
 });

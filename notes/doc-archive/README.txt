@@ -1,5 +1,15 @@
 # TEA
 
+## Start here / 从这里开始
+
+- [Platform explainer / 平台白话说明 / ELI5](docs/platform-explainer.md)
+- [GitHub description, technologies, and keywords / GitHub 描述、技术栈与关键词](docs/github-metadata.md)
+- [Documentation index / 文档索引](docs/index.md)
+
+SSR-first game runtime, builder workspace, and AI-enabled game platform built on Bun + TypeScript.
+
+基于 Bun + TypeScript 的 SSR 优先游戏运行时、构建器工作区与 AI 游戏平台。
+
 ![Bun](https://img.shields.io/badge/Bun%20Runtime-1.3+-black?logo=bun&logoColor=white&style=for-the-badge)
 ![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript&logoColor=white&style=for-the-badge)
 ![Prisma](https://img.shields.io/badge/Prisma-7%2B-2D3748?logo=prisma&style=for-the-badge)
@@ -32,6 +42,7 @@ Documentation parity strategy: every concept is mirrored with English first, the
 
 ### English
 
+- [Platform explainer](docs/platform-explainer.md)
 - [Documentation](#documentation--文档)
 - [Architecture at a glance](#architecture-at-a-glance--架构一览)
 - [Request and error lifecycle](#request-and-error-lifecycle--请求与错误流)
@@ -48,6 +59,7 @@ Documentation parity strategy: every concept is mirrored with English first, the
 
 ### 中文
 
+- [平台白话说明](docs/platform-explainer.md)
 - [文档](#documentation--文档)
 - [架构一览](#architecture-at-a-glance--架构一览)
 - [请求与错误流](#request-and-error-lifecycle--请求与错误流)

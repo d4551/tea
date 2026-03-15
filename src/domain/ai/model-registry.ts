@@ -212,7 +212,7 @@ export const MODEL_REGISTRY: ModelRegistry = {
   },
   imageGeneration: {
     key: "imageGeneration",
-    label: "Local image generation (experimental)",
+    label: "Local image generation",
     description:
       "Local text-to-image generation through Transformers.js when a compatible ONNX image model is available.",
     task: "text-to-image",

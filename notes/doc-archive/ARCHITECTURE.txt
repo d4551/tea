@@ -2,6 +2,27 @@
 
 This file is the canonical architecture reference used after markdown retirement.
 
+## Start here
+
+If you want the shortest guided overview before reading the full architecture reference, start with [docs/platform-explainer.md](docs/platform-explainer.md).
+That page includes English, Chinese, and Explain Like I'm 5 versions plus simplified Mermaid charts.
+
+## Product view
+
+```mermaid
+flowchart LR
+  Creator["Creator"] --> Builder["Builder SSR + HTMX"]
+  Player["Player"] --> Runtime["Game SSR + playable client"]
+  Operator["Operator"] --> Ops["Runbooks + verification"]
+  Builder --> Publish["Publish validation + immutable release"]
+  Publish --> Runtime
+  Runtime --> Transport["HTTP + SSE + WebSocket"]
+  Runtime --> Loop["game-loop"]
+  Builder --> Services["Builder + AI services"]
+  Services --> Store["Prisma + SQLite + assets"]
+  Loop --> Store
+```
+
 ## 1) Design invariants
 
 1. **Authoring is mutable, runtime is immutable**: builder projects are drafts, sessions are created from published snapshots only.

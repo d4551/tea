@@ -15,6 +15,7 @@ import {
   type NavigationItem,
   renderActionDropdown,
   renderCollapsibleSidebarMenu,
+  renderSecondaryNav,
 } from "../shared/navigation.ts";
 import { spinnerClasses } from "../shared/ui-components.ts";
 import {
@@ -22,6 +23,7 @@ import {
   iconAssets,
   iconAutomation,
   iconDashboard,
+  iconDocs,
   iconDialogue,
   iconMechanics,
   iconMenu,
@@ -148,6 +150,13 @@ const withBuilderQuery = (path: string, locale: LocaleCode, projectId: string): 
     lang: locale,
   });
 
+const withBuilderSection = (
+  path: string,
+  locale: LocaleCode,
+  projectId: string,
+  sectionId: string,
+): string => withBuilderQuery(`${path}#${sectionId}`, locale, projectId);
+
 const buildProjectConsoleNavigationGroups = (
   messages: Messages,
   locale: LocaleCode,
@@ -166,12 +175,82 @@ const buildProjectConsoleNavigationGroups = (
         active: activeTab === "ai" || activeTab === "settings",
       },
       {
+        key: "knowledge",
+        label: messages.builder.knowledgeWorkspaceTitle,
+        shortLabel: messages.builder.knowledgeWorkspaceTitle,
+        href: withBuilderSection(appRoutes.builderAi, locale, projectId, "builder-knowledge-workspace"),
+        icon: iconDocs(),
+      },
+      {
+        key: "providers",
+        label: messages.builder.providerStatus,
+        shortLabel: messages.builder.providerStatus,
+        href: withBuilderSection(appRoutes.builderAi, locale, projectId, "builder-provider-workbench"),
+        icon: iconAi(),
+      },
+      {
+        key: "models",
+        label: messages.builder.aiModelCatalogWorkspaceTitle,
+        shortLabel: messages.builder.aiModelCatalogWorkspaceTitle,
+        href: withBuilderSection(appRoutes.builderAi, locale, projectId, "builder-model-catalog"),
+        icon: iconAi(),
+      },
+      {
+        key: "preview",
+        label: messages.builder.previewChanges,
+        shortLabel: messages.builder.previewChanges,
+        href: withBuilderSection(appRoutes.builderAi, locale, projectId, "builder-patch-preview"),
+        icon: iconAutomation(),
+      },
+    ],
+  },
+  {
+    title: messages.builder.operations,
+    items: [
+      {
         key: "operations",
         label: messages.builder.operations,
         shortLabel: messages.builder.operations,
         href: withBuilderQuery(appRoutes.builderAutomation, locale, projectId),
         icon: iconAutomation(),
         active: activeTab === "automation" || activeTab === "operations",
+      },
+      {
+        key: "review-queue",
+        label: messages.builder.automationArtifactsLabel,
+        shortLabel: messages.builder.automationArtifactsLabel,
+        href: withBuilderSection(
+          appRoutes.builderAutomation,
+          locale,
+          projectId,
+          "builder-review-queue",
+        ),
+        icon: iconAutomation(),
+      },
+      {
+        key: "run-composer",
+        label: messages.builder.createAutomationRun,
+        shortLabel: messages.builder.createAutomationRun,
+        href: withBuilderSection(
+          appRoutes.builderAutomation,
+          locale,
+          projectId,
+          "builder-automation-composer",
+        ),
+        icon: iconAutomation(),
+      },
+    ],
+  },
+  {
+    title: messages.builder.navGroupRuntime,
+    items: [
+      {
+        key: "playtest",
+        label: messages.builder.playtest,
+        shortLabel: messages.builder.playtest,
+        href: withBuilderQuery(appRoutes.game, locale, projectId),
+        icon: iconPlay(),
+        active: activeTab === "play" || activeTab === "playtest",
       },
     ],
   },
@@ -276,8 +355,57 @@ const resolveConsoleWorkspaceLabel = (messages: Messages, activeTab: string): st
   if (activeTab === "automation" || activeTab === "operations") {
     return messages.builder.operations;
   }
+  if (activeTab === "play" || activeTab === "playtest") {
+    return messages.builder.playtest;
+  }
   return messages.builder.projectSettings;
 };
+
+const resolveWorkspaceSwitcherActiveKey = (activeTab: string): string => {
+  if (activeTab === "automation" || activeTab === "operations") {
+    return "operations";
+  }
+  if (activeTab === "play" || activeTab === "playtest") {
+    return "playtest";
+  }
+  if (activeTab === "ai" || activeTab === "settings") {
+    return "settings";
+  }
+  return "create";
+};
+
+const renderWorkspaceSwitcher = (
+  messages: Messages,
+  locale: LocaleCode,
+  projectId: string,
+  activeTab: string,
+): string =>
+  renderSecondaryNav(
+    [
+      {
+        key: "create",
+        label: messages.builder.dashboard,
+        href: withBuilderQuery(appRoutes.builderStart, locale, projectId),
+      },
+      {
+        key: "settings",
+        label: messages.builder.projectSettings,
+        href: withBuilderQuery(appRoutes.builderAi, locale, projectId),
+      },
+      {
+        key: "operations",
+        label: messages.builder.operations,
+        href: withBuilderQuery(appRoutes.builderAutomation, locale, projectId),
+      },
+      {
+        key: "playtest",
+        label: messages.builder.playtest,
+        href: withBuilderQuery(appRoutes.game, locale, projectId),
+      },
+    ],
+    resolveWorkspaceSwitcherActiveKey(activeTab),
+    messages.builder.title,
+  );
 
 /**
  * Renders a compact project bar for the builder header.
@@ -299,6 +427,7 @@ export const renderBuilderProjectShell = (
   projectId: string,
   currentPath: string,
   project: BuilderChromeProject | null,
+  activeTab: string,
 ): string => {
   const switchAction = withQueryParameters(currentPath, { lang: locale });
   const playHref =
@@ -360,20 +489,26 @@ export const renderBuilderProjectShell = (
     },
   ];
 
+  const publishedReleaseVersion = project?.publishedReleaseVersion;
+  const projectReleaseValue =
+    typeof publishedReleaseVersion === "number"
+      ? `${messages.builder.versionPrefix}${publishedReleaseVersion}`
+      : messages.builder.noPublishedRelease;
+
   return `<section id="builder-project-shell" class="border-b border-base-300/80 bg-base-100/80 backdrop-blur">
-    <div class="flex flex-col gap-3 px-4 py-3 lg:px-6">
+    <div class="flex flex-col gap-4 px-4 py-3 lg:px-6">
       <div class="flex flex-wrap items-center gap-3">
         <div class="space-y-1">
           <div class="flex flex-wrap items-center gap-2">
             <span class="font-semibold text-sm">${escapeHtml(project?.id ?? projectId)}</span>
             <span class="badge ${statusTone} badge-soft badge-xs">${escapeHtml(statusLabel)}</span>
             ${
-              project !== null
+              project !== null && project.publishedReleaseVersion !== null
                 ? `<span class="text-xs text-base-content/50">${escapeHtml(messages.builder.versionPrefix)}${project.version}</span>`
                 : ""
             }
           </div>
-          <p class="text-xs text-base-content/60">${escapeHtml(project?.publishedReleaseVersion !== null ? messages.builder.projectStatusPublished : messages.builder.workspaceJumpBack)}</p>
+          <p class="text-xs text-base-content/60">${escapeHtml(project !== null && project.publishedReleaseVersion !== null ? messages.builder.projectStatusPublished : messages.builder.workspaceJumpBack)}</p>
         </div>
         <div class="flex-1"></div>
         <div class="flex flex-wrap items-center gap-2">
@@ -387,6 +522,25 @@ export const renderBuilderProjectShell = (
             projectMenuItems,
             { align: "end", widthClass: "w-72", menuClassName: "p-3" },
           )}
+        </div>
+      </div>
+      <div class="grid gap-3 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.9fr)]">
+        <div class="rounded-[1.25rem] border border-base-300/80 bg-base-200/55 p-2">
+          ${renderWorkspaceSwitcher(messages, locale, project?.id ?? projectId, activeTab)}
+        </div>
+        <div class="grid gap-2 sm:grid-cols-3">
+          <div class="rounded-[1.25rem] border border-base-300/80 bg-base-100/90 px-4 py-3">
+            <p class="text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-base-content/50">${escapeHtml(messages.builder.projectDraftVersion)}</p>
+            <p class="mt-2 text-lg font-semibold">${escapeHtml(project ? `${messages.builder.versionPrefix}${project.version}` : messages.builder.projectStatusDraft)}</p>
+          </div>
+          <div class="rounded-[1.25rem] border border-base-300/80 bg-base-100/90 px-4 py-3">
+            <p class="text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-base-content/50">${escapeHtml(messages.builder.projectPublishedVersion)}</p>
+            <p class="mt-2 text-lg font-semibold">${escapeHtml(projectReleaseValue)}</p>
+          </div>
+          <div class="rounded-[1.25rem] border border-base-300/80 bg-base-100/90 px-4 py-3">
+            <p class="text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-base-content/50">${escapeHtml(messages.builder.projectStatus)}</p>
+            <p class="mt-2 text-lg font-semibold">${escapeHtml(statusLabel)}</p>
+          </div>
         </div>
       </div>
     </div>
@@ -486,6 +640,20 @@ const renderSidebarShell = (
         <span class="truncate text-sm font-medium">${escapeHtml(project === null ? messages.common.noProjectBound : messages.common.projectConfigured)}</span>
       </div>
       <p class="text-xs leading-5 text-base-content/60">${escapeHtml(shellDescription)}</p>
+      ${
+        project
+          ? `<div class="grid grid-cols-2 gap-2 text-xs">
+              <div class="rounded-box border border-base-300/80 bg-base-200/60 px-3 py-2">
+                <div class="font-semibold uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(messages.builder.projectDraftVersion)}</div>
+                <div class="mt-1 text-sm font-semibold">${escapeHtml(`${messages.builder.versionPrefix}${project.version}`)}</div>
+              </div>
+              <div class="rounded-box border border-base-300/80 bg-base-200/60 px-3 py-2">
+                <div class="font-semibold uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(messages.builder.projectPublishedVersion)}</div>
+                <div class="mt-1 text-sm font-semibold">${escapeHtml(project.publishedReleaseVersion === null ? messages.builder.noPublishedRelease : `${messages.builder.versionPrefix}${project.publishedReleaseVersion}`)}</div>
+              </div>
+            </div>`
+          : ""
+      }
     </div>`,
     footerHtml: `<a href="${escapeHtml(withQueryParameters(appRoutes.home, { lang: locale }))}" class="btn btn-outline btn-block btn-sm gap-2" aria-label="${escapeHtml(messages.builder.exitBuilder)}">
       <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
@@ -532,6 +700,7 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
     projectId,
     project,
     currentPath,
+    activeTab,
     body,
     shellLabel: messages.builder.title,
     activeWorkspaceLabel,
@@ -573,6 +742,7 @@ export const renderConsoleLayout = (props: BuilderLayoutProps): string => {
     projectId,
     project,
     currentPath,
+    activeTab,
     body,
     shellLabel: messages.builder.advancedTools,
     activeWorkspaceLabel,
@@ -590,6 +760,7 @@ interface ShellFrameConfig {
   readonly projectId: string;
   readonly project: BuilderChromeProject | null;
   readonly currentPath: string;
+  readonly activeTab: string;
   readonly body: string;
   readonly shellLabel: string;
   readonly activeWorkspaceLabel: string;
@@ -610,6 +781,7 @@ const renderShellFrame = (config: ShellFrameConfig): string => {
     projectId,
     project,
     currentPath,
+    activeTab,
     body,
     shellLabel,
     activeWorkspaceLabel,
@@ -644,7 +816,7 @@ const renderShellFrame = (config: ShellFrameConfig): string => {
           </div>
         </nav>
 
-        ${renderBuilderProjectShell(messages, locale, projectId, currentPath, project)}
+        ${renderBuilderProjectShell(messages, locale, projectId, currentPath, project, activeTab)}
         <div id="builder-content" class="flex-1 overflow-x-clip px-4 py-4 pb-[calc(8.5rem+env(safe-area-inset-bottom))] md:pb-36 lg:px-6 lg:py-6 lg:pb-6" role="region" aria-live="polite">
           ${body}
         </div>

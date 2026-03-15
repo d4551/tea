@@ -5,9 +5,12 @@ import { builderService } from "../domain/builder/builder-service.ts";
 import { gameLoop } from "../domain/game/game-loop.ts";
 import { authSessionGuard } from "../plugins/auth-session.ts";
 import { gameRequestContextPlugin } from "../plugins/game-request-context.ts";
+import { defaultOracleMode } from "../shared/constants/oracle.ts";
 import { defaultGameConfig } from "../shared/config/game-config.ts";
 import type { GameSessionState } from "../shared/contracts/game.ts";
 import { GamePage, type GamePageProps } from "../views/game-page.ts";
+import type { OraclePanelState } from "../views/layout.ts";
+import { parseOracleMode } from "./oracle-input.ts";
 
 /**
  * Assembles `GamePage` playable-state props from a resolved session.
@@ -49,6 +52,26 @@ const buildPlayablePageProps = (
   },
   appOrigin: requestOrigin,
 });
+
+const resolveOraclePanelState = (request: Request): OraclePanelState => {
+  const searchParams = new URL(request.url).searchParams;
+  const openAiAssistant = searchParams.get("openAiAssistant");
+  const hasOpenSignal =
+    openAiAssistant === "true" || openAiAssistant === "1" || searchParams.has("question");
+  if (!hasOpenSignal) {
+    return {
+      state: "idle",
+      mode: defaultOracleMode,
+      question: "",
+    };
+  }
+
+  return {
+    state: "idle",
+    mode: parseOracleMode(searchParams.get("mode") ?? undefined),
+    question: searchParams.get("question") ?? "",
+  };
+};
 
 const hydrateGameSession = async (
   sessionId: string | null,
@@ -94,15 +117,20 @@ export const gameRoutes = new Elysia({ prefix: "/projects" })
         const inviteToken = gameInviteToken;
         const ownerSessionId = gameParticipantSessionId;
         const requestOrigin = new URL(request.url).origin;
+        const oraclePanelState = resolveOraclePanelState(request);
         if (inviteToken) {
           const joined = await gameLoop.joinSession(inviteToken, ownerSessionId);
           if (joined) {
-            return GamePage(buildPlayablePageProps(joined, locale, requestOrigin));
+            return GamePage({
+              ...buildPlayablePageProps(joined, locale, requestOrigin),
+              oraclePanelState,
+            });
           }
 
           return GamePage({
             locale,
             state: "invalid-invite",
+            oraclePanelState,
           });
         }
         if (projectId) {
@@ -112,6 +140,7 @@ export const gameRoutes = new Elysia({ prefix: "/projects" })
               locale,
               state: "missing-project",
               projectId,
+              oraclePanelState,
             });
           }
 
@@ -121,6 +150,7 @@ export const gameRoutes = new Elysia({ prefix: "/projects" })
               locale,
               state: "unpublished-project",
               projectId,
+              oraclePanelState,
             });
           }
         }
@@ -136,10 +166,14 @@ export const gameRoutes = new Elysia({ prefix: "/projects" })
             locale,
             state: "session-unavailable",
             projectId: projectId ?? undefined,
+            oraclePanelState,
           });
         }
 
-        return GamePage(buildPlayablePageProps(session, locale, requestOrigin));
+        return GamePage({
+          ...buildPlayablePageProps(session, locale, requestOrigin),
+          oraclePanelState,
+        });
       },
     ),
   );

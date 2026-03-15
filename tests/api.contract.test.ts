@@ -332,6 +332,47 @@ describe("API contracts", () => {
     );
   });
 
+  test("ai playground partial endpoint forwards page context into oracle provider prompt", async () => {
+    let capturedPrompt = "";
+
+    await withMockedRegistry(
+      {
+        selectProvider: () =>
+          ({ name: "mock-chat" }) as ReturnType<ProviderRegistry["selectProvider"]>,
+        chat: async (params) => {
+          capturedPrompt = String(params.messages[0]?.content ?? "");
+          return {
+            ok: true,
+            text: "Context-aware response for your game scene",
+            model: "mock-oracle",
+            durationMs: 6,
+          };
+        },
+      },
+      async () => {
+        const query = new URLSearchParams({
+          question: "How can we improve this bridge?",
+          context_path: "/projects/context-check/world",
+          context_route: "builderScenes",
+          context_project: "context-check-1",
+          lang: "en-US",
+        });
+
+        const response = await app.handle(
+          new Request(toUrl(`${appRoutes.aiPlaygroundPartial}?${query.toString()}`)),
+        );
+        const body = await response.text();
+
+        expect(response.status).toBe(httpStatus.ok);
+        expect(body).toContain("Context-aware response for your game scene");
+        expect(capturedPrompt).toContain(
+          `Respond creatively and helpfully to this game design prompt: "How can we improve this bridge?"`,
+        );
+        expect(capturedPrompt).toContain("[Context: user is on builderScenes, project context-check-1]");
+      },
+    );
+  });
+
   test("oracle endpoint returns validation error envelope for blank questions", async () => {
     const response = await app.handle(
       new Request(toUrl(appRoutes.oracleApi), {
@@ -2725,15 +2766,15 @@ describe("HTMX partial rendering", () => {
     expect(html.includes("/public/vendor/htmx-ext/layout-controls.js")).toBe(true);
   });
 
-  test("home page renders explicit empty states instead of placeholder project metrics", async () => {
+  test("home page renders a launch-ready release standard instead of placeholder project metrics", async () => {
     const response = await app.handle(new Request(toUrl(appRoutes.home)));
     const html = await response.text();
 
     expect(response.status).toBe(httpStatus.ok);
-    expect(html.includes("No project activity yet")).toBe(true);
-    expect(html.includes("Project created in workspace")).toBe(false);
-    expect(html.includes("Waiting for initial scene draft")).toBe(false);
-    expect(html.includes("Awaiting publication")).toBe(false);
+    expect(html.includes("Launch-ready operating model")).toBe(true);
+    expect(html.includes("World architecture defined")).toBe(true);
+    expect(html.includes("Runtime validation scheduled")).toBe(true);
+    expect(html.includes("Publication gate pending")).toBe(true);
   });
 
   test("home page presents direct 2D and 3D scene launch links", async () => {
@@ -2745,7 +2786,7 @@ describe("HTMX partial rendering", () => {
     expect(response.status).toBe(httpStatus.ok);
     expect(html.includes(teaHouseLaunch)).toBe(true);
     expect(html.includes(crystalCavernLaunch)).toBe(true);
-    expect(html.includes("Choose your scene mode")).toBe(true);
+    expect(html.includes("Launch baseline scenes")).toBe(true);
     expect(html.includes("Launch Tea House")).toBe(true);
     expect(html.includes("Launch Crystal Cavern")).toBe(true);
   });
@@ -3305,7 +3346,7 @@ describe("HTMX partial rendering", () => {
     expect(html.includes("Choose a starter")).toBe(true);
     expect(html.includes('name="starterTemplateId"')).toBe(true);
     expect(html.includes("Blank workspace")).toBe(true);
-    expect(html.includes("Tea house story sample")).toBe(true);
+    expect(html.includes("Tea house story starter")).toBe(true);
   });
 
   test("builder publish shell exposes play link for published projects", async () => {

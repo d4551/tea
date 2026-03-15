@@ -17,6 +17,8 @@
 | [API 与传输契约（中文）](notes/doc-archive/docs__api-contracts.zh-CN.txt) | API 契约中文版本 |
 | [Builder 领域（英文）](notes/doc-archive/docs__builder-domain.txt) | Draft/Publish/发布流程 |
 | [Builder 领域（中文）](notes/doc-archive/docs__builder-domain.zh-CN.txt) | 构建器领域中文版本 |
+| [平台差距审计（英文）](notes/doc-archive/docs__platform-gap-audit.txt) | 平台作用域、布局与 Web 原生引擎对标 |
+| [平台差距审计（中文）](notes/doc-archive/docs__platform-gap-audit.zh-CN.txt) | 本审计的中文版本 |
 
 ## 运行时文档
 
@@ -55,5 +57,6 @@
 2. 再读 [README（中文）](notes/doc-archive/README.zh-CN.txt) 或 [README（英文）](notes/doc-archive/README.txt)。
 3. 阅读 [架构说明（中文）](notes/doc-archive/ARCHITECTURE.zh-CN.txt) 或 [英文版](notes/doc-archive/ARCHITECTURE.txt)。
 4. 阅读 API 与领域契约（`docs__api-contracts`, `docs__builder-domain`）后修改 API 或发布流程。
-5. 阅读 `Builder` 运行时文档后修改创建/发布行为。
-6. 阅读 playable + AI + HTMX 文档以覆盖前端与会话链路。
+5. 涉及作用域划分、共享资产、多项目工作区或 AI 治理时，优先阅读 `docs__platform-gap-audit`。
+6. 阅读 `Builder` 运行时文档后修改创建/发布行为。
+7. 阅读 playable + AI + HTMX 文档以覆盖前端与会话链路。

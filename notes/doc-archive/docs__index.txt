@@ -7,6 +7,7 @@ English and Chinese versions are available for all canonical documents.
 
 | Document | Purpose |
 | --- | --- |
+| [Platform explainer](./platform-explainer.md) | Guided overview in English, Chinese, and Explain Like I'm 5 language with Mermaid charts |
 | [README](notes/doc-archive/README.txt) | Top-level product, stack, workflow, and contributor rules |
 | [README (Chinese)](notes/doc-archive/README.zh-CN.txt) | 顶层产品、技术栈、工作流与贡献规则 |
 | [Architecture](notes/doc-archive/ARCHITECTURE.txt) | Runtime topology, ownership boundaries, state models, and transport surfaces |
@@ -17,6 +18,8 @@ English and Chinese versions are available for all canonical documents.
 | [API and transport contracts (Chinese)](notes/doc-archive/docs__api-contracts.zh-CN.txt) | HTTP/SSE/WS 契约和错误路由映射 |
 | [Builder domain](notes/doc-archive/docs__builder-domain.txt) | Draft, publish, release, and runtime seeding rules |
 | [Builder domain (Chinese)](notes/doc-archive/docs__builder-domain.zh-CN.txt) | 草稿、发布、发布物和运行时注入规则 |
+| [Platform gap audit](notes/doc-archive/docs__platform-gap-audit.txt) | Scope audit and web-native benchmark for platform IA, editor layout, and AI gaps |
+| [Platform gap audit (Chinese)](notes/doc-archive/docs__platform-gap-audit.zh-CN.txt) | 平台作用域审计与 Web 原生引擎对标 |
 
 ## Runtime docs
 
@@ -47,8 +50,10 @@ English and Chinese versions are available for all canonical documents.
 
 ## Reading order
 
-1. Start with [README](notes/doc-archive/README.txt) or [README (Chinese)](notes/doc-archive/README.zh-CN.txt).
-2. Read [Architecture](notes/doc-archive/ARCHITECTURE.txt) or [Architecture (Chinese)](notes/doc-archive/ARCHITECTURE.zh-CN.txt) for system boundaries.
-3. Review [API and transport contracts](notes/doc-archive/docs__api-contracts.txt) and [Builder domain](notes/doc-archive/docs__builder-domain.txt) before touching route or publish behavior.
-4. Use runbook docs before routine operations and troubleshooting.
-5. Use runtime-specific docs when changing HTMX, playable, AI, or companion pack behavior.
+1. Start with the [Platform explainer](./platform-explainer.md) if you want the shortest guided overview first.
+2. Continue with [README](notes/doc-archive/README.txt) or [README (Chinese)](notes/doc-archive/README.zh-CN.txt).
+3. Read [Architecture](notes/doc-archive/ARCHITECTURE.txt) or [Architecture (Chinese)](notes/doc-archive/ARCHITECTURE.zh-CN.txt) for system boundaries.
+4. Review [API and transport contracts](notes/doc-archive/docs__api-contracts.txt) and [Builder domain](notes/doc-archive/docs__builder-domain.txt) before touching route or publish behavior.
+5. Read [Platform gap audit](notes/doc-archive/docs__platform-gap-audit.txt) when changing ownership scope, workspace IA, shared assets, or AI governance.
+6. Use runbook docs before routine operations and troubleshooting.
+7. Use runtime-specific docs when changing HTMX, playable, AI, or companion pack behavior.

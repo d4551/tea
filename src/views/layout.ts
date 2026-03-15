@@ -17,6 +17,8 @@ import {
   renderMobileDrawerMenu,
 } from "./shared/navigation.ts";
 
+export type { OraclePanelState } from "./oracle.ts";
+
 /**
  * Escapes raw text for safe HTML interpolation.
  *
@@ -162,7 +164,14 @@ export const renderLayout = (input: LayoutInput): string => {
     customSidebarHtml,
     hideTopBar,
     hideFooter,
+    oraclePanelState = {
+      state: "idle",
+      mode: "auto",
+      question: "",
+    },
   } = input;
+  const isOracleDrawerOpen =
+    oraclePanelState.state !== "idle" || oraclePanelState.question.trim().length > 0;
   const languageSwitch = locale === "en-US" ? "zh-CN" : "en-US";
   const baseContainer =
     "mx-auto flex w-full max-w-[1600px] flex-col gap-8 px-4 lg:px-8 py-6 lg:py-8";
@@ -244,7 +253,13 @@ export const renderLayout = (input: LayoutInput): string => {
     
     <!-- AI Chat Wrapper (Right Drawer) -->
     <div class="drawer drawer-end">
-      <input id="ai-chat-drawer" type="checkbox" class="drawer-toggle" aria-label="${escapeHtml(messages.common.openAiAssistant)}" />
+      <input
+        id="ai-chat-drawer"
+        type="checkbox"
+        class="drawer-toggle"
+        aria-label="${escapeHtml(messages.common.openAiAssistant)}"
+        ${isOracleDrawerOpen ? "checked" : ""}
+      />
       <div class="drawer-content flex flex-col min-h-screen relative">
 
         <!-- Main Nav Wrapper (Left Drawer) -->
@@ -255,7 +270,7 @@ export const renderLayout = (input: LayoutInput): string => {
             ${
               hideTopBar
                 ? ""
-                : `${renderTopBar(messages, locale, languageSwitch, currentPathWithQuery, publicPrimaryItems)}${renderBreadcrumbRow(messages.common.breadcrumbLabel, breadcrumbItems)}`
+                : `${renderTopBar(messages, locale, languageSwitch, currentPathWithQuery, publicPrimaryItems, isOracleDrawerOpen)}${renderBreadcrumbRow(messages.common.breadcrumbLabel, breadcrumbItems)}`
             }
 
             <main id="main-content" tabindex="-1" class="${escapeHtml(containerClass)}">
@@ -286,6 +301,7 @@ export const renderLayout = (input: LayoutInput): string => {
             label: messages.common.openAiAssistant,
             className: "btn btn-circle btn-primary drawer-button h-14 w-14 sm:h-16 sm:w-16 shrink-0 shadow-2xl",
             hasPopup: "dialog",
+            expanded: isOracleDrawerOpen,
             content:
               '<svg xmlns="http://www.w3.org/2000/svg" class="size-6 sm:size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>',
           })}
@@ -308,7 +324,7 @@ export const renderLayout = (input: LayoutInput): string => {
           <div class="flex-1 overflow-y-auto p-4">
           ${renderOracleSection(
             messages,
-            input.oraclePanelState ?? { state: "idle", mode: "auto", question: "" },
+            oraclePanelState,
             locale,
             {
               variant: "drawer",
@@ -337,6 +353,7 @@ const renderTopBar = (
   languageSwitch: LocaleCode,
   currentPathWithQuery: string,
   navigationItems: readonly NavigationItem[],
+  isOracleDrawerOpen: boolean,
 ): string => {
   const localeSwitchButtonText =
     languageSwitch === "en-US"
@@ -368,6 +385,7 @@ const renderTopBar = (
       hasPopup: "dialog",
       drawerToggle: {
         targetId: "ai-chat-drawer",
+        expanded: isOracleDrawerOpen,
       },
       content: `${iconAiSpark()}<span class="hidden sm:inline">${escapeHtml(messages.common.openAiAssistant)}</span>`,
     },

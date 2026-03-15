@@ -833,6 +833,7 @@ const renderProjectChromeOob = async (
     projectId,
     currentPath,
     await toChromeProject(projectId),
+    resolveBuilderChromeTab(currentPath),
   );
   return chrome.replace(
     '<section id="builder-project-shell"',
@@ -846,6 +847,42 @@ const withProjectChromeRefresh = async (
   currentPath: string,
   html: string,
 ): Promise<string> => `${await renderProjectChromeOob(locale, projectId, currentPath)}${html}`;
+
+const resolveBuilderChromeTab = (currentPath: string): string => {
+  if (currentPath.includes("/settings")) {
+    return "ai";
+  }
+
+  if (currentPath.includes("/operations")) {
+    return "automation";
+  }
+
+  if (currentPath.includes("/assets")) {
+    return "assets";
+  }
+
+  if (currentPath.includes("/systems")) {
+    return "mechanics";
+  }
+
+  if (currentPath.includes("/story")) {
+    return "dialogue";
+  }
+
+  if (currentPath.includes("/characters")) {
+    return "npcs";
+  }
+
+  if (currentPath.includes("/playtest")) {
+    return "play";
+  }
+
+  if (currentPath.includes("/start")) {
+    return "dashboard";
+  }
+
+  return "scenes";
+};
 
 const toBuilderRedirectPath = (path: string): string => {
   const candidate = path.trim();
@@ -2312,6 +2349,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
           project.id,
           redirectPath,
           await toChromeProject(project.id),
+          resolveBuilderChromeTab(redirectPath),
         );
       }
 

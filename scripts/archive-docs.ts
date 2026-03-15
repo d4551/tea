@@ -38,6 +38,7 @@ const DOCUMENT_PAIRS: readonly { readonly en: string; readonly zh?: string }[] =
   { en: "docs/htmx-extensions.md", zh: "docs/htmx-extensions.zh-CN.md" },
   { en: "docs/playable-runtime.md", zh: "docs/playable-runtime.zh-CN.md" },
   { en: "docs/local-ai-runtime.md", zh: "docs/local-ai-runtime.zh-CN.md" },
+  { en: "docs/platform-gap-audit.md", zh: "docs/platform-gap-audit.zh-CN.md" },
   { en: "docs/operator-runbook.md", zh: "docs/operator-runbook.zh-CN.md" },
   { en: "docs/api-contracts.md", zh: "docs/api-contracts.zh-CN.md" },
   { en: "docs/builder-domain.md", zh: "docs/builder-domain.zh-CN.md" },

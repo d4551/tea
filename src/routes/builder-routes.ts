@@ -19,6 +19,7 @@ import {
 import { detectAvailableFeatures } from "../domain/game/ai/game-ai-service.ts";
 import { gameSpriteManifests } from "../domain/game/data/sprite-data.ts";
 import { gameLoop } from "../domain/game/game-loop.ts";
+import { defaultOracleMode } from "../shared/constants/oracle.ts";
 import { builderRequestContextPlugin } from "../plugins/builder-request-context.ts";
 import { assetRelativePaths, toPublicAssetUrl } from "../shared/constants/assets.ts";
 import {
@@ -45,7 +46,8 @@ import { renderDialogueEditor } from "../views/builder/dialogue-editor.ts";
 import { renderMechanicsEditor } from "../views/builder/mechanics-editor.ts";
 import { renderNpcEditor } from "../views/builder/npc-editor.ts";
 import { renderSceneEditor } from "../views/builder/scene-editor.ts";
-import { type LayoutContext, type LayoutScript, renderDocument } from "../views/layout.ts";
+import { type LayoutContext, type LayoutScript, type OraclePanelState, renderDocument } from "../views/layout.ts";
+import { parseOracleMode } from "./oracle-input.ts";
 
 /**
  * Wraps builder content in the full page layout or returns partial for HTMX.
@@ -59,6 +61,7 @@ const wrapOrPartial = (
   projectId: string,
   project: BuilderChromeProject | null,
   body: string,
+  oraclePanelState?: OraclePanelState,
   scripts: readonly LayoutScript[] = [],
 ): string => {
   const isHtmx = request.headers.get("HX-Request") === "true";
@@ -120,6 +123,7 @@ const wrapOrPartial = (
     currentPathWithQuery,
     persistentProjectId: projectId,
     customSidebarHtml,
+    oraclePanelState,
     hideTopBar: true,
     hideFooter: true,
   };
@@ -138,6 +142,7 @@ const wrapOrPartialConsole = (
   projectId: string,
   project: BuilderChromeProject | null,
   body: string,
+  oraclePanelState?: OraclePanelState,
 ): string => {
   const isHtmx = request.headers.get("HX-Request") === "true";
 
@@ -171,10 +176,31 @@ const wrapOrPartialConsole = (
     currentPathWithQuery,
     persistentProjectId: projectId,
     customSidebarHtml,
+    oraclePanelState,
     hideTopBar: true,
     hideFooter: true,
   };
   return renderDocument(layout, messages.builder.advancedTools, consoleBody, []);
+};
+
+const resolveOraclePanelState = (request: Request): OraclePanelState => {
+  const searchParams = new URL(request.url).searchParams;
+  const openAiAssistant = searchParams.get("openAiAssistant");
+  const hasOpenSignal =
+    openAiAssistant === "true" || openAiAssistant === "1" || searchParams.has("question");
+  if (!hasOpenSignal) {
+    return {
+      state: "idle",
+      mode: defaultOracleMode,
+      question: "",
+    };
+  }
+
+  return {
+    state: "idle",
+    mode: parseOracleMode(searchParams.get("mode") ?? undefined),
+    question: searchParams.get("question") ?? "",
+  };
 };
 
 const toRecord = <T>(records: ReadonlyMap<string, T>): Record<string, T> =>
@@ -188,6 +214,7 @@ const wrapMissingProject = (
   currentPath: string,
   projectId: string,
   project: BuilderChromeProject | null,
+  oraclePanelState?: OraclePanelState,
 ): string =>
   wrapOrPartial(
     request,
@@ -198,6 +225,7 @@ const wrapMissingProject = (
     projectId,
     project,
     renderBuilderStarterWorkspace(messages, locale, projectId, currentPath),
+    oraclePanelState,
   );
 
 const toChromeProject = (
@@ -232,6 +260,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
   .use(builderRequestContextPlugin)
   .get("/new", async ({ request, builderLocale, builderCurrentPath }) => {
     const messages = getMessages(builderLocale);
+    const oraclePanelState = resolveOraclePanelState(request);
     return wrapOrPartial(
       request,
       builderLocale,
@@ -241,6 +270,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       "",
       null,
       renderBuilderStarterWorkspace(messages, builderLocale, "", appRoutes.builderStart),
+      oraclePanelState,
     );
   })
   .get(
@@ -249,6 +279,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       const projectId = resolveRouteProjectId(params.projectId, builderProjectId);
       const messages = getMessages(builderLocale);
       const project = await builderService.getProject(projectId);
+      const oraclePanelState = resolveOraclePanelState(request);
       const chromeProject = toChromeProject(project);
       if (!project) {
         return wrapMissingProject(
@@ -259,6 +290,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           builderCurrentPath,
           projectId,
           chromeProject,
+          oraclePanelState,
         );
       }
       const features = await detectAvailableFeatures();
@@ -320,6 +352,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         projectId,
         chromeProject,
         body,
+        oraclePanelState,
       );
     },
   )
@@ -336,6 +369,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       const projectId = resolveRouteProjectId(params.projectId, builderProjectId);
       const messages = getMessages(builderLocale);
       const project = await builderService.getProject(projectId);
+      const oraclePanelState = resolveOraclePanelState(request);
       const chromeProject = toChromeProject(project);
       if (!project) {
         return wrapMissingProject(
@@ -346,6 +380,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           builderCurrentPath,
           projectId,
           chromeProject,
+          oraclePanelState,
         );
       }
       const searchParams = new URL(request.url).searchParams;
@@ -368,6 +403,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         projectId,
         chromeProject,
         body,
+        oraclePanelState,
       );
     },
   )
@@ -377,6 +413,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       const projectId = resolveRouteProjectId(params.projectId, builderProjectId);
       const messages = getMessages(builderLocale);
       const project = await builderService.getProject(projectId);
+      const oraclePanelState = resolveOraclePanelState(request);
       const chromeProject = toChromeProject(project);
       if (!project) {
         return wrapMissingProject(
@@ -387,6 +424,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           builderCurrentPath,
           projectId,
           chromeProject,
+          oraclePanelState,
         );
       }
       const scenes = toRecord(project.scenes);
@@ -401,6 +439,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         projectId,
         chromeProject,
         body,
+        oraclePanelState,
       );
     },
   )
@@ -417,6 +456,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       const projectId = resolveRouteProjectId(params.projectId, builderProjectId);
       const messages = getMessages(builderLocale);
       const project = await builderService.getProject(projectId);
+      const oraclePanelState = resolveOraclePanelState(request);
       const chromeProject = toChromeProject(project);
       if (!project) {
         return wrapMissingProject(
@@ -427,6 +467,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           builderCurrentPath,
           projectId,
           chromeProject,
+          oraclePanelState,
         );
       }
       const catalog = await builderService.getDialogues(projectId, builderLocale);
@@ -441,6 +482,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         projectId,
         chromeProject,
         body,
+        oraclePanelState,
       );
     },
   )
@@ -457,6 +499,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       const projectId = resolveRouteProjectId(params.projectId, builderProjectId);
       const messages = getMessages(builderLocale);
       const project = await builderService.getProject(projectId);
+      const oraclePanelState = resolveOraclePanelState(request);
       const chromeProject = toChromeProject(project);
       if (!project) {
         return wrapMissingProject(
@@ -467,6 +510,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           builderCurrentPath,
           projectId,
           chromeProject,
+          oraclePanelState,
         );
       }
       const searchParams = new URL(request.url).searchParams;
@@ -489,6 +533,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         projectId,
         chromeProject,
         body,
+        oraclePanelState,
       );
     },
   )
@@ -498,6 +543,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       const projectId = resolveRouteProjectId(params.projectId, builderProjectId);
       const messages = getMessages(builderLocale);
       const project = await builderService.getProject(projectId);
+      const oraclePanelState = resolveOraclePanelState(request);
       const chromeProject = toChromeProject(project);
       if (!project) {
         return wrapMissingProject(
@@ -508,6 +554,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           builderCurrentPath,
           projectId,
           chromeProject,
+          oraclePanelState,
         );
       }
       const body = renderMechanicsEditor(
@@ -528,6 +575,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         projectId,
         chromeProject,
         body,
+        oraclePanelState,
       );
     },
   )
@@ -537,6 +585,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       const projectId = resolveRouteProjectId(params.projectId, builderProjectId);
       const messages = getMessages(builderLocale);
       const project = await builderService.getProject(projectId);
+      const oraclePanelState = resolveOraclePanelState(request);
       const chromeProject = toChromeProject(project);
       if (!project) {
         return wrapMissingProject(
@@ -547,6 +596,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           builderCurrentPath,
           projectId,
           chromeProject,
+          oraclePanelState,
         );
       }
       const builderPage = resolveBuilderPage(request);
@@ -567,6 +617,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         projectId,
         chromeProject,
         body,
+        oraclePanelState,
       );
     },
   )
@@ -576,6 +627,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       const projectId = resolveRouteProjectId(params.projectId, builderProjectId);
       const messages = getMessages(builderLocale);
       const project = await builderService.getProject(projectId);
+      const oraclePanelState = resolveOraclePanelState(request);
       const chromeProject = toChromeProject(project);
       if (!project) {
         return wrapMissingProject(
@@ -586,6 +638,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           builderCurrentPath,
           projectId,
           chromeProject,
+          oraclePanelState,
         );
       }
       const features = await detectAvailableFeatures();
@@ -617,6 +670,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         projectId,
         chromeProject,
         body,
+        oraclePanelState,
       );
     },
   );

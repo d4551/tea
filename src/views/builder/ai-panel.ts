@@ -272,6 +272,41 @@ const countAvailableCapabilities = (features: AvailableAiFeatures): number =>
     features.localInference,
   ].filter(Boolean).length;
 
+const renderWorkbenchJumpLinks = (
+  ariaLabel: string,
+  links: ReadonlyArray<{ label: string; href: string; tone?: "primary" | "ghost" | "outline" }>,
+): string => `<nav class="overflow-x-auto" aria-label="${escapeHtml(ariaLabel)}">
+  <div class="flex min-w-max flex-wrap gap-2">
+    ${links
+      .map(
+        (link) =>
+          `<a class="btn btn-${escapeHtml(link.tone ?? "ghost")} btn-sm" href="${escapeHtml(link.href)}">${escapeHtml(link.label)}</a>`,
+      )
+      .join("")}
+  </div>
+</nav>`;
+
+const renderWorkbenchSummaryCard = (
+  title: string,
+  description: string,
+  actions: ReadonlyArray<{ label: string; href: string; tone?: "primary" | "ghost" | "outline" }>,
+): string => `<article class="${cardClasses.bordered}">
+  <div class="card-body gap-4">
+    <div class="space-y-2">
+      <h3 class="card-title text-base">${escapeHtml(title)}</h3>
+      <p class="text-sm leading-6 text-base-content/72">${escapeHtml(description)}</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      ${actions
+        .map(
+          (action) =>
+            `<a class="btn btn-${escapeHtml(action.tone ?? "ghost")} btn-sm" href="${escapeHtml(action.href)}">${escapeHtml(action.label)}</a>`,
+        )
+        .join("")}
+    </div>
+  </div>
+</article>`;
+
 /**
  * Renders the AI capability feature matrix table.
  *
@@ -1251,6 +1286,61 @@ export const renderAiPanel = (
   const playtestHref = withQueryParameters(interpolateRoutePath(appRoutes.game, { projectId }), {
     lang: locale,
   });
+  const providerHref = withQueryParameters(
+    interpolateRoutePath(appRoutes.builderAi, { projectId }) + "#builder-provider-workbench",
+    { lang: locale },
+  );
+  const assistantReviewHref = withQueryParameters(
+    interpolateRoutePath(appRoutes.builderAi, { projectId }) + "#builder-assistant-review",
+    { lang: locale },
+  );
+  const knowledgeHref = withQueryParameters(
+    interpolateRoutePath(appRoutes.builderAi, { projectId }) + "#builder-knowledge-workspace",
+    { lang: locale },
+  );
+  const modelCatalogHref = withQueryParameters(
+    interpolateRoutePath(appRoutes.builderAi, { projectId }) + "#builder-model-catalog",
+    { lang: locale },
+  );
+  const patchPreviewHref = withQueryParameters(
+    interpolateRoutePath(appRoutes.builderAi, { projectId }) + "#builder-patch-preview",
+    { lang: locale },
+  );
+  const jumpLinks = renderWorkbenchJumpLinks(messages.builder.projectSettings, [
+    { label: messages.builder.providerStatus, href: providerHref, tone: "primary" },
+    { label: messages.builder.assistantReviewTitle, href: assistantReviewHref },
+    { label: messages.builder.knowledgeWorkspaceTitle, href: knowledgeHref },
+    { label: messages.builder.aiModelCatalogWorkspaceTitle, href: modelCatalogHref },
+    { label: messages.builder.previewChanges, href: patchPreviewHref },
+    { label: messages.builder.operations, href: reviewQueueHref, tone: "outline" },
+  ]);
+  const workbenchCards = [
+    renderWorkbenchSummaryCard(
+      messages.builder.providerStatus,
+      messages.builder.advancedSettingsDescription,
+      [
+        { label: messages.builder.providerStatus, href: providerHref, tone: "primary" },
+        { label: messages.builder.aiModelCatalogWorkspaceTitle, href: modelCatalogHref },
+      ],
+    ),
+    renderWorkbenchSummaryCard(
+      messages.builder.knowledgeWorkspaceTitle,
+      messages.builder.knowledgeWorkspaceDescription,
+      [
+        { label: messages.builder.knowledgeWorkspaceTitle, href: knowledgeHref, tone: "primary" },
+        { label: messages.builder.assistantReviewTitle, href: assistantReviewHref },
+      ],
+    ),
+    renderWorkbenchSummaryCard(
+      messages.builder.operations,
+      messages.builder.advancedAutomationDescription,
+      [
+        { label: messages.builder.operations, href: reviewQueueHref, tone: "primary" },
+        { label: messages.builder.previewChanges, href: patchPreviewHref, tone: "ghost" },
+        { label: messages.builder.playtest, href: playtestHref, tone: "outline" },
+      ],
+    ),
+  ].join("");
 
   return `
     <div class="space-y-6 animate-fade-in-up">
@@ -1280,8 +1370,8 @@ export const renderAiPanel = (
           },
         ],
         actions: `
-          <a class="btn btn-outline btn-sm" href="${escapeHtml(playtestHref)}" aria-label="${escapeHtml(messages.builder.playtest)}">
-            ${escapeHtml(messages.builder.playtest)}
+          <a class="btn btn-outline btn-sm" href="${escapeHtml(knowledgeHref)}" aria-label="${escapeHtml(messages.builder.knowledgeWorkspaceTitle)}">
+            ${escapeHtml(messages.builder.knowledgeWorkspaceTitle)}
           </a>
           <a class="btn btn-primary btn-sm" href="${escapeHtml(reviewQueueHref)}" aria-label="${escapeHtml(messages.builder.operations)}">
             ${escapeHtml(messages.builder.operations)}
@@ -1289,10 +1379,13 @@ export const renderAiPanel = (
         `,
       })}
       ${renderWorkspaceFrame({
-        navigatorTitle: messages.builder.providerStatus,
+        navigatorTitle: messages.builder.projectSettings,
         navigatorDescription: messages.builder.advancedSettingsDescription,
-        navigatorBody: `<div role="alert" class="alert alert-warning alert-soft">
+        navigatorBody: `<div id="builder-provider-workbench" role="alert" class="alert alert-warning alert-soft">
             <span>${escapeHtml(messages.builder.creatorSafeAiDescription)}</span>
+          </div>
+          <div class="rounded-[1.25rem] border border-base-300 bg-base-100 p-4 shadow-sm">
+            ${jumpLinks}
           </div>
           ${renderAiStatusHero(messages, runtimeProfile, features)}
           ${renderAiCapabilityStatusCards(messages, featureCapabilities)}
@@ -1301,64 +1394,86 @@ export const renderAiPanel = (
             ${renderAiModelInventory(messages, runtimeProfile)}
           </div>`,
         mainBody: `<div class="space-y-4">
-          <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box" open>
-            <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.platformReadinessTitle)}">${escapeHtml(messages.builder.platformReadinessTitle)}</summary>
-            <div class="collapse-content">
-              ${renderPlatformReadinessSection({
-                messages,
-                locale,
-                projectId,
-                readiness,
-                keys: ["aiAuthoring", "automation"],
-              })}
-            </div>
-          </details>
-
-          <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
-            <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.assistantReviewTitle)}">${escapeHtml(messages.builder.assistantReviewTitle)}</summary>
-            <div class="collapse-content">
-              <div class="grid gap-4 xl:grid-cols-2">
-                ${renderAiAssistForm(messages, locale, projectId, featureCapabilities.assist)}
-                ${renderAiTestForm(messages, locale, projectId, featureCapabilities.test)}
+          <section id="builder-capability-overview" class="rounded-[1.5rem] border border-base-300 bg-base-100 shadow-sm">
+            <div class="flex flex-col gap-4 p-5 lg:p-6">
+              <div class="space-y-2">
+                <h2 class="text-xl font-semibold tracking-tight">${escapeHtml(messages.builder.projectSettings)}</h2>
+                <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.advancedSettingsDescription)}</p>
+              </div>
+              <div class="grid gap-4 xl:grid-cols-3">
+                ${workbenchCards}
               </div>
             </div>
-          </details>
+          </section>
 
-          <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
-            <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.knowledgeWorkspaceTitle)}">${escapeHtml(messages.builder.knowledgeWorkspaceTitle)}</summary>
-            <div class="collapse-content">
-              <div class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-                ${renderAiKnowledgeWorkspace(messages, locale, projectId, documents)}
-                <div class="space-y-4">
-                  ${renderAiRetrievalAndToolPlan(
-                    messages,
-                    locale,
-                    projectId,
-                    featureCapabilities.toolLikeSuggestions,
-                  )}
-                  ${renderAiFineTuneWorkspace(messages, locale, projectId)}
+          <section id="builder-provider-workbench">
+            <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box" open>
+              <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.platformReadinessTitle)}">${escapeHtml(messages.builder.platformReadinessTitle)}</summary>
+              <div class="collapse-content">
+                ${renderPlatformReadinessSection({
+                  messages,
+                  locale,
+                  projectId,
+                  readiness,
+                  keys: ["aiAuthoring", "automation"],
+                })}
+              </div>
+            </details>
+          </section>
+
+          <section id="builder-assistant-review">
+            <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
+              <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.assistantReviewTitle)}">${escapeHtml(messages.builder.assistantReviewTitle)}</summary>
+              <div class="collapse-content">
+                <div class="grid gap-4 xl:grid-cols-2">
+                  ${renderAiAssistForm(messages, locale, projectId, featureCapabilities.assist)}
+                  ${renderAiTestForm(messages, locale, projectId, featureCapabilities.test)}
                 </div>
               </div>
-            </div>
-          </details>
+            </details>
+          </section>
 
-          <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
-            <summary class="collapse-title font-semibold" aria-label="${escapeHtml(
-              messages.builder.aiModelCatalogWorkspaceTitle,
-            )}">${escapeHtml(
-              messages.builder.aiModelCatalogWorkspaceTitle,
-            )}</summary>
-            <div class="collapse-content">
-              ${renderAiModelSettingsWorkspace(messages, locale, projectId, runtimeProfile)}
-            </div>
-          </details>
+          <section id="builder-knowledge-workspace">
+            <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
+              <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.knowledgeWorkspaceTitle)}">${escapeHtml(messages.builder.knowledgeWorkspaceTitle)}</summary>
+              <div class="collapse-content">
+                <div class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+                  ${renderAiKnowledgeWorkspace(messages, locale, projectId, documents)}
+                  <div class="space-y-4">
+                    ${renderAiRetrievalAndToolPlan(
+                      messages,
+                      locale,
+                      projectId,
+                      featureCapabilities.toolLikeSuggestions,
+                    )}
+                    ${renderAiFineTuneWorkspace(messages, locale, projectId)}
+                  </div>
+                </div>
+              </div>
+            </details>
+          </section>
 
-          <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
-            <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.previewChanges)}">${escapeHtml(messages.builder.previewChanges)}</summary>
-            <div class="collapse-content">
-              ${renderAiPatchAndApiSurface(messages, locale, projectId)}
-            </div>
-          </details>
+          <section id="builder-model-catalog">
+            <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
+              <summary class="collapse-title font-semibold" aria-label="${escapeHtml(
+                messages.builder.aiModelCatalogWorkspaceTitle,
+              )}">${escapeHtml(
+                messages.builder.aiModelCatalogWorkspaceTitle,
+              )}</summary>
+              <div class="collapse-content">
+                ${renderAiModelSettingsWorkspace(messages, locale, projectId, runtimeProfile)}
+              </div>
+            </details>
+          </section>
+
+          <section id="builder-patch-preview">
+            <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
+              <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.previewChanges)}">${escapeHtml(messages.builder.previewChanges)}</summary>
+              <div class="collapse-content">
+                ${renderAiPatchAndApiSurface(messages, locale, projectId)}
+              </div>
+            </details>
+          </section>
         </div>`,
         sideSections: [
           {

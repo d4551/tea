@@ -22,6 +22,41 @@ import {
   renderWorkspaceShell,
 } from "./workspace-shell.ts";
 
+const renderWorkbenchJumpLinks = (
+  ariaLabel: string,
+  links: ReadonlyArray<{ label: string; href: string; tone?: "primary" | "ghost" | "outline" }>,
+): string => `<nav class="overflow-x-auto" aria-label="${escapeHtml(ariaLabel)}">
+  <div class="flex min-w-max flex-wrap gap-2">
+    ${links
+      .map(
+        (link) =>
+          `<a class="btn btn-${escapeHtml(link.tone ?? "ghost")} btn-sm" href="${escapeHtml(link.href)}">${escapeHtml(link.label)}</a>`,
+      )
+      .join("")}
+  </div>
+</nav>`;
+
+const renderWorkbenchSummaryCard = (
+  title: string,
+  description: string,
+  actions: ReadonlyArray<{ label: string; href: string; tone?: "primary" | "ghost" | "outline" }>,
+): string => `<article class="${cardClasses.bordered}">
+  <div class="card-body gap-4">
+    <div class="space-y-2">
+      <h3 class="card-title text-base">${escapeHtml(title)}</h3>
+      <p class="text-sm leading-6 text-base-content/72">${escapeHtml(description)}</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      ${actions
+        .map(
+          (action) =>
+            `<a class="btn btn-${escapeHtml(action.tone ?? "ghost")} btn-sm" href="${escapeHtml(action.href)}">${escapeHtml(action.label)}</a>`,
+        )
+        .join("")}
+    </div>
+  </div>
+</article>`;
+
 /**
  * Renders the automation review and orchestration workspace.
  *
@@ -36,8 +71,8 @@ export const renderAutomationPanel = (
   messages: Messages,
   locale: LocaleCode,
   projectId: string,
-  runs: readonly AutomationRun[],
-  artifacts: readonly GenerationArtifact[],
+  runs: ReadonlyArray<AutomationRun>,
+  artifacts: ReadonlyArray<GenerationArtifact>,
   page = 1,
 ): string => {
   const createRunAction = interpolateRoutePath(appRoutes.builderApiAutomationRunsCreateForm, {
@@ -144,6 +179,12 @@ export const renderAutomationPanel = (
 
   const operationsPath = interpolateRoutePath(appRoutes.builderAutomation, { projectId });
   const operationsAction = withQueryParameters(operationsPath, { lang: locale });
+  const reviewQueueHref = withQueryParameters(`${operationsPath}#builder-review-queue`, {
+    lang: locale,
+  });
+  const composerHref = withQueryParameters(`${operationsPath}#builder-automation-composer`, {
+    lang: locale,
+  });
   const paginatedRuns = paginateWorkspaceItems(Array.from(runs), page, BUILDER_LIBRARY_PAGE_SIZE);
   const previousHref =
     paginatedRuns.page > 1
@@ -177,6 +218,38 @@ export const renderAutomationPanel = (
     previousHref,
     nextHref,
   });
+  const jumpLinks = renderWorkbenchJumpLinks(messages.builder.operations, [
+    { label: messages.builder.createAutomationRun, href: composerHref, tone: "primary" },
+    { label: messages.builder.automationArtifactsLabel, href: reviewQueueHref },
+    { label: messages.builder.projectSettings, href: settingsHref },
+    { label: messages.builder.playtest, href: playtestHref, tone: "outline" },
+  ]);
+  const workbenchCards = [
+    renderWorkbenchSummaryCard(
+      messages.builder.createAutomationRun,
+      messages.builder.advancedAutomationDescription,
+      [
+        { label: messages.builder.createAutomationRun, href: composerHref, tone: "primary" },
+        { label: messages.builder.projectSettings, href: settingsHref },
+      ],
+    ),
+    renderWorkbenchSummaryCard(
+      messages.builder.automationArtifactsLabel,
+      messages.builder.previewReady,
+      [
+        { label: messages.builder.automationArtifactsLabel, href: reviewQueueHref, tone: "primary" },
+        { label: messages.builder.operations, href: operationsAction },
+      ],
+    ),
+    renderWorkbenchSummaryCard(
+      messages.builder.playtest,
+      messages.builder.projectPlayHint,
+      [
+        { label: messages.builder.playtest, href: playtestHref, tone: "outline" },
+        { label: messages.builder.projectSettings, href: settingsHref, tone: "ghost" },
+      ],
+    ),
+  ].join("");
 
   return `<section class="space-y-6 animate-fade-in-up">
     ${renderWorkspaceShell({
@@ -209,7 +282,10 @@ export const renderAutomationPanel = (
     ${renderWorkspaceFrame({
       navigatorTitle: messages.builder.createAutomationRun,
       navigatorDescription: messages.builder.advancedAutomationDescription,
-      navigatorBody: `<article class="${cardClasses.bordered}">
+      navigatorBody: `<div class="rounded-[1.25rem] border border-base-300 bg-base-100 p-4 shadow-sm">
+          ${jumpLinks}
+        </div>
+        <article id="builder-automation-composer" class="${cardClasses.bordered}">
           <form class="card-body gap-3" hx-post="${escapeHtml(createRunAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#automation-create-spinner" hx-disabled-elt="button, input, select, textarea">
             ${renderBuilderHiddenFields(projectId, locale)}
             <fieldset class="fieldset">
@@ -225,7 +301,19 @@ export const renderAutomationPanel = (
             </div>
           </form>
         </article>`,
-      mainBody: `<section class="space-y-3">
+      mainBody: `<div class="space-y-4">
+          <section class="rounded-[1.5rem] border border-base-300 bg-base-100 shadow-sm">
+            <div class="flex flex-col gap-4 p-5 lg:p-6">
+              <div class="space-y-2">
+                <h2 class="text-xl font-semibold tracking-tight">${escapeHtml(messages.builder.operations)}</h2>
+                <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.advancedAutomationDescription)}</p>
+              </div>
+              <div class="grid gap-4 xl:grid-cols-3">
+                ${workbenchCards}
+              </div>
+            </div>
+          </section>
+          <section id="builder-review-queue" class="space-y-3">
           <div class="flex items-center justify-between gap-3">
             <h2 class="text-2xl font-semibold">${escapeHtml(messages.builder.operations)}</h2>
             <span class="badge badge-outline">${runs.length}</span>
@@ -268,7 +356,8 @@ export const renderAutomationPanel = (
               </div>
             </article>`;
           }).join("")}</div>
-        </section>`,
+        </section>
+      </div>`,
       sideSections: [
         {
           title: messages.builder.reviewLabelPrefix,

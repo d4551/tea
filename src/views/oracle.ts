@@ -18,7 +18,7 @@ export interface OraclePageContext {
  * Context for rendering the oracle section (drawer vs full page).
  */
 export interface OracleSectionContext {
-  /** Layout variant: drawer uses single-column, page uses responsive grid. */
+  /** Layout variant: drawer uses a compact single-column panel, page uses a two-column responsive layout. */
   readonly variant: "drawer" | "page";
   /** Optional page context for grounded AI responses. */
   readonly pageContext?: OraclePageContext;
