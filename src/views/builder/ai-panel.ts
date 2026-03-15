@@ -9,7 +9,9 @@ import type {
   KnowledgeDocumentRecord,
   KnowledgeSearchMatch,
 } from "../../domain/ai/knowledge-base-service.ts";
+import type { AiRuntimeSettingValue } from "../../domain/ai/ai-runtime-settings-service.ts";
 import type { AiRuntimeProfile } from "../../domain/ai/local-runtime-profile.ts";
+import type { ProviderModelCatalogEntry } from "../../domain/ai/provider-model-catalog.ts";
 import type { AiToolPlanSuccess } from "../../domain/ai/providers/provider-types.ts";
 import type { BuilderPlatformReadiness } from "../../domain/builder/platform-readiness.ts";
 import type { AvailableAiFeatures } from "../../domain/game/ai/game-ai-service.ts";
@@ -397,6 +399,378 @@ const renderAiModelInventory = (messages: Messages, runtimeProfile: AiRuntimePro
 };
 
 /**
+ * Search-state payload rendered by the model settings workspace.
+ */
+export interface AiModelCatalogSearchState {
+  /** Active setting key currently being searched. */
+  readonly settingKey: string;
+  /** Provider lane used for the active search. */
+  readonly provider: string;
+  /** Slot identifier used for the active search. */
+  readonly slot: string;
+  /** Search query text. */
+  readonly search: string;
+  /** Optional author filter text. */
+  readonly author: string;
+  /** Normalized search result items. */
+  readonly items: readonly ProviderModelCatalogEntry[];
+  /** Optional error message when the provider search fails. */
+  readonly error?: string;
+}
+
+const aiSettingSourceBadgeClass = (
+  source: AiRuntimeSettingValue["source"],
+): string => {
+  switch (source) {
+    case "override":
+      return "badge-primary badge-soft";
+    case "env":
+      return "badge-secondary badge-soft";
+    case "default":
+    default:
+      return "badge-outline";
+  }
+};
+
+const aiSettingSourceLabel = (
+  messages: Messages,
+  source: AiRuntimeSettingValue["source"],
+): string => {
+  switch (source) {
+    case "override":
+      return messages.builder.aiModelCatalogSourceOverride;
+    case "env":
+      return messages.builder.aiModelCatalogSourceEnv;
+    case "default":
+    default:
+      return messages.builder.aiModelCatalogSourceDefault;
+  }
+};
+
+const searchableProviderLanes = new Set([
+  "transformers-local",
+  "huggingface-inference",
+  "ollama",
+  "openai-compatible-local",
+  "openai-compatible-cloud",
+]);
+
+const searchableSlots = new Set([
+  "sentiment",
+  "oracle",
+  "npcDialogue",
+  "embeddings",
+  "speechToText",
+  "textToSpeech",
+  "imageGenerationModel",
+  "chat",
+  "embedding",
+  "vision",
+  "transcription",
+  "speech",
+  "moderation",
+  "image",
+]);
+
+const renderAiSettingsForm = (
+  messages: Messages,
+  locale: LocaleCode,
+  projectId: string,
+  setting: AiRuntimeSettingValue,
+  submitLabel: string,
+): string => {
+  const action = withQueryParameters(appRoutes.aiSettings, { projectId, locale });
+
+  return `<form
+    class="flex flex-wrap items-center gap-2"
+    hx-patch="${escapeHtml(action)}"
+    hx-target="#ai-model-settings-workspace"
+    hx-swap="outerHTML"
+    hx-disabled-elt="button, input, select, textarea"
+  >
+    <input type="hidden" name="key" value="${escapeHtml(setting.key)}" />
+    <input
+      type="${setting.valueType === "integer" || setting.valueType === "float" ? "number" : "text"}"
+      ${setting.valueType === "float" ? `step="0.1"` : ""}
+      class="input input-sm w-full md:w-56"
+      name="value"
+      value="${escapeHtml(String(setting.value))}"
+      aria-label="${escapeHtml(setting.label)}"
+    />
+    <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(submitLabel)}</button>
+    <button type="submit" name="reset" value="true" class="btn btn-ghost btn-sm">${escapeHtml(
+      messages.builder.aiModelCatalogResetSubmit,
+    )}</button>
+  </form>`;
+};
+
+export const renderAiProviderSearchPanel = (
+  messages: Messages,
+  locale: LocaleCode,
+  projectId: string,
+  searchState?: AiModelCatalogSearchState,
+): string => {
+  if (!searchState) {
+    return `<div id="ai-model-search-results" class="${cardClasses.bordered}">
+      <div class="card-body">
+        <h2 class="card-title">${escapeHtml(messages.builder.aiModelCatalogSearchTitle)}</h2>
+        <div role="status" class="alert alert-info alert-soft">
+          <span>${escapeHtml(messages.builder.aiModelCatalogSearchDescription)}</span>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  if (searchState.error) {
+    return `<div id="ai-model-search-results" class="${cardClasses.bordered}">
+      <div class="card-body">
+        <h2 class="card-title">${escapeHtml(messages.builder.aiModelCatalogSearchTitle)}</h2>
+        <div role="alert" class="alert alert-error alert-soft">
+          <span>${escapeHtml(searchState.error)}</span>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  const applyAction = withQueryParameters(appRoutes.aiSettings, { projectId, locale });
+  const rows =
+    searchState.items.length > 0
+      ? searchState.items
+          .map(
+            (item) => `<tr class="hover:bg-base-200/70">
+              <td class="font-medium">${escapeHtml(item.label)}</td>
+              <td><code class="text-xs">${escapeHtml(item.model)}</code></td>
+              <td>${escapeHtml(item.summary)}</td>
+              <td><span class="badge badge-outline badge-xs">${escapeHtml(item.source)}</span></td>
+              <td class="text-right">
+                <form
+                  hx-patch="${escapeHtml(applyAction)}"
+                  hx-target="#ai-model-settings-workspace"
+                  hx-swap="outerHTML"
+                  hx-disabled-elt="button, input"
+                >
+                  <input type="hidden" name="key" value="${escapeHtml(searchState.settingKey)}" />
+                  <input type="hidden" name="value" value="${escapeHtml(item.model)}" />
+                  <button type="submit" class="btn btn-primary btn-xs">${escapeHtml(
+                    messages.builder.save,
+                  )}</button>
+                </form>
+              </td>
+            </tr>`,
+          )
+          .join("")
+      : `<tr><td colspan="5" class="text-sm text-base-content/70">${escapeHtml(
+          messages.builder.aiModelCatalogNoResults,
+        )}</td></tr>`;
+
+  return `<div id="ai-model-search-results" class="${cardClasses.bordered}">
+    <div class="card-body gap-4">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <h2 class="card-title">${escapeHtml(messages.builder.aiModelCatalogSearchTitle)}</h2>
+          <p class="text-sm text-base-content/70">${escapeHtml(`${searchState.provider} · ${searchState.slot}`)}</p>
+        </div>
+        <span class="badge badge-outline">${escapeHtml(`${searchState.items.length}`)}</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th scope="col">${escapeHtml(messages.builder.titleLabel)}</th>
+              <th scope="col">${escapeHtml(messages.builder.modelLabel)}</th>
+              <th scope="col">${escapeHtml(messages.builder.descriptionLabel)}</th>
+              <th scope="col">${escapeHtml(messages.builder.statusHeader)}</th>
+              <th scope="col"></th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+};
+
+/**
+ * Renders the model-catalog and runtime override workspace.
+ *
+ * @param messages Locale-resolved messages.
+ * @param locale Active locale.
+ * @param projectId Active project id.
+ * @param runtimeProfile Effective runtime profile with editable settings.
+ * @param searchState Optional active provider search state.
+ * @returns HTML string for the runtime override workspace.
+ */
+export const renderAiModelSettingsWorkspace = (
+  messages: Messages,
+  locale: LocaleCode,
+  projectId: string,
+  runtimeProfile: AiRuntimeProfile,
+  searchState?: AiModelCatalogSearchState,
+): string => {
+  const laneTitles: Readonly<Record<string, string>> = {
+    "transformers-local": messages.builder.aiModelCatalogLaneTransformersLocal,
+    ollama: messages.builder.aiModelCatalogLaneOllama,
+    "openai-compatible-local": messages.builder.aiModelCatalogLaneApiCompatibleLocal,
+    "openai-compatible-cloud": messages.builder.aiModelCatalogLaneApiCompatibleCloud,
+    "huggingface-inference": messages.builder.aiModelCatalogLaneHfInference,
+    "huggingface-endpoints": messages.builder.aiModelCatalogLaneHfEndpoints,
+    "image-generation": messages.builder.aiModelCatalogLaneImageGeneration,
+  };
+
+  const laneIds = [
+    "transformers-local",
+    "ollama",
+    "openai-compatible-local",
+    "openai-compatible-cloud",
+    "huggingface-inference",
+    "image-generation",
+  ];
+
+  const laneContent = laneIds
+    .map((laneId, index) => {
+      const laneSettings = runtimeProfile.settings.filter((setting) => setting.providerLane === laneId);
+      const laneActionMarkup =
+        laneId === "ollama"
+          ? `<form
+              class="flex flex-wrap items-center gap-2"
+              hx-post="${escapeHtml(withQueryParameters(appRoutes.aiProviderOllamaPull, { projectId, locale }))}"
+              hx-target="#ai-model-settings-workspace"
+              hx-swap="outerHTML"
+              hx-disabled-elt="button, input"
+            >
+              <input type="hidden" name="slot" value="chat" />
+              <input
+                type="text"
+                name="model"
+                class="input input-sm w-full md:w-64"
+                placeholder="${escapeHtml(messages.builder.aiModelCatalogPullPlaceholder)}"
+                aria-label="${escapeHtml(messages.builder.aiModelCatalogPullPlaceholder)}"
+              />
+              <button type="submit" class="btn btn-secondary btn-sm">${escapeHtml(
+                messages.builder.aiModelCatalogPullSubmit,
+              )}</button>
+            </form>`
+          : "";
+      const settingRows = laneSettings
+        .map((setting) => {
+          const valueCell =
+            setting.valueType === "string" && searchableProviderLanes.has(setting.providerLane) &&
+            searchableSlots.has(setting.slot)
+              ? `<div class="space-y-2">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <code class="text-xs">${escapeHtml(String(setting.value))}</code>
+                    <span class="badge ${aiSettingSourceBadgeClass(setting.source)} badge-xs">${escapeHtml(
+                      aiSettingSourceLabel(messages, setting.source),
+                    )}</span>
+                  </div>
+                  <form
+                    class="flex flex-wrap items-center gap-2"
+                    hx-get="${escapeHtml(
+                      withQueryParameters(appRoutes.aiProviderModels, {
+                        projectId,
+                        locale,
+                        provider: setting.providerLane,
+                        slot: setting.slot,
+                        settingKey: setting.key,
+                      }),
+                    )}"
+                    hx-target="#ai-model-search-results"
+                    hx-swap="innerHTML"
+                    hx-disabled-elt="button, input, select, textarea"
+                  >
+                    <label class="input input-sm w-full md:w-64">
+                      <svg class="h-[1em] opacity-50" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <g stroke-linejoin="round" stroke-linecap="round" stroke-width="2.5" fill="none" stroke="currentColor">
+                          <circle cx="11" cy="11" r="8"></circle>
+                          <path d="m21 21-4.3-4.3"></path>
+                        </g>
+                      </svg>
+                      <input type="search" name="search" placeholder="${escapeHtml(
+                        messages.builder.aiModelCatalogSearchPlaceholder,
+                      )}" aria-label="${escapeHtml(setting.label)}" />
+                    </label>
+                    <input type="text" name="author" class="input input-sm w-full md:w-40" placeholder="${escapeHtml(
+                      messages.builder.aiModelCatalogAuthorPlaceholder,
+                    )}" aria-label="${escapeHtml(messages.builder.aiModelCatalogAuthorPlaceholder)}" />
+                    <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(
+                      messages.builder.aiModelCatalogSearchSubmit,
+                    )}</button>
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-sm"
+                      hx-patch="${escapeHtml(
+                        withQueryParameters(appRoutes.aiSettings, { projectId, locale }),
+                      )}"
+                      hx-target="#ai-model-settings-workspace"
+                      hx-swap="outerHTML"
+                      hx-vals='${escapeHtml(JSON.stringify({ key: setting.key, reset: true }))}'
+                    >
+                      ${escapeHtml(messages.builder.aiModelCatalogResetSubmit)}
+                    </button>
+                  </form>
+                </div>`
+              : renderAiSettingsForm(messages, locale, projectId, setting, messages.builder.save);
+
+          return `<tr>
+            <td class="font-medium">${escapeHtml(setting.label)}</td>
+            <td><span class="badge badge-outline badge-xs">${escapeHtml(setting.slot)}</span></td>
+            <td>${valueCell}</td>
+          </tr>`;
+        })
+        .join("");
+
+      return `<input type="radio" name="ai_model_tabs" class="tab" aria-label="${escapeHtml(
+        laneTitles[laneId] ?? laneId,
+      )}" ${index === 0 ? 'checked="checked"' : ""} />
+      <div class="tab-content border-base-300 bg-base-100 p-4">
+        <div class="${cardClasses.bordered}">
+          <div class="card-body gap-4">
+            <div class="flex items-center justify-between gap-3">
+              <h3 class="card-title">${escapeHtml(laneTitles[laneId] ?? laneId)}</h3>
+              <span class="badge badge-outline">${escapeHtml(`${laneSettings.length}`)}</span>
+            </div>
+            ${laneActionMarkup}
+            ${
+              laneSettings.length > 0
+                ? `<div class="overflow-x-auto">
+                    <table class="table table-sm">
+                      <thead>
+                        <tr>
+                          <th scope="col">${escapeHtml(messages.builder.titleLabel)}</th>
+                          <th scope="col">${escapeHtml(messages.builder.taskLabel)}</th>
+                          <th scope="col">${escapeHtml(messages.builder.modelLabel)}</th>
+                        </tr>
+                      </thead>
+                      <tbody>${settingRows}</tbody>
+                    </table>
+                  </div>`
+                : `<div role="status" class="alert alert-info alert-soft"><span>${escapeHtml(
+                    messages.builder.aiModelCatalogNoLaneSettings,
+                  )}</span></div>`
+            }
+          </div>
+        </div>
+      </div>`;
+    })
+    .join("");
+
+  return `<section id="ai-model-settings-workspace" class="space-y-4">
+    <div class="${cardClasses.bordered}">
+      <div class="card-body gap-4">
+        <div>
+          <h2 class="card-title">${escapeHtml(messages.builder.aiModelCatalogWorkspaceTitle)}</h2>
+          <p class="text-sm text-base-content/70">${escapeHtml(
+            messages.builder.aiModelCatalogWorkspaceDescription,
+          )}</p>
+        </div>
+        <div class="tabs tabs-lift tabs-sm">${laneContent}</div>
+      </div>
+    </div>
+    ${renderAiProviderSearchPanel(messages, locale, projectId, searchState)}
+  </section>`;
+};
+
+/**
  * Renders the AI assist form (fieldset pattern, not form-control).
  *
  * @param messages Locale-resolved messages.
@@ -654,6 +1028,141 @@ const renderAiRetrievalAndToolPlan = (
 };
 
 /**
+ * Renders the Hugging Face fine-tuning submission form.
+ *
+ * @param messages Locale-resolved messages.
+ * @param locale Active locale.
+ * @param projectId Active project id.
+ * @returns HTML string for HF training submission workspace.
+ */
+const renderAiFineTuneWorkspace = (
+  messages: Messages,
+  locale: LocaleCode,
+  projectId: string,
+): string => {
+  const submitHref = withQueryParameters(appRoutes.aiBuilderHfTraining, {
+    projectId,
+    locale,
+  });
+  return `<div class="${cardClasses.bordered}">
+    <div class="card-body">
+      <h2 class="card-title">${escapeHtml(messages.builder.fineTuneWorkspaceTitle)}</h2>
+      <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.fineTuneWorkspaceDescription)}</p>
+      <form
+        hx-post="${escapeHtml(submitHref)}"
+        hx-target="#ai-hf-training-result"
+        hx-swap="innerHTML"
+        hx-indicator="#ai-hf-training-spinner"
+        hx-disabled-elt="button, input, select, textarea"
+        class="space-y-3"
+      >
+        ${renderBuilderHiddenFields(projectId, locale)}
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.hfTrainingDatasetLabel)}</legend>
+          <input
+            id="hf-training-dataset"
+            name="datasetId"
+            type="text"
+            class="input w-full"
+            placeholder="${escapeHtml(messages.builder.hfTrainingDatasetPlaceholder)}"
+            required
+            aria-required="true"
+            aria-label="${escapeHtml(messages.builder.hfTrainingDatasetLabel)}"
+          />
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.hfTrainingSplitLabel)}</legend>
+          <input
+            id="hf-training-dataset-split"
+            name="datasetSplit"
+            type="text"
+            class="input w-full"
+            value="train"
+            aria-label="${escapeHtml(messages.builder.hfTrainingSplitLabel)}"
+          />
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.hfTrainingBaseModelLabel)}</legend>
+          <input
+            id="hf-training-base-model"
+            name="baseModel"
+            type="text"
+            class="input w-full"
+            value="meta-llama/Llama-3.2-3B-Instruct"
+            required
+            aria-required="true"
+            aria-label="${escapeHtml(messages.builder.hfTrainingBaseModelLabel)}"
+          />
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.hfTrainingOutputModelLabel)}</legend>
+          <input
+            id="hf-training-output-model"
+            name="outputModel"
+            type="text"
+            class="input w-full"
+            placeholder="username/tea-builder-ft"
+            required
+            aria-required="true"
+            aria-label="${escapeHtml(messages.builder.hfTrainingOutputModelLabel)}"
+          />
+        </fieldset>
+        <div class="grid gap-3 sm:grid-cols-3">
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">${escapeHtml(messages.builder.hfTrainingMethodLabel)}</legend>
+            <select
+              id="hf-training-method"
+              name="method"
+              class="select select-bordered w-full"
+              aria-label="${escapeHtml(messages.builder.hfTrainingMethodLabel)}"
+            >
+              <option value="sft">${escapeHtml(messages.builder.hfTrainingMethodSft)}</option>
+              <option value="dpo">${escapeHtml(messages.builder.hfTrainingMethodDpo)}</option>
+              <option value="grpo">${escapeHtml(messages.builder.hfTrainingMethodGrpo)}</option>
+              <option value="reward">${escapeHtml(messages.builder.hfTrainingMethodReward)}</option>
+            </select>
+          </fieldset>
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">${escapeHtml(messages.builder.hfTrainingEpochsLabel)}</legend>
+            <input
+              id="hf-training-epochs"
+              name="epochs"
+              type="number"
+              min="1"
+              step="1"
+              value="3"
+              class="input w-full"
+              aria-label="${escapeHtml(messages.builder.hfTrainingEpochsLabel)}"
+            />
+          </fieldset>
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">${escapeHtml(messages.builder.hfTrainingLearningRateLabel)}</legend>
+            <input
+              id="hf-training-learning-rate"
+              name="learningRate"
+              type="number"
+              min="0.000001"
+              max="1"
+              step="0.000001"
+              value="0.00002"
+              class="input w-full"
+              aria-label="${escapeHtml(messages.builder.hfTrainingLearningRateLabel)}"
+            />
+          </fieldset>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="submit" class="btn btn-secondary btn-sm" aria-label="${escapeHtml(messages.builder.hfTrainingSubmit)}">
+            ${escapeHtml(messages.builder.hfTrainingSubmit)}
+          </button>
+          <span id="ai-hf-training-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
+        </div>
+      </form>
+      <div id="ai-hf-training-result" class="mt-4" aria-live="polite"></div>
+    </div>
+  </div>`;
+};
+
+/**
  * Renders the patch preview and API surface cards.
  *
  * @param messages Locale-resolved messages.
@@ -820,13 +1329,27 @@ export const renderAiPanel = (
             <div class="collapse-content">
               <div class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
                 ${renderAiKnowledgeWorkspace(messages, locale, projectId, documents)}
-                ${renderAiRetrievalAndToolPlan(
-                  messages,
-                  locale,
-                  projectId,
-                  featureCapabilities.toolLikeSuggestions,
-                )}
+                <div class="space-y-4">
+                  ${renderAiRetrievalAndToolPlan(
+                    messages,
+                    locale,
+                    projectId,
+                    featureCapabilities.toolLikeSuggestions,
+                  )}
+                  ${renderAiFineTuneWorkspace(messages, locale, projectId)}
+                </div>
               </div>
+            </div>
+          </details>
+
+          <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
+            <summary class="collapse-title font-semibold" aria-label="${escapeHtml(
+              messages.builder.aiModelCatalogWorkspaceTitle,
+            )}">${escapeHtml(
+              messages.builder.aiModelCatalogWorkspaceTitle,
+            )}</summary>
+            <div class="collapse-content">
+              ${renderAiModelSettingsWorkspace(messages, locale, projectId, runtimeProfile)}
             </div>
           </details>
 

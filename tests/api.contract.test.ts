@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { createApp } from "../src/app.ts";
 import { appConfig } from "../src/config/environment.ts";
+import { aiRuntimeSettingsService } from "../src/domain/ai/ai-runtime-settings-service.ts";
 import { resetEmbeddingFallback } from "../src/domain/ai/knowledge-base-service.ts";
 import { ProviderRegistry } from "../src/domain/ai/providers/provider-registry.ts";
 import { vectorStore } from "../src/domain/ai/vector-store.ts";
@@ -214,6 +215,8 @@ afterEach(async () => {
     await gameLoop.closeSession(sessionId);
   }
   managedSessionIds.clear();
+  await prismaBase.aiRuntimeSetting.deleteMany();
+  await aiRuntimeSettingsService.resetForTests();
 });
 
 describe("API contracts", () => {
@@ -2254,6 +2257,14 @@ describe("API contracts", () => {
         catalog?: Array<{
           configKey: string;
           model: string;
+          source?: string;
+          providerLane?: string;
+          slot?: string;
+          editable?: boolean;
+        }>;
+        settings?: Array<{
+          key: string;
+          source: string;
         }>;
       };
     }>(response);
@@ -2266,6 +2277,252 @@ describe("API contracts", () => {
         (entry) => entry.configKey === "AI_LOCAL_SPEECH_TO_TEXT_MODEL" && entry.model.length > 0,
       ),
     ).toBe(true);
+    expect(
+      payload.data?.catalog?.some(
+        (entry) =>
+          entry.configKey === "AI_LOCAL_SPEECH_TO_TEXT_MODEL" &&
+          typeof entry.source === "string" &&
+          typeof entry.providerLane === "string" &&
+          typeof entry.slot === "string" &&
+          entry.editable === true,
+      ),
+    ).toBe(true);
+    expect(payload.data?.settings?.some((entry) => entry.key === "OLLAMA_CHAT_MODEL")).toBe(true);
+  });
+
+  test("AI settings endpoint persists overrides and updates runtime catalog sources", async () => {
+    const patchResponse = await app.handle(
+      new Request(toUrl(appRoutes.aiSettings), {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          updates: [
+            {
+              key: "AI_LOCAL_SPEECH_TO_TEXT_MODEL",
+              value: "microsoft/vibe-voice",
+            },
+          ],
+        }),
+      }),
+    );
+
+    const patchPayload = await readResponsePayload<{
+      readonly ok: boolean;
+      readonly data?: {
+        settings?: Array<{
+          key: string;
+          value: string | number | boolean;
+          source: string;
+        }>;
+        catalog?: Array<{
+          configKey: string;
+          model: string;
+          source: string;
+        }>;
+      };
+    }>(patchResponse);
+
+    expect(patchResponse.status).toBe(httpStatus.ok);
+    expect(patchPayload.ok).toBe(true);
+    expect(
+      patchPayload.data?.settings?.some(
+        (entry) =>
+          entry.key === "AI_LOCAL_SPEECH_TO_TEXT_MODEL" &&
+          entry.value === "microsoft/vibe-voice" &&
+          entry.source === "override",
+      ),
+    ).toBe(true);
+    expect(
+      patchPayload.data?.catalog?.some(
+        (entry) =>
+          entry.configKey === "AI_LOCAL_SPEECH_TO_TEXT_MODEL" &&
+          entry.model === "microsoft/vibe-voice" &&
+          entry.source === "override",
+      ),
+    ).toBe(true);
+  });
+
+  test("AI provider model search returns normalized Hugging Face catalog entries", async () => {
+    const fetchSpy = spyOn(globalThis, "fetch").mockImplementation((async (input) => {
+      const url = String(input);
+      if (url.includes("/api/models")) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: "microsoft/vibe-voice",
+              pipeline_tag: "automatic-speech-recognition",
+              tags: ["automatic-speech-recognition", "audio"],
+            },
+          ]),
+          {
+            status: httpStatus.ok,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+
+      return new Response("[]", {
+        status: httpStatus.ok,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch);
+
+    try {
+      const response = await app.handle(
+        new Request(
+          toUrl(
+            withQueryParameters(appRoutes.aiProviderModels, {
+              provider: "transformers-local",
+              slot: "speechToText",
+              search: "vibe",
+              author: "microsoft",
+              limit: "5",
+            }),
+          ),
+        ),
+      );
+      const payload = await readResponsePayload<{
+        readonly ok: boolean;
+        readonly data?: {
+          provider: string;
+          slot: string;
+          items: Array<{
+            model: string;
+            source: string;
+            provider: string;
+          }>;
+        };
+      }>(response);
+
+      expect(response.status).toBe(httpStatus.ok);
+      expect(payload.ok).toBe(true);
+      expect(payload.data?.provider).toBe("transformers-local");
+      expect(payload.data?.slot).toBe("speechToText");
+      expect(payload.data?.items[0]?.model).toBe("microsoft/vibe-voice");
+      expect(payload.data?.items[0]?.source).toBe("hub");
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  test("AI provider Ollama pull endpoint refreshes catalog after install", async () => {
+    const fetchSpy = spyOn(globalThis, "fetch").mockImplementation((async (input, init) => {
+      const url = String(input);
+
+      if (url.endsWith("/api/pull")) {
+        return new Response(JSON.stringify({ status: "success" }), {
+          status: httpStatus.ok,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/tags")) {
+        return new Response(
+          JSON.stringify({
+            models: [
+              {
+                name: "llama3.2",
+                model: "llama3.2",
+                modified_at: new Date().toISOString(),
+                size: 1,
+                digest: "abc",
+                details: {
+                  format: "gguf",
+                  family: "llama",
+                  families: ["llama"],
+                  parameter_size: "8B",
+                  quantization_level: "Q4_K_M",
+                },
+              },
+            ],
+          }),
+          {
+            status: httpStatus.ok,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+
+      if (url.endsWith("/api/show") && init?.method === "POST") {
+        return new Response(
+          JSON.stringify({
+            modelfile: "FROM llama3.2",
+            template: "{{ .Prompt }}",
+            details: {
+              format: "gguf",
+              family: "llama",
+              families: ["llama"],
+              parameter_size: "8B",
+              quantization_level: "Q4_K_M",
+            },
+          }),
+          {
+            status: httpStatus.ok,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+
+      return new Response(JSON.stringify({ data: [] }), {
+        status: httpStatus.ok,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch);
+
+    try {
+      const response = await app.handle(
+        new Request(toUrl(appRoutes.aiProviderOllamaPull), {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "llama3.2",
+            slot: "chat",
+          }),
+        }),
+      );
+      const payload = await readResponsePayload<{
+        readonly ok: boolean;
+        readonly data?: {
+          model: string;
+          catalog: {
+            provider: string;
+            items: Array<{
+              model: string;
+              source: string;
+            }>;
+          };
+        };
+      }>(response);
+
+      expect(response.status).toBe(httpStatus.ok);
+      expect(payload.ok).toBe(true);
+      expect(payload.data?.model).toBe("llama3.2");
+      expect(payload.data?.catalog.provider).toBe("ollama");
+      expect(payload.data?.catalog.items.some((item) => item.model === "llama3.2")).toBe(true);
+      expect(payload.data?.catalog.items[0]?.source).toBe("installed");
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  test("builder settings page renders the model catalog workspace", async () => {
+    const projectId = `settings-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+    const response = await app.handle(
+      new Request(toUrl(withProjectPagePath(appRoutes.builderAi, projectId))),
+    );
+    const html = await response.text();
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(html.includes("Model Catalog &amp; Overrides") || html.includes("Model Catalog & Overrides")).toBe(
+      true,
+    );
+    expect(html.includes("ai-model-settings-workspace")).toBe(true);
+    expect(html.includes("Transformers Local")).toBe(true);
   });
 
   test("AI knowledge routes ingest list and semantically search indexed documents", async () => {
@@ -2532,6 +2789,48 @@ describe("HTMX partial rendering", () => {
     expect(html.includes("Tool plan preview")).toBe(true);
     expect(html.includes("Structured tool planning is currently unavailable")).toBe(true);
     expect(html.includes(appRoutes.aiBuilderToolPlan)).toBe(false);
+    expect(html.includes(appRoutes.aiBuilderHfTraining)).toBe(true);
+  });
+
+  test("builder AI HF training endpoint queues a reviewable run", async () => {
+    await createBuilderProject("default");
+    const body = {
+      projectId: "default",
+      locale: "en-US",
+      datasetId: "openai/gsm8k",
+      datasetSplit: "train",
+      baseModel: "meta-llama/Llama-3.2-3B-Instruct",
+      outputModel: "team/tea-builder-ft",
+      method: "sft",
+      epochs: "3",
+      learningRate: "0.00002",
+    };
+    const response = await app.handle(
+      new Request(toUrl(appRoutes.aiBuilderHfTraining), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json",
+        },
+        body: JSON.stringify(body),
+      }),
+    );
+    const payload = (await response.json()) as {
+      readonly ok: boolean;
+      readonly data?: {
+        readonly runId: string;
+        readonly status: string;
+        readonly goal: string;
+        readonly automationPath: string;
+      };
+    };
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(payload.ok).toBe(true);
+    expect(typeof payload.data?.runId).toBe("string");
+    expect(payload.data?.status).toBe("blocked_for_approval");
+    expect(payload.data?.goal.includes("openai/gsm8k:train")).toBe(true);
+    expect(payload.data?.automationPath).toContain("/projects/default/operations");
   });
 
   test("home route handles non-js oracle form fallback as full SSR page", async () => {

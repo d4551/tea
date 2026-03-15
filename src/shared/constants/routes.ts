@@ -29,6 +29,7 @@ type AppRouteMap = {
   readonly aiHealth: string;
   readonly aiCapabilities: string;
   readonly aiCatalog: string;
+  readonly aiSettings: string;
   readonly aiKnowledgeDocuments: string;
   readonly aiKnowledgeDocumentDetail: string;
   readonly aiKnowledgeSearch: string;
@@ -51,6 +52,7 @@ type AppRouteMap = {
   readonly aiBuilderKnowledgeDocumentDetail: string;
   readonly aiBuilderKnowledgeSearch: string;
   readonly aiBuilderToolPlan: string;
+  readonly aiBuilderHfTraining: string;
   readonly aiBuilderPatchPreview: string;
   readonly aiBuilderPatchApply: string;
   readonly aiBuilderPatchPreviewForm: string;
@@ -143,6 +145,7 @@ export const appRoutes: AppRouteMap = {
   aiHealth: "/api/ai/health",
   aiCapabilities: "/api/ai/capabilities",
   aiCatalog: "/api/ai/catalog",
+  aiSettings: "/api/ai/settings",
   aiKnowledgeDocuments: "/api/ai/knowledge/documents",
   aiKnowledgeDocumentDetail: "/api/ai/knowledge/documents/:documentId",
   aiKnowledgeSearch: "/api/ai/knowledge/search",
@@ -165,6 +168,7 @@ export const appRoutes: AppRouteMap = {
   aiBuilderKnowledgeDocumentDetail: "/api/builder/ai/knowledge/documents/:documentId",
   aiBuilderKnowledgeSearch: "/api/builder/ai/knowledge/search",
   aiBuilderToolPlan: "/api/builder/ai/plan/tools",
+  aiBuilderHfTraining: "/api/builder/ai/training/hf-jobs",
   aiBuilderPatchPreview: "/api/builder/ai/patch/preview",
   aiBuilderPatchApply: "/api/builder/ai/patch/apply",
   aiBuilderPatchPreviewForm: "/api/builder/ai/patch/preview/form",

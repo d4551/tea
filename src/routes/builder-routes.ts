@@ -602,7 +602,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         messages,
         features,
         deriveFeatureCapability(registryStatus),
-        getAiRuntimeProfile(),
+        await getAiRuntimeProfile(),
         builderLocale,
         projectId,
         readiness,

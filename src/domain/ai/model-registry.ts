@@ -1,4 +1,8 @@
 import { appConfig } from "../../config/environment.ts";
+import {
+  aiRuntimeSettingsService,
+  getAiRuntimeSettingDescriptor,
+} from "./ai-runtime-settings-service.ts";
 import type { AiCapability } from "./providers/provider-types.ts";
 
 /**
@@ -84,6 +88,14 @@ export interface LocalModelCatalogEntry {
   readonly configKey: string;
   /** Whether the target is active in this environment. */
   readonly enabled: boolean;
+  /** Whether the target is editable through runtime overrides. */
+  readonly editable: boolean;
+  /** Provider lane used by the settings UI. */
+  readonly providerLane: string;
+  /** Stable slot identifier used by the settings UI. */
+  readonly slot: string;
+  /** Effective source for the configured model. */
+  readonly source: "override" | "env" | "default";
 }
 
 /**
@@ -99,6 +111,7 @@ type ModelRegistryKey =
   | "imageGeneration";
 
 type ModelRegistry = Readonly<Record<ModelRegistryKey, ModelEntry>>;
+type MutableModelEntry = { -readonly [K in keyof ModelEntry]: ModelEntry[K] };
 
 export const MODEL_REGISTRY: ModelRegistry = {
   sentiment: {
@@ -215,6 +228,34 @@ export const MODEL_REGISTRY: ModelRegistry = {
 };
 
 /**
+ * Synchronizes the mutable registry snapshot with the current effective app config.
+ */
+export const synchronizeModelRegistry = (): void => {
+  const sentiment = MODEL_REGISTRY.sentiment as MutableModelEntry;
+  const oracle = MODEL_REGISTRY.oracle as MutableModelEntry;
+  const npcDialogue = MODEL_REGISTRY.npcDialogue as MutableModelEntry;
+  const embeddings = MODEL_REGISTRY.embeddings as MutableModelEntry;
+  const speechToText = MODEL_REGISTRY.speechToText as MutableModelEntry;
+  const textToSpeech = MODEL_REGISTRY.textToSpeech as MutableModelEntry;
+  const imageGeneration = MODEL_REGISTRY.imageGeneration as MutableModelEntry;
+
+  sentiment.model = appConfig.ai.localSentimentModel;
+  oracle.model = appConfig.ai.localTextGenerationModel;
+  npcDialogue.model = appConfig.ai.localNpcDialogueModel;
+  embeddings.model = appConfig.ai.localEmbeddingModel;
+  embeddings.enabled = appConfig.ai.localEmbeddingsEnabled;
+  speechToText.model = appConfig.ai.localSpeechToTextModel;
+  speechToText.enabled = appConfig.ai.localSpeechToTextEnabled;
+  textToSpeech.model = appConfig.ai.localTextToSpeechModel;
+  textToSpeech.enabled = appConfig.ai.localTextToSpeechEnabled;
+  imageGeneration.model = appConfig.ai.localImageGenerationModel;
+  imageGeneration.enabled =
+    appConfig.ai.localImageGenerationEnabled && appConfig.ai.localImageGenerationModel.trim().length > 0;
+};
+
+synchronizeModelRegistry();
+
+/**
  * Registry key union derived from {@link MODEL_REGISTRY}.
  */
 export type ModelKey = keyof typeof MODEL_REGISTRY;
@@ -225,16 +266,23 @@ export type ModelKey = keyof typeof MODEL_REGISTRY;
  * @returns Builder-friendly local model catalog.
  */
 export const getLocalModelCatalog = (): readonly LocalModelCatalogEntry[] =>
-  Object.values(MODEL_REGISTRY).map((entry) => ({
-    key: entry.key,
-    label: entry.label,
-    description: entry.description,
-    task: entry.task,
-    model: entry.model,
-    capabilities: entry.capabilities,
-    runtime: `onnx-${entry.device}`,
-    dtype: entry.dtype,
-    integration: "huggingface",
-    configKey: entry.configKey,
-    enabled: entry.enabled,
-  }));
+  Object.values(MODEL_REGISTRY).map((entry) => {
+    const descriptor = getAiRuntimeSettingDescriptor(entry.configKey);
+    return {
+      key: entry.key,
+      label: entry.label,
+      description: entry.description,
+      task: entry.task,
+      model: entry.model,
+      capabilities: entry.capabilities,
+      runtime: `onnx-${entry.device}`,
+      dtype: entry.dtype,
+      integration: "huggingface",
+      configKey: entry.configKey,
+      enabled: entry.enabled,
+      editable: descriptor?.editable ?? false,
+      providerLane: descriptor?.providerLane ?? "transformers-local",
+      slot: descriptor?.slot ?? entry.key,
+      source: aiRuntimeSettingsService.getSettingSource(entry.configKey),
+    };
+  });

@@ -3,6 +3,10 @@ import {
   type AiApiCompatibleVendor,
   type OnnxDevicePreference,
 } from "../../config/environment.ts";
+import {
+  aiRuntimeSettingsService,
+  type AiRuntimeSettingValue,
+} from "./ai-runtime-settings-service.ts";
 import { getLocalModelCatalog, type LocalModelCatalogEntry } from "./model-registry.ts";
 
 /**
@@ -67,6 +71,8 @@ export interface AiRuntimeProfile {
   };
   /** Configured local model targets. */
   readonly catalog: readonly LocalModelCatalogEntry[];
+  /** Editable effective runtime settings exposed to UI and API clients. */
+  readonly settings: readonly AiRuntimeSettingValue[];
 }
 
 /**
@@ -74,7 +80,7 @@ export interface AiRuntimeProfile {
  *
  * @returns Local AI runtime profile.
  */
-export const getAiRuntimeProfile = (): AiRuntimeProfile => ({
+export const getAiRuntimeProfile = async (): Promise<AiRuntimeProfile> => ({
   transformers: {
     provider: "transformers.js",
     integration: "huggingface",
@@ -128,4 +134,5 @@ export const getAiRuntimeProfile = (): AiRuntimeProfile => ({
     cloudFallbackEnabled: appConfig.ai.routing.cloudFallbackEnabled,
   },
   catalog: getLocalModelCatalog(),
+  settings: await aiRuntimeSettingsService.listSettings(),
 });

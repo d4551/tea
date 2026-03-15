@@ -42,3 +42,5 @@ public/game/game-client.bundle.js
 
 # Logs
 *.log
+.cursor/rules/
+.claude/

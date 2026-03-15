@@ -6,13 +6,21 @@
  */
 
 import { Elysia, t } from "elysia";
-import { appConfig, normalizeLocale } from "../config/environment.ts";
+import { appConfig, normalizeLocale, parseBoolean } from "../config/environment.ts";
 import { deriveFeatureCapability } from "../domain/ai/capability-snapshot.ts";
+import {
+  aiRuntimeSettingsService,
+  type AiRuntimeSettingMutation,
+} from "../domain/ai/ai-runtime-settings-service.ts";
 import {
   type KnowledgeSearchMatch,
   knowledgeBaseService,
 } from "../domain/ai/knowledge-base-service.ts";
 import { getAiRuntimeProfile } from "../domain/ai/local-runtime-profile.ts";
+import {
+  pullOllamaModel,
+  searchProviderModels,
+} from "../domain/ai/provider-model-catalog.ts";
 import { ProviderRegistry } from "../domain/ai/providers/provider-registry.ts";
 import { auditService } from "../domain/audit/audit-service.ts";
 import {
@@ -36,6 +44,10 @@ import {
   resampleMonoPcm,
   safeDecodeWavAudio,
 } from "../shared/utils/wav-audio.ts";
+import {
+  renderAiModelSettingsWorkspace,
+  renderAiProviderSearchPanel,
+} from "../views/builder/ai-panel.ts";
 
 type RegistryStatus = Awaited<ReturnType<ProviderRegistry["getStatus"]>>;
 type RegistryCapability = RegistryStatus["capabilities"][number];
@@ -118,6 +130,26 @@ const localCatalogSchema = t.Object({
   integration: t.String(),
   configKey: t.String(),
   enabled: t.Boolean(),
+  editable: t.Boolean(),
+  providerLane: t.String(),
+  slot: t.String(),
+  source: t.Union([t.Literal("override"), t.Literal("env"), t.Literal("default")]),
+});
+
+const aiRuntimeSettingSchema = t.Object({
+  key: t.String(),
+  value: t.Union([t.String(), t.Number(), t.Boolean()]),
+  valueType: t.Union([
+    t.Literal("string"),
+    t.Literal("integer"),
+    t.Literal("float"),
+    t.Literal("boolean"),
+  ]),
+  source: t.Union([t.Literal("override"), t.Literal("env"), t.Literal("default")]),
+  editable: t.Boolean(),
+  providerLane: t.String(),
+  slot: t.String(),
+  label: t.String(),
 });
 
 const localRuntimeSchema = t.Object({
@@ -173,6 +205,36 @@ const localRuntimeSchema = t.Object({
     cloudFallbackEnabled: t.Boolean(),
   }),
   catalog: t.Array(localCatalogSchema),
+  settings: t.Array(aiRuntimeSettingSchema),
+});
+
+const providerModelCatalogItemSchema = t.Object({
+  provider: t.String(),
+  model: t.String(),
+  label: t.String(),
+  summary: t.String(),
+  capabilities: t.Array(t.String()),
+  tags: t.Array(t.String()),
+  installed: t.Boolean(),
+  available: t.Boolean(),
+  source: t.Union([
+    t.Literal("hub"),
+    t.Literal("installed"),
+    t.Literal("discovered"),
+    t.Literal("configured"),
+  ]),
+});
+
+const providerModelCatalogDataSchema = t.Object({
+  provider: t.String(),
+  slot: t.String(),
+  items: t.Array(providerModelCatalogItemSchema),
+  nextCursor: t.Union([t.String(), t.Null()]),
+});
+
+const providerModelCatalogResponseSchema = t.Object({
+  ok: t.Literal(true),
+  data: providerModelCatalogDataSchema,
 });
 
 const featureSnapshotSchema = t.Object({
@@ -409,8 +471,8 @@ const decodeAudioPayload = (audioBase64: string): Uint8Array => {
   return new Uint8Array(Buffer.from(payload, "base64"));
 };
 
-const toAiRuntimeRecord = () => {
-  const runtimeProfile = getAiRuntimeProfile();
+const toAiRuntimeRecord = async () => {
+  const runtimeProfile = await getAiRuntimeProfile();
 
   return {
     transformers: {
@@ -467,6 +529,20 @@ const toAiRuntimeRecord = () => {
       integration: entry.integration,
       configKey: entry.configKey,
       enabled: entry.enabled,
+      editable: entry.editable,
+      providerLane: entry.providerLane,
+      slot: entry.slot,
+      source: entry.source,
+    })),
+    settings: runtimeProfile.settings.map((setting) => ({
+      key: setting.key,
+      value: setting.value,
+      valueType: setting.valueType,
+      source: setting.source,
+      editable: setting.editable,
+      providerLane: setting.providerLane,
+      slot: setting.slot,
+      label: setting.label,
     })),
   };
 };
@@ -498,6 +574,42 @@ const delayWithAbort = (signal: AbortSignal, delayMs: number): Promise<void> =>
 
     signal.addEventListener("abort", onAbort, { once: true });
   });
+
+const normalizeAiSettingsMutations = (body: unknown): readonly AiRuntimeSettingMutation[] => {
+  if (typeof body !== "object" || body === null) {
+    throw new Error("AI runtime settings payload must be an object.");
+  }
+
+  const record = body as {
+    readonly updates?: readonly AiRuntimeSettingMutation[];
+    readonly key?: string;
+    readonly value?: string | number | boolean;
+    readonly reset?: string | boolean;
+  };
+
+  if (Array.isArray(record.updates)) {
+    return record.updates;
+  }
+
+  if (typeof record.key !== "string" || record.key.trim().length === 0) {
+    throw new Error("AI runtime setting key is required.");
+  }
+
+  const reset =
+    typeof record.reset === "boolean"
+      ? record.reset
+      : typeof record.reset === "string"
+        ? parseBoolean(record.reset, false, "reset")
+        : false;
+
+  return [
+    {
+      key: record.key,
+      value: record.value,
+      reset,
+    },
+  ];
+};
 
 const renderAiHealthStatusMarkup = (locale: string, providers: RegistryProviders): string => {
   const messages = getMessages(normalizeLocale(locale));
@@ -620,7 +732,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
           localInference: features.localInference,
           providers: [...features.providers],
         },
-        localRuntime: toAiRuntimeRecord(),
+        localRuntime: await toAiRuntimeRecord(),
       });
     },
     {
@@ -644,7 +756,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
       return successEnvelope({
         features: createFeatureCapability(status),
         models: status.capabilities.map(asCapabilityRecord),
-        localRuntime: toAiRuntimeRecord(),
+        localRuntime: await toAiRuntimeRecord(),
       });
     },
     {
@@ -659,7 +771,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
       },
     },
   )
-  .get(appRoutes.aiCatalog, () => successEnvelope(toAiRuntimeRecord()), {
+  .get(appRoutes.aiCatalog, async () => successEnvelope(await toAiRuntimeRecord()), {
     detail: {
       tags: ["ai"],
       summary: "Local AI runtime catalog",
@@ -670,6 +782,227 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
       [httpStatus.ok]: aiCatalogResponseSchema,
     },
   })
+  .get(
+    appRoutes.aiProviderModels,
+    async ({ query, request }) => {
+      const provider = query.provider as
+        | "ollama"
+        | "openai-compatible-local"
+        | "openai-compatible-cloud"
+        | "huggingface-inference"
+        | "huggingface-endpoints"
+        | "transformers-local";
+      const locale = normalizeLocale(query.locale);
+      const messages = getMessages(locale);
+
+      try {
+        const result = await searchProviderModels({
+          provider,
+          slot: query.slot,
+          search: query.search,
+          author: query.author,
+          cursor: query.cursor,
+          limit: query.limit,
+        });
+
+        if (request.headers.get("HX-Request") === "true") {
+          return renderAiProviderSearchPanel(messages, locale, query.projectId ?? "", {
+            settingKey: query.settingKey ?? "",
+            provider: result.provider,
+            slot: result.slot,
+            search: query.search ?? "",
+            author: query.author ?? "",
+            items: result.items,
+          });
+        }
+
+        return {
+          ok: true as const,
+          data: {
+            provider: result.provider,
+            slot: result.slot,
+            items: result.items.map((item) => ({
+              provider: item.provider,
+              model: item.model,
+              label: item.label,
+              summary: item.summary,
+              capabilities: [...item.capabilities],
+              tags: [...item.tags],
+              installed: item.installed,
+              available: item.available,
+              source: item.source,
+            })),
+            nextCursor: result.nextCursor,
+          },
+        };
+      } catch (error) {
+        if (request.headers.get("HX-Request") === "true") {
+          return renderAiProviderSearchPanel(messages, locale, query.projectId ?? "", {
+            settingKey: query.settingKey ?? "",
+            provider,
+            slot: query.slot,
+            search: query.search ?? "",
+            author: query.author ?? "",
+            items: [],
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        throw error;
+      }
+    },
+    {
+      query: t.Object({
+        provider: t.String({ minLength: 1 }),
+        slot: t.String({ minLength: 1 }),
+        search: t.Optional(t.String()),
+        author: t.Optional(t.String()),
+        cursor: t.Optional(t.String()),
+        limit: t.Optional(t.Number({ minimum: 1, maximum: 25 })),
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+        settingKey: t.Optional(t.String()),
+      }),
+      detail: {
+        tags: ["ai"],
+        summary: "Provider model search",
+        description:
+          "Searches provider-aware model catalogs so the settings UI can populate configurable model slots.",
+      },
+      response: {
+        [httpStatus.ok]: t.Union([providerModelCatalogResponseSchema, t.String()]),
+      },
+    },
+  )
+  .patch(
+    appRoutes.aiSettings,
+    async ({ body, query, request }) => {
+      await aiRuntimeSettingsService.updateSettings(normalizeAiSettingsMutations(body));
+      const runtimeRecord = await toAiRuntimeRecord();
+      if (request.headers.get("HX-Request") === "true") {
+        const locale = normalizeLocale(query.locale);
+        return renderAiModelSettingsWorkspace(
+          getMessages(locale),
+          locale,
+          query.projectId ?? "",
+          await getAiRuntimeProfile(),
+        );
+      }
+      return successEnvelope(runtimeRecord);
+    },
+    {
+      query: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+      }),
+      body: t.Union([
+        t.Object({
+          updates: t.Array(
+            t.Object({
+              key: t.String({ minLength: 1 }),
+              value: t.Optional(t.Union([t.String(), t.Number(), t.Boolean()])),
+              reset: t.Optional(t.Boolean()),
+            }),
+            { minItems: 1 },
+          ),
+        }),
+        t.Object({
+          key: t.String({ minLength: 1 }),
+          value: t.Optional(t.Union([t.String(), t.Number(), t.Boolean()])),
+          reset: t.Optional(t.Union([t.String(), t.Boolean()])),
+        }),
+      ]),
+      detail: {
+        tags: ["ai"],
+        summary: "Update AI runtime overrides",
+        description:
+          "Persists app-wide AI runtime overrides and returns the refreshed effective runtime snapshot.",
+      },
+      response: {
+        [httpStatus.ok]: t.Union([aiCatalogResponseSchema, t.String()]),
+      },
+    },
+  )
+  .post(
+    appRoutes.aiProviderOllamaPull,
+    async ({ body, query, request }) => {
+      await pullOllamaModel(body.model);
+      const catalog = await searchProviderModels({
+        provider: "ollama",
+        slot: body.slot ?? "chat",
+        search: body.model,
+        limit: 10,
+      });
+
+      if (request.headers.get("HX-Request") === "true") {
+        const locale = normalizeLocale(query.locale);
+        return renderAiModelSettingsWorkspace(
+          getMessages(locale),
+          locale,
+          query.projectId ?? "",
+          await getAiRuntimeProfile(),
+          {
+            settingKey: "OLLAMA_CHAT_MODEL",
+            provider: catalog.provider,
+            slot: catalog.slot,
+            search: body.model,
+            author: "",
+            items: catalog.items,
+          },
+        );
+      }
+
+      return {
+        ok: true as const,
+        data: {
+          model: body.model,
+          catalog: {
+            provider: catalog.provider,
+            slot: catalog.slot,
+            items: catalog.items.map((item) => ({
+              provider: item.provider,
+              model: item.model,
+              label: item.label,
+              summary: item.summary,
+              capabilities: [...item.capabilities],
+              tags: [...item.tags],
+              installed: item.installed,
+              available: item.available,
+              source: item.source,
+            })),
+            nextCursor: catalog.nextCursor,
+          },
+        },
+      };
+    },
+    {
+      query: t.Object({
+        projectId: t.Optional(t.String()),
+        locale: t.Optional(t.String()),
+      }),
+      body: t.Object({
+        model: t.String({ minLength: 1 }),
+        slot: t.Optional(t.String()),
+      }),
+      detail: {
+        tags: ["ai"],
+        summary: "Pull an Ollama model",
+        description:
+          "Downloads one Ollama model into the local runtime and refreshes provider capability discovery.",
+      },
+      response: {
+        [httpStatus.ok]: t.Union([
+          t.Object({
+            ok: t.Literal(true),
+            data: t.Object({
+              model: t.String(),
+              catalog: providerModelCatalogDataSchema,
+            }),
+          }),
+          t.String(),
+        ]),
+      },
+    },
+  )
   .get(
     appRoutes.aiKnowledgeDocuments,
     async ({ query }) => {

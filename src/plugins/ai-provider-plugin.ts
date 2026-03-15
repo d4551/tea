@@ -6,6 +6,7 @@
  * registry on app shutdown.
  */
 import { appConfig } from "../config/environment.ts";
+import { aiRuntimeSettingsService } from "../domain/ai/ai-runtime-settings-service.ts";
 import { ProviderRegistry } from "../domain/ai/providers/provider-registry.ts";
 import { createManagedPollingPlugin } from "./managed-polling-plugin.ts";
 
@@ -20,6 +21,7 @@ export const aiProviderPlugin = createManagedPollingPlugin({
   stoppedEvent: "ai.provider-registry.stopped",
   failedEvent: "ai.provider-registry.failed",
   beforeStart: async () => {
+    await aiRuntimeSettingsService.ensureInitialized();
     await ProviderRegistry.getInstance();
   },
   run: async () => {

@@ -425,6 +425,45 @@ export interface Messages {
     readonly previewToolPlan: string;
     readonly toolPlanPreviewTitle: string;
     readonly toolPlanPreviewDescription: string;
+    readonly fineTuneWorkspaceTitle: string;
+    readonly fineTuneWorkspaceDescription: string;
+    readonly hfTrainingDatasetLabel: string;
+    readonly hfTrainingDatasetPlaceholder: string;
+    readonly hfTrainingSplitLabel: string;
+    readonly hfTrainingBaseModelLabel: string;
+    readonly hfTrainingOutputModelLabel: string;
+    readonly hfTrainingMethodLabel: string;
+    readonly hfTrainingMethodSft: string;
+    readonly hfTrainingMethodDpo: string;
+    readonly hfTrainingMethodGrpo: string;
+    readonly hfTrainingMethodReward: string;
+    readonly hfTrainingEpochsLabel: string;
+    readonly hfTrainingLearningRateLabel: string;
+    readonly hfTrainingSubmit: string;
+    readonly hfTrainingQueuedTitle: string;
+    readonly hfTrainingQueuedDescription: string;
+    readonly aiModelCatalogWorkspaceTitle: string;
+    readonly aiModelCatalogWorkspaceDescription: string;
+    readonly aiModelCatalogSearchTitle: string;
+    readonly aiModelCatalogSearchDescription: string;
+    readonly aiModelCatalogSearchPlaceholder: string;
+    readonly aiModelCatalogAuthorPlaceholder: string;
+    readonly aiModelCatalogSearchSubmit: string;
+    readonly aiModelCatalogResetSubmit: string;
+    readonly aiModelCatalogNoResults: string;
+    readonly aiModelCatalogNoLaneSettings: string;
+    readonly aiModelCatalogPullPlaceholder: string;
+    readonly aiModelCatalogPullSubmit: string;
+    readonly aiModelCatalogSourceOverride: string;
+    readonly aiModelCatalogSourceEnv: string;
+    readonly aiModelCatalogSourceDefault: string;
+    readonly aiModelCatalogLaneTransformersLocal: string;
+    readonly aiModelCatalogLaneOllama: string;
+    readonly aiModelCatalogLaneApiCompatibleLocal: string;
+    readonly aiModelCatalogLaneApiCompatibleCloud: string;
+    readonly aiModelCatalogLaneHfInference: string;
+    readonly aiModelCatalogLaneHfEndpoints: string;
+    readonly aiModelCatalogLaneImageGeneration: string;
     readonly closeSidebar: string;
     readonly currentProject: string;
     readonly projectIdLabel: string;
@@ -1416,6 +1455,49 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       toolPlanPreviewTitle: "Structured tool plan",
       toolPlanPreviewDescription:
         "Review the generated step sequence before turning it into automation or manual builder work.",
+      fineTuneWorkspaceTitle: "Fine-tune model (HF Jobs)",
+      fineTuneWorkspaceDescription:
+        "Queue a Hugging Face Jobs fine-tuning request with dataset and method selection for review before submission.",
+      hfTrainingDatasetLabel: "Dataset repository",
+      hfTrainingDatasetPlaceholder: "organization/dataset-name",
+      hfTrainingSplitLabel: "Dataset split",
+      hfTrainingBaseModelLabel: "Base model",
+      hfTrainingOutputModelLabel: "Output model repository",
+      hfTrainingMethodLabel: "Training method",
+      hfTrainingMethodSft: "SFT",
+      hfTrainingMethodDpo: "DPO",
+      hfTrainingMethodGrpo: "GRPO",
+      hfTrainingMethodReward: "Reward",
+      hfTrainingEpochsLabel: "Epochs",
+      hfTrainingLearningRateLabel: "Learning rate",
+      hfTrainingSubmit: "Queue fine-tuning request",
+      hfTrainingQueuedTitle: "Fine-tuning request queued for review.",
+      hfTrainingQueuedDescription:
+        "Open Operations to review and approve this HF Jobs run request before execution.",
+      aiModelCatalogWorkspaceTitle: "Model Catalog & Overrides",
+      aiModelCatalogWorkspaceDescription:
+        "Search provider catalogs, assign model slots, and override effective runtime defaults without editing dotenv files.",
+      aiModelCatalogSearchTitle: "Model Search",
+      aiModelCatalogSearchDescription:
+        "Search a provider catalog to populate one of the configurable model slots.",
+      aiModelCatalogSearchPlaceholder: "Search models",
+      aiModelCatalogAuthorPlaceholder: "Author",
+      aiModelCatalogSearchSubmit: "Search",
+      aiModelCatalogResetSubmit: "Reset",
+      aiModelCatalogNoResults: "No matching models found.",
+      aiModelCatalogNoLaneSettings: "No editable settings in this lane.",
+      aiModelCatalogPullPlaceholder: "Pull Ollama model",
+      aiModelCatalogPullSubmit: "Pull",
+      aiModelCatalogSourceOverride: "Override",
+      aiModelCatalogSourceEnv: "Env",
+      aiModelCatalogSourceDefault: "Default",
+      aiModelCatalogLaneTransformersLocal: "Transformers Local",
+      aiModelCatalogLaneOllama: "Ollama",
+      aiModelCatalogLaneApiCompatibleLocal: "API-Compatible Local",
+      aiModelCatalogLaneApiCompatibleCloud: "API-Compatible Cloud",
+      aiModelCatalogLaneHfInference: "HF Inference",
+      aiModelCatalogLaneHfEndpoints: "HF Endpoints",
+      aiModelCatalogLaneImageGeneration: "Image Generation",
       closeSidebar: "Close sidebar",
       currentProject: "Current project",
       projectIdLabel: "Project ID",
@@ -2376,6 +2458,47 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       previewToolPlan: "预览工具方案",
       toolPlanPreviewTitle: "结构化工具方案",
       toolPlanPreviewDescription: "先审查生成的步骤序列，再将其转化为自动化或手动构建工作。",
+      fineTuneWorkspaceTitle: "模型微调（HF Jobs）",
+      fineTuneWorkspaceDescription:
+        "选择数据集与训练方法，先创建可审查的 Hugging Face Jobs 微调请求，再决定是否执行。",
+      hfTrainingDatasetLabel: "数据集仓库",
+      hfTrainingDatasetPlaceholder: "organization/dataset-name",
+      hfTrainingSplitLabel: "数据集划分",
+      hfTrainingBaseModelLabel: "基础模型",
+      hfTrainingOutputModelLabel: "输出模型仓库",
+      hfTrainingMethodLabel: "训练方法",
+      hfTrainingMethodSft: "SFT",
+      hfTrainingMethodDpo: "DPO",
+      hfTrainingMethodGrpo: "GRPO",
+      hfTrainingMethodReward: "Reward",
+      hfTrainingEpochsLabel: "训练轮次",
+      hfTrainingLearningRateLabel: "学习率",
+      hfTrainingSubmit: "加入微调请求队列",
+      hfTrainingQueuedTitle: "微调请求已加入待审查队列。",
+      hfTrainingQueuedDescription: "前往操作中心审查并批准该 HF Jobs 运行请求。",
+      aiModelCatalogWorkspaceTitle: "模型目录与运行时覆盖",
+      aiModelCatalogWorkspaceDescription:
+        "搜索各个提供方的模型目录，为固定槽位分配模型，并在不修改 dotenv 文件的情况下覆盖当前运行时默认值。",
+      aiModelCatalogSearchTitle: "模型搜索",
+      aiModelCatalogSearchDescription: "搜索提供方目录，为可配置模型槽位填充候选模型。",
+      aiModelCatalogSearchPlaceholder: "搜索模型",
+      aiModelCatalogAuthorPlaceholder: "作者",
+      aiModelCatalogSearchSubmit: "搜索",
+      aiModelCatalogResetSubmit: "重置",
+      aiModelCatalogNoResults: "没有找到匹配的模型。",
+      aiModelCatalogNoLaneSettings: "此通道中没有可编辑的设置。",
+      aiModelCatalogPullPlaceholder: "拉取 Ollama 模型",
+      aiModelCatalogPullSubmit: "拉取",
+      aiModelCatalogSourceOverride: "覆盖",
+      aiModelCatalogSourceEnv: "环境变量",
+      aiModelCatalogSourceDefault: "默认值",
+      aiModelCatalogLaneTransformersLocal: "本地 Transformers",
+      aiModelCatalogLaneOllama: "Ollama",
+      aiModelCatalogLaneApiCompatibleLocal: "本地 API 兼容提供方",
+      aiModelCatalogLaneApiCompatibleCloud: "云端 API 兼容提供方",
+      aiModelCatalogLaneHfInference: "HF 推理",
+      aiModelCatalogLaneHfEndpoints: "HF 端点",
+      aiModelCatalogLaneImageGeneration: "图像生成",
       closeSidebar: "关闭侧边栏",
       currentProject: "当前项目",
       projectIdLabel: "项目 ID",

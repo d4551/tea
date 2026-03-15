@@ -278,6 +278,10 @@ export interface AppConfig {
     readonly ragSearchLimit: number;
     readonly ragCandidateLimit: number;
     readonly ragHashDimension: number;
+    readonly ragHfDataset: string | null;
+    readonly ragHfDatasetConfig: string | null;
+    readonly ragHfDatasetSplit: string;
+    readonly ragHfDatasetTextColumn: string | null;
     readonly audioInputSampleRateHz: number;
     readonly audioUploadMaxBytes: number;
     readonly textToSpeechSpeakerEmbeddings: string;
@@ -1624,6 +1628,10 @@ export const appConfig: AppConfig = {
       8,
       "AI_RAG_HASH_DIMENSION",
     ),
+    ragHfDataset: parseOptionalString(Bun.env.AI_RAG_HF_DATASET) ?? null,
+    ragHfDatasetConfig: parseOptionalString(Bun.env.AI_RAG_HF_DATASET_CONFIG) ?? null,
+    ragHfDatasetSplit: parseOptionalString(Bun.env.AI_RAG_HF_DATASET_SPLIT) ?? "train",
+    ragHfDatasetTextColumn: parseOptionalString(Bun.env.AI_RAG_HF_DATASET_TEXT_COLUMN) ?? null,
     audioInputSampleRateHz: parseInteger(
       Bun.env.AI_AUDIO_INPUT_SAMPLE_RATE_HZ,
       DEFAULT_AI_AUDIO_INPUT_SAMPLE_RATE_HZ,

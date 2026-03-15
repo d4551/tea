@@ -13,6 +13,7 @@ import {
   normalizeKnowledgeSearchText,
   tokenizeKnowledgeSearchTerms,
 } from "./knowledge-search-text.ts";
+import { fetchHfDatasetSnippets } from "./hf-dataset-source.ts";
 import { ProviderRegistry } from "./providers/provider-registry.ts";
 import { vectorStore } from "./vector-store.ts";
 
@@ -728,7 +729,32 @@ export class KnowledgeBaseService {
       .map(({ candidateRank: _candidateRank, ...match }) => match)
       .slice(0, effectiveLimit);
 
-    return ranked;
+    if (ranked.length >= effectiveLimit) {
+      return ranked;
+    }
+
+    const supplemental = await fetchHfDatasetSnippets(
+      trimmedQuery,
+      Math.max(1, effectiveLimit - ranked.length),
+    );
+    if (supplemental.length === 0) {
+      return ranked;
+    }
+
+    const targetLocale = normalizeLocale(options.locale);
+    return [
+      ...ranked,
+      ...supplemental.map((snippet, index) => ({
+        documentId: snippet.id,
+        chunkId: snippet.id,
+        title: appConfig.ai.ragHfDataset ?? "hf-dataset",
+        source: snippet.source,
+        locale: targetLocale,
+        ordinal: index,
+        text: snippet.text,
+        score: snippet.score,
+      })),
+    ].slice(0, effectiveLimit);
   }
 
   /**

@@ -119,6 +119,23 @@ const highCostGenerationKinds = new Set<BuilderGenerationJobCreatePayload["kind"
 const hasUnsafeAutomationKinds = (stepsJson: string | undefined): boolean =>
   typeof stepsJson === "string" &&
   (stepsJson.includes('"kind":"request"') || stepsJson.includes('"kind":"create-asset"'));
+type HfTrainingMethod = "sft" | "dpo" | "grpo" | "reward";
+const isHfRepoId = (value: string): boolean =>
+  /^[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(value);
+const toHfTrainingMethod = (value: string | undefined): HfTrainingMethod =>
+  value === "dpo" || value === "grpo" || value === "reward" ? value : "sft";
+const toHfTrainingMethodLabel = (messages: ReturnType<typeof getMessages>, method: HfTrainingMethod) => {
+  switch (method) {
+    case "dpo":
+      return messages.builder.hfTrainingMethodDpo;
+    case "grpo":
+      return messages.builder.hfTrainingMethodGrpo;
+    case "reward":
+      return messages.builder.hfTrainingMethodReward;
+    default:
+      return messages.builder.hfTrainingMethodSft;
+  }
+};
 
 const resolveBuilderPrincipalFromContext = (context: {
   readonly builderPrincipalType: "anonymous" | "user";
@@ -456,6 +473,13 @@ const builderAiPlanDataSchema = t.Object({
   correlationId: t.String(),
 });
 
+const builderHfTrainingRequestDataSchema = t.Object({
+  runId: t.String(),
+  status: t.String(),
+  goal: t.String(),
+  automationPath: t.String(),
+});
+
 const starterProjectTemplateIdSchema = t.Union([
   t.Literal("blank"),
   t.Literal("tea-house-story"),
@@ -567,6 +591,7 @@ const builderSuccessDataSchema = t.Union([
   builderAiCapabilitiesDataSchema,
   builderAiResponseDataSchema,
   builderAiPlanDataSchema,
+  builderHfTrainingRequestDataSchema,
   builderProjectDataSchema,
   builderPublishDataSchema,
   builderSceneMutationDataSchema,
@@ -1655,6 +1680,166 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       }),
       response: {
         [httpStatus.ok]: t.String(),
+      },
+    },
+  )
+  .post(
+    route(appRoutes.aiBuilderHfTraining),
+    async ({
+      body,
+      request,
+      set,
+      status,
+      builderLocale,
+      builderProjectId,
+      builderCurrentPath,
+      builderPrincipalType,
+      builderPrincipalUserId,
+      builderPrincipalOrganizationId,
+      builderPrincipalRoleKeys,
+    }) => {
+      const actionContext = readBuilderScopedContext(
+        { builderLocale, builderProjectId, builderCurrentPath },
+        { body },
+      );
+      const { builderLocale: actionLocale, builderProjectId: actionProjectId } = actionContext;
+      const messages = getBuilderMessages(actionLocale);
+      const raw =
+        body instanceof FormData
+          ? Object.fromEntries(Array.from(body.entries()).map(([key, value]) => [key, String(value)]))
+          : body && typeof body === "object"
+            ? (body as Record<string, unknown>)
+            : {};
+      const toField = (key: string): string =>
+        typeof raw[key] === "string" ? (raw[key] as string).trim() : "";
+      const datasetId = toField("datasetId");
+      const datasetSplit = toField("datasetSplit") || "train";
+      const baseModel = toField("baseModel");
+      const outputModel = toField("outputModel");
+      const method = toHfTrainingMethod(toField("method") || undefined);
+      const epochs = Math.max(1, Math.min(30, Number.parseInt(toField("epochs") || "3", 10) || 3));
+      const learningRate = Math.max(
+        0.000001,
+        Math.min(1, Number.parseFloat(toField("learningRate") || "0.00002") || 0.00002),
+      );
+
+      if (!isHfRepoId(datasetId) || !isHfRepoId(outputModel) || baseModel.length < 3) {
+        return status(
+          httpStatus.badRequest,
+          buildError(
+            request,
+            set.headers,
+            "VALIDATION_ERROR",
+            httpStatus.badRequest,
+            messages.missingPrompt,
+          ),
+        );
+      }
+
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext({
+        builderPrincipalType,
+        builderPrincipalUserId,
+        builderPrincipalOrganizationId,
+        builderPrincipalRoleKeys,
+      });
+      const runId = `run.hf-jobs.${crypto.randomUUID()}`;
+      const now = Date.now();
+      const methodLabel = toHfTrainingMethodLabel(getMessages(actionLocale), method);
+      const goal = [
+        `HF Jobs ${methodLabel}`,
+        `dataset=${datasetId}:${datasetSplit}`,
+        `base=${baseModel}`,
+        `output=${outputModel}`,
+        `epochs=${epochs}`,
+        `lr=${learningRate.toFixed(6)}`,
+      ].join(" | ");
+      const created = await builderService.saveAutomationRun(
+        actionProjectId,
+        {
+          id: runId,
+          run: {
+            id: runId,
+            status: "blocked_for_approval",
+            goal,
+            steps: [
+              {
+                id: `${runId}.step.submit-hf-job`,
+                action: "http",
+                summary: "Submit fine-tuning run to Hugging Face Jobs",
+                status: "pending",
+              },
+            ],
+            artifactIds: [],
+            statusMessage: "hf.training.requested",
+            dryRun: true,
+            signedBy: actionUpdatedBy,
+            signedAtMs: now,
+            createdAtMs: now,
+            updatedAtMs: now,
+          },
+        },
+        actionUpdatedBy,
+      );
+      if (!created) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, actionLocale, "projectNotFound"),
+        );
+      }
+
+      if (!wantsHtml(request.headers.get("accept"))) {
+        return status(
+          httpStatus.ok,
+          successEnvelope({
+            runId,
+            status: created.payload.status,
+            goal: created.payload.goal,
+            automationPath: withQueryParameters(
+              interpolateRoutePath(appRoutes.builderAutomation, { projectId: actionProjectId }),
+              { lang: actionLocale },
+            ),
+          }),
+        );
+      }
+
+      return withProjectChromeRefresh(
+        actionLocale,
+        actionProjectId,
+        appRoutes.builderAi,
+        `<article class="${cardClasses.bordered}">
+          <div class="card-body gap-4">
+            <div role="alert" class="alert alert-success alert-soft">
+              <span>${escapeHtml(messages.hfTrainingQueuedTitle)}</span>
+            </div>
+            <p class="text-sm text-base-content/70">${escapeHtml(messages.hfTrainingQueuedDescription)}</p>
+            <ul class="list rounded-box bg-base-200/60 text-sm">
+              <li><strong>${escapeHtml(messages.hfTrainingDatasetLabel)}:</strong> <code>${escapeHtml(`${datasetId}:${datasetSplit}`)}</code></li>
+              <li><strong>${escapeHtml(messages.hfTrainingBaseModelLabel)}:</strong> <code>${escapeHtml(baseModel)}</code></li>
+              <li><strong>${escapeHtml(messages.hfTrainingOutputModelLabel)}:</strong> <code>${escapeHtml(outputModel)}</code></li>
+              <li><strong>${escapeHtml(messages.hfTrainingMethodLabel)}:</strong> ${escapeHtml(methodLabel)}</li>
+            </ul>
+            <a
+              class="btn btn-outline btn-sm w-fit"
+              href="${escapeHtml(
+                withQueryParameters(
+                  interpolateRoutePath(appRoutes.builderAutomation, { projectId: actionProjectId }),
+                  { lang: actionLocale },
+                ),
+              )}"
+              aria-label="${escapeHtml(messages.operations)}"
+            >
+              ${escapeHtml(messages.operations)}
+            </a>
+          </div>
+        </article>`,
+      );
+    },
+    {
+      body: t.Any(),
+      response: {
+        [httpStatus.ok]: t.Union([t.String(), builderOkResponse]),
+        [httpStatus.badRequest]: builderErrorResponse,
+        [httpStatus.notFound]: builderErrorResponse,
       },
     },
   )

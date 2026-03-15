@@ -10,6 +10,7 @@ import { appConfig } from "../../../config/environment.ts";
 import { createLogger } from "../../../lib/logger.ts";
 import type { ProviderReadiness } from "../../../shared/contracts/game.ts";
 import { settleAsync } from "../../../shared/utils/async-result.ts";
+import { aiRuntimeSettingsService } from "../ai-runtime-settings-service.ts";
 import { OllamaProvider } from "./ollama-provider.ts";
 import { OpenAiCompatibleProvider } from "./openai-compatible-provider.ts";
 import type {
@@ -95,6 +96,8 @@ export class ProviderRegistry {
     if (ProviderRegistry._instance) {
       return ProviderRegistry._instance;
     }
+
+    await aiRuntimeSettingsService.ensureInitialized();
 
     const providers: AiProvider[] = [new TransformersProvider()];
     if (appConfig.ai.ollamaEnabled) {
