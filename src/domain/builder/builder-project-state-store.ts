@@ -46,7 +46,12 @@ import {
 } from "../../shared/services/db.ts";
 import { acceptUnknown, safeJsonParse } from "../../shared/utils/safe-json.ts";
 import { gameTextByLocale } from "../game/data/game-text.ts";
-import { gameScenes, gameSpriteManifests } from "../game/data/sprite-data.ts";
+import {
+  gameScenes,
+  gameScenes2d,
+  gameScenes3d,
+  gameSpriteManifests,
+} from "../game/data/sprite-data.ts";
 import { resolveStarterProjectTemplateId, toStarterProjectSource } from "./starter-projects.ts";
 
 /**
@@ -610,9 +615,373 @@ const createBlankStarterState = (): BuilderProjectState => ({
   automationRuns: {},
 });
 
+const buildBaselineAssets2d = (): Record<string, BuilderAsset> => {
+  const backgroundAssets = Object.values(gameScenes2d).map(
+    (scene) =>
+      ({
+        id: `asset.background.${scene.id}`,
+        kind: "background",
+        label: scene.id,
+        sceneMode: "2d",
+        source: scene.background,
+        sourceFormat: "png",
+        tags: ["baseline", scene.id],
+        variants: [
+          {
+            id: `variant.background.${scene.id}.runtime`,
+            format: "png",
+            source: scene.background,
+            usage: "runtime",
+            mimeType: "image/png",
+          },
+        ],
+        approved: true,
+        createdAtMs: baselineCreatedAtMs,
+        updatedAtMs: baselineCreatedAtMs,
+      }) satisfies BuilderAsset,
+  );
+
+  const spriteKeys2d = ["chaJiang", "teaMonk"] as const;
+  const spriteAssets: BuilderAsset[] = [];
+  for (const characterKey of spriteKeys2d) {
+    const manifest = gameSpriteManifests[characterKey];
+    if (!manifest) continue;
+    spriteAssets.push({
+      id: `asset.sprite.${characterKey}`,
+      kind: "sprite-sheet",
+      label: characterKey,
+      sceneMode: "2d",
+      source: manifest.sheet,
+      sourceFormat: "png",
+      tags: ["baseline", "sprite", characterKey],
+      variants: [
+        {
+          id: `variant.sprite.${characterKey}.runtime`,
+          format: "png",
+          source: manifest.sheet,
+          usage: "runtime",
+          mimeType: "image/png",
+        },
+      ],
+      approved: true,
+      createdAtMs: baselineCreatedAtMs,
+      updatedAtMs: baselineCreatedAtMs,
+    });
+  }
+
+  return toRecordFromEntries(
+    [...backgroundAssets, ...spriteAssets].map((asset) => [asset.id, asset]),
+  );
+};
+
+const buildBaselineAnimationClips2d = (): Record<string, AnimationClip> =>
+  toRecordFromEntries(
+    (["chaJiang", "teaMonk"] as const).flatMap((characterKey) => {
+      const manifest = gameSpriteManifests[characterKey];
+      if (!manifest) return [];
+      return Object.entries(manifest.animations).map(([animationKey, animation]) => {
+        const clip: AnimationClip = {
+          id: `clip.${characterKey}.${animationKey}`,
+          assetId: `asset.sprite.${characterKey}`,
+          label: `${characterKey}:${animationKey}`,
+          sceneMode: "2d",
+          stateTag: animationKey,
+          playbackFps: animation.speed,
+          startFrame: animation.startCol,
+          frameCount: animation.frames,
+          loop: true,
+          direction: animationKey.endsWith("-up")
+            ? "up"
+            : animationKey.endsWith("-down")
+              ? "down"
+              : animationKey.endsWith("-left")
+                ? "left"
+                : animationKey.endsWith("-right")
+                  ? "right"
+                  : undefined,
+          createdAtMs: baselineCreatedAtMs,
+          updatedAtMs: baselineCreatedAtMs,
+        };
+        return [clip.id, clip];
+      });
+    }),
+  );
+
+const buildBaselineDialogueGraphs2d = (): Record<string, DialogueGraph> => ({
+  "graph.chaJiang.garden": {
+    id: "graph.chaJiang.garden",
+    title: "Garden Keeper Intro",
+    npcId: "chaJiang",
+    rootNodeId: "root",
+    nodes: [
+      {
+        id: "root",
+        line: "npc.gardenKeeper.greet",
+        edges: [
+          {
+            to: "seeds",
+            advanceQuestStepId: "step.meet-gardenKeeper",
+          },
+        ],
+      },
+      {
+        id: "seeds",
+        line: "npc.gardenKeeper.lines.seeds",
+        edges: [],
+      },
+    ],
+    createdAtMs: baselineCreatedAtMs,
+    updatedAtMs: baselineCreatedAtMs,
+  },
+  "graph.teaMonk.garden": {
+    id: "graph.teaMonk.garden",
+    title: "Wandering Sage Intro",
+    npcId: "teaMonk",
+    rootNodeId: "root",
+    nodes: [
+      {
+        id: "root",
+        line: "npc.wanderingSage.greet",
+        edges: [
+          {
+            to: "meditation",
+            advanceQuestStepId: "step.meet-wanderingSage",
+          },
+        ],
+      },
+      {
+        id: "meditation",
+        line: "npc.wanderingSage.lines.meditation",
+        edges: [],
+      },
+    ],
+    createdAtMs: baselineCreatedAtMs,
+    updatedAtMs: baselineCreatedAtMs,
+  },
+});
+
+const buildBaselineFlags2d = (): Record<string, GameFlagDefinition> => ({
+  gardenVisited: {
+    key: "gardenVisited",
+    label: "Garden visited",
+    initialValue: false,
+  },
+  gardenKeeperMet: {
+    key: "gardenKeeperMet",
+    label: "Garden keeper met",
+    initialValue: false,
+  },
+});
+
+const buildBaselineTriggers2d = (): Record<string, TriggerDefinition> => ({
+  "trigger.enter-pixelGarden": {
+    id: "trigger.enter-pixelGarden",
+    label: "Enter pixel garden",
+    event: "scene-enter",
+    sceneId: "pixelGarden",
+    setFlags: {
+      gardenVisited: true,
+    },
+  },
+  "trigger.meet-gardenKeeper": {
+    id: "trigger.meet-gardenKeeper",
+    label: "Meet the garden keeper",
+    event: "npc-interact",
+    sceneId: "pixelGarden",
+    npcId: "chaJiang",
+    setFlags: {
+      gardenKeeperMet: true,
+    },
+    questId: "quest.garden.welcome",
+    questStepId: "step.meet-gardenKeeper",
+  },
+  "trigger.meet-wanderingSage": {
+    id: "trigger.meet-wanderingSage",
+    label: "Meet the wandering sage",
+    event: "npc-interact",
+    sceneId: "pixelGarden",
+    npcId: "teaMonk",
+    setFlags: {},
+    questId: "quest.garden.welcome",
+    questStepId: "step.meet-wanderingSage",
+  },
+});
+
+const buildBaselineQuests2d = (): Record<string, QuestDefinition> => ({
+  "quest.garden.welcome": {
+    id: "quest.garden.welcome",
+    title: "Welcome to the Garden",
+    description: "Speak with the garden keeper to begin your journey.",
+    steps: [
+      {
+        id: "step.meet-gardenKeeper",
+        title: "Speak with the garden keeper",
+        description: "Approach the garden keeper and interact.",
+        triggerId: "trigger.meet-gardenKeeper",
+      },
+      {
+        id: "step.meet-wanderingSage",
+        title: "Speak with the wandering sage",
+        description: "Find the wandering sage and listen to their wisdom.",
+        triggerId: "trigger.meet-wanderingSage",
+      },
+    ],
+  },
+});
+
+const createBaselineState2d = (): BuilderProjectState => {
+  const scenes = toRecordFromEntries(
+    Object.entries(gameScenes2d).map(([sceneId, scene]) => [sceneId, structuredClone(scene)]),
+  );
+  const dialogues: BuilderProjectState["dialogues"] = {
+    "en-US": Object.fromEntries(Object.entries(gameTextByLocale["en-US"].npcs)),
+    "zh-CN": Object.fromEntries(Object.entries(gameTextByLocale["zh-CN"].npcs)),
+  };
+
+  return {
+    scenes,
+    dialogues,
+    assets: buildBaselineAssets2d(),
+    animationClips: buildBaselineAnimationClips2d(),
+    animationTimelines: {},
+    spriteAtlases: {},
+    dialogueGraphs: buildBaselineDialogueGraphs2d(),
+    quests: buildBaselineQuests2d(),
+    triggers: buildBaselineTriggers2d(),
+    flags: buildBaselineFlags2d(),
+    generationJobs: {},
+    artifacts: {},
+    automationRuns: {},
+  };
+};
+
+const buildBaselineAssets3d = (): Record<string, BuilderAsset> => {
+  const backgroundAssets = Object.values(gameScenes3d).map(
+    (scene) =>
+      ({
+        id: `asset.background.${scene.id}`,
+        kind: "background",
+        label: scene.id,
+        sceneMode: "3d",
+        source: scene.background,
+        sourceFormat: "png",
+        tags: ["baseline", scene.id],
+        variants: [
+          {
+            id: `variant.background.${scene.id}.runtime`,
+            format: "png",
+            source: scene.background,
+            usage: "runtime",
+            mimeType: "image/png",
+          },
+        ],
+        approved: true,
+        createdAtMs: baselineCreatedAtMs,
+        updatedAtMs: baselineCreatedAtMs,
+      }) satisfies BuilderAsset,
+  );
+
+  const placeholderGlb = joinUrlPath(
+    appConfig.staticAssets.assetsPrefix,
+    builderGeometryPlaceholderPaths.glb,
+  );
+  const modelAsset: BuilderAsset = {
+    id: "asset.model.orbitalModel",
+    kind: "model",
+    label: "Orbital Station (GLB)",
+    sceneMode: "3d",
+    source: placeholderGlb,
+    sourceFormat: "glb",
+    tags: ["baseline", "environment", "3d"],
+    variants: [
+      {
+        id: "variant.model.orbitalModel.runtime",
+        format: "glb",
+        source: placeholderGlb,
+        usage: "runtime",
+        mimeType: "model/gltf-binary",
+      },
+    ],
+    approved: true,
+    createdAtMs: baselineCreatedAtMs,
+    updatedAtMs: baselineCreatedAtMs,
+  };
+
+  const allAssets: BuilderAsset[] = [...backgroundAssets, modelAsset];
+  return toRecordFromEntries(allAssets.map((a) => [a.id, a]));
+};
+
+const buildBaselineFlags3d = (): Record<string, GameFlagDefinition> => ({
+  orbitalVisited: {
+    key: "orbitalVisited",
+    label: "Orbital station visited",
+    initialValue: false,
+  },
+});
+
+const buildBaselineTriggers3d = (): Record<string, TriggerDefinition> => ({
+  "trigger.enter-orbitalStation": {
+    id: "trigger.enter-orbitalStation",
+    label: "Enter orbital station",
+    event: "scene-enter",
+    sceneId: "orbitalStation",
+    setFlags: {
+      orbitalVisited: true,
+    },
+  },
+});
+
+const buildBaselineQuests3d = (): Record<string, QuestDefinition> => ({
+  "quest.orbital.explore": {
+    id: "quest.orbital.explore",
+    title: "Explore the Station",
+    description: "Navigate the orbital station and discover its layout.",
+    steps: [
+      {
+        id: "step.enter-orbital",
+        title: "Enter the orbital station",
+        description: "Step into the station and begin your exploration.",
+        triggerId: "trigger.enter-orbitalStation",
+      },
+    ],
+  },
+});
+
+const createBaselineState3d = (): BuilderProjectState => {
+  const scenes = toRecordFromEntries(
+    Object.entries(gameScenes3d).map(([sceneId, scene]) => [sceneId, structuredClone(scene)]),
+  );
+  const dialogues: BuilderProjectState["dialogues"] = {
+    "en-US": Object.fromEntries(Object.entries(gameTextByLocale["en-US"].npcs)),
+    "zh-CN": Object.fromEntries(Object.entries(gameTextByLocale["zh-CN"].npcs)),
+  };
+
+  return {
+    scenes,
+    dialogues,
+    assets: buildBaselineAssets3d(),
+    animationClips: {},
+    animationTimelines: {},
+    spriteAtlases: {},
+    dialogueGraphs: {},
+    quests: buildBaselineQuests3d(),
+    triggers: buildBaselineTriggers3d(),
+    flags: buildBaselineFlags3d(),
+    generationJobs: {},
+    artifacts: {},
+    automationRuns: {},
+  };
+};
+
 const createStarterProjectState = (templateId: StarterProjectTemplateId): BuilderProjectState => {
   if (templateId === "tea-house-story") {
     return createBaselineState();
+  }
+  if (templateId === "2d-game") {
+    return createBaselineState2d();
+  }
+  if (templateId === "3d-game") {
+    return createBaselineState3d();
   }
 
   return createBlankStarterState();

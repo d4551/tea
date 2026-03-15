@@ -2844,7 +2844,7 @@ export interface CreatorAssistContext {
 /**
  * Canonical starter template identifiers for first-run builder bootstrapping.
  */
-export type StarterProjectTemplateId = "blank" | "tea-house-story";
+export type StarterProjectTemplateId = "blank" | "tea-house-story" | "2d-game" | "3d-game";
 
 /**
  * Creator-visible starter template metadata used by the first-run project picker.

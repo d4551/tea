@@ -1,8 +1,9 @@
 import { appConfig, type LocaleCode } from "../config/environment.ts";
-import { defaultBuilderProjectId } from "../domain/builder/builder-project-state-store.ts";
+
 import { assetRelativePaths, joinUrlPath } from "../shared/constants/assets.ts";
 import { interpolateRoutePath } from "../shared/constants/route-patterns.ts";
 import { appRoutes, withLocaleQuery } from "../shared/constants/routes.ts";
+import { supportedUiThemes, type UiTheme } from "../shared/constants/ui-theme.ts";
 import type { Messages } from "../shared/i18n/messages.ts";
 import { type OraclePanelState, renderOracleSection } from "./oracle.ts";
 import {
@@ -379,30 +380,31 @@ const renderTopBar = (
 };
 
 const renderThemeDropdown = (messages: Messages): string => {
+  const themeItems = supportedUiThemes.map((theme) => {
+    const label =
+      theme === "tea-light" ? messages.common.themeTeaLight : messages.common.themeTeaDark;
+
+    return {
+      key: theme,
+      label,
+      contentHtml: `<label class="btn btn-ghost btn-sm justify-start gap-2">
+          <input type="radio" name="theme-dropdown" class="theme-controller" value="${escapeHtml(theme)}" aria-label="${escapeHtml(label)}" />
+          <span>${escapeHtml(label)}</span>
+        </label>`,
+    };
+  }) satisfies readonly {
+    readonly key: UiTheme;
+    readonly label: string;
+    readonly contentHtml: string;
+  }[];
+
   return renderActionDropdown(
     messages.common.themeLabel,
     `<span class="btn btn-ghost btn-sm gap-2">
       <span class="hidden sm:inline">${escapeHtml(messages.common.themeLabel)}</span>
       <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v2M12 19v2M5.64 5.64l1.41 1.42M16.95 16.96l1.41 1.41M3 12h2M19 12h2M5.64 18.36l1.41-1.41M16.95 7.04l1.41-1.41M12 9a3 3 0 100 6 3 3 0 000-6z" /></svg>
     </span>`,
-    [
-      {
-        key: "tea-dark",
-        label: messages.common.themeTeaDark,
-        contentHtml: `<label class="btn btn-ghost btn-sm justify-start gap-2">
-          <input type="radio" name="theme-dropdown" class="theme-controller" value="tea-dark" aria-label="${escapeHtml(messages.common.themeTeaDark)}" />
-          <span>${escapeHtml(messages.common.themeTeaDark)}</span>
-        </label>`,
-      },
-      {
-        key: "tea-light",
-        label: messages.common.themeTeaLight,
-        contentHtml: `<label class="btn btn-ghost btn-sm justify-start gap-2">
-          <input type="radio" name="theme-dropdown" class="theme-controller" value="tea-light" aria-label="${escapeHtml(messages.common.themeTeaLight)}" />
-          <span>${escapeHtml(messages.common.themeTeaLight)}</span>
-        </label>`,
-      },
-    ],
+    themeItems,
     {
       align: "end",
       widthClass: "w-48",
@@ -441,7 +443,7 @@ const renderFooter = (messages: Messages, locale: LocaleCode): string => {
     {
       label: messages.navigation.game,
       href: withLocaleQuery(
-        interpolateRoutePath(appRoutes.game, { projectId: defaultBuilderProjectId }),
+        appRoutes.builder,
         locale,
       ),
     },

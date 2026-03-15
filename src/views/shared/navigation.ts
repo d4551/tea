@@ -269,7 +269,7 @@ export const renderActionDropdown = (
 
       const disabledAttr = item.disabled ? " disabled" : "";
       const buttonType = item.type ?? "button";
-      return `<li><button type="${buttonType}"${disabledAttr} class="${escapeHtml(item.className ?? "")}">${escapeHtml(item.label)}</button></li>`;
+      return `<li><button type="${buttonType}"${disabledAttr} class="${escapeHtml(item.className ?? "")}" aria-label="${escapeHtml(item.label)}">${escapeHtml(item.label)}</button></li>`;
     })
     .join("");
 
@@ -292,7 +292,7 @@ export const renderHeaderNavbar = (
   brand: string,
   items: readonly NavigationItem[],
   actions: readonly NavigationAction[],
-  options?: {
+  options: {
     readonly ariaLabel: string;
     readonly className?: string;
     readonly mobileLead?: string;
@@ -308,9 +308,9 @@ export const renderHeaderNavbar = (
     })
     .join("");
 
-  return `<nav aria-label="${escapeHtml(options?.ariaLabel ?? "Primary navigation")}" class="${escapeHtml(options?.className ?? "navbar border-b border-base-300/80 bg-base-100/90 backdrop-blur")}">
+  return `<nav aria-label="${escapeHtml(options.ariaLabel)}" class="${escapeHtml(options.className ?? "navbar border-b border-base-300/80 bg-base-100/90 backdrop-blur")}">
     <div class="navbar-start gap-2">
-      ${options?.mobileLead ?? ""}
+      ${options.mobileLead ?? ""}
       ${brand}
     </div>
     <div class="navbar-center hidden lg:flex">

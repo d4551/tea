@@ -649,13 +649,13 @@ export function GamePage(props: GamePageProps) {
             </div>
             <div id="save-slot-result"></div>
             <div class="modal-action">
-              <form method="dialog" class="inline"><button type="submit" class="btn btn-ghost">${escapeHtml(messages.builder.cancel)}</button></form>
-              <button type="submit" class="btn btn-primary">${escapeHtml(messages.game.saveAction)}</button>
+              <form method="dialog" class="inline"><button type="submit" class="btn btn-ghost" aria-label="${escapeHtml(messages.builder.cancel)}">${escapeHtml(messages.builder.cancel)}</button></form>
+              <button type="submit" class="btn btn-primary" aria-label="${escapeHtml(messages.game.saveAction)}">${escapeHtml(messages.game.saveAction)}</button>
             </div>
           </form>
         </div>
         <form method="dialog" class="modal-backdrop">
-          <button type="submit" aria-label="${escapeHtml(messages.common.closeMenu)}">close</button>
+          <button type="submit" aria-label="${escapeHtml(messages.common.closeMenu)}">${escapeHtml(messages.common.closeMenu)}</button>
         </form>
       </dialog>
 
@@ -682,7 +682,7 @@ export function GamePage(props: GamePageProps) {
           </div>
         </div>
         <form method="dialog" class="modal-backdrop">
-          <button type="submit" aria-label="${escapeHtml(messages.common.closeMenu)}">close</button>
+          <button type="submit" aria-label="${escapeHtml(messages.common.closeMenu)}">${escapeHtml(messages.common.closeMenu)}</button>
         </form>
       </dialog>
       `
@@ -704,7 +704,7 @@ export function GamePage(props: GamePageProps) {
                 <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionMoveUp)}</span></label>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
-                  <button type="button" class="btn btn-sm btn-outline" data-action-set="move-up">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="move-up" aria-label="${escapeHtml(messages.game.keyBindingsActionMoveUp)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
             </div>
@@ -713,7 +713,7 @@ export function GamePage(props: GamePageProps) {
                 <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionMoveDown)}</span></label>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
-                  <button type="button" class="btn btn-sm btn-outline" data-action-set="move-down">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="move-down" aria-label="${escapeHtml(messages.game.keyBindingsActionMoveDown)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
             </div>
@@ -722,7 +722,7 @@ export function GamePage(props: GamePageProps) {
                 <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionMoveLeft)}</span></label>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
-                  <button type="button" class="btn btn-sm btn-outline" data-action-set="move-left">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="move-left" aria-label="${escapeHtml(messages.game.keyBindingsActionMoveLeft)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
             </div>
@@ -731,7 +731,7 @@ export function GamePage(props: GamePageProps) {
                 <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionMoveRight)}</span></label>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
-                  <button type="button" class="btn btn-sm btn-outline" data-action-set="move-right">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="move-right" aria-label="${escapeHtml(messages.game.keyBindingsActionMoveRight)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
             </div>
@@ -740,7 +740,7 @@ export function GamePage(props: GamePageProps) {
                 <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionInteract)}</span></label>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
-                  <button type="button" class="btn btn-sm btn-outline" data-action-set="interact">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="interact" aria-label="${escapeHtml(messages.game.keyBindingsActionInteract)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
             </div>
@@ -749,7 +749,7 @@ export function GamePage(props: GamePageProps) {
                 <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionMenu)}</span></label>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
-                  <button type="button" class="btn btn-sm btn-outline" data-action-set="menu">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="menu" aria-label="${escapeHtml(messages.game.keyBindingsActionMenu)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
             </div>
@@ -758,19 +758,19 @@ export function GamePage(props: GamePageProps) {
                 <label class="label py-0"><span class="label-text">${escapeHtml(messages.game.keyBindingsActionClose)}</span></label>
                 <div class="flex items-center gap-2">
                   <span class="key-binding-keys flex flex-wrap gap-1"></span>
-                  <button type="button" class="btn btn-sm btn-outline" data-action-set="close">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="close" aria-label="${escapeHtml(messages.game.keyBindingsActionClose)} ${escapeHtml(messages.game.keyBindingsSetButton)}">${escapeHtml(messages.game.keyBindingsSetButton)}</button>
                 </div>
               </div>
             </div>
           </div>
           <p class="text-xs text-base-content/50 mt-3">${escapeHtml(messages.game.keyBindingsUpdatedHint)}</p>
           <div class="modal-action mt-4">
-            <button type="button" class="btn btn-ghost btn-sm" data-reset-bindings>${escapeHtml(messages.game.keyBindingsResetDefaults)}</button>
-            <form method="dialog" class="inline"><button type="submit" class="btn btn-ghost">${escapeHtml(messages.common.closeMenu)}</button></form>
+            <button type="button" class="btn btn-ghost btn-sm" data-reset-bindings aria-label="${escapeHtml(messages.game.keyBindingsResetDefaults)}">${escapeHtml(messages.game.keyBindingsResetDefaults)}</button>
+            <form method="dialog" class="inline"><button type="submit" class="btn btn-ghost" aria-label="${escapeHtml(messages.common.closeMenu)}">${escapeHtml(messages.common.closeMenu)}</button></form>
           </div>
         </div>
         <form method="dialog" class="modal-backdrop">
-          <button type="submit" aria-label="${escapeHtml(messages.common.closeMenu)}">close</button>
+          <button type="submit" aria-label="${escapeHtml(messages.common.closeMenu)}">${escapeHtml(messages.common.closeMenu)}</button>
         </form>
       </dialog>
     </div>

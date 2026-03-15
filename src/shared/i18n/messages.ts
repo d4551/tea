@@ -45,6 +45,8 @@ export interface Messages {
     readonly contextLabel: string;
     readonly notApplicable: string;
     readonly dismiss: string;
+    readonly statsEmptyValue: string;
+    readonly noActiveJobs: string;
   };
   readonly pages: {
     readonly home: {
@@ -449,6 +451,10 @@ export interface Messages {
     readonly starterProjectTemplateBlankDescription: string;
     readonly starterProjectTemplateStoryLabel: string;
     readonly starterProjectTemplateStoryDescription: string;
+    readonly starterProjectTemplate2dLabel: string;
+    readonly starterProjectTemplate2dDescription: string;
+    readonly starterProjectTemplate3dLabel: string;
+    readonly starterProjectTemplate3dDescription: string;
     readonly projectSettings: string;
     readonly operations: string;
     readonly projectPlayHint: string;
@@ -524,6 +530,9 @@ export interface Messages {
     readonly tilemapToolsLabel: string;
     readonly tilePaletteLabel: string;
     readonly tileCellLabel: string;
+    readonly tilemapSelectedTileLabel: string;
+    readonly tilemapEmptyTileLabel: string;
+    readonly tilemapEraserLabel: string;
     readonly tilemapInstructions: string;
     readonly modelPathLabel: string;
     readonly assetKindPortrait: string;
@@ -977,6 +986,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       contextLabel: "Context",
       notApplicable: "—",
       dismiss: "Dismiss",
+      statsEmptyValue: "0",
+      noActiveJobs: "0",
     },
     pages: {
       home: {
@@ -1433,6 +1444,12 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       starterProjectTemplateStoryLabel: "Tea house story sample",
       starterProjectTemplateStoryDescription:
         "Load a curated 2D/3D sample project with scenes, characters, dialogue, assets, and starter progression.",
+      starterProjectTemplate2dLabel: "Pixel Garden (2D)",
+      starterProjectTemplate2dDescription:
+        "A 2D sprite-based garden scene with characters and dialogue. Ideal for learning 2D authoring.",
+      starterProjectTemplate3dLabel: "Orbital Station (3D)",
+      starterProjectTemplate3dDescription:
+        "A 3D environment with models and lighting. Explore 3D scene setup and runtime.",
       projectSettings: "Project Settings",
       operations: "Operations",
       projectPlayHint: "Only published releases can be launched in the player.",
@@ -1509,8 +1526,11 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       tilemapToolsLabel: "Tilemap tools",
       tilePaletteLabel: "Tile palette",
       tileCellLabel: "Tile cell",
+      tilemapSelectedTileLabel: "Selected tile",
+      tilemapEmptyTileLabel: "Empty tile",
+      tilemapEraserLabel: "Eraser",
       tilemapInstructions:
-        "Choose a tile set, paint with Brush, or use Fill to flood one connected area.",
+        "Choose a tile set, paint with Brush, use Fill on one connected area, or switch to the eraser. Arrow keys move across the grid, and Enter or Space paints the focused cell.",
       modelPathLabel: "Model path (glb/usdz)",
       assetKindPortrait: "Portrait",
       assetKindSpriteSheet: "Sprite sheet",
@@ -1951,6 +1971,8 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       contextLabel: "上下文",
       notApplicable: "—",
       dismiss: "关闭",
+      statsEmptyValue: "0",
+      noActiveJobs: "0",
     },
     pages: {
       home: {
@@ -2377,6 +2399,10 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       starterProjectTemplateStoryLabel: "茶馆故事示例",
       starterProjectTemplateStoryDescription:
         "载入一个包含场景、角色、对话、素材与初始流程的 2D/3D 示例项目。",
+      starterProjectTemplate2dLabel: "像素花园 (2D)",
+      starterProjectTemplate2dDescription: "一个带角色与对话的 2D 精灵花园场景，适合学习 2D 创作。",
+      starterProjectTemplate3dLabel: "轨道站 (3D)",
+      starterProjectTemplate3dDescription: "带模型与光照的 3D 环境，探索 3D 场景设置与运行。",
       projectSettings: "项目设置",
       operations: "操作中心",
       projectPlayHint: "只有已发布版本才能在玩家视图中启动。",
@@ -2452,7 +2478,11 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       tilemapToolsLabel: "瓦片工具",
       tilePaletteLabel: "瓦片调色板",
       tileCellLabel: "瓦片格",
-      tilemapInstructions: "选择瓦片集后可用画笔绘制，或使用填充一次性填满连通区域。",
+      tilemapSelectedTileLabel: "当前瓦片",
+      tilemapEmptyTileLabel: "空白瓦片",
+      tilemapEraserLabel: "橡皮擦",
+      tilemapInstructions:
+        "选择瓦片集后可用画笔绘制，对连通区域使用填充，或切换到橡皮擦。方向键可在网格中移动，按 Enter 或空格会在当前格子绘制。",
       modelPathLabel: "模型路径 (glb/usdz)",
       assetKindPortrait: "立绘",
       assetKindSpriteSheet: "精灵表",

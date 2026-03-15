@@ -670,7 +670,7 @@ const renderShellFrame = (config: ShellFrameConfig): string => {
             <div class="flex-1"></div>
             <div class="flex items-center gap-1.5">
               <span class="font-medium">${escapeHtml(messages.builder.statusBarJobs)}:</span>
-              <span class="badge badge-ghost badge-xs">0</span>
+              <span class="badge badge-ghost badge-xs">${escapeHtml(messages.common.noActiveJobs)}</span>
             </div>
           </div>
         </footer>

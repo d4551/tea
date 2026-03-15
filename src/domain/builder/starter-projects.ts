@@ -11,6 +11,8 @@ export const STARTER_PROJECT_SOURCE_PREFIX = "starter-template:";
 export const starterProjectTemplateIds: readonly StarterProjectTemplateId[] = [
   "blank",
   "tea-house-story",
+  "2d-game",
+  "3d-game",
 ];
 
 /**

@@ -57,6 +57,33 @@ export const AUTOMATION_STEP_KIND_UNSUPPORTED_ERROR = "automation-step-kind-unsu
 /** Default scene node size (width and height) when creating 3D nodes. */
 export const DEFAULT_SCENE_NODE_SIZE = 64;
 
+/** Default tilemap layer identifier used by the 2D scene editor. */
+export const DEFAULT_TILEMAP_LAYER_ID = "default";
+
+/** Default tilemap layer label stored with 2D scene data. */
+export const DEFAULT_TILEMAP_LAYER_NAME = "ground";
+
+/** Empty tile sentinel stored in the tilemap grid. */
+export const DEFAULT_TILEMAP_EMPTY_VALUE = -1;
+
+/** Default tile width and height for tilemap sprite sheets. */
+export const DEFAULT_TILEMAP_TILE_SIZE_PX = 32;
+
+/** Default palette preview size for tilemap swatches. */
+export const DEFAULT_TILEMAP_PALETTE_PREVIEW_SIZE_PX = 28;
+
+/** Default tilemap editor column count. */
+export const DEFAULT_TILEMAP_GRID_COLUMNS = 12;
+
+/** Default tilemap editor row count. */
+export const DEFAULT_TILEMAP_GRID_ROWS = 8;
+
+/** Debounce window before tilemap edits persist through HTMX. */
+export const TILEMAP_PERSIST_DEBOUNCE_MS = 400;
+
+/** Flood-fill operation guard to prevent runaway tile paints. */
+export const TILEMAP_FILL_OPERATION_LIMIT = 500;
+
 /** Placeholder SVG width for builder generation previews (16:9). */
 export const CREATOR_PLACEHOLDER_SVG_WIDTH = 1024;
 

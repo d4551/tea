@@ -1,6 +1,5 @@
 import { Elysia } from "elysia";
 import { appConfig, type LocaleCode, normalizeLocale } from "../config/environment.ts";
-import { defaultBuilderProjectId } from "../domain/builder/builder-service.ts";
 import {
   appRoutes,
   resolveRequestPathname,
@@ -80,7 +79,7 @@ const resolveBuilderProjectId = (
     readStringField(querySource, "projectId") ??
     "";
   const normalized = candidate.trim();
-  return normalized.length > 0 ? normalized : defaultBuilderProjectId;
+  return normalized.length > 0 ? normalized : "";
 };
 
 const resolveBuilderLocale = (

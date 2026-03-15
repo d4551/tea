@@ -112,19 +112,19 @@ export const renderHomePage = (input: PageRenderInput): string => {
       stats: [
         {
           title: messages.pages.home.statsScenes,
-          value: "0",
+          value: messages.common.statsEmptyValue,
           description: messages.common.noProjectBound,
           figure: `<svg xmlns="http://www.w3.org/2000/svg" class="size-6 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
         },
         {
           title: messages.builder.npcs,
-          value: "0",
+          value: messages.common.statsEmptyValue,
           description: messages.common.noProjectBound,
           figure: `<svg xmlns="http://www.w3.org/2000/svg" class="size-6 text-secondary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
         },
         {
           title: messages.pages.home.projectActivity,
-          value: "—",
+          value: messages.common.notApplicable,
           description: messages.pages.home.activityEmptyTitle,
           figure: `<svg xmlns="http://www.w3.org/2000/svg" class="size-6 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`,
         },

@@ -1,7 +1,20 @@
 import { assetRelativePaths, joinUrlPath, toPublicAssetUrl } from "../shared/constants/assets.ts";
 import { defaultAppRouteRoots } from "../shared/constants/route-defaults.ts";
+import {
+  DEFAULT_UI_THEME,
+  normalizeUiTheme as normalizeSupportedUiTheme,
+  type UiTheme,
+} from "../shared/constants/ui-theme.ts";
 import { type LocaleCode, supportedLocaleCodes } from "../shared/types/locale.ts";
 
+export {
+  DEFAULT_UI_THEME,
+  isUiTheme,
+  matchUiTheme,
+  supportedUiThemes,
+  UI_THEME_STORAGE_KEY,
+  type UiTheme,
+} from "../shared/constants/ui-theme.ts";
 export type { LocaleCode } from "../shared/types/locale.ts";
 
 /**
@@ -62,7 +75,7 @@ export interface AppConfig {
     readonly automationAllowedRequestPathPrefixes: readonly string[];
   };
   readonly ui: {
-    readonly defaultTheme: string;
+    readonly defaultTheme: UiTheme;
     readonly maxContentWidthClass: string;
     readonly socialLinks: {
       readonly githubUrl: string | null;
@@ -314,14 +327,6 @@ const DEFAULT_COMPLIANCE_ARTIFACT_RETENTION_DAYS = 30;
 const DEFAULT_COMPLIANCE_EXPORT_DIRECTORY = "uploads/compliance-exports";
 const DEFAULT_PLAYABLE_GAME_MOUNT_PATH = defaultAppRouteRoots.game;
 const DEFAULT_PLAYABLE_GAME_SOURCE_DIRECTORY = "public/game";
-const DEFAULT_THEME = "tea-dark";
-const SUPPORTED_UI_THEMES = ["tea-dark", "tea-light"] as const;
-const LEGACY_UI_THEME_ALIASES = {
-  silk: "tea-light",
-  autumn: "tea-dark",
-  "forge-dark": "tea-dark",
-  "forge-light": "tea-light",
-} as const;
 const DEFAULT_MAX_CONTENT_WIDTH_CLASS = "max-w-6xl";
 const DEFAULT_SESSION_COOKIE_NAME = "lotfk_session";
 const DEFAULT_SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
@@ -640,18 +645,8 @@ export const normalizeLocale = (value: string | undefined): LocaleCode => {
  * @param value Raw configured theme value.
  * @returns Supported application theme identifier.
  */
-export const normalizeUiTheme = (value: string | undefined): string => {
-  const normalized = value?.trim().toLowerCase();
-  if (!normalized) {
-    return DEFAULT_THEME;
-  }
-
-  const aliasedTheme =
-    LEGACY_UI_THEME_ALIASES[normalized as keyof typeof LEGACY_UI_THEME_ALIASES] ?? normalized;
-
-  return SUPPORTED_UI_THEMES.includes(aliasedTheme as (typeof SUPPORTED_UI_THEMES)[number])
-    ? aliasedTheme
-    : DEFAULT_THEME;
+export const normalizeUiTheme = (value: string | undefined): UiTheme => {
+  return normalizeSupportedUiTheme(value, DEFAULT_UI_THEME);
 };
 
 /**

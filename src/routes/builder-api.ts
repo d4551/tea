@@ -410,7 +410,12 @@ const builderAiPlanDataSchema = t.Object({
   correlationId: t.String(),
 });
 
-const starterProjectTemplateIdSchema = t.Union([t.Literal("blank"), t.Literal("tea-house-story")]);
+const starterProjectTemplateIdSchema = t.Union([
+  t.Literal("blank"),
+  t.Literal("tea-house-story"),
+  t.Literal("2d-game"),
+  t.Literal("3d-game"),
+]);
 
 const builderProjectDataSchema = t.Object({
   id: t.String(),

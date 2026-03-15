@@ -6,6 +6,7 @@ import {
   normalizeUiTheme,
   parseBoolean,
   parseInteger,
+  supportedUiThemes,
 } from "../src/config/environment.ts";
 import {
   assetRelativePaths,
@@ -79,7 +80,7 @@ describe("environment parsing", () => {
     expect(typeof configuredAutomationOrigin).toBe("string");
     expect(appConfig.builder.localAutomationOrigin).toBe(configuredAutomationOrigin ?? "");
     expect(appConfig.builder.automationProbeTimeoutMs).toBeGreaterThanOrEqual(100);
-    expect(["tea-dark", "tea-light"]).toContain(appConfig.ui.defaultTheme);
+    expect(supportedUiThemes).toContain(appConfig.ui.defaultTheme);
     expect(
       typeof appConfig.ui.socialLinks.githubUrl === "string" ||
         appConfig.ui.socialLinks.githubUrl === null,

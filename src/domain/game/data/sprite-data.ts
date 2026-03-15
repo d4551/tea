@@ -242,6 +242,138 @@ export const gameScenes: Record<string, SceneDefinition> = {
 };
 
 /**
+ * 2D-only starter: Pixel Garden — sprite-based garden scene.
+ */
+const pixelGardenNpcAi: Readonly<NpcAiBlueprint> = {
+  wanderRadius: 40,
+  wanderSpeed: 0.3,
+  idlePauseMs: [1500, 4000],
+  greetOnApproach: true,
+  greetLineKey: "npc.greet.garden",
+};
+
+export const gameScenes2d: Record<string, SceneDefinition> = {
+  pixelGarden: {
+    id: "pixelGarden",
+    sceneMode: "2d",
+    displayTitle: "Pixel Garden",
+    titleKey: "scene.pixelGarden.title",
+    background: gameAssetUrls.teaHouseBackground,
+    geometry: {
+      width: 640,
+      height: 640,
+    },
+    spawn: {
+      x: 320,
+      y: 400,
+    },
+    nodes: [
+      {
+        id: "node.pixelGarden.background",
+        nodeType: "sprite",
+        assetId: "asset.background.pixelGarden",
+        position: { x: 0, y: 0 },
+        size: { width: 640, height: 640 },
+        layer: "background",
+      },
+      {
+        id: "node.pixelGarden.spawn",
+        nodeType: "spawn",
+        position: { x: 320, y: 400 },
+        size: { width: 24, height: 24 },
+        layer: "gameplay",
+      },
+    ],
+    npcs: [
+      {
+        characterKey: "chaJiang",
+        displayName: "Garden Keeper",
+        x: 200,
+        y: 220,
+        labelKey: "npc.gardenKeeper.label",
+        dialogueKeys: ["npc.gardenKeeper.lines.seeds", "npc.gardenKeeper.lines.harvest"],
+        interactRadius: 55,
+        ai: {
+          ...pixelGardenNpcAi,
+          greetLineKey: "npc.gardenKeeper.greet",
+          wanderRadius: 30,
+          wanderSpeed: 0.25,
+        },
+      },
+      {
+        characterKey: "teaMonk",
+        displayName: "Wandering Sage",
+        x: 420,
+        y: 280,
+        labelKey: "npc.wanderingSage.label",
+        dialogueKeys: ["npc.wanderingSage.lines.meditation", "npc.wanderingSage.lines.peace"],
+        interactRadius: 60,
+        ai: {
+          ...pixelGardenNpcAi,
+          greetLineKey: "npc.wanderingSage.greet",
+          wanderRadius: 35,
+          wanderSpeed: 0.2,
+        },
+      },
+    ],
+    collisions: [
+      { x: 0, y: 0, width: 640, height: 100 },
+      { x: 0, y: 0, width: 50, height: 640 },
+      { x: 560, y: 0, width: 80, height: 640 },
+      { x: 0, y: 540, width: 640, height: 100 },
+      { x: 180, y: 180, width: 140, height: 70 },
+    ],
+  },
+};
+
+/**
+ * 3D-only starter: Orbital Station — model, light, spawn.
+ */
+export const gameScenes3d: Record<string, SceneDefinition> = {
+  orbitalStation: {
+    id: "orbitalStation",
+    sceneMode: "3d",
+    displayTitle: "Orbital Station",
+    titleKey: "scene.orbitalStation.title",
+    background: gameAssetUrls.teaHouseBackground,
+    geometry: {
+      width: 1000,
+      height: 1000,
+    },
+    spawn: {
+      x: 0,
+      y: 0,
+    },
+    nodes: [
+      {
+        id: "node.orbitalStation.model",
+        nodeType: "model",
+        assetId: "asset.model.orbitalModel",
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+      },
+      {
+        id: "node.orbitalStation.light",
+        nodeType: "light",
+        position: { x: 8, y: 12, z: 8 },
+        rotation: { x: -0.6, y: 0.3, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+      },
+      {
+        id: "node.orbitalStation.spawn",
+        nodeType: "spawn",
+        position: { x: 0, y: 0, z: 3 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+      },
+    ],
+    npcs: [],
+    collisions: [],
+  },
+};
+
+/**
  * Localized text keys used by the owned engine.
  */
 export const gameTextKeys: {
@@ -251,6 +383,8 @@ export const gameTextKeys: {
   scenes: {
     "scene.teaHouse.title": "scene.teaHouse.title",
     "scene.crystalCavern.title": "scene.crystalCavern.title",
+    "scene.pixelGarden.title": "scene.pixelGarden.title",
+    "scene.orbitalStation.title": "scene.orbitalStation.title",
   },
   npcs: {
     "npc.teaMonk.label": "npc.teaMonk.label",
@@ -266,5 +400,13 @@ export const gameTextKeys: {
     "npc.riverPilot.lines.oracle-intro": "npc.riverPilot.lines.oracle-intro",
     "npc.riverPilot.lines.oracle-quote": "npc.riverPilot.lines.oracle-quote",
     "npc.riverPilot.greet": "npc.riverPilot.greet",
+    "npc.gardenKeeper.label": "npc.gardenKeeper.label",
+    "npc.gardenKeeper.greet": "npc.gardenKeeper.greet",
+    "npc.gardenKeeper.lines.seeds": "npc.gardenKeeper.lines.seeds",
+    "npc.gardenKeeper.lines.harvest": "npc.gardenKeeper.lines.harvest",
+    "npc.wanderingSage.label": "npc.wanderingSage.label",
+    "npc.wanderingSage.greet": "npc.wanderingSage.greet",
+    "npc.wanderingSage.lines.meditation": "npc.wanderingSage.lines.meditation",
+    "npc.wanderingSage.lines.peace": "npc.wanderingSage.lines.peace",
   },
 };

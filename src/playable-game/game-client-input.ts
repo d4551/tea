@@ -131,7 +131,7 @@ export const readGameClientLabels = (
       missing: connectionMissing,
     },
     reconnectAction,
-    backToBuilderLabel: backToBuilderLabel ?? "Back to builder",
+    backToBuilderLabel: backToBuilderLabel ?? connectionConnecting,
     builderHref: builderHref ?? "#",
     connectingToRealm: connectingToRealm ?? connectionConnecting,
     runtimeFocusActive,

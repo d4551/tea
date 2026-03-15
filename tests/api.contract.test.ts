@@ -2708,6 +2708,9 @@ describe("HTMX partial rendering", () => {
     expect(html.includes("data-scene-editor")).toBe(true);
     expect(html.includes("data-scene-node-form")).toBe(true);
     expect(html.includes("data-scene-selected-node")).toBe(true);
+    expect(html.includes("data-tilemap-selection")).toBe(true);
+    expect(html.includes('data-tilemap-eraser-label="Eraser"')).toBe(true);
+    expect(html.includes('class="btn btn-square btn-sm h-full min-h-0 w-full')).toBe(true);
     expect(html.includes('aria-label="Filter scenes"')).toBe(true);
     expect(html.includes("Results: 1-1 / 1")).toBe(true);
     expect(html.includes("Yangtze Tea House")).toBe(true);

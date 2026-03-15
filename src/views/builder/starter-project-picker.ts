@@ -45,6 +45,20 @@ export const buildStarterProjectTemplates = (
     defaultSceneMode: "2d",
     recommended: recommendedStarterProjectTemplateId === "tea-house-story",
   },
+  {
+    id: "2d-game",
+    label: messages.builder.starterProjectTemplate2dLabel,
+    description: messages.builder.starterProjectTemplate2dDescription,
+    defaultSceneMode: "2d",
+    recommended: recommendedStarterProjectTemplateId === "2d-game",
+  },
+  {
+    id: "3d-game",
+    label: messages.builder.starterProjectTemplate3dLabel,
+    description: messages.builder.starterProjectTemplate3dDescription,
+    defaultSceneMode: "3d",
+    recommended: recommendedStarterProjectTemplateId === "3d-game",
+  },
 ];
 
 const renderCompactTemplateOptions = (

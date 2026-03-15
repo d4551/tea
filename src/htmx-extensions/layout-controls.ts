@@ -1,4 +1,5 @@
 import { createLogger } from "../lib/logger.ts";
+import { matchUiTheme, UI_THEME_STORAGE_KEY } from "../shared/constants/ui-theme.ts";
 import {
   readLocalStorageResult,
   writeLocalStorageResult,
@@ -28,8 +29,6 @@ interface DrawerToggleControl extends HTMLElement {
 }
 
 const drawerToggleSelector = "[data-drawer-toggle-target]";
-const themeStorageKey = "app-theme-preference";
-const supportedThemes = ["tea-dark", "tea-light"] as const;
 
 const resolveFocusTarget = (root: ParentNode): HTMLElement | null => {
   const panelTarget =
@@ -79,47 +78,9 @@ const findControlledDrawerSides = (checkbox: HTMLInputElement): readonly HTMLEle
   }
 
   const escapedTargetId = CSS.escape(targetId);
-  const sidePanels = Array.from(drawerHost.querySelectorAll<HTMLElement>(".drawer-side")).filter(
+  return Array.from(drawerHost.querySelectorAll<HTMLElement>(".drawer-side")).filter(
     (side) => side.querySelector<HTMLElement>(`label[for="${escapedTargetId}"]`) !== null,
   );
-  return sidePanels;
-};
-
-const resolveDrawerSideTransform = (isEndDrawer: boolean): string =>
-  isEndDrawer ? "100%" : "-100%";
-
-const syncDrawerVisualState = (targetId: string): void => {
-  const checkbox = resolveDrawerToggle(targetId);
-  const drawerHost = checkbox?.closest(".drawer");
-  if (!checkbox || !drawerHost) {
-    return;
-  }
-
-  const sidePanels = findControlledDrawerSides(checkbox);
-  if (sidePanels.length === 0) {
-    return;
-  }
-
-  const isOpen = checkbox.checked;
-  const isEndDrawer = drawerHost.classList.contains("drawer-end");
-  const closedTranslate = resolveDrawerSideTransform(isEndDrawer);
-
-  for (const side of sidePanels) {
-    const panel = side.querySelector<HTMLElement>(":scope > :not(.drawer-overlay)");
-    const overlay = side.querySelector<HTMLElement>(".drawer-overlay");
-
-    side.style.visibility = isOpen ? "visible" : "hidden";
-    side.style.opacity = isOpen ? "1" : "0";
-    side.style.pointerEvents = isOpen ? "auto" : "none";
-    if (overlay) {
-      overlay.style.visibility = isOpen ? "visible" : "hidden";
-      overlay.style.pointerEvents = isOpen ? "auto" : "none";
-    }
-
-    if (panel) {
-      panel.style.transform = isOpen ? "translateX(0%)" : `translateX(${closedTranslate})`;
-    }
-  }
 };
 
 const resolveRelatedControls = (targetId: string): readonly DrawerToggleControl[] =>
@@ -138,8 +99,6 @@ const syncDrawerControlState = (targetId: string): void => {
       control.setAttribute("aria-expanded", String(checkbox.checked));
     }
   }
-
-  syncDrawerVisualState(targetId);
 };
 
 const toggleDrawer = (control: DrawerToggleControl): void => {
@@ -175,24 +134,9 @@ const parseThemeValue = (themeInput: unknown): string | null => {
   return value.length > 0 ? value : null;
 };
 
-const normalizeTheme = (value: string): string | null => {
-  const normalized = value.trim().toLowerCase();
-  const teaThemeByLegacyTheme: Record<string, string> = {
-    silk: "tea-light",
-    autumn: "tea-dark",
-    "forge-dark": "tea-dark",
-    "forge-light": "tea-light",
-  };
-
-  return teaThemeByLegacyTheme[normalized] ?? normalized;
-};
-
-const isSupportedTheme = (theme: string): theme is (typeof supportedThemes)[number] =>
-  supportedThemes.includes(theme as (typeof supportedThemes)[number]);
-
 const applyDocumentTheme = (theme: string): void => {
-  const normalized = normalizeTheme(theme);
-  if (normalized === null || !isSupportedTheme(normalized)) {
+  const normalized = matchUiTheme(theme);
+  if (normalized === null) {
     return;
   }
 
@@ -207,11 +151,8 @@ const findThemeRadio = (theme: string): HTMLInputElement | null => {
 };
 
 const applyThemeFromStorage = (theme: string): void => {
-  const nextTheme = normalizeTheme(theme);
+  const nextTheme = matchUiTheme(theme);
   if (nextTheme === null) {
-    return;
-  }
-  if (!isSupportedTheme(nextTheme)) {
     logger.warn("layout.theme.storage.unknown_theme", { theme });
     return;
   }
@@ -231,9 +172,9 @@ const applyThemeFromStorage = (theme: string): void => {
 
 /** Restores persisted theme preference from localStorage into matching radios. */
 const restoreThemeSelection = (): void => {
-  const stored = readLocalStorageResult(themeStorageKey);
+  const stored = readLocalStorageResult(UI_THEME_STORAGE_KEY);
   if (!stored.ok) {
-    logger.warn("layout.theme.storage.read_failed", { key: themeStorageKey });
+    logger.warn("layout.theme.storage.read_failed", { key: UI_THEME_STORAGE_KEY });
     return;
   }
 
@@ -242,7 +183,7 @@ const restoreThemeSelection = (): void => {
     return;
   }
 
-  const normalized = normalizeTheme(storedTheme);
+  const normalized = matchUiTheme(storedTheme);
   if (normalized !== null) {
     applyThemeFromStorage(normalized);
   }
@@ -260,20 +201,16 @@ const persistThemeSelection = (event: Event): void => {
   if (!theme) {
     return;
   }
-  const normalized = normalizeTheme(theme);
+  const normalized = matchUiTheme(theme);
   if (!normalized) {
     return;
   }
 
-  if (!isSupportedTheme(normalized)) {
-    return;
-  }
-
   applyDocumentTheme(normalized);
-  const result = writeLocalStorageResult(themeStorageKey, normalized);
+  const result = writeLocalStorageResult(UI_THEME_STORAGE_KEY, normalized);
   if (!result.ok) {
     logger.warn("layout.theme.storage.write_failed", {
-      key: themeStorageKey,
+      key: UI_THEME_STORAGE_KEY,
       theme,
     });
   }
@@ -285,8 +222,8 @@ const normalizeDocumentTheme = (): void => {
     return;
   }
 
-  const normalized = normalizeTheme(currentTheme);
-  if (!normalized || !isSupportedTheme(normalized)) {
+  const normalized = matchUiTheme(currentTheme);
+  if (!normalized) {
     return;
   }
 

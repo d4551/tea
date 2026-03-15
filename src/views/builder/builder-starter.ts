@@ -1,5 +1,5 @@
 import type { LocaleCode } from "../../config/environment.ts";
-import { defaultBuilderProjectId } from "../../domain/builder/builder-project-state-store.ts";
+
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 import { renderStarterProjectPicker } from "./starter-project-picker.ts";
@@ -42,7 +42,7 @@ export const renderBuilderStarterWorkspace = (
           messages,
           locale,
           redirectPath: currentPath,
-          projectId: projectId === defaultBuilderProjectId ? "" : projectId,
+          projectId,
         })}
       </div>`,
       mainBody: `<section class="rounded-[1.5rem] border border-base-300 bg-base-100 p-5 shadow-sm">

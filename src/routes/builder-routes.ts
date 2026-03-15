@@ -9,7 +9,7 @@ import { Elysia } from "elysia";
 import { appConfig } from "../config/environment.ts";
 import { knowledgeBaseService } from "../domain/ai/knowledge-base-service.ts";
 import { getAiRuntimeProfile } from "../domain/ai/local-runtime-profile.ts";
-import { builderService, defaultBuilderProjectId } from "../domain/builder/builder-service.ts";
+import { builderService } from "../domain/builder/builder-service.ts";
 import {
   deriveBuilderReadinessAudit,
   evaluateBuilderPlatformReadiness,
@@ -236,12 +236,12 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       messages,
       "start",
       builderCurrentPath,
-      defaultBuilderProjectId,
+      "",
       null,
       renderBuilderStarterWorkspace(
         messages,
         builderLocale,
-        defaultBuilderProjectId,
+        "",
         appRoutes.builderStart,
       ),
     );

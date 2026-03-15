@@ -652,8 +652,15 @@ export class GameLoopService {
         new Map<string, string>()
       ).entries(),
     );
-    const resolvedScene =
+    const firstProjectSceneId =
+      publishedProject && publishedProject.scenes.size > 0
+        ? publishedProject.scenes.keys().next().value
+        : undefined;
+    const projectScene =
       publishedProject?.scenes.get(sceneId) ??
+      (firstProjectSceneId ? publishedProject?.scenes.get(firstProjectSceneId) : undefined);
+    const resolvedScene =
+      projectScene ??
       resolveScene(sceneId) ??
       resolveScene(defaultGameConfig.defaultSceneId) ??
       createFallbackSceneDefinition(defaultGameConfig.defaultSceneId);

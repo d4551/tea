@@ -13,6 +13,12 @@ import {
   DEFAULT_SCENE_NODE_SIZE,
   DEFAULT_SCENE_SPAWN_X,
   DEFAULT_SCENE_SPAWN_Y,
+  DEFAULT_TILEMAP_EMPTY_VALUE,
+  DEFAULT_TILEMAP_GRID_COLUMNS,
+  DEFAULT_TILEMAP_GRID_ROWS,
+  DEFAULT_TILEMAP_LAYER_ID,
+  DEFAULT_TILEMAP_LAYER_NAME,
+  DEFAULT_TILEMAP_TILE_SIZE_PX,
 } from "../../shared/constants/builder-defaults.ts";
 import {
   BUILDER_QUERY_PARAM_PAGE,
@@ -54,6 +60,18 @@ const resolveNpcLabel = (locale: LocaleCode, npc: SceneDefinition["npcs"][number
   const translated = resolveGameText(locale, npc.labelKey);
   return resolveCreatorFacingText(translated, npc.displayName || npc.labelKey, npc.characterKey);
 };
+
+const createDefaultTilemapLayer = (): TilemapLayer => ({
+  id: DEFAULT_TILEMAP_LAYER_ID,
+  tileSetAssetId: "",
+  tileWidth: DEFAULT_TILEMAP_TILE_SIZE_PX,
+  tileHeight: DEFAULT_TILEMAP_TILE_SIZE_PX,
+  data: Array.from({ length: DEFAULT_TILEMAP_GRID_ROWS }, () =>
+    Array.from({ length: DEFAULT_TILEMAP_GRID_COLUMNS }, () => DEFAULT_TILEMAP_EMPTY_VALUE),
+  ),
+  collision: false,
+  layer: DEFAULT_TILEMAP_LAYER_NAME,
+});
 
 const renderScenePreview = (
   scene: SceneDefinition,
@@ -912,23 +930,15 @@ export const renderSceneDetail = (
             scene.sceneMode !== "3d"
               ? (
                   () => {
-                    const defaultLayer: TilemapLayer = {
-                      id: "default",
-                      tileSetAssetId: "",
-                      tileWidth: 32,
-                      tileHeight: 32,
-                      data: Array.from({ length: 8 }, () => Array.from({ length: 12 }, () => -1)),
-                      collision: false,
-                      layer: "ground",
-                    };
+                    const defaultLayer = createDefaultTilemapLayer();
                     const existingLayer = scene.tilemap?.layers?.[0];
-                    const gridCols = 12;
-                    const gridRows = 8;
+                    const gridCols = DEFAULT_TILEMAP_GRID_COLUMNS;
+                    const gridRows = DEFAULT_TILEMAP_GRID_ROWS;
                     const normalizedData = existingLayer?.data
                       ? Array.from({ length: gridRows }, (_, r) =>
                           Array.from(
                             { length: gridCols },
-                            (_, c) => (existingLayer.data[r]?.[c] ?? -1) as number,
+                            (_, c) => existingLayer.data[r]?.[c] ?? DEFAULT_TILEMAP_EMPTY_VALUE,
                           ),
                         )
                       : defaultLayer.data;
@@ -950,22 +960,30 @@ export const renderSceneDetail = (
                     const gridCells = Array.from({ length: gridRows * gridCols }, (_, i) => {
                       const row = Math.floor(i / gridCols);
                       const col = i % gridCols;
-                      const tileValue = layer.data[row]?.[col] ?? -1;
-                      const bgClass = tileValue >= 0 ? "bg-primary/30" : "bg-base-300/30";
-                      return `<div class="${bgClass} rounded-sm min-h-4 cursor-crosshair select-none" data-tile-row="${row}" data-tile-col="${col}" data-tile-value="${tileValue}" role="button" tabindex="0" aria-label="${escapeHtml(messages.builder.tileCellLabel)} ${row + 1}, ${col + 1}"></div>`;
+                      const tileValue = layer.data[row]?.[col] ?? DEFAULT_TILEMAP_EMPTY_VALUE;
+                      const cellClasses =
+                        tileValue >= 0
+                          ? "btn btn-square btn-sm h-full min-h-0 w-full rounded-sm border-base-300 bg-primary/25 p-0 shadow-none hover:bg-primary/35"
+                          : "btn btn-square btn-sm h-full min-h-0 w-full rounded-sm border-base-300 bg-base-300/35 p-0 shadow-none hover:bg-base-300/55";
+                      return `<button type="button" class="${cellClasses}" data-tile-row="${row}" data-tile-col="${col}" data-tile-value="${tileValue}" aria-label="${escapeHtml(messages.builder.tileCellLabel)} ${row + 1}, ${col + 1}"></button>`;
                     }).join("");
-                    return `<div data-scene-tab-panel="tilemap" class="hidden space-y-4" data-tilemap-assets="${assetsPayload}" data-tilemap-layer="${layerPayload}" data-tilemap-cols="${gridCols}" data-tilemap-rows="${gridRows}" data-tilemap-form-action="${escapeHtml(formAction)}">
-                   <div class="flex flex-wrap items-center gap-2" role="toolbar" aria-label="${escapeHtml(messages.builder.tilemapToolsLabel)}">
-                     <button type="button" class="badge badge-soft badge-lg cursor-pointer hover:badge-primary" data-tilemap-mode="brush" aria-pressed="true" aria-label="${escapeHtml(messages.builder.tilemapBrushLabel)}">${escapeHtml(messages.builder.tilemapBrushLabel)}</button>
-                     <button type="button" class="badge badge-soft badge-lg cursor-pointer hover:badge-primary" data-tilemap-mode="fill" aria-pressed="false" aria-label="${escapeHtml(messages.builder.tilemapFillLabel)}">${escapeHtml(messages.builder.tilemapFillLabel)}</button>
+                    const selectedTileLabel = `${messages.builder.tilemapSelectedTileLabel}: ${messages.builder.tilemapEmptyTileLabel}`;
+                    return `<div data-scene-tab-panel="tilemap" class="hidden space-y-4" data-tilemap-assets="${assetsPayload}" data-tilemap-layer="${layerPayload}" data-tilemap-cols="${gridCols}" data-tilemap-rows="${gridRows}" data-tilemap-form-action="${escapeHtml(formAction)}" data-tilemap-selected-label="${escapeHtml(messages.builder.tilemapSelectedTileLabel)}" data-tilemap-empty-label="${escapeHtml(messages.builder.tilemapEmptyTileLabel)}" data-tilemap-eraser-label="${escapeHtml(messages.builder.tilemapEraserLabel)}">
+                   <div class="join" role="toolbar" aria-label="${escapeHtml(messages.builder.tilemapToolsLabel)}">
+                     <button type="button" class="btn btn-sm btn-primary join-item" data-tilemap-mode="brush" aria-pressed="true" aria-label="${escapeHtml(messages.builder.tilemapBrushLabel)}">${escapeHtml(messages.builder.tilemapBrushLabel)}</button>
+                     <button type="button" class="btn btn-sm btn-soft join-item" data-tilemap-mode="fill" aria-pressed="false" aria-label="${escapeHtml(messages.builder.tilemapFillLabel)}">${escapeHtml(messages.builder.tilemapFillLabel)}</button>
                    </div>
                    <fieldset class="fieldset">
                      <legend class="fieldset-legend">${escapeHtml(messages.builder.tilemapTileSetLabel)}</legend>
                      <input type="text" class="input input-bordered w-full" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.tilemapTileSetLabel)}" data-tilemap-tileset value="${escapeHtml(layer.tileSetAssetId)}" />
                    </fieldset>
                    <div class="rounded-box border border-base-300 bg-base-200/50 p-2" data-tilemap-palette-container>
-                     <p class="text-xs text-base-content/60 mb-2">${escapeHtml(messages.builder.tilePaletteLabel)}</p>
-                     <div class="flex flex-wrap gap-1 min-h-12 max-h-24 overflow-auto" data-tilemap-palette aria-label="${escapeHtml(messages.builder.tilePaletteLabel)}"></div>
+                     <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+                       <p class="text-xs text-base-content/60">${escapeHtml(messages.builder.tilePaletteLabel)}</p>
+                       <p class="text-xs font-medium text-base-content/70" data-tilemap-selection role="status" aria-live="polite">${escapeHtml(selectedTileLabel)}</p>
+                     </div>
+                     <div class="flex flex-wrap gap-2" data-tilemap-palette aria-label="${escapeHtml(messages.builder.tilePaletteLabel)}"></div>
+                     <p class="mt-2 text-xs text-base-content/60" data-tilemap-palette-empty>${escapeHtml(messages.builder.tilemapInstructions)}</p>
                    </div>
                    <div class="aspect-video overflow-hidden rounded-box border border-base-300 bg-base-200/50 grid grid-cols-12 grid-rows-8 gap-px p-2 min-h-32" data-tilemap-grid aria-label="${escapeHtml(messages.builder.tilemapTabLabel)}">
                      ${gridCells}

@@ -2,13 +2,25 @@
  * Scene editor tab switching and tilemap paint tooling.
  *
  * Handles:
- * - Tab toggling between "nodes" and "tilemap" panels
+ * - Keyboard-accessible tab toggling between "nodes" and "tilemap" panels
  * - Tilemap brush/fill paint modes with debounced HTMX persistence
- * - Tileset palette rendering from sprite sheet images
+ * - Tile palette rendering from sprite sheet images without inline styles
+ * - Keyboard and pointer painting, including an eraser state
  *
  * Bootstraps on DOMContentLoaded and re-runs after htmx:afterSwap for partial updates.
  */
-import { acceptUnknown, safeJsonParse } from "../shared/utils/safe-json.ts";
+import {
+  DEFAULT_TILEMAP_EMPTY_VALUE,
+  DEFAULT_TILEMAP_GRID_COLUMNS,
+  DEFAULT_TILEMAP_GRID_ROWS,
+  DEFAULT_TILEMAP_LAYER_ID,
+  DEFAULT_TILEMAP_LAYER_NAME,
+  DEFAULT_TILEMAP_PALETTE_PREVIEW_SIZE_PX,
+  DEFAULT_TILEMAP_TILE_SIZE_PX,
+  TILEMAP_FILL_OPERATION_LIMIT,
+  TILEMAP_PERSIST_DEBOUNCE_MS,
+} from "../shared/constants/builder-defaults.ts";
+import { safeJsonParse } from "../shared/utils/safe-json.ts";
 
 interface TilemapLayer {
   readonly id: string;
@@ -25,6 +37,11 @@ interface TilemapAsset {
   readonly source: string;
 }
 
+interface GridPosition {
+  readonly row: number;
+  readonly col: number;
+}
+
 declare global {
   interface Window {
     htmx?: {
@@ -33,82 +50,302 @@ declare global {
   }
 }
 
-const isArray = (value: unknown): value is unknown[] => Array.isArray(value);
+const wiredDetails = new WeakSet<HTMLElement>();
+const wiredTilemapPanels = new WeakSet<HTMLElement>();
 
-const parseTilemapAssets = (raw: string): TilemapAsset[] => {
-  const parsed = safeJsonParse(raw, [] as unknown[], isArray);
-  return parsed.filter(
-    (item): item is TilemapAsset =>
-      item !== null &&
-      typeof item === "object" &&
-      typeof (item as TilemapAsset).id === "string" &&
-      typeof (item as TilemapAsset).source === "string",
-  );
-};
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
 
-const parseTilemapLayer = (raw: string): TilemapLayer => {
-  const fallback: TilemapLayer = {
-    id: "default",
-    tileSetAssetId: "",
-    tileWidth: 32,
-    tileHeight: 32,
-    data: [],
-    collision: false,
-    layer: "ground",
-  };
-  const parsed = safeJsonParse(raw, fallback as unknown, acceptUnknown);
+const isInteger = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value);
 
-  if (parsed !== null && typeof parsed === "object" && "tileWidth" in (parsed as object)) {
-    return parsed as TilemapLayer;
+const isTileGrid = (value: unknown): value is number[][] =>
+  Array.isArray(value) &&
+  value.every((row) => Array.isArray(row) && row.every((tileValue) => isInteger(tileValue)));
+
+const isTilemapAsset = (value: unknown): value is TilemapAsset =>
+  isRecord(value) && typeof value.id === "string" && typeof value.source === "string";
+
+const isTilemapAssetArray = (value: unknown): value is TilemapAsset[] =>
+  Array.isArray(value) && value.every((entry) => isTilemapAsset(entry));
+
+const isTilemapLayer = (value: unknown): value is TilemapLayer =>
+  isRecord(value) &&
+  typeof value.id === "string" &&
+  typeof value.tileSetAssetId === "string" &&
+  isInteger(value.tileWidth) &&
+  isInteger(value.tileHeight) &&
+  isTileGrid(value.data) &&
+  typeof value.collision === "boolean" &&
+  typeof value.layer === "string";
+
+const createDefaultTilemapLayer = (): TilemapLayer => ({
+  id: DEFAULT_TILEMAP_LAYER_ID,
+  tileSetAssetId: "",
+  tileWidth: DEFAULT_TILEMAP_TILE_SIZE_PX,
+  tileHeight: DEFAULT_TILEMAP_TILE_SIZE_PX,
+  data: [],
+  collision: false,
+  layer: DEFAULT_TILEMAP_LAYER_NAME,
+});
+
+const parseTilemapAssets = (raw: string): TilemapAsset[] =>
+  safeJsonParse(raw, [], isTilemapAssetArray);
+
+const parseTilemapLayer = (raw: string): TilemapLayer =>
+  safeJsonParse(raw, createDefaultTilemapLayer(), isTilemapLayer);
+
+const resolveTileCell = (target: EventTarget | null): HTMLButtonElement | null => {
+  if (!(target instanceof Element)) {
+    return null;
   }
 
-  return fallback;
+  const cell = target.closest<HTMLButtonElement>("[data-tile-row][data-tile-col]");
+  return cell instanceof HTMLButtonElement ? cell : null;
+};
+
+const resolveGridPosition = (cell: HTMLElement): GridPosition | null => {
+  const row = Number.parseInt(cell.getAttribute("data-tile-row") ?? "", 10);
+  const col = Number.parseInt(cell.getAttribute("data-tile-col") ?? "", 10);
+  if (!Number.isInteger(row) || !Number.isInteger(col)) {
+    return null;
+  }
+
+  return { row, col };
+};
+
+const resolveLabelValue = (panel: HTMLElement, attribute: string, fallback: string): string => {
+  const value = panel.getAttribute(attribute);
+  return value?.trim() ? value : fallback;
+};
+
+const updateSceneTabState = (detail: HTMLElement, activeTabId: string): void => {
+  const parent = detail.querySelector(".card-body");
+  if (!parent) {
+    return;
+  }
+
+  for (const tabElement of parent.querySelectorAll<HTMLElement>("[data-scene-tab]")) {
+    const isActive = tabElement.getAttribute("data-scene-tab") === activeTabId;
+    tabElement.classList.toggle("tab-active", isActive);
+    tabElement.setAttribute("aria-selected", isActive ? "true" : "false");
+    tabElement.tabIndex = isActive ? 0 : -1;
+  }
+
+  for (const panelElement of parent.querySelectorAll<HTMLElement>("[data-scene-tab-panel]")) {
+    panelElement.classList.toggle(
+      "hidden",
+      panelElement.getAttribute("data-scene-tab-panel") !== activeTabId,
+    );
+  }
 };
 
 const wireTabSwitching = (detail: HTMLElement): void => {
+  if (wiredDetails.has(detail)) {
+    return;
+  }
+
+  wiredDetails.add(detail);
   detail.addEventListener("click", (event) => {
-    const tab = (event.target as Element | null)?.closest?.("[data-scene-tab]");
+    const tab =
+      event.target instanceof Element
+        ? event.target.closest<HTMLElement>("[data-scene-tab]")
+        : null;
     if (!tab || tab.getAttribute("role") !== "tab") {
       return;
     }
 
     const tabId = tab.getAttribute("data-scene-tab");
+    if (!tabId) {
+      return;
+    }
+
+    updateSceneTabState(detail, tabId);
+  });
+
+  detail.addEventListener("keydown", (event) => {
+    const tab =
+      event.target instanceof Element
+        ? event.target.closest<HTMLElement>("[data-scene-tab]")
+        : null;
+    if (!tab || tab.getAttribute("role") !== "tab") {
+      return;
+    }
+
     const parent = tab.closest(".card-body");
     if (!parent) {
       return;
     }
 
-    for (const tabElement of parent.querySelectorAll("[data-scene-tab]")) {
-      const isActive = tabElement.getAttribute("data-scene-tab") === tabId;
-      tabElement.classList.toggle("tab-active", isActive);
-      tabElement.setAttribute("aria-selected", isActive ? "true" : "false");
+    const tabs = Array.from(parent.querySelectorAll<HTMLElement>("[data-scene-tab]"));
+    const activeIndex = tabs.indexOf(tab);
+    if (activeIndex < 0) {
+      return;
     }
 
-    for (const panelElement of parent.querySelectorAll("[data-scene-tab-panel]")) {
-      panelElement.classList.toggle(
-        "hidden",
-        panelElement.getAttribute("data-scene-tab-panel") !== tabId,
-      );
+    let nextIndex = activeIndex;
+    if (event.key === "ArrowRight") {
+      nextIndex = (activeIndex + 1) % tabs.length;
+    } else if (event.key === "ArrowLeft") {
+      nextIndex = (activeIndex - 1 + tabs.length) % tabs.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = tabs.length - 1;
+    } else {
+      return;
     }
+
+    event.preventDefault();
+    const nextTab = tabs[nextIndex];
+    const nextTabId = nextTab?.getAttribute("data-scene-tab");
+    if (!nextTab || !nextTabId) {
+      return;
+    }
+
+    updateSceneTabState(detail, nextTabId);
+    nextTab.focus();
   });
 };
 
-const wireTilemapEditor = (panel: HTMLElement): void => {
-  const assets = parseTilemapAssets(panel.getAttribute("data-tilemap-assets") ?? "[]");
-  const layer = parseTilemapLayer(panel.getAttribute("data-tilemap-layer") ?? "{}");
-  const cols = parseInt(panel.getAttribute("data-tilemap-cols") ?? "12", 10);
-  const rows = parseInt(panel.getAttribute("data-tilemap-rows") ?? "8", 10);
-
-  if (!layer.data || layer.data.length === 0) {
-    layer.data = Array.from({ length: rows }, () => Array.from({ length: cols }, () => -1));
+const updateSelectionStatus = (panel: HTMLElement, selectedTile: number): void => {
+  const status = panel.querySelector<HTMLElement>("[data-tilemap-selection]");
+  if (!status) {
+    return;
   }
 
-  let mode = "brush";
-  let selectedTile = 0;
+  const selectedTileLabel = resolveLabelValue(
+    panel,
+    "data-tilemap-selected-label",
+    "Selected tile",
+  );
+  const emptyTileLabel = resolveLabelValue(panel, "data-tilemap-empty-label", "Empty tile");
+  const tileLabel =
+    selectedTile === DEFAULT_TILEMAP_EMPTY_VALUE ? emptyTileLabel : `#${selectedTile + 1}`;
+  status.textContent = `${selectedTileLabel}: ${tileLabel}`;
+};
+
+const updatePaletteSelection = (panel: HTMLElement, selectedTile: number): void => {
+  for (const button of panel.querySelectorAll<HTMLButtonElement>("[data-tile-select-value]")) {
+    const rawValue = button.getAttribute("data-tile-select-value");
+    const buttonValue = Number.parseInt(rawValue ?? "", 10);
+    const isActive = Number.isInteger(buttonValue) && buttonValue === selectedTile;
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+    button.classList.toggle("btn-primary", isActive);
+    button.classList.toggle("btn-soft", !isActive);
+    button.classList.toggle("ring-2", isActive);
+    button.classList.toggle("ring-primary/40", isActive);
+  }
+};
+
+const updatePaletteEmptyState = (panel: HTMLElement, isEmpty: boolean): void => {
+  const emptyState = panel.querySelector<HTMLElement>("[data-tilemap-palette-empty]");
+  if (!emptyState) {
+    return;
+  }
+
+  emptyState.classList.toggle("hidden", !isEmpty);
+};
+
+const updateCellAppearance = (cell: HTMLButtonElement, value: number): void => {
+  cell.setAttribute("data-tile-value", String(value));
+  const isPainted = value >= 0;
+  cell.classList.toggle("bg-primary/25", isPainted);
+  cell.classList.toggle("hover:bg-primary/35", isPainted);
+  cell.classList.toggle("bg-base-300/35", !isPainted);
+  cell.classList.toggle("hover:bg-base-300/55", !isPainted);
+};
+
+const focusGridCell = (panel: HTMLElement, row: number, col: number): void => {
+  const cell = panel.querySelector<HTMLButtonElement>(
+    `[data-tile-row="${row}"][data-tile-col="${col}"]`,
+  );
+  cell?.focus();
+};
+
+const createPaletteButton = (
+  tileValue: number,
+  label: string,
+  onSelect: (value: number) => void,
+): HTMLButtonElement => {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "btn btn-square btn-sm btn-soft h-10 w-10 p-1";
+  button.setAttribute("data-tile-select-value", String(tileValue));
+  button.setAttribute("aria-label", label);
+  button.setAttribute("aria-pressed", "false");
+  button.addEventListener("click", () => onSelect(tileValue));
+  return button;
+};
+
+const appendPalettePreview = (
+  button: HTMLButtonElement,
+  image: HTMLImageElement,
+  tileColumn: number,
+  tileRow: number,
+  tileWidth: number,
+  tileHeight: number,
+): void => {
+  const canvas = document.createElement("canvas");
+  canvas.width = DEFAULT_TILEMAP_PALETTE_PREVIEW_SIZE_PX;
+  canvas.height = DEFAULT_TILEMAP_PALETTE_PREVIEW_SIZE_PX;
+  canvas.className = "h-7 w-7 rounded-sm bg-base-200/70";
+  canvas.setAttribute("aria-hidden", "true");
+  const context = canvas.getContext("2d");
+  if (context) {
+    context.imageSmoothingEnabled = false;
+    context.drawImage(
+      image,
+      tileColumn * tileWidth,
+      tileRow * tileHeight,
+      tileWidth,
+      tileHeight,
+      0,
+      0,
+      DEFAULT_TILEMAP_PALETTE_PREVIEW_SIZE_PX,
+      DEFAULT_TILEMAP_PALETTE_PREVIEW_SIZE_PX,
+    );
+  } else {
+    button.append(document.createTextNode(String(tileColumn + tileRow + 1)));
+    return;
+  }
+  button.appendChild(canvas);
+};
+
+const wireTilemapEditor = (panel: HTMLElement): void => {
+  if (wiredTilemapPanels.has(panel)) {
+    return;
+  }
+
+  wiredTilemapPanels.add(panel);
+  const assets = parseTilemapAssets(panel.getAttribute("data-tilemap-assets") ?? "[]");
+  const layer = parseTilemapLayer(panel.getAttribute("data-tilemap-layer") ?? "{}");
+  const cols = Number.parseInt(
+    panel.getAttribute("data-tilemap-cols") ?? String(DEFAULT_TILEMAP_GRID_COLUMNS),
+    10,
+  );
+  const rows = Number.parseInt(
+    panel.getAttribute("data-tilemap-rows") ?? String(DEFAULT_TILEMAP_GRID_ROWS),
+    10,
+  );
+
+  if (!layer.data || layer.data.length === 0) {
+    layer.data = Array.from({ length: rows }, () =>
+      Array.from({ length: cols }, () => DEFAULT_TILEMAP_EMPTY_VALUE),
+    );
+  }
+
+  let mode: "brush" | "fill" = "brush";
+  let selectedTile = DEFAULT_TILEMAP_EMPTY_VALUE;
   let isDrawing = false;
+  let paletteRequestId = 0;
   const persistForm = panel.querySelector<HTMLFormElement>("[data-tilemap-persist-form]");
   const persistInput = panel.querySelector<HTMLInputElement>("[data-tilemap-json]");
-  let debounceTimer = 0;
+  const palette = panel.querySelector<HTMLElement>("[data-tilemap-palette]");
+  const grid = panel.querySelector<HTMLElement>("[data-tilemap-grid]");
+  const paletteLabel =
+    palette?.getAttribute("aria-label") ??
+    resolveLabelValue(panel, "data-tilemap-palette-label", "Tile palette");
 
   const getAssetSource = (id: string): string => {
     for (const asset of assets) {
@@ -119,47 +356,10 @@ const wireTilemapEditor = (panel: HTMLElement): void => {
     return id && (id.startsWith("/") || id.startsWith("http")) ? id : "";
   };
 
-  const renderPalette = (source: string, tileWidth: number, tileHeight: number): void => {
-    const palette = panel.querySelector<HTMLElement>("[data-tilemap-palette]");
-    if (!palette) {
-      return;
-    }
-    palette.innerHTML = "";
-
-    if (!source) {
-      return;
-    }
-
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = (): void => {
-      const w = img.naturalWidth || img.width;
-      const h = img.naturalHeight || img.height;
-      const tileCols = Math.max(1, Math.floor(w / (tileWidth || 32)));
-      const tileRows = Math.max(1, Math.floor(h / (tileHeight || 32)));
-      const count = tileCols * tileRows;
-
-      for (let i = 0; i < count; i++) {
-        const tc = i % tileCols;
-        const tr = Math.floor(i / tileCols);
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className =
-          "btn btn-sm btn-ghost p-0.5 border border-base-300 rounded overflow-hidden";
-        button.setAttribute("data-tile-index", String(i));
-        button.style.width = "28px";
-        button.style.height = "28px";
-        button.style.backgroundImage = `url(${source})`;
-        button.style.backgroundPosition = `${-tc * (tileWidth || 32)}px ${-tr * (tileHeight || 32)}px`;
-        button.style.backgroundSize = `${w}px ${h}px`;
-        button.addEventListener("click", () => {
-          selectedTile = parseInt(button.getAttribute("data-tile-index") ?? "0", 10);
-        });
-        palette.appendChild(button);
-      }
-    };
-    img.onerror = (): void => {};
-    img.src = source;
+  const setSelectedTile = (value: number): void => {
+    selectedTile = value;
+    updateSelectionStatus(panel, selectedTile);
+    updatePaletteSelection(panel, selectedTile);
   };
 
   const persistTilemap = (): void => {
@@ -170,13 +370,13 @@ const wireTilemapEditor = (panel: HTMLElement): void => {
     const tilemap = {
       layers: [
         {
-          id: "default",
+          id: layer.id,
           tileSetAssetId: layer.tileSetAssetId,
           tileWidth: layer.tileWidth,
           tileHeight: layer.tileHeight,
-          data: layer.data.map((r) => r.slice()),
-          collision: false,
-          layer: "background",
+          data: layer.data.map((row) => row.slice()),
+          collision: layer.collision,
+          layer: layer.layer,
         },
       ],
     };
@@ -202,142 +402,254 @@ const wireTilemapEditor = (panel: HTMLElement): void => {
   };
 
   const schedulePersist = (): void => {
-    clearTimeout(debounceTimer);
-    debounceTimer = window.setTimeout(persistTilemap, 400);
+    clearTimeout(Number(panel.dataset.tilemapPersistTimer ?? "0"));
+    const timerId = window.setTimeout(persistTilemap, TILEMAP_PERSIST_DEBOUNCE_MS);
+    panel.dataset.tilemapPersistTimer = String(timerId);
   };
 
-  const setTile = (r: number, c: number, v: number): void => {
-    if (r < 0 || r >= rows || c < 0 || c >= cols) {
+  const setTile = (row: number, col: number, value: number): void => {
+    if (row < 0 || row >= rows || col < 0 || col >= cols) {
       return;
     }
 
-    const targetRow = layer.data[r];
-    if (!targetRow) {
+    const targetRow = layer.data[row];
+    if (!targetRow || targetRow[col] === value) {
       return;
     }
-    targetRow[c] = v;
-    const cell = panel.querySelector<HTMLElement>(`[data-tile-row="${r}"][data-tile-col="${c}"]`);
+
+    targetRow[col] = value;
+    const cell = panel.querySelector<HTMLButtonElement>(
+      `[data-tile-row="${row}"][data-tile-col="${col}"]`,
+    );
     if (cell) {
-      cell.setAttribute("data-tile-value", String(v));
-      cell.classList.toggle("bg-primary/30", v >= 0);
-      cell.classList.toggle("bg-base-300/30", v < 0);
+      updateCellAppearance(cell, value);
     }
     schedulePersist();
   };
 
-  const floodFill = (startR: number, startC: number, replaceWith: number): void => {
-    const targetRow = layer.data[startR];
-    if (!targetRow) {
-      return;
-    }
-    const target = targetRow[startC] ?? -1;
-    if (target === replaceWith) {
+  const floodFill = (startRow: number, startCol: number, nextValue: number): void => {
+    const initialRow = layer.data[startRow];
+    if (!initialRow) {
       return;
     }
 
-    const stack: [number, number][] = [[startR, startC]];
+    const targetValue = initialRow[startCol] ?? DEFAULT_TILEMAP_EMPTY_VALUE;
+    if (targetValue === nextValue) {
+      return;
+    }
+
+    const stack: GridPosition[] = [{ row: startRow, col: startCol }];
     const visited = new Set<string>();
-    let count = 0;
+    let operations = 0;
 
-    while (stack.length > 0 && count < 500) {
-      const point = stack.pop();
-      if (!point) {
+    while (stack.length > 0 && operations < TILEMAP_FILL_OPERATION_LIMIT) {
+      const position = stack.pop();
+      if (!position) {
         break;
       }
 
-      const [r, c] = point;
-      const key = `${r},${c}`;
-      const row = layer.data[r];
-
+      const { row, col } = position;
+      const key = `${row},${col}`;
+      const currentRow = layer.data[row];
       if (
-        r < 0 ||
-        r >= rows ||
-        c < 0 ||
-        c >= cols ||
+        row < 0 ||
+        row >= rows ||
+        col < 0 ||
+        col >= cols ||
         visited.has(key) ||
-        !row ||
-        row[c] !== target
+        !currentRow ||
+        currentRow[col] !== targetValue
       ) {
         continue;
       }
 
       visited.add(key);
-      setTile(r, c, replaceWith);
-      count++;
-      stack.push([r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]);
+      setTile(row, col, nextValue);
+      operations += 1;
+      stack.push(
+        { row: row - 1, col },
+        { row: row + 1, col },
+        { row, col: col - 1 },
+        { row, col: col + 1 },
+      );
     }
   };
 
-  const tilesetInput = panel.querySelector<HTMLInputElement>("[data-tilemap-tileset]");
-  if (tilesetInput) {
-    tilesetInput.addEventListener("change", () => {
-      layer.tileSetAssetId = tilesetInput.value.trim();
-      const source = getAssetSource(layer.tileSetAssetId);
-      if (source) {
-        renderPalette(source, layer.tileWidth, layer.tileHeight);
-      }
-    });
-  }
-
-  if (layer.tileSetAssetId) {
-    const source = getAssetSource(layer.tileSetAssetId);
-    if (source) {
-      renderPalette(source, layer.tileWidth, layer.tileHeight);
+  const paintPosition = (position: GridPosition): void => {
+    if (mode === "fill") {
+      floodFill(position.row, position.col, selectedTile);
+      return;
     }
-  }
 
-  for (const button of panel.querySelectorAll<HTMLElement>("[data-tilemap-mode]")) {
+    setTile(position.row, position.col, selectedTile);
+  };
+
+  const renderPalette = (source: string, tileWidth: number, tileHeight: number): void => {
+    if (!palette) {
+      return;
+    }
+
+    const eraserLabel = resolveLabelValue(panel, "data-tilemap-eraser-label", "Eraser");
+    palette.innerHTML = "";
+    const eraserButton = createPaletteButton(
+      DEFAULT_TILEMAP_EMPTY_VALUE,
+      `${paletteLabel}: ${eraserLabel}`,
+      setSelectedTile,
+    );
+    eraserButton.append(document.createTextNode(eraserLabel.slice(0, 1).toUpperCase()));
+    palette.appendChild(eraserButton);
+
+    if (!source) {
+      updatePaletteEmptyState(panel, true);
+      updatePaletteSelection(panel, selectedTile);
+      return;
+    }
+
+    const requestId = paletteRequestId + 1;
+    paletteRequestId = requestId;
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = (): void => {
+      if (paletteRequestId !== requestId) {
+        return;
+      }
+
+      const sourceWidth = image.naturalWidth || image.width;
+      const sourceHeight = image.naturalHeight || image.height;
+      const normalizedTileWidth = tileWidth > 0 ? tileWidth : DEFAULT_TILEMAP_TILE_SIZE_PX;
+      const normalizedTileHeight = tileHeight > 0 ? tileHeight : DEFAULT_TILEMAP_TILE_SIZE_PX;
+      const tileColumns = Math.max(1, Math.floor(sourceWidth / normalizedTileWidth));
+      const tileRows = Math.max(1, Math.floor(sourceHeight / normalizedTileHeight));
+      const tileCount = tileColumns * tileRows;
+
+      for (let index = 0; index < tileCount; index += 1) {
+        const tileColumn = index % tileColumns;
+        const tileRow = Math.floor(index / tileColumns);
+        const label = `${paletteLabel} #${index + 1}`;
+        const button = createPaletteButton(index, label, setSelectedTile);
+        appendPalettePreview(
+          button,
+          image,
+          tileColumn,
+          tileRow,
+          normalizedTileWidth,
+          normalizedTileHeight,
+        );
+        palette.appendChild(button);
+      }
+
+      updatePaletteEmptyState(panel, false);
+      updatePaletteSelection(panel, selectedTile);
+    };
+    image.onerror = (): void => {
+      if (paletteRequestId !== requestId) {
+        return;
+      }
+
+      updatePaletteEmptyState(panel, true);
+      updatePaletteSelection(panel, selectedTile);
+    };
+    image.src = source;
+  };
+
+  const tilesetInput = panel.querySelector<HTMLInputElement>("[data-tilemap-tileset]");
+  tilesetInput?.addEventListener("change", () => {
+    layer.tileSetAssetId = tilesetInput.value.trim();
+    renderPalette(getAssetSource(layer.tileSetAssetId), layer.tileWidth, layer.tileHeight);
+  });
+
+  for (const button of panel.querySelectorAll<HTMLButtonElement>("[data-tilemap-mode]")) {
     button.addEventListener("click", () => {
-      mode = button.getAttribute("data-tilemap-mode") ?? "brush";
-      for (const b of panel.querySelectorAll<HTMLElement>("[data-tilemap-mode]")) {
-        b.setAttribute("aria-pressed", b === button ? "true" : "false");
+      mode = button.getAttribute("data-tilemap-mode") === "fill" ? "fill" : "brush";
+      for (const candidate of panel.querySelectorAll<HTMLButtonElement>("[data-tilemap-mode]")) {
+        const isActive = candidate === button;
+        candidate.setAttribute("aria-pressed", isActive ? "true" : "false");
+        candidate.classList.toggle("btn-primary", isActive);
+        candidate.classList.toggle("btn-soft", !isActive);
       }
     });
   }
 
-  const grid = panel.querySelector<HTMLElement>("[data-tilemap-grid]");
   if (grid) {
-    grid.addEventListener("mousedown", (event) => {
-      const cell = (event.target as Element)?.closest<HTMLElement>(
-        "[data-tile-row][data-tile-col]",
-      );
-      if (!cell) {
+    grid.addEventListener("pointerdown", (event) => {
+      if (event.pointerType === "mouse" && event.button !== 0) {
+        return;
+      }
+
+      const cell = resolveTileCell(event.target);
+      const position = cell ? resolveGridPosition(cell) : null;
+      if (!cell || !position) {
         return;
       }
 
       event.preventDefault();
-      const r = parseInt(cell.getAttribute("data-tile-row") ?? "0", 10);
-      const c = parseInt(cell.getAttribute("data-tile-col") ?? "0", 10);
-
-      if (mode === "fill") {
-        floodFill(r, c, selectedTile);
-      } else {
-        isDrawing = true;
-        setTile(r, c, selectedTile);
-      }
+      paintPosition(position);
+      isDrawing = mode === "brush";
+      cell.focus();
     });
 
-    grid.addEventListener("mousemove", (event) => {
+    grid.addEventListener("pointermove", (event) => {
       if (!isDrawing || mode !== "brush") {
         return;
       }
 
-      const cell = (event.target as Element)?.closest<HTMLElement>(
-        "[data-tile-row][data-tile-col]",
-      );
-      if (!cell) {
+      if (event.buttons === 0) {
+        isDrawing = false;
         return;
       }
 
-      const r = parseInt(cell.getAttribute("data-tile-row") ?? "0", 10);
-      const c = parseInt(cell.getAttribute("data-tile-col") ?? "0", 10);
-      setTile(r, c, selectedTile);
+      const cell = resolveTileCell(event.target);
+      const position = cell ? resolveGridPosition(cell) : null;
+      if (!position) {
+        return;
+      }
+
+      paintPosition(position);
+    });
+
+    grid.addEventListener("pointerleave", () => {
+      isDrawing = false;
+    });
+
+    grid.addEventListener("pointerup", () => {
+      isDrawing = false;
+    });
+
+    grid.addEventListener("keydown", (event) => {
+      const cell = resolveTileCell(event.target);
+      const position = cell ? resolveGridPosition(cell) : null;
+      if (!cell || !position) {
+        return;
+      }
+
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        paintPosition(position);
+        return;
+      }
+
+      let nextPosition: GridPosition | null = null;
+      if (event.key === "ArrowUp") {
+        nextPosition = { row: Math.max(0, position.row - 1), col: position.col };
+      } else if (event.key === "ArrowDown") {
+        nextPosition = { row: Math.min(rows - 1, position.row + 1), col: position.col };
+      } else if (event.key === "ArrowLeft") {
+        nextPosition = { row: position.row, col: Math.max(0, position.col - 1) };
+      } else if (event.key === "ArrowRight") {
+        nextPosition = { row: position.row, col: Math.min(cols - 1, position.col + 1) };
+      }
+
+      if (!nextPosition) {
+        return;
+      }
+
+      event.preventDefault();
+      focusGridCell(panel, nextPosition.row, nextPosition.col);
     });
   }
 
-  document.addEventListener("mouseup", () => {
-    isDrawing = false;
-  });
+  renderPalette(getAssetSource(layer.tileSetAssetId), layer.tileWidth, layer.tileHeight);
+  setSelectedTile(DEFAULT_TILEMAP_EMPTY_VALUE);
 };
 
 const boot = (): void => {
@@ -354,14 +666,10 @@ const boot = (): void => {
   }
 };
 
-const refresh = (): void => {
-  boot();
-};
-
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", boot, { once: true });
 } else {
   boot();
 }
 
-document.addEventListener("htmx:afterSwap", refresh);
+document.addEventListener("htmx:afterSwap", boot);

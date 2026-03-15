@@ -1,7 +1,12 @@
 import type { LocaleCode } from "../../config/environment.ts";
 import { appConfig } from "../../config/environment.ts";
 import { resolveGameText } from "../../domain/game/data/game-text.ts";
-import { gameScenes, gameSpriteManifests } from "../../domain/game/data/sprite-data.ts";
+import {
+  gameScenes,
+  gameScenes2d,
+  gameScenes3d,
+  gameSpriteManifests,
+} from "../../domain/game/data/sprite-data.ts";
 import { appRoutes } from "../../shared/constants/routes.ts";
 import type {
   GameErrorCode,
@@ -120,7 +125,7 @@ export const defaultGameConfig: RuntimeGameConfig = {
  * @returns Scene definition or null when unavailable.
  */
 export const resolveScene = (sceneId: string): SceneDefinition | null => {
-  return gameScenes[sceneId] ?? null;
+  return gameScenes[sceneId] ?? gameScenes2d[sceneId] ?? gameScenes3d[sceneId] ?? null;
 };
 
 const humanizeSceneIdentifier = (sceneId: string): string =>

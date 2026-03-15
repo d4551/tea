@@ -22,6 +22,8 @@ export const gameTextByLocale: Record<GameLocale, GameTextCatalog> = {
   "en-US": {
     scenes: {
       "scene.teaHouse.title": "Yangtze Tea House",
+      "scene.pixelGarden.title": "Pixel Garden",
+      "scene.orbitalStation.title": "Orbital Station",
     },
     npcs: {
       "npc.teaMonk.label": "Tea Monk",
@@ -44,6 +46,17 @@ export const gameTextByLocale: Record<GameLocale, GameTextCatalog> = {
       "npc.riverPilot.lines.oracle-quote":
         "The five elements never lie. Let me consult them for you...",
       "npc.riverPilot.greet": "The leaves stir... someone approaches.",
+      "npc.gardenKeeper.label": "Garden Keeper",
+      "npc.gardenKeeper.greet": "Welcome to the garden. The soil is rich today.",
+      "npc.gardenKeeper.lines.seeds":
+        "Every seed holds a story. Plant with intention, harvest with gratitude.",
+      "npc.gardenKeeper.lines.harvest":
+        "The best crops come to those who tend the soil, not just the plants.",
+      "npc.wanderingSage.label": "Wandering Sage",
+      "npc.wanderingSage.greet": "Peace finds those who seek stillness.",
+      "npc.wanderingSage.lines.meditation":
+        "In the garden, time slows. Breathe. Let the world settle around you.",
+      "npc.wanderingSage.lines.peace": "The flowers do not rush. Neither should you.",
     },
     progression: {
       levelNames: [
@@ -61,6 +74,8 @@ export const gameTextByLocale: Record<GameLocale, GameTextCatalog> = {
   "zh-CN": {
     scenes: {
       "scene.teaHouse.title": "长江茶馆",
+      "scene.pixelGarden.title": "像素花园",
+      "scene.orbitalStation.title": "轨道站",
     },
     npcs: {
       "npc.teaMonk.label": "茶僧",
@@ -76,6 +91,14 @@ export const gameTextByLocale: Record<GameLocale, GameTextCatalog> = {
       "npc.riverPilot.lines.oracle-intro": "只要有胆识，便可让茶叶为你解梦：说出来，让叶子回答吧。",
       "npc.riverPilot.lines.oracle-quote": "五行不欺。先让叶阵替你占一下。",
       "npc.riverPilot.greet": "叶片微动——有人靠近了。",
+      "npc.gardenKeeper.label": "园丁",
+      "npc.gardenKeeper.greet": "欢迎来到花园。今日土壤肥沃。",
+      "npc.gardenKeeper.lines.seeds": "每颗种子都藏着故事。用心播种，感恩收获。",
+      "npc.gardenKeeper.lines.harvest": "最好的收成属于那些照料土壤的人，而非只照料植物的人。",
+      "npc.wanderingSage.label": "游方智者",
+      "npc.wanderingSage.greet": "宁静属于寻求静心之人。",
+      "npc.wanderingSage.lines.meditation": "在花园里，时间变慢。呼吸。让世界在你周围安定下来。",
+      "npc.wanderingSage.lines.peace": "花儿不匆忙。你也不必。",
     },
     progression: {
       levelNames: [
