@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import type { ControlPlaneSnapshot } from "../../shared/contracts/platform-control-plane.ts";
 import { getMessages } from "../../shared/i18n/translator.ts";
 import { renderControlPlanePage } from "./control-plane.ts";
-import type { ControlPlaneSnapshot } from "../../shared/contracts/platform-control-plane.ts";
 
 const snapshot: ControlPlaneSnapshot = {
   games: [

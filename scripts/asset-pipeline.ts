@@ -5,11 +5,9 @@ import {
   getHtmxExtensionEntryPaths,
   joinLocalPath,
 } from "../src/shared/constants/assets.ts";
-import { safeJsonParse } from "../src/shared/utils/safe-json.ts";
+import { isRecord, safeJsonParse } from "../src/shared/utils/safe-json.ts";
 
 type BunBuildOptions = Parameters<typeof Bun.build>[0];
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
 const emptyRecord: Record<string, unknown> = {};
 
 const resolvePackagePath = (specifier: string): string =>

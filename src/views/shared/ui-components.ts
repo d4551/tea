@@ -6,6 +6,7 @@
  */
 
 import { escapeHtml } from "../layout.ts";
+import { renderLinkMetadataAttrs as renderSharedLinkMetadataAttrs } from "./link-attrs.ts";
 
 /* ------------------------------------------------------------------ */
 /* Shared CSS Class Constants (DRY)                                   */
@@ -90,6 +91,12 @@ export interface ButtonConfig {
   readonly type?: "button" | "submit" | "reset";
   /** Optional href for link buttons. */
   readonly href?: string;
+  /** Optional locale code for localized link metadata. */
+  readonly linkLanguage?: string;
+  /** Optional target for link buttons. */
+  readonly target?: "_blank" | "_self";
+  /** Optional rel for link buttons. */
+  readonly rel?: string;
   /** Optional HTMX attributes. */
   readonly htmx?: {
     readonly get?: string;
@@ -172,6 +179,8 @@ export interface TabItem {
   readonly badge?: number;
   /** Optional href for link tabs. */
   readonly href?: string;
+  /** Optional locale code for localized link metadata. */
+  readonly linkLanguage?: string;
   /** Optional HTMX attributes. */
   readonly htmx?: {
     readonly get?: string;
@@ -438,6 +447,8 @@ const variantClasses: Record<string, string> = {
   outline: "btn-outline",
 };
 
+const renderLinkMetadataAttrs = renderSharedLinkMetadataAttrs;
+
 /**
  * Renders a DaisyUI button.
  */
@@ -453,12 +464,12 @@ export const renderButton = (config: ButtonConfig): string => {
     sizeClasses[size] ?? "",
     config.loading ? "loading" : "",
     config.className ?? "",
+    config.disabled ? "btn-disabled" : "",
   ]
     .filter(Boolean)
     .join(" ");
 
   const disabledAttr = config.disabled ? " disabled" : "";
-  const ariaLabelAttr = ariaLabel ? ` aria-label="${escapeHtml(ariaLabel)}"` : "";
   const idAttr = config.id ? ` id="${escapeHtml(config.id)}"` : "";
 
   const htmxAttrs = config.htmx ? renderHtmxAttrs(config.htmx) : "";
@@ -471,9 +482,21 @@ export const renderButton = (config: ButtonConfig): string => {
   const content = `${leadingIcon}${escapeHtml(config.label)}${trailingIcon}`;
 
   if (config.href) {
-    return `<a href="${escapeHtml(config.href)}" class="${classes}"${ariaLabelAttr}${idAttr}${htmxAttrs}>${content}</a>`;
+    const linkAttrs = renderLinkMetadataAttrs({
+      href: config.disabled ? undefined : config.href,
+      ariaLabel,
+      id: config.id,
+      linkLanguage: config.linkLanguage,
+      target: config.disabled ? undefined : config.target,
+      rel: config.disabled ? undefined : config.rel,
+    });
+    const disabledAttrs = config.disabled
+      ? ' role="button" tabindex="-1" aria-disabled="true"'
+      : "";
+    return `<a class="${classes}"${linkAttrs}${disabledAttrs}${htmxAttrs}>${content}</a>`;
   }
 
+  const ariaLabelAttr = ariaLabel ? ` aria-label="${escapeHtml(ariaLabel)}"` : "";
   return `<button class="${classes}"${typeAttr}${disabledAttr}${ariaLabelAttr}${idAttr}${htmxAttrs}>${content}</button>`;
 };
 
@@ -641,16 +664,22 @@ export const renderTabs = (config: TabsConfig): string => {
 
       const disabledAttr = tab.disabled ? " disabled" : "";
       const activeAttr = isActive ? ' aria-selected="true"' : ' aria-selected="false"';
+      const currentAttr = isActive ? ' aria-current="page"' : "";
 
-      if (tab.href && !tab.htmx) {
-        return `<a href="${escapeHtml(tab.href)}" class="tab ${activeClass}" role="tab"${activeAttr}${disabledAttr} aria-label="${escapeHtml(tab.label)}">${content}</a>`;
+      if (tab.href) {
+        const linkAttrs = renderLinkMetadataAttrs({
+          href: tab.href,
+          ariaLabel: tab.label,
+          linkLanguage: tab.linkLanguage,
+        });
+        return `<a class="tab ${activeClass}" role="tab"${activeAttr}${currentAttr}${disabledAttr}${linkAttrs}${htmxAttrs}>${content}</a>`;
       }
 
-      return `<button type="button" class="tab ${activeClass}" role="tab"${activeAttr}${disabledAttr} aria-label="${escapeHtml(tab.label)}"${htmxAttrs}>${content}</button>`;
+      return `<button type="button" class="tab ${activeClass}" role="tab"${activeAttr}${currentAttr}${disabledAttr} aria-label="${escapeHtml(tab.label)}"${htmxAttrs}>${content}</button>`;
     })
     .join("");
 
-  return `<nav class="${containerClasses}" role="tablist" aria-label="${escapeHtml(ariaLabel)}">${tabItems}</nav>`;
+  return `<nav class="${containerClasses}" role="tablist" aria-orientation="horizontal" aria-label="${escapeHtml(ariaLabel)}">${tabItems}</nav>`;
 };
 
 /**
@@ -838,7 +867,7 @@ export const renderField = (config: FieldConfig): string => {
     inputHtml = `<select${idAttr}${nameAttr}${ariaLabelAttr}${requiredAttr}${disabledAttr}${ariaInvalidAttr}${ariaDescribedByAttr} class="${inputClasses}">${optionsHtml}</select>`;
   } else {
     const typeAttr = ` type="${config.type ?? "text"}"`;
-    inputHtml = `<input${idAttr}${nameAttr}${typeAttr}${placeholderAttr}${valueAttr}${minAttr}${maxAttr}${stepAttr}${requiredAttr}${disabledAttr}${ariaInvalidAttr}${ariaDescribedByAttr} class="${inputClasses}" />`;
+    inputHtml = `<input${idAttr}${nameAttr}${typeAttr}${placeholderAttr}${valueAttr}${minAttr}${maxAttr}${stepAttr}${requiredAttr}${disabledAttr}${ariaInvalidAttr}${ariaDescribedByAttr}${ariaLabelAttr} class="${inputClasses}" />`;
   }
 
   const helpHtml = config.helpText

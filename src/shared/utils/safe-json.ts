@@ -1,3 +1,5 @@
+import type { Prisma } from "@prisma/client";
+
 /**
  * Safe JSON parsing and URL decoding utilities.
  *
@@ -355,11 +357,33 @@ const parseJsonObject = (cursor: JsonParseCursor): JsonValueResult => {
   return { success: false };
 };
 
+export const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
 /**
  * Validator that accepts any parsed value. Use only when the result is consumed as unknown
  * or validated separately. Never use for typed results without explicit structure validation.
+ * @deprecated Prefer explicit validators for each payload shape. For truly unbounded fallback
+ * scenarios, use `(value): value is unknown => true`.
  */
 export const acceptUnknown = (value: unknown): value is unknown => true;
+
+const isInputJsonValueArray = (value: readonly unknown[]): value is Prisma.InputJsonValue[] =>
+  value.every(isInputJsonValue);
+
+const isInputJsonValueObject = (value: unknown): value is Record<string, Prisma.InputJsonValue> =>
+  typeof value === "object" &&
+  value !== null &&
+  !Array.isArray(value) &&
+  Object.values(value).every(isInputJsonValue);
+
+export const isInputJsonValue = (value: unknown): value is Prisma.InputJsonValue =>
+  value === null ||
+  typeof value === "string" ||
+  typeof value === "number" ||
+  typeof value === "boolean" ||
+  (Array.isArray(value) && isInputJsonValueArray(value)) ||
+  isInputJsonValueObject(value);
 
 const readJsonParseResult = (source: string): unknown | null => {
   const cursor: JsonParseCursor = {

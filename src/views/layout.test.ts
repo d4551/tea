@@ -23,6 +23,8 @@ describe("renderDocument", () => {
     expect(html).toContain(messages.common.skipToContent);
     expect(html).toContain(messages.common.openAiAssistant);
     expect(html).toContain(messages.navigation.controlPlane);
+    expect(html).toContain('rel="alternate" hreflang="en-US"');
+    expect(html).toContain('rel="alternate" hreflang="zh-CN"');
   });
 
   test("applies project branding to document metadata and theme scope", () => {
@@ -44,5 +46,21 @@ describe("renderDocument", () => {
     expect(html).toContain(`style="--app-heading-font:`);
     expect(html).toContain(`<title>Start Here · ${brand.appName}</title>`);
     expect(html).toContain(`content="${brand.appSubtitle}"`);
+  });
+
+  test("keeps footer resource links locale-aware and points game to the playable surface", () => {
+    const locale = "en-US";
+    const messages = getMessages(locale);
+    const layout: LayoutContext = {
+      locale,
+      messages,
+      activeRoute: "home",
+      currentPathWithQuery: "/?lang=en-US",
+    };
+
+    const html = renderDocument(layout, messages.pages.home.title, "<section>body</section>");
+
+    expect(html).toContain(`href="/?lang=${locale}" aria-label="${messages.navigation.game}"`);
+    expect(html).toContain(`hreflang="${locale}"`);
   });
 });

@@ -32,7 +32,7 @@ import type {
 import { validateGameCommandInput } from "../../shared/contracts/game.ts";
 import { getMessages } from "../../shared/i18n/translator.ts";
 import { settleAsync } from "../../shared/utils/async-result.ts";
-import { safeJsonParse } from "../../shared/utils/safe-json.ts";
+import { isRecord, safeJsonParse } from "../../shared/utils/safe-json.ts";
 import { builderService } from "../builder/builder-service.ts";
 import { generateNpcDialogue } from "./ai/game-ai-service.ts";
 import { combatEngine } from "./combat-engine.ts";
@@ -53,6 +53,51 @@ import { buildSessionSceneState } from "./utils/session-state.ts";
 
 // Wrap worldTimeMs at ~1 day to prevent float precision loss in NPC PRNG
 const WORLD_TIME_WRAP_MS = defaultGameConfig.worldTimeWrapMs;
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+const toBase64Url = (value: Uint8Array): string =>
+  value.toBase64().replace(/\+/gu, "-").replace(/\//gu, "_").replace(/=+$/gu, "");
+
+const isBase64Url = (value: string): boolean => {
+  if (value.length === 0 || !/^[A-Za-z0-9_-]+$/u.test(value)) {
+    return false;
+  }
+
+  const remainder = value.length % 4;
+  return remainder === 0 || remainder === 2 || remainder === 3;
+};
+
+const fromBase64Url = (value: string): Uint8Array => {
+  if (!isBase64Url(value)) {
+    return new Uint8Array();
+  }
+  const normalized = value.replace(/-/gu, "+").replace(/_/gu, "/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+  return Uint8Array.fromBase64(padded);
+};
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0;
+
+const isResumeTokenPayload = (value: unknown): value is ResumeTokenPayload =>
+  isRecord(value) &&
+  isNonEmptyString(value.sessionId) &&
+  isNonEmptyString(value.participantSessionId) &&
+  isFiniteNumber(value.expiresAtMs) &&
+  isFiniteNumber(value.tokenVersion) &&
+  isNonEmptyString(value.signature);
+
+const isInviteTokenPayload = (value: unknown): value is InviteTokenPayload =>
+  isRecord(value) &&
+  isNonEmptyString(value.sessionId) &&
+  isNonEmptyString(value.ownerSessionId) &&
+  (value.role === "controller" || value.role === "spectator") &&
+  isFiniteNumber(value.expiresAtMs) &&
+  isNonEmptyString(value.signature);
+
 const MULTIPLAYER_PRESENCE_OFFSETS: readonly Readonly<{
   readonly x: number;
   readonly y: number;
@@ -163,16 +208,17 @@ const encodeResumeToken = (
   expiresAtMs: number,
   tokenVersion: number,
 ): string =>
-  Buffer.from(
-    JSON.stringify({
-      sessionId,
-      participantSessionId,
-      expiresAtMs,
-      tokenVersion,
-      signature: hashResumePayload(sessionId, participantSessionId, expiresAtMs, tokenVersion),
-    } satisfies ResumeTokenPayload),
-    "utf8",
-  ).toString("base64url");
+  toBase64Url(
+    textEncoder.encode(
+      JSON.stringify({
+        sessionId,
+        participantSessionId,
+        expiresAtMs,
+        tokenVersion,
+        signature: hashResumePayload(sessionId, participantSessionId, expiresAtMs, tokenVersion),
+      } satisfies ResumeTokenPayload),
+    ),
+  );
 
 const encodeInviteToken = (
   sessionId: string,
@@ -180,36 +226,27 @@ const encodeInviteToken = (
   role: Exclude<GameSessionParticipantRole, "owner">,
   expiresAtMs: number,
 ): string =>
-  Buffer.from(
-    JSON.stringify({
-      sessionId,
-      ownerSessionId,
-      role,
-      expiresAtMs,
-      signature: hashInvitePayload(sessionId, ownerSessionId, role, expiresAtMs),
-    } satisfies InviteTokenPayload),
-    "utf8",
-  ).toString("base64url");
+  toBase64Url(
+    textEncoder.encode(
+      JSON.stringify({
+        sessionId,
+        ownerSessionId,
+        role,
+        expiresAtMs,
+        signature: hashInvitePayload(sessionId, ownerSessionId, role, expiresAtMs),
+      } satisfies InviteTokenPayload),
+    ),
+  );
 
 const decodeResumeToken = (token: string): ResumeTokenPayload | null => {
-  const decoded = Buffer.from(token, "base64url").toString("utf8");
+  const decoded = textDecoder.decode(fromBase64Url(token));
   const payload = safeJsonParse<ResumeTokenPayload | null>(
     decoded,
     null,
-    (v): v is ResumeTokenPayload | null => true,
+    (v): v is ResumeTokenPayload | null => v === null || isResumeTokenPayload(v),
   );
 
-  if (
-    !payload ||
-    typeof payload.sessionId !== "string" ||
-    payload.sessionId.length === 0 ||
-    typeof payload.participantSessionId !== "string" ||
-    payload.participantSessionId.length === 0 ||
-    !Number.isFinite(payload.expiresAtMs) ||
-    !Number.isFinite(payload.tokenVersion) ||
-    typeof payload.signature !== "string" ||
-    payload.signature.length === 0
-  ) {
+  if (!payload || payload.expiresAtMs <= 0 || payload.tokenVersion < 0) {
     return null;
   }
 
@@ -217,21 +254,14 @@ const decodeResumeToken = (token: string): ResumeTokenPayload | null => {
 };
 
 const decodeInviteToken = (token: string): InviteTokenPayload | null => {
-  const decoded = Buffer.from(token, "base64url").toString("utf8");
+  const decoded = textDecoder.decode(fromBase64Url(token));
   const payload = safeJsonParse<InviteTokenPayload | null>(
     decoded,
     null,
-    (v): v is InviteTokenPayload | null => true,
+    (v): v is InviteTokenPayload | null => v === null || isInviteTokenPayload(v),
   );
 
-  if (
-    !payload ||
-    payload.sessionId.length === 0 ||
-    payload.ownerSessionId.length === 0 ||
-    (payload.role !== "controller" && payload.role !== "spectator") ||
-    !Number.isFinite(payload.expiresAtMs) ||
-    payload.signature.length === 0
-  ) {
+  if (!payload || payload.expiresAtMs <= 0) {
     return null;
   }
 
@@ -1231,70 +1261,79 @@ export class GameLoopService {
     await this.persistSessionIfDue(session, true);
   }
 
+  private async runScheduledTick(sessionId: string): Promise<void> {
+    if (this.tickInFlight.has(sessionId)) {
+      this.scheduleTick(sessionId, defaultGameConfig.tickMs);
+      return;
+    }
+
+    this.tickInFlight.add(sessionId);
+
+    const runTick = async (): Promise<void> => {
+      const snapshot = await this.tick(sessionId, defaultGameConfig.tickMs);
+      if (!snapshot) {
+        this._clearTick(sessionId);
+        return;
+      }
+
+      for (const cb of this.tickCallbacks.get(sessionId) ?? []) {
+        cb(snapshot);
+      }
+
+      if (this.shouldKeepTicking(sessionId, snapshot.state)) {
+        this.scheduleTick(sessionId, defaultGameConfig.tickMs);
+        return;
+      }
+
+      await this.flushSession(sessionId);
+      this._clearTick(sessionId);
+    };
+
+    const tickRunResult = await settleAsync(runTick());
+    if (!tickRunResult.ok) {
+      logger.error("tick.failed", {
+        sessionId,
+        error: String(tickRunResult.error),
+      });
+      const restored = await settleAsync(this.stateStore.getSession(sessionId));
+      if (!restored.ok) {
+        logger.warn("game-loop.tick.restore-failed", {
+          sessionId,
+          error: String(restored.error),
+        });
+      } else if (restored.value.ok) {
+        this.liveSessions.set(sessionId, this.toMutable(restored.value.payload));
+      } else {
+        logger.debug("game-loop.tick.restore-miss", {
+          sessionId,
+          reason: restored.value.error,
+        });
+      }
+
+      if (
+        (this.tickCallbacks.get(sessionId)?.size ?? 0) > 0 ||
+        this.getCommandQueueDepth(sessionId) > 0
+      ) {
+        this.scheduleTick(sessionId, defaultGameConfig.tickMs);
+      }
+    }
+
+    this.tickInFlight.delete(sessionId);
+  }
+
   private scheduleTick(sessionId: string, delayMs: number): void {
     if (this.tickTimeouts.has(sessionId)) {
       return;
     }
 
+    if (delayMs <= 0) {
+      void this.runScheduledTick(sessionId);
+      return;
+    }
+
     const timeout = setTimeout(async () => {
       this.tickTimeouts.delete(sessionId);
-      if (this.tickInFlight.has(sessionId)) {
-        this.scheduleTick(sessionId, defaultGameConfig.tickMs);
-        return;
-      }
-
-      this.tickInFlight.add(sessionId);
-
-      const runTick = async (): Promise<void> => {
-        const snapshot = await this.tick(sessionId, defaultGameConfig.tickMs);
-        if (!snapshot) {
-          this._clearTick(sessionId);
-          return;
-        }
-
-        for (const cb of this.tickCallbacks.get(sessionId) ?? []) {
-          cb(snapshot);
-        }
-
-        if (this.shouldKeepTicking(sessionId, snapshot.state)) {
-          this.scheduleTick(sessionId, defaultGameConfig.tickMs);
-          return;
-        }
-
-        await this.flushSession(sessionId);
-        this._clearTick(sessionId);
-      };
-
-      const tickRunResult = await settleAsync(runTick());
-      if (!tickRunResult.ok) {
-        logger.error("tick.failed", {
-          sessionId,
-          error: String(tickRunResult.error),
-        });
-        const restored = await settleAsync(this.stateStore.getSession(sessionId));
-        if (!restored.ok) {
-          logger.warn("game-loop.tick.restore-failed", {
-            sessionId,
-            error: String(restored.error),
-          });
-        } else if (restored.value.ok) {
-          this.liveSessions.set(sessionId, this.toMutable(restored.value.payload));
-        } else {
-          logger.debug("game-loop.tick.restore-miss", {
-            sessionId,
-            reason: restored.value.error,
-          });
-        }
-
-        if (
-          (this.tickCallbacks.get(sessionId)?.size ?? 0) > 0 ||
-          this.getCommandQueueDepth(sessionId) > 0
-        ) {
-          this.scheduleTick(sessionId, defaultGameConfig.tickMs);
-        }
-      }
-
-      this.tickInFlight.delete(sessionId);
+      await this.runScheduledTick(sessionId);
     }, delayMs);
 
     this.tickTimeouts.set(sessionId, timeout);

@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="en-US" data-theme="tea-dark" data-theme-lock="project">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="view-transition" content="same-origin" />
+    <title>Playable World · TEA Project</title>
+    <meta name="description" content="Editorial game-operations platform for playable worlds" />
+    <link rel="alternate" hreflang="en-US" href="/projects/default/playtest?lang=en-US&amp;sessionId=1b149a55-0475-455a-979f-c7fee1da2398" />
+    <link rel="alternate" hreflang="zh-CN" href="/projects/default/playtest?lang=zh-CN&amp;sessionId=1b149a55-0475-455a-979f-c7fee1da2398" />
+    <link rel="alternate" hreflang="x-default" href="/projects/default/playtest?lang=en-US&amp;sessionId=1b149a55-0475-455a-979f-c7fee1da2398" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&amp;family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;family=Manrope:wght@400;500;600;700;800&amp;family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&amp;family=Outfit:wght@300;400;500;600;700;800&amp;family=Sora:wght@300;400;500;600;700;800&amp;family=Space+Mono:wght@400;700&amp;display=swap" media="print" onload="this.media='all'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&amp;family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;family=Manrope:wght@400;500;600;700;800&amp;family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&amp;family=Outfit:wght@300;400;500;600;700;800&amp;family=Sora:wght@300;400;500;600;700;800&amp;family=Space+Mono:wght@400;700&amp;display=swap" /></noscript>
+    <link rel="stylesheet" href="/public/app.css" />
+    <script src="/public/vendor/htmx.min.js" defer></script>
+    <script src="/public/vendor/htmx-ext/sse.js" defer></script>
+    <script src="/public/vendor/htmx-ext/oracle-indicator.js" type="module"></script>
+    <script src="/public/vendor/htmx-ext/focus-panel.js" type="module"></script>
+  </head>
+  <body class="min-h-screen bg-base-100 text-base-content antialiased" hx-boost="false" hx-target="#main-content" hx-select="#main-content" hx-ext="layout-controls,focus-panel" style="--app-heading-font:&quot;Sora&quot;, sans-serif; --app-body-font:&quot;DM Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif; --app-mono-font:&quot;Space Mono&quot;, &quot;IBM Plex Mono&quot;, ui-monospace, monospace; --app-code-font:&quot;Space Mono&quot;, &quot;IBM Plex Mono&quot;, ui-monospace, monospace; --color-primary:#7C5CFF; --color-primary-content:#F8FAFC; --color-secondary:#2EC5CE; --color-secondary-content:#0F172A; --color-accent:#F59E0B; --color-accent-content:#F8FAFC; --color-neutral:#1F2937; --color-neutral-content:#F8FAFC; --color-base-100:#0F172A; --color-base-200:#10182B; --color-base-300:#121A2C; --color-base-content:#F8FAFC; --color-focus-ring:#7C5CFF">
+    <a
+      href="#main-content"
+      class="sr-only z-[100] m-2 inline-flex items-center gap-2 rounded-lg border-2 border-primary bg-base-100 px-4 py-3 text-sm font-semibold text-primary shadow-lg transition-all duration-200 focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:ring-2 focus:ring-primary focus:ring-offset-2 hover:bg-primary hover:text-primary-content"
+      aria-label="Skip to main content"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      Skip to main content
+    </a>
+    
+    <!-- AI Chat Wrapper (Right Drawer) -->
+    <div class="drawer drawer-end touch-pan-y">
+      <input
+        id="ai-chat-drawer"
+        type="checkbox"
+        class="drawer-toggle"
+        aria-label="Open AI Assistant"
+        
+      />
+      <div class="drawer-content relative flex min-h-screen flex-col">
+
+        <!-- Main Nav Wrapper (Left Drawer) -->
+        <div class="drawer flex-1 min-w-0">
+          <input id="main-nav-drawer" type="checkbox" class="drawer-toggle" aria-label="Open navigation menu" />
+          <div class="drawer-content flex w-full max-w-[100vw] min-w-0 flex-col">
+
+            
+
+            <main id="main-content" tabindex="-1" class="mx-auto flex w-full max-w-[1600px] flex-col gap-8 px-4 lg:px-8 py-6 lg:py-8 vt-main flex-1 game-page-layout items-start min-w-0 section-stack">
+              
+    <script id="game-client-bootstrap" type="application/json">{"session":{"sessionId":"1b149a55-0475-455a-979f-c7fee1da2398","participantSessionId":"efca14b7-a724-4d4c-9226-770e2579d191","resumeToken":"eyJzZXNzaW9uSWQiOiIxYjE0OWE1NS0wNDc1LTQ1NWEtOTc5Zi1jN2ZlZTFkYTIzOTgiLCJwYXJ0aWNpcGFudFNlc3Npb25JZCI6ImVmY2ExNGI3LWE3MjQtNGQ0Yy05MjI2LTc3MGUyNTc5ZDE5MSIsImV4cGlyZXNBdE1zIjoxNzc0MTk3NzMxMzk1LCJ0b2tlblZlcnNpb24iOjEsInNpZ25hdHVyZSI6IjJsMjQxYml6eTVwc2EifQ","locale":"en-US","resumeTokenExpiresAtMs":1774197731395,"commandQueueDepth":0,"version":1,"participantRole":"owner"},"runtime":{"commandSendIntervalMs":50,"commandTtlMs":60000,"socketReconnectDelayMs":1000,"restoreRequestTimeoutMs":5000,"restoreMaxAttempts":2,"rendererPreference":"webgpu"}}</script>
+    <div class="game-page-grid gap-5 font-serif stagger-children animate-fade-in-up" hx-boost="false" hx-ext="sse" sse-connect="http://127.0.0.1:3088/api/game/session/1b149a55-0475-455a-979f-c7fee1da2398/hud?locale=en-US" data-sse-url="http://127.0.0.1:3088/api/game/session/1b149a55-0475-455a-979f-c7fee1da2398/hud?locale=en-US" data-builder-href="/projects/default/start?lang=en-US" data-back-to-builder-label="Back to builder" data-connecting-to-realm="Connecting to Realm...">
+      <section class="rounded-[1.5rem] border border-base-300 bg-base-100/92 p-4 shadow-sm">
+          <div class="flex flex-col gap-4">
+            <div class="space-y-3">
+              <div class="border-none bg-transparent px-0 py-0">
+    <nav aria-label="Create playable slice" class="breadcrumbs max-w-[1600px] text-sm">
+      <ul><li><a href="/projects/default/start?lang=en-US" aria-label="Game Builder">Game Builder</a></li><li><span aria-current="page">Playtest</span></li></ul>
+    </nav>
+  </div>
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div class="space-y-2">
+                  <span class="badge badge-primary badge-soft">Playtest</span>
+                  <div class="space-y-1">
+                    <h2 class="text-lg font-semibold tracking-tight">Create playable slice</h2>
+                    <p class="text-sm leading-6 text-base-content/72">Playtest as soon as one scene, one character, and one interaction work. Save the review queue and AI tools for acceleration, not for first setup.</p>
+                  </div>
+                </div>
+                <a class="btn btn-outline btn-sm" href="/projects/default/systems?lang=en-US" aria-label="Rules &amp; Progress">
+                        <span aria-hidden="true">←</span>
+                        <span>Rules &amp; Progress</span>
+                      </a>
+              </div>
+            </div>
+            <div class="surface-scroll surface-scroll-x surface-scroll-fade-x touch-pan-x pb-1">
+    <nav class="tabs tabs-lg tabs-box interactive-surface min-w-max border border-base-300/70 bg-base-200/85 p-1 shadow-sm" role="tablist" aria-label="Create playable slice">
+      <a href="/projects/default/start?lang=en-US" role="tab" class="tab " aria-selected="false" aria-label="Start Here" ><span>Start Here</span></a><a href="/projects/default/world?lang=en-US" role="tab" class="tab " aria-selected="false" aria-label="World" ><span>World</span></a><a href="/projects/default/assets?lang=en-US" role="tab" class="tab " aria-selected="false" aria-label="Art &amp; Audio" ><span>Art &amp; Audio</span></a><a href="/projects/default/characters?lang=en-US" role="tab" class="tab " aria-selected="false" aria-label="Characters" ><span>Characters</span></a><a href="/projects/default/story?lang=en-US" role="tab" class="tab " aria-selected="false" aria-label="Story" ><span>Story</span></a><a href="/projects/default/systems?lang=en-US" role="tab" class="tab " aria-selected="false" aria-label="Rules &amp; Progress" ><span>Rules &amp; Progress</span></a><a href="/projects/default/playtest?lang=en-US" role="tab" class="tab tab-active [--tab-color:var(--color-primary)]" aria-selected="true" aria-label="Playtest" ><span>Playtest</span></a>
+    </nav>
+  </div>
+          </div>
+        </section>
+      <!-- Game Header Bar -->
+      <header class="bg-base-200 card shadow">
+        <div class="card-body p-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div class="flex items-center gap-3 min-w-0 shrink" role="group" aria-label="Scene">
+            <div class="rounded-lg w-10 h-10 flex items-center justify-center bg-primary/15 text-primary shrink-0 font-semibold">TEA</div>
+            <div class="min-w-0">
+              <p class="text-xs uppercase tracking-[0.22em] text-base-content/55">Playable World</p>
+              <h1
+                id="game-scene-title-heading"
+                sse-swap="scene-title-heading"
+                hx-swap="outerHTML"
+                class="text-heading-2 font-bold tracking-tight truncate"
+              >Yangtze Tea House</h1>
+              <p
+                id="game-objective-summary"
+                sse-swap="objective-summary"
+                hx-swap="outerHTML"
+                class="text-sm text-base-content/60 truncate"
+              >Speak with the tea monk</p>
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-4 lg:gap-6">
+            <div class="flex gap-2" role="group" aria-label="Game Builder">
+              <a href="/projects/default/start?lang=en-US" class="btn btn-outline btn-sm gap-2" aria-label="Back to builder">
+                <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                <span class="hidden sm:inline">Back to builder</span>
+              </a>
+              <button type="button" class="btn btn-ghost btn-sm gap-2" data-modal-trigger="key_bindings_modal" aria-label="Key Bindings">
+                <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-1.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h1.09a1.65 1.65 0 001-1.51 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v1.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-1.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                <span class="hidden sm:inline">Key Bindings</span>
+              </button>
+            
+              <button type="button" class="btn btn-ghost btn-sm gap-2" data-modal-trigger="save_slot_modal" aria-label="Save">
+                <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                <span class="hidden sm:inline">Save</span>
+              </button>
+              <button type="button" class="btn btn-ghost btn-sm gap-2" data-modal-trigger="load_slot_modal" aria-label="Load">
+                <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span class="hidden sm:inline">Load</span>
+              </button>
+            
+            </div>
+            <div class="flex items-center gap-2 flex-wrap" role="group" aria-label="connecting">
+            <span id="game-session-meta" class="hidden"
+              data-session-id="1b149a55-0475-455a-979f-c7fee1da2398"
+              data-participant-session-id="efca14b7-a724-4d4c-9226-770e2579d191"
+              data-resume-token="eyJzZXNzaW9uSWQiOiIxYjE0OWE1NS0wNDc1LTQ1NWEtOTc5Zi1jN2ZlZTFkYTIzOTgiLCJwYXJ0aWNpcGFudFNlc3Npb25JZCI6ImVmY2ExNGI3LWE3MjQtNGQ0Yy05MjI2LTc3MGUyNTc5ZDE5MSIsImV4cGlyZXNBdE1zIjoxNzc0MTk3NzMxMzk1LCJ0b2tlblZlcnNpb24iOjEsInNpZ25hdHVyZSI6IjJsMjQxYml6eTVwc2EifQ"
+              data-command-queue-depth="0"
+              data-version="1"
+              data-locale="en-US"
+              role="status" aria-live="polite">
+            </span>
+            <div
+              id="game-connection-status"
+              class="flex items-center gap-2 rounded-box bg-base-200 px-3 py-2 text-sm"
+              aria-label="connecting"
+              data-connecting-label="connecting"
+              data-connected-label="connected"
+              data-disconnected-prefix="disconnected"
+              data-reconnecting-label="reconnecting"
+              data-expired-label="session expired"
+              data-missing-label="session missing"
+              role="status"
+              aria-live="polite"
+            >
+              <span id="game-connection-indicator" class="status status-warning status-sm status-ping"></span>
+              <span id="game-connection-status-text">connecting</span>
+            </div>
+            <span
+              id="game-command-queue"
+              class="badge badge-outline badge-sm gap-1"
+              aria-label="queue"
+              data-queue-label="queue"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              0
+            </span>
+            <button
+              id="game-reconnect"
+              type="button"
+              class="btn btn-xs btn-warning hidden gap-1"
+              aria-label="Reconnect"
+              data-reconnect-label="Reconnect"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 11-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+              Reconnect
+            </button>
+            <div
+              id="hud-xp"
+              data-hud-slot="hud-xp"
+              sse-swap="xp"
+              hx-swap="outerHTML"
+              data-xp-label="XP"
+              data-level-label="Lv"
+              class="badge badge-primary badge-lg px-4 shadow-md gap-1"
+              aria-live="polite"
+              role="status"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              XP: 0 / Lvl 1
+            </div>
+            </div>
+          </div>
+        </div>
+        <div
+          id="game-connection-alert"
+          class="hidden border-t border-base-300/50 bg-warning/10 px-4 py-2 text-sm"
+          role="alert"
+          aria-live="polite"
+        >
+          <div class="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="size-4 text-warning shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span id="game-connection-alert-text">connecting</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="grid gap-6 lg:grid-cols-[0.82fr_0.18fr]" aria-label="Playable runtime surface">
+          <div class="relative aspect-video overflow-hidden rounded-xl border border-base-content/20 bg-black shadow-2xl">
+            <div
+              id="game-canvas-wrapper"
+              class="absolute inset-0 h-full w-full cursor-auto outline-none data-[runtime-active=true]:cursor-none"
+              tabindex="0"
+              aria-label="Playable runtime surface"
+              aria-describedby="game-runtime-help game-controls-list"
+              data-runtime-active="false"
+              data-runtime-focus-active-label="Runtime controls active."
+              data-runtime-focus-inactive-label="Runtime controls inactive."
+              data-spectator-control-denied-label="Spectators cannot control gameplay."
+            ></div>
+
+            <div
+              class="pointer-events-none absolute inset-0 flex flex-col justify-between p-6 backdrop-blur-sm"
+            >
+              <div class="flex justify-between items-start pt-2">
+                <div id="hud-scene" sse-swap="scene-badge" hx-swap="outerHTML" aria-live="polite" role="status" class="pointer-events-auto rounded-full border border-base-content/10 bg-base-100/80 backdrop-blur-sm px-6 py-2 text-lg font-bold shadow">
+                  Connecting to Realm...
+                </div>
+              </div>
+
+              <div class="flex w-full justify-center pb-8">
+                <div
+                  id="hud-dialogue"
+                  data-hud-slot="hud-dialogue"
+                  sse-swap="dialogue"
+                  hx-swap="outerHTML"
+                  aria-live="polite"
+                  role="log"
+                  class="hidden w-full max-w-2xl pointer-events-auto transform opacity-0 transition-all duration-300 scale-95"
+                >
+                </div>
+
+                <div
+                  id="hud-combat"
+                  data-hud-slot="hud-combat"
+                  sse-swap="combat"
+                  hx-swap="outerHTML"
+                  aria-live="polite"
+                  role="log"
+                  class="hidden w-full max-w-4xl pointer-events-auto transform opacity-0 transition-all duration-300 scale-95"
+                >
+                </div>
+
+                <div
+                  id="hud-inventory"
+                  data-hud-slot="hud-inventory"
+                  sse-swap="inventory"
+                  hx-swap="outerHTML"
+                  aria-live="polite"
+                  role="region"
+                  class="hidden w-full max-w-3xl pointer-events-auto transform opacity-0 transition-all duration-300 scale-95"
+                >
+                </div>
+
+                <div
+                  id="hud-cutscene"
+                  data-hud-slot="hud-cutscene"
+                  sse-swap="cutscene"
+                  hx-swap="outerHTML"
+                  aria-live="polite"
+                  role="region"
+                  class="hidden w-full h-full pointer-events-auto transform transition-all duration-500"
+                >
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <aside class="order-2 lg:order-none space-y-4 game-sidebar" aria-label="Session objective">
+            <article class="bg-base-200 card flex-1">
+              <div class="card-body">
+                <h2 class="card-title text-lg">Session objective</h2>
+                <div
+                  id="game-quest-log"
+                  sse-swap="quest"
+                  hx-swap="outerHTML"
+                  class="hidden"
+                  aria-label="Quest log"
+                ></div>
+                <div class="stats stats-vertical bg-base-200 rounded-box mt-3">
+                  <div class="stat">
+                    <div class="stat-title">Participants</div>
+                    <div class="stat-value text-sm">1</div>
+                    <div class="stat-desc">Owner</div>
+                  </div>
+                  <div class="stat">
+                    <div class="stat-title">Scene</div>
+                    <div
+                      id="game-scene-title-value"
+                      sse-swap="scene-title-value"
+                      hx-swap="outerHTML"
+                      class="stat-value text-base"
+                    >Yangtze Tea House</div>
+                    <div class="stat-desc">Scene mode</div>
+                  </div>
+                  <div class="stat">
+                    <div class="stat-title">Scene mode</div>
+                    <div
+                      id="game-scene-mode-value"
+                      sse-swap="scene-mode"
+                      hx-swap="outerHTML"
+                      class="stat-value text-base"
+                    >2D</div>
+                    <div class="stat-desc">Speak with the tea monk</div>
+                  </div>
+                  <div class="stat">
+                    <div class="stat-title">Project</div>
+                    <div class="stat-value text-xs">default</div>
+                  </div>
+                </div>
+              </div>
+            </article>
+            <article class="bg-base-200 card flex-1">
+              <div class="card-body">
+                <h2 class="card-title text-lg">Current session</h2>
+                <div class="flex flex-wrap gap-2">
+                  <span class="badge badge-outline">queue: 0</span>
+                  <span class="badge badge-soft">Published project</span>
+                  <span class="badge badge-ghost">English</span>
+                </div>
+              </div>
+            </article>
+            <article class="bg-base-200 card flex-1">
+              <div class="card-body gap-4">
+                <h2 class="card-title text-lg">Multiplayer</h2>
+                <p class="text-sm text-base-content/70">Invite controllers or spectators into the current runtime session without leaving the published build.</p>
+                <div class="space-y-2">
+                  <div class="text-xs font-semibold uppercase tracking-wide text-base-content/60">Participants</div>
+                  <div class="avatar-group -space-x-6" id="game-participants-list" sse-swap="participants" hx-swap="outerHTML" role="list" aria-live="polite">
+                    <div class="avatar tooltip" data-tip="efca14b7-a724-4d4c-9226-770e2579d191">
+                          <div class="w-12 rounded-full bg-base-200 ring ring-base-300">
+                            <span class="text-sm uppercase font-semibold">o</span>
+                          </div>
+                        </div>
+                  </div>
+                </div>
+                <div class="space-y-3">
+                        <form hx-post="/api/game/session/1b149a55-0475-455a-979f-c7fee1da2398/invite" hx-target="#game-multiplayer-share-result" hx-swap="outerHTML" hx-disabled-elt="button" hx-indicator="#invite-controller-spinner" class="flex flex-wrap items-center gap-2">
+                          <input type="hidden" name="locale" value="en-US" />
+                          <input type="hidden" name="role" value="controller" />
+                          <button type="submit" class="btn btn-primary btn-sm" aria-label="Create controller invite">Create controller invite</button>
+                          <span id="invite-controller-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="Loading"></span>
+                        </form>
+                        <form hx-post="/api/game/session/1b149a55-0475-455a-979f-c7fee1da2398/invite" hx-target="#game-multiplayer-share-result" hx-swap="outerHTML" hx-disabled-elt="button" hx-indicator="#invite-spectator-spinner" class="flex flex-wrap items-center gap-2">
+                          <input type="hidden" name="locale" value="en-US" />
+                          <input type="hidden" name="role" value="spectator" />
+                          <button type="submit" class="btn btn-outline btn-sm" aria-label="Create spectator invite">Create spectator invite</button>
+                          <span id="invite-spectator-spinner" class="loading loading-spinner loading-sm htmx-indicator" aria-label="Loading"></span>
+                        </form>
+                        <div id="game-multiplayer-share-result" class="hidden"></div>
+                      </div>
+              </div>
+            </article>
+            <article class="bg-base-200 card flex-1">
+              <div class="card-body">
+                <h2 class="card-title text-lg">Controls</h2>
+                <p id="game-runtime-help" class="text-sm text-base-content/70">Focus the runtime surface to capture keyboard movement and interaction controls.</p>
+                <span id="game-runtime-focus-status" class="sr-only" aria-live="polite" role="status">Runtime controls inactive.</span>
+                <ul id="game-controls-list" class="space-y-2 text-sm">
+                  <li>Move: WASD or arrow keys</li>
+                  <li>Interact: E, Enter, or Space</li>
+                  <li>Advance dialogue: Escape</li>
+                </ul>
+              </div>
+            </article>
+          </aside>
+      </section>
+
+      
+      <!-- Save slot modal (native dialog with showModal, focus trap, restore on close) -->
+      <dialog id="save_slot_modal" class="modal" role="dialog" aria-labelledby="save-slot-modal-title" aria-modal="true">
+        <div class="modal-box">
+          <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" aria-label="Close navigation menu">✕</button>
+          </form>
+          <h3 id="save-slot-modal-title" class="font-bold text-lg">Save game</h3>
+          <form
+            id="save-slot-form"
+            hx-post="/api/game/session/1b149a55-0475-455a-979f-c7fee1da2398/save-slot"
+            hx-target="#save-slot-result"
+            hx-swap="innerHTML"
+            hx-disabled-elt="button[type=submit]"
+            class="mt-4 space-y-4"
+          >
+            <div class="form-control">
+              <label class="label" for="save-slot-name">
+                <span class="label-text">Slot name</span>
+              </label>
+              <input
+                type="text"
+                id="save-slot-name"
+                name="slotName"
+                placeholder="Slot name (optional)"
+                class="input input-bordered w-full"
+                required
+                aria-required="true"
+              />
+            </div>
+            <div id="save-slot-result"></div>
+            <div class="modal-action">
+              <form method="dialog" class="inline"><button type="submit" class="btn btn-ghost" aria-label="Cancel">Cancel</button></form>
+              <button type="submit" class="btn btn-primary" aria-label="Save">Save</button>
+            </div>
+          </form>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+          <button type="submit" aria-label="Close navigation menu">Close navigation menu</button>
+        </form>
+      </dialog>
+
+      <!-- Load slot modal (native dialog with showModal) -->
+      <dialog id="load_slot_modal" class="modal" role="dialog" aria-labelledby="load-slot-modal-title" aria-modal="true">
+        <div class="modal-box">
+          <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" aria-label="Close navigation menu">✕</button>
+          </form>
+          <h3 id="load-slot-modal-title" class="font-bold text-lg">Load game</h3>
+          <div
+            id="load-slots-list"
+            class="mt-4 space-y-2 max-h-64 overflow-y-auto"
+            hx-get="/api/game/session/1b149a55-0475-455a-979f-c7fee1da2398/save-slots"
+            hx-trigger="revealed"
+            hx-swap="innerHTML"
+          >
+            <div class="flex flex-col gap-2" aria-busy="true" aria-label="Loading">
+              <div class="skeleton h-12 w-full rounded-box"></div>
+              <div class="skeleton h-12 w-full rounded-box"></div>
+              <div class="skeleton h-12 w-full rounded-box"></div>
+              <div class="skeleton h-12 w-3/4 rounded-box"></div>
+            </div>
+          </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+          <button type="submit" aria-label="Close navigation menu">Close navigation menu</button>
+        </form>
+      </dialog>
+      
+
+      <!-- Key bindings modal (for all players) -->
+
+      <dialog id="key_bindings_modal" class="modal" role="dialog" aria-labelledby="key-bindings-modal-title" aria-modal="true" data-listening-hint="Press any key..." data-set-label="Set">
+        <div class="modal-box max-w-md">
+          <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" aria-label="Close navigation menu">✕</button>
+          </form>
+          <h3 id="key-bindings-modal-title" class="font-bold text-lg">Key Bindings</h3>
+          <p class="text-sm text-base-content/70 mt-1">Customize your controls. Click Set and press a key to rebind.</p>
+          <div class="mt-4 space-y-3">
+            <div class="form-control key-binding-row" data-action="move-up">
+              <div class="flex items-center justify-between gap-4">
+                <label class="label py-0"><span class="label-text">Move up</span></label>
+                <div class="flex items-center gap-2">
+                  <span class="key-binding-keys flex flex-wrap gap-1"></span>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="move-up" aria-label="Move up Set">Set</button>
+                </div>
+              </div>
+            </div>
+            <div class="form-control key-binding-row" data-action="move-down">
+              <div class="flex items-center justify-between gap-4">
+                <label class="label py-0"><span class="label-text">Move down</span></label>
+                <div class="flex items-center gap-2">
+                  <span class="key-binding-keys flex flex-wrap gap-1"></span>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="move-down" aria-label="Move down Set">Set</button>
+                </div>
+              </div>
+            </div>
+            <div class="form-control key-binding-row" data-action="move-left">
+              <div class="flex items-center justify-between gap-4">
+                <label class="label py-0"><span class="label-text">Move left</span></label>
+                <div class="flex items-center gap-2">
+                  <span class="key-binding-keys flex flex-wrap gap-1"></span>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="move-left" aria-label="Move left Set">Set</button>
+                </div>
+              </div>
+            </div>
+            <div class="form-control key-binding-row" data-action="move-right">
+              <div class="flex items-center justify-between gap-4">
+                <label class="label py-0"><span class="label-text">Move right</span></label>
+                <div class="flex items-center gap-2">
+                  <span class="key-binding-keys flex flex-wrap gap-1"></span>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="move-right" aria-label="Move right Set">Set</button>
+                </div>
+              </div>
+            </div>
+            <div class="form-control key-binding-row" data-action="interact">
+              <div class="flex items-center justify-between gap-4">
+                <label class="label py-0"><span class="label-text">Interact</span></label>
+                <div class="flex items-center gap-2">
+                  <span class="key-binding-keys flex flex-wrap gap-1"></span>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="interact" aria-label="Interact Set">Set</button>
+                </div>
+              </div>
+            </div>
+            <div class="form-control key-binding-row" data-action="menu">
+              <div class="flex items-center justify-between gap-4">
+                <label class="label py-0"><span class="label-text">Menu / Inventory</span></label>
+                <div class="flex items-center gap-2">
+                  <span class="key-binding-keys flex flex-wrap gap-1"></span>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="menu" aria-label="Menu / Inventory Set">Set</button>
+                </div>
+              </div>
+            </div>
+            <div class="form-control key-binding-row" data-action="close">
+              <div class="flex items-center justify-between gap-4">
+                <label class="label py-0"><span class="label-text">Close / Back</span></label>
+                <div class="flex items-center gap-2">
+                  <span class="key-binding-keys flex flex-wrap gap-1"></span>
+                  <button type="button" class="btn btn-sm btn-outline" data-action-set="close" aria-label="Close / Back Set">Set</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="text-xs text-base-content/50 mt-3">Changes apply when you refocus the game or refresh.</p>
+          <div class="modal-action mt-4">
+            <button type="button" class="btn btn-ghost btn-sm" data-reset-bindings aria-label="Reset to defaults">Reset to defaults</button>
+            <form method="dialog" class="inline"><button type="submit" class="btn btn-ghost" aria-label="Close navigation menu">Close navigation menu</button></form>
+          </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+          <button type="submit" aria-label="Close navigation menu">Close navigation menu</button>
+        </form>
+      </dialog>
+    </div>
+  
+            </main>
+
+            
+          </div>
+
+          <!-- Main Nav Sidebar (Left) -->
+          <div class="drawer-side z-40 ">
+            <label for="main-nav-drawer" aria-label="Close sidebar" class="drawer-overlay"></label>
+            <div class="surface-shell surface-section flex min-h-full w-80 max-w-[85vw] flex-col bg-base-100">
+    <div class="border-b border-base-300 px-4 py-4"><a href="/?lang=en-US" class="btn btn-ghost px-2 text-base font-bold tracking-tight gap-2 normal-case">
+    <span class="rounded-lg bg-gradient-to-br from-primary to-secondary px-2 py-1 text-lg leading-none text-primary-content" aria-hidden="true">TEA</span>
+    <span>TEA Project</span>
+  </a></div>
+    <div role="navigation" aria-label="Mobile navigation" class="surface-scroll surface-scroll-y touch-pan-y flex-1 space-y-4 px-0 py-4">
+      <div class="space-y-2">
+        <div class="px-4 text-xs font-semibold uppercase tracking-[0.2em] text-base-content/55">Primary navigation</div>
+        <ul class="menu menu-md w-full px-2"><li><a href="/?lang=en-US" aria-label="Studio" class=""><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg><span>Studio</span></a></li><li><a href="/games?lang=en-US&amp;projectId=default" aria-label="Control Plane" class=""><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><path d="M4 7h16"></path><path d="M4 12h10"></path><path d="M4 17h16"></path><circle cx="17" cy="12" r="3"></circle></svg><span>Control Plane</span></a></li><li><a href="/projects/default/start?lang=en-US" aria-label="Craft" class=""><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg><span>Craft</span></a></li><li><a href="/projects/default/playtest?lang=en-US" aria-label="Play" aria-current="page" class="menu-active font-semibold"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg><span>Play</span></a></li></ul>
+      </div>
+    </div>
+    
+  </div>
+          </div>
+        </div>
+
+        <!-- Global FAB for AI Chat (z-[90] ensures visibility above game canvas) -->
+        <div class="fab fixed right-6 bottom-6 z-[90]">
+          <label for="ai-chat-drawer" class="btn btn-circle btn-primary drawer-button h-14 w-14 sm:h-16 sm:w-16 shrink-0 shadow-2xl" role="button" tabindex="0" aria-controls="ai-chat-drawer" aria-label="Open AI Assistant" data-drawer-toggle-target="ai-chat-drawer" data-drawer-toggle-mode="toggle" aria-expanded="false" aria-haspopup="dialog"><svg xmlns="http://www.w3.org/2000/svg" class="size-6 sm:size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></label>
+        </div>
+      </div>
+      
+      <!-- AI Chat Sidebar (Right) (z-[95] ensures visibility above game canvas) -->
+      <div class="drawer-side z-[95]">
+        <label for="ai-chat-drawer" aria-label="Close AI chat" class="drawer-overlay"></label>
+        <aside class="surface-shell surface-section flex min-h-full w-80 flex-col border-l border-base-300 bg-base-100 text-base-content sm:w-96" role="dialog" aria-modal="false" aria-label="Open AI Assistant">
+          <div class="flex shrink-0 items-center justify-end border-b border-base-300 px-4 py-3">
+            <label for="ai-chat-drawer" class="btn btn-ghost btn-sm" role="button" tabindex="0" aria-controls="ai-chat-drawer" aria-label="Close AI chat" data-drawer-toggle-target="ai-chat-drawer" data-drawer-toggle-mode="close">Close AI chat</label>
+          </div>
+          <div class="surface-scroll surface-scroll-y touch-pan-y flex-1 overflow-y-auto p-4">
+          <section aria-labelledby="oracle-title" class="flex flex-col gap-4 overflow-y-auto">
+    <article class="card card-border bg-base-100 shadow-sm shrink-0">
+      <div class="card-body gap-4">
+        <h2 id="oracle-title" class="card-title text-lg">AI Assistant</h2>
+        <p class="opacity-90 text-sm">Generate dialogue, scene descriptions, character backstories, and more. Your local AI creates content for your game in seconds.</p>
+        <form
+          id="oracle-form"
+          method="get"
+          action="/"
+          hx-get="/partials/ai-playground"
+          hx-target="#oracle-panel"
+          hx-swap="outerHTML"
+          hx-indicator="#oracle-loading"
+          hx-params="*"
+          hx-disabled-elt="find button, find input, find select"
+          hx-ext="oracle-indicator"
+          data-oracle-indicator-id="oracle-loading"
+          data-oracle-panel-id="oracle-panel"
+          data-loading-title="Creating"
+          data-loading-description="Your AI assistant is generating content."
+          data-send-error-message="Could not reach the AI model. Check your connection and try again."
+          data-response-error-message="The AI model is busy. Try again in a moment."
+          data-oracle-loading-template-id="oracle-loading-template"
+          class="grid gap-3"
+          aria-label="AI Assistant"
+        >
+          <input type="hidden" name="lang" value="en-US" />
+          <input type="hidden" name="context_path" value="/projects/default/playtest?lang=en-US&amp;sessionId=1b149a55-0475-455a-979f-c7fee1da2398" /><input type="hidden" name="context_route" value="game" /><input type="hidden" name="context_project" value="default" />
+          <fieldset class="fieldset">
+            <label class="floating-label w-full">
+              <span>What would you like to create?</span>
+              <input
+                id="oracle-question"
+                class="input input-bordered w-full input-sm"
+                type="text"
+                name="question"
+                value=""
+                maxlength="240"
+                placeholder=" "
+                aria-label="What would you like to create?"
+                required
+              />
+            </label>
+          </fieldset>
+          <input type="hidden" name="mode" value="auto" />
+          <button type="submit" class="btn btn-primary btn-sm w-full" aria-label="Generate">
+            <span>Generate</span>
+            <span id="oracle-loading" class="loading loading-dots loading-sm text-primary" aria-label="Loading"></span>
+          </button>
+        </form>
+        <template id="oracle-loading-template"><article id="oracle-panel" class="card card-border border-info/30 bg-info/5" role="status" aria-live="polite" aria-busy="true" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
+      <div class="card-body gap-3">
+        <h3 class="card-title text-info text-sm">Creating</h3>
+        <div class="chat chat-start">
+          <div class="chat-header text-xs text-base-content/60">What would you like to create? · auto</div>
+          <div class="chat-bubble chat-bubble-info opacity-60" data-oracle-loading-question="true"></div>
+          <div class="chat-footer text-[0.65rem] text-base-content/60">12:42:11 AM</div>
+        </div>
+        <div class="chat chat-end">
+          <div class="chat-header text-xs text-base-content/60">AI Assistant · auto</div>
+          <div class="chat-bubble chat-bubble-info space-y-2 w-full max-w-xs">
+            <span class="loading loading-dots loading-md opacity-70"></span>
+          </div>
+          <div class="chat-footer text-[0.65rem] text-base-content/60">12:42:11 AM</div>
+        </div>
+      </div>
+    </article></template>
+      </div>
+    </article>
+    <article id="oracle-panel" class="card card-dash border-base-300 bg-base-200/40" aria-live="polite" tabindex="-1" data-focus-panel="true" hx-ext="focus-panel">
+      <div class="card-body">
+        <div class="empty-state">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+          <div>
+            <h3 class="font-semibold text-base-content/70">AI Assistant</h3>
+            <p class="text-sm">Describe what you want to create and the AI will generate it for you.</p>
+          </div>
+        </div>
+      </div>
+    </article>
+  </section>
+          </div>
+        </aside>
+      </div>
+    </div>
+    
+    <div id="toast-container" class="toast toast-end toast-bottom z-[100]" aria-live="polite" data-fallback-error-message="Request failed"></div>
+    <script src="/public/vendor/htmx-ext/layout-controls.js" type="module"></script><script src="/public/vendor/htmx-ext/server-toast.js" type="module"></script><script src="/public/js/scene-editor-tabs.js" type="module"></script>
+    <script src="/game/assets/game-client.js" type="module"></script><script src="/public/js/game-sse-error.js" type="module"></script><script src="/public/js/game-modal-focus.js" type="module"></script><script src="/public/js/game-key-bindings.js" type="module"></script>
+  </body>
+</html>

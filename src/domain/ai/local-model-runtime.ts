@@ -1,7 +1,7 @@
 import type {
   LocalEmbeddingOperationResult,
-  LocalSentimentOperationResult,
   LocalImageGenerationOperationResult,
+  LocalSentimentOperationResult,
   LocalSpeechSynthesisOperationResult,
   LocalTextGenerationOperationResult,
   LocalTranscriptionOperationResult,

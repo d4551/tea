@@ -368,7 +368,9 @@ describe("API contracts", () => {
         expect(capturedPrompt).toContain(
           `Respond creatively and helpfully to this game design prompt: "How can we improve this bridge?"`,
         );
-        expect(capturedPrompt).toContain("[Context: user is on builderScenes, project context-check-1]");
+        expect(capturedPrompt).toContain(
+          "[Context: user is on builderScenes, project context-check-1]",
+        );
       },
     );
   });
@@ -2559,9 +2561,9 @@ describe("API contracts", () => {
     const html = await response.text();
 
     expect(response.status).toBe(httpStatus.ok);
-    expect(html.includes("Model Catalog &amp; Overrides") || html.includes("Model Catalog & Overrides")).toBe(
-      true,
-    );
+    expect(
+      html.includes("Model Catalog &amp; Overrides") || html.includes("Model Catalog & Overrides"),
+    ).toBe(true);
     expect(html.includes("ai-model-settings-workspace")).toBe(true);
     expect(html.includes("Transformers Local")).toBe(true);
   });
@@ -2826,16 +2828,20 @@ describe("HTMX partial rendering", () => {
     expect(response.status).toBe(httpStatus.ok);
     expect(html.includes("Project Settings")).toBe(true);
     expect(html.includes("Knowledge workspace")).toBe(true);
-    expect(html.includes(interpolateRoutePath(appRoutes.aiBuilderKnowledgeDocuments, { projectId }))).toBe(
-      true,
-    );
+    expect(
+      html.includes(interpolateRoutePath(appRoutes.aiBuilderKnowledgeDocuments, { projectId })),
+    ).toBe(true);
     expect(
       html.includes(interpolateRoutePath(appRoutes.aiBuilderKnowledgeSearch, { projectId })),
     ).toBe(true);
     expect(html.includes("Tool plan preview")).toBe(true);
     expect(html.includes("Structured tool planning is currently unavailable")).toBe(true);
-    expect(html.includes(interpolateRoutePath(appRoutes.aiBuilderToolPlan, { projectId }))).toBe(false);
-    expect(html.includes(interpolateRoutePath(appRoutes.aiBuilderHfTraining, { projectId }))).toBe(true);
+    expect(html.includes(interpolateRoutePath(appRoutes.aiBuilderToolPlan, { projectId }))).toBe(
+      false,
+    );
+    expect(html.includes(interpolateRoutePath(appRoutes.aiBuilderHfTraining, { projectId }))).toBe(
+      true,
+    );
   });
 
   test("builder AI HF training endpoint queues a reviewable run", async () => {
@@ -2859,13 +2865,14 @@ describe("HTMX partial rendering", () => {
           }),
         ),
         {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          accept: "application/json",
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            accept: "application/json",
+          },
+          body: JSON.stringify(body),
         },
-        body: JSON.stringify(body),
-      }),
+      ),
     );
     const payload = (await response.json()) as {
       readonly ok: boolean;
@@ -2900,9 +2907,7 @@ describe("HTMX partial rendering", () => {
     expect(html.includes('value="river trade"')).toBe(true);
     expect(html.includes("AI temporarily busy")).toBe(true);
     expect(
-      html.includes(
-        'href="/?lang=zh-CN&amp;question=river+trade&amp;mode=force-retryable-error"',
-      ),
+      html.includes('href="/?lang=zh-CN&amp;question=river+trade&amp;mode=force-retryable-error"'),
     ).toBe(true);
   });
 
@@ -3275,21 +3280,22 @@ describe("HTMX partial rendering", () => {
           }),
         ),
         {
-        method: "POST",
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          accept: "text/html",
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            accept: "text/html",
+          },
+          body: new URLSearchParams({
+            projectId,
+            locale: "en-US",
+            id: usdzAssetId,
+            label: "Tea House USDZ",
+            kind: "model",
+            sceneMode: "3d",
+            source: "/assets/models/tea-house.usdz",
+          }).toString(),
         },
-        body: new URLSearchParams({
-          projectId,
-          locale: "en-US",
-          id: usdzAssetId,
-          label: "Tea House USDZ",
-          kind: "model",
-          sceneMode: "3d",
-          source: "/assets/models/tea-house.usdz",
-        }).toString(),
-      }),
+      ),
     );
 
     const usdAssetId = `asset-${crypto.randomUUID().slice(0, 8)}`;
@@ -3301,21 +3307,22 @@ describe("HTMX partial rendering", () => {
           }),
         ),
         {
-        method: "POST",
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          accept: "text/html",
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            accept: "text/html",
+          },
+          body: new URLSearchParams({
+            projectId,
+            locale: "en-US",
+            id: usdAssetId,
+            label: "Tea House USDA",
+            kind: "model",
+            sceneMode: "3d",
+            source: "/assets/models/tea-house.usda",
+          }).toString(),
         },
-        body: new URLSearchParams({
-          projectId,
-          locale: "en-US",
-          id: usdAssetId,
-          label: "Tea House USDA",
-          kind: "model",
-          sceneMode: "3d",
-          source: "/assets/models/tea-house.usda",
-        }).toString(),
-      }),
+      ),
     );
 
     const project = await builderService.getProject(projectId);
@@ -4222,20 +4229,17 @@ describe("HTMX partial rendering", () => {
   test("transcribe route returns typed validation errors for invalid wav payloads", async () => {
     const incomingCorrelationId = "ai-transcribe-correlation-id";
     const response = await app.handle(
-      new Request(
-        toUrl(interpolateRoutePath(appRoutes.aiTranscribe, { projectId: "default" })),
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            accept: "application/json",
-            [correlationIdHeader]: incomingCorrelationId,
-          },
-          body: JSON.stringify({
-            audioBase64: Buffer.from("not-a-valid-wav").toString("base64"),
-          }),
+      new Request(toUrl(interpolateRoutePath(appRoutes.aiTranscribe, { projectId: "default" })), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json",
+          [correlationIdHeader]: incomingCorrelationId,
         },
-      ),
+        body: JSON.stringify({
+          audioBase64: new TextEncoder().encode("not-a-valid-wav").toBase64(),
+        }),
+      }),
     );
     const payload = await readResponsePayload<{
       readonly ok: false;

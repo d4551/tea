@@ -1,5 +1,6 @@
 import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
+import { isRecord } from "../../shared/utils/safe-json.ts";
 import { aiRuntimeSettingsService } from "./ai-runtime-settings-service.ts";
 import { ProviderRegistry } from "./providers/provider-registry.ts";
 
@@ -81,14 +82,13 @@ interface HuggingFaceHubModelRecord {
 }
 
 type JsonPrimitive = string | number | boolean | null;
+interface JsonRecord {
+  readonly [key: string]: JsonValue | undefined;
+}
 type JsonArray = readonly JsonValue[];
-type JsonRecord = Readonly<Record<string, JsonValue>>;
 type JsonValue = JsonPrimitive | JsonArray | JsonRecord;
 
 const searchableProviderSet = new Set<string>(SEARCHABLE_PROVIDER_LANES);
-
-const isRecord = (value: JsonValue): value is JsonRecord =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
 
 const extractModelId = (value: JsonValue): string =>
   isRecord(value) && typeof value.id === "string" ? value.id : "";
@@ -191,15 +191,11 @@ const toOpenAiCompatibleModelDiscoveryUrl = (
 
 const parseOpenAiModelIds = (value: JsonValue): readonly string[] => {
   if (Array.isArray(value)) {
-    return value
-      .map((entry) => extractModelId(entry))
-      .filter((entry) => entry.length > 0);
+    return value.map((entry) => extractModelId(entry)).filter((entry) => entry.length > 0);
   }
 
   if (isRecord(value) && Array.isArray(value.data)) {
-    return value.data
-      .map((entry) => extractModelId(entry))
-      .filter((entry) => entry.length > 0);
+    return value.data.map((entry) => extractModelId(entry)).filter((entry) => entry.length > 0);
   }
 
   return [];
@@ -373,7 +369,8 @@ const searchRegistryCapabilities = async (input: {
 }): Promise<ProviderModelCatalogResult> => {
   const registry = await ProviderRegistry.getInstance();
   const status = await registry.getStatus();
-  const providerReady = status.providers.find((entry) => entry.name === input.provider)?.available ?? false;
+  const providerReady =
+    status.providers.find((entry) => entry.name === input.provider)?.available ?? false;
   const requiredCapability = slotToCapability(input.slot);
 
   const items = status.capabilities
@@ -381,7 +378,9 @@ const searchRegistryCapabilities = async (input: {
     .filter(
       (entry) => requiredCapability === null || entry.capabilities.has(requiredCapability as never),
     )
-    .filter((entry) => matchesTextSearch(input.search, entry.model, [...entry.capabilities].join(" ")))
+    .filter((entry) =>
+      matchesTextSearch(input.search, entry.model, [...entry.capabilities].join(" ")),
+    )
     .slice(0, input.limit)
     .map((entry) => ({
       provider: input.provider,
@@ -415,7 +414,8 @@ const searchOpenAiCompatibleModels = async (input: {
 }): Promise<ProviderModelCatalogResult> => {
   const registry = await ProviderRegistry.getInstance();
   const status = await registry.getStatus();
-  const providerReady = status.providers.find((entry) => entry.name === input.provider)?.available ?? false;
+  const providerReady =
+    status.providers.find((entry) => entry.name === input.provider)?.available ?? false;
   const requiredCapability = slotToCapability(input.slot);
   let source: ProviderModelCatalogEntry["source"] = input.modelsPath ? "discovered" : "configured";
 
@@ -442,7 +442,9 @@ const searchOpenAiCompatibleModels = async (input: {
     );
 
   const capabilityMap = new Map(capabilityMatches.map((entry) => [entry.model, entry]));
-  const modelIds = [...new Set([...discoveredIds, ...capabilityMatches.map((entry) => entry.model)])];
+  const modelIds = [
+    ...new Set([...discoveredIds, ...capabilityMatches.map((entry) => entry.model)]),
+  ];
 
   const items = modelIds
     .filter((modelId) => matchesTextSearch(input.search, modelId))

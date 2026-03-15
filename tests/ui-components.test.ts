@@ -4,6 +4,7 @@ import {
   renderField,
   renderProgress,
   renderRadialProgress,
+  renderTabs,
 } from "../src/views/shared/ui-components.ts";
 
 describe("renderButton", () => {
@@ -37,6 +38,20 @@ describe("renderButton", () => {
 
     expect(html).not.toContain("onclick=");
     expect(html).toContain('type="button"');
+  });
+
+  test("renders locale-aware links with safe external rel values", () => {
+    const html = renderButton({
+      label: "Docs",
+      href: "/docs?lang=zh-CN",
+      linkLanguage: "zh-CN",
+      target: "_blank",
+    });
+
+    expect(html).toContain('href="/docs?lang=zh-CN"');
+    expect(html).toContain('hreflang="zh-CN"');
+    expect(html).toContain('lang="zh-CN"');
+    expect(html).toContain('rel="noopener noreferrer"');
   });
 
   test("clamps progress value to max and emits safe value", () => {
@@ -81,5 +96,38 @@ describe("renderButton", () => {
 
     expect(html).not.toContain("aria-describedby=");
     expect(html).not.toContain('aria-invalid="true"');
+  });
+
+  test("applies aria-labels to native text inputs", () => {
+    const html = renderField({
+      name: "inventoryCode",
+      label: "Inventory code",
+      type: "text",
+      value: "A1",
+    });
+
+    expect(html).toContain('aria-label="Inventory code"');
+  });
+
+  test("renders tab anchors when links also use htmx updates", () => {
+    const html = renderTabs({
+      activeKey: "overview",
+      tabs: [
+        {
+          key: "overview",
+          label: "Overview",
+          href: "/projects/default/start?lang=en-US",
+          htmx: {
+            get: "/projects/default/start?lang=en-US",
+            target: "#main-content",
+            swap: "innerHTML",
+          },
+        },
+      ],
+    });
+
+    expect(html).toContain('<a class="tab');
+    expect(html).toContain('href="/projects/default/start?lang=en-US"');
+    expect(html).toContain('hx-get="/projects/default/start?lang=en-US"');
   });
 });

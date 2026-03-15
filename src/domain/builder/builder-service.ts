@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { appConfig, type LocaleCode } from "../../config/environment.ts";
 import {
   normalizeProjectBranding,
@@ -49,7 +50,7 @@ import type {
   TriggerDefinition,
 } from "../../shared/contracts/game.ts";
 import { sha256Hex } from "../../shared/utils/crypto.ts";
-import { acceptUnknown, safeJsonParse } from "../../shared/utils/safe-json.ts";
+import { isInputJsonValue, isRecord, safeJsonParse } from "../../shared/utils/safe-json.ts";
 import {
   deriveAnimationClipIdentity,
   deriveDialogueGraphIdentity,
@@ -731,9 +732,6 @@ const trimOrFallback = (value: string | undefined, fallback: string): string => 
   return trimmed ?? fallback;
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
-
 const assertUnreachable = (_value: never): never => {
   throw new Error(AUTOMATION_STEP_KIND_UNSUPPORTED_ERROR);
 };
@@ -894,7 +892,7 @@ const isAutomationStepSpec = (value: unknown): value is AutomationStepSpec => {
 };
 
 const parseAutomationStepSpecs = (value: string | undefined): readonly AutomationStepSpec[] => {
-  const parsed = safeJsonParse<unknown>(value ?? "", [], acceptUnknown);
+  const parsed = safeJsonParse<unknown[]>(value ?? "", [], (v): v is unknown[] => Array.isArray(v));
   if (!Array.isArray(parsed)) {
     return [];
   }
@@ -956,7 +954,7 @@ const isSuggestedAnimationPlanClip = (value: unknown): value is SuggestedAnimati
 const parseSuggestedAnimationPlanPayload = (
   source: string,
 ): SuggestedAnimationPlanPayload | null => {
-  const parsed = safeJsonParse<unknown>(source, null, acceptUnknown);
+  const parsed = safeJsonParse<Record<string, unknown> | null>(source, null, isRecord);
   if (!isRecord(parsed) || !Array.isArray(parsed.suggestedClips)) {
     return null;
   }
@@ -1062,11 +1060,11 @@ const parseParticleEmitter = (
   if (!raw || raw.trim().length === 0) {
     return fallback;
   }
-  const parsed = safeJsonParse<unknown>(raw, null, (v): v is unknown => v !== undefined);
-  if (!parsed || typeof parsed !== "object") {
+  const parsed = safeJsonParse<Record<string, unknown> | null>(raw, null, isRecord);
+  if (!parsed) {
     return fallback;
   }
-  const r = parsed as Record<string, unknown>;
+  const r = parsed;
   if (typeof r.maxCount !== "number" || typeof r.rate !== "number") {
     return fallback;
   }
@@ -1307,8 +1305,12 @@ const automationRunMutationResult = (
 /**
  * Parses JSON-like AI patch payload values into runtime values.
  */
-const parsePatchValue = (value: string): unknown =>
-  safeJsonParse<unknown>(value, value, acceptUnknown);
+const parsePatchValue = (value: string): Prisma.InputJsonValue | null =>
+  safeJsonParse<Prisma.InputJsonValue | null>(
+    value,
+    null,
+    (parsed): parsed is Prisma.InputJsonValue | null => parsed === null || isInputJsonValue(parsed),
+  );
 
 type PatchTarget =
   | {

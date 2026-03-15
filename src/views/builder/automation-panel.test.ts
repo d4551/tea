@@ -41,26 +41,14 @@ const runs: ReadonlyArray<AutomationRun> = [
 
 describe("renderAutomationPanel", () => {
   test("renders canonical operations workbench section targets exactly once", () => {
-    const html = renderAutomationPanel(
-      getMessages("en-US"),
-      "en-US",
-      "default",
-      runs,
-      artifacts,
-    );
+    const html = renderAutomationPanel(getMessages("en-US"), "en-US", "default", runs, artifacts);
 
     expect(countOccurrences(html, 'id="builder-automation-composer"')).toBe(1);
     expect(countOccurrences(html, 'id="builder-review-queue"')).toBe(1);
   });
 
   test("renders jump links and review queue content for the operations workbench", () => {
-    const html = renderAutomationPanel(
-      getMessages("en-US"),
-      "en-US",
-      "default",
-      runs,
-      artifacts,
-    );
+    const html = renderAutomationPanel(getMessages("en-US"), "en-US", "default", runs, artifacts);
 
     expect(html).toContain("/projects/default/operations?lang=en-US#builder-automation-composer");
     expect(html).toContain("/projects/default/operations?lang=en-US#builder-review-queue");

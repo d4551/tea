@@ -1,6 +1,6 @@
 import { createLogger } from "../src/lib/logger.ts";
 import { settleAsync } from "../src/shared/utils/async-result.ts";
-import { acceptUnknown, safeJsonParse } from "../src/shared/utils/safe-json.ts";
+import { isRecord, safeJsonParse } from "../src/shared/utils/safe-json.ts";
 
 interface ArchiveEntry {
   /** Source markdown path in repo at archive time. */
@@ -71,9 +71,6 @@ const sha256Hex = async (value: string): Promise<string> => {
   return hashValues.map((digit) => digit.toString(16).padStart(2, "0")).join("");
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object";
-
 const isArchiveEntry = (value: unknown): value is ArchiveEntry => {
   if (!isRecord(value)) {
     return false;
@@ -101,7 +98,7 @@ const readManifest = async (): Promise<ArchiveManifest | null> => {
     return null;
   }
 
-  const parsed = safeJsonParse<unknown>(manifestText.value, null, acceptUnknown);
+  const parsed = safeJsonParse<Record<string, unknown> | null>(manifestText.value, null, isRecord);
   if (!isRecord(parsed)) {
     return null;
   }

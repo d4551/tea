@@ -84,9 +84,7 @@ export const createOracleService = (): OracleService => ({
       } satisfies OracleRetryableErrorState | OracleFatalErrorState;
     }
 
-    const persistence = await settleAsync(
-      persistInteraction(trimmedQuestion, answer.text),
-    );
+    const persistence = await settleAsync(persistInteraction(trimmedQuestion, answer.text));
     if (!persistence.ok) {
       const failure = toPrismaExternalFailure(persistence.error, "record oracle interaction");
       logger.warn("oracle.persist.failed", {

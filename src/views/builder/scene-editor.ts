@@ -34,11 +34,7 @@ import type {
 } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
-import {
-  cardClasses,
-  renderEmptyStateCompact,
-  spinnerClasses,
-} from "../shared/ui-components.ts";
+import { cardClasses, renderEmptyStateCompact, spinnerClasses } from "../shared/ui-components.ts";
 import { buildCreatorAssistContext } from "./builder-flow.ts";
 import { buildBuilderJourneyConfig } from "./builder-journey.ts";
 import { renderCreatorAssistPanel } from "./creator-assist-panel.ts";
@@ -194,7 +190,7 @@ const renderScenePaletteBadges = (
 
 const renderNodeForm = (
   messages: Messages,
-  locale: LocaleCode,
+  _locale: LocaleCode,
   projectId: string,
   sceneId: string,
   node: SceneNodeDefinition,
@@ -414,7 +410,7 @@ export const renderSceneEditor = (
     .map((scene) => {
       const isSelected = scene.id === activeScene?.id;
       const sceneTitle = resolveSceneTitle(locale, scene);
-  const detailHref = withQueryParameters(scenesPath, {
+      const detailHref = withQueryParameters(scenesPath, {
         search,
         [BUILDER_QUERY_PARAM_PAGE]: String(paginatedScenes.page),
         [BUILDER_QUERY_PARAM_SCENE_ID]: scene.id,
@@ -879,8 +875,8 @@ export const renderSceneDetail = (
           </div>
           ${
             scene.sceneMode !== "3d"
-              ? `<div class="tabs tabs-boxed" role="tablist">
-                   <button type="button" class="tab tab-active" role="tab" aria-selected="true" data-scene-tab="nodes">${escapeHtml(messages.builder.sceneNodes)}</button>
+              ? `<div class="tabs tabs-boxed" role="tablist" aria-orientation="horizontal">
+                   <button type="button" class="tab tab-active" role="tab" aria-selected="true" aria-current="page" data-scene-tab="nodes">${escapeHtml(messages.builder.sceneNodes)}</button>
                    <button type="button" class="tab" role="tab" aria-selected="false" data-scene-tab="tilemap">${escapeHtml(messages.builder.tilemapTabLabel)}</button>
                  </div>`
               : ""

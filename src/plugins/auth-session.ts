@@ -61,12 +61,13 @@ interface AuthSessionCookieOptions {
 }
 
 interface AuthSessionCookie {
-  readonly value?: string;
-  readonly set: (value: string) => void;
+  readonly value?: unknown;
+  readonly set?: unknown;
 }
 
-export type AuthCookieBag = Record<string, AuthSessionCookie>;
-const authSessionCache = new WeakMap<AuthCookieBag, AuthSession>();
+export type AuthCookieBag = Readonly<Record<string, AuthSessionCookie>> | null | undefined;
+type AuthCookieRecord = Readonly<Record<string, AuthSessionCookie>>;
+const authSessionCache = new WeakMap<AuthCookieRecord, AuthSession>();
 
 const authSessionCookieSchema = t.Cookie({
   [appConfig.auth.sessionCookieName]: t.Optional(t.String()),
@@ -82,8 +83,14 @@ const sessionCookieOptions: AuthSessionCookieOptions = {
   secure: true,
 };
 
+const isCookieSetter = (value: unknown): value is (config: unknown) => unknown =>
+  typeof value === "function";
+
+const normalizeAuthCookieBag = (cookie: AuthCookieBag): AuthCookieRecord => cookie ?? {};
+
 const readSessionId = (cookie: AuthCookieBag): string | null => {
-  const sessionCookie = cookie[appConfig.auth.sessionCookieName];
+  const cookieRecord = normalizeAuthCookieBag(cookie);
+  const sessionCookie = cookieRecord[appConfig.auth.sessionCookieName];
   return typeof sessionCookie?.value === "string" && sessionCookie.value.length > 0
     ? sessionCookie.value
     : null;
@@ -177,7 +184,8 @@ export const resolveAuthSession = (
   cookie: AuthCookieBag,
   principalSeed?: AuthPrincipalSeed,
 ): AuthSession => {
-  const cachedSession = authSessionCache.get(cookie);
+  const cookieRecord = normalizeAuthCookieBag(cookie);
+  const cachedSession = authSessionCache.get(cookieRecord);
   if (cachedSession !== undefined && principalSeed === undefined) {
     return cachedSession;
   }
@@ -191,7 +199,7 @@ export const resolveAuthSession = (
   };
 
   if (principalSeed === undefined) {
-    authSessionCache.set(cookie, authSession);
+    authSessionCache.set(cookieRecord, authSession);
   }
 
   return authSession;
@@ -230,11 +238,13 @@ export const authSessionGuard: {
   cookie: authSessionCookieSchema,
   beforeHandle: ({ cookie }: { cookie: AuthCookieBag }) => {
     const authSession = resolveAuthSession(cookie);
-    const sessionCookie = cookie[appConfig.auth.sessionCookieName];
-    sessionCookie?.set({
-      value: authSession.sessionId,
-      ...sessionCookieOptions,
-    });
+    const sessionCookie = normalizeAuthCookieBag(cookie)[appConfig.auth.sessionCookieName];
+    if (isCookieSetter(sessionCookie?.set)) {
+      sessionCookie.set({
+        value: authSession.sessionId,
+        ...sessionCookieOptions,
+      });
+    }
   },
 };
 

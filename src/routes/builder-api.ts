@@ -86,7 +86,7 @@ import type {
   SceneNpcDefinition,
 } from "../shared/contracts/game.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
-import { acceptUnknown, safeDecodeUri, safeJsonParse } from "../shared/utils/safe-json.ts";
+import { isRecord, safeDecodeUri, safeJsonParse } from "../shared/utils/safe-json.ts";
 import {
   renderKnowledgeDocumentList,
   renderKnowledgeRetrievalResult,
@@ -109,7 +109,8 @@ import { cardClasses, renderBuilderHiddenFields } from "../views/shared/ui-compo
 
 const route = (path: string): string => path.replace(/^\/api\/builder/, "");
 
-const countProjectSpriteManifests = (_projectId: string): number => Object.keys(gameSpriteManifests).length;
+const countProjectSpriteManifests = (_projectId: string): number =>
+  Object.keys(gameSpriteManifests).length;
 
 const isMutatingBuilderMethod = (method: string): boolean =>
   method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE";
@@ -127,7 +128,10 @@ const isHfRepoId = (value: string): boolean =>
   /^[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(value);
 const toHfTrainingMethod = (value: string | undefined): HfTrainingMethod =>
   value === "dpo" || value === "grpo" || value === "reward" ? value : "sft";
-const toHfTrainingMethodLabel = (messages: ReturnType<typeof getMessages>, method: HfTrainingMethod) => {
+const toHfTrainingMethodLabel = (
+  messages: ReturnType<typeof getMessages>,
+  method: HfTrainingMethod,
+) => {
   switch (method) {
     case "dpo":
       return messages.builder.hfTrainingMethodDpo;
@@ -139,6 +143,25 @@ const toHfTrainingMethodLabel = (messages: ReturnType<typeof getMessages>, metho
       return messages.builder.hfTrainingMethodSft;
   }
 };
+
+const hfTrainingMethodSchema = t.Union([
+  t.Literal("sft"),
+  t.Literal("dpo"),
+  t.Literal("grpo"),
+  t.Literal("reward"),
+]);
+const hfTrainingRequestFieldSchema = t.Union([t.String(), t.Number()]);
+const hfTrainingRequestSchema = t.Object({
+  projectId: t.Optional(t.String()),
+  locale: t.Optional(t.String()),
+  datasetId: t.String({ minLength: 1 }),
+  datasetSplit: t.Optional(t.String()),
+  baseModel: t.String({ minLength: 1 }),
+  outputModel: t.String({ minLength: 1 }),
+  method: t.Optional(hfTrainingMethodSchema),
+  epochs: t.Optional(hfTrainingRequestFieldSchema),
+  learningRate: t.Optional(hfTrainingRequestFieldSchema),
+});
 
 const resolveBuilderPrincipalFromContext = (context: {
   readonly builderPrincipalType: "anonymous" | "user";
@@ -1067,8 +1090,6 @@ const describePublishValidationIssues = (
 };
 
 const parseOperation = (rawText: string): BuilderArtifactPatch[] => {
-  const isRecord = (value: unknown): value is Record<string, unknown> =>
-    value !== null && typeof value === "object" && !Array.isArray(value);
   const fallback: BuilderArtifactPatch = {
     op: "replace",
     path: BUILDER_ARTIFACT_PATCH_PATH_DEFAULT_LAST_LINE,
@@ -1079,7 +1100,9 @@ const parseOperation = (rawText: string): BuilderArtifactPatch[] => {
     return [fallback];
   }
 
-  const parsed = safeJsonParse<unknown>(rawText, null, acceptUnknown);
+  const parsed = safeJsonParse<readonly unknown[] | null>(rawText, null, (value) =>
+    Array.isArray(value),
+  );
   if (!Array.isArray(parsed)) {
     return [fallback];
   }
@@ -1295,63 +1318,66 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       return status(httpStatus.ok, successEnvelope(readiness));
     },
   )
-  .get("/ops/observability", async ({ params, builderLocale, builderProjectId, builderCurrentPath, status }) => {
-    const actionContext = readBuilderScopedContext(
-      { builderLocale, builderProjectId, builderCurrentPath },
-      { params },
-    );
-    const project = await builderService.peekProject(actionContext.builderProjectId);
-    const registry = await ProviderRegistry.getInstance();
-    const aiStatus = await registry.getStatus();
-    const readinessAudit =
-      project === null
-        ? undefined
-        : deriveBuilderReadinessAudit({
-            scenes: project.scenes.values(),
-            assets: project.assets.values(),
-            animationClips: project.animationClips.values(),
-            animationTimelines: project.animationTimelines.values(),
-            dialogueGraphs: project.dialogueGraphs.values(),
-            quests: project.quests.values(),
-            triggers: project.triggers.values(),
-            flags: project.flags.values(),
-            generationJobs: project.generationJobs.values(),
-            automationRuns: project.automationRuns.values(),
-            latestReleaseVersion: project.latestReleaseVersion,
-            publishedReleaseVersion: project.publishedReleaseVersion,
-          });
-    const readiness = evaluateBuilderPlatformReadiness({
-      sceneCount: project?.scenes.size ?? 0,
-      spriteManifestCount: countProjectSpriteManifests(actionContext.builderProjectId),
-      aiFeatures: await detectAvailableFeatures(),
-      rendererPreference: appConfig.playableGame.rendererPreference,
-      onnxDevice: appConfig.ai.onnxDevice,
-      audit: readinessAudit,
-    });
-    const automationRunHistory = project
-      ? [...project.automationRuns.values()]
-          .sort((left, right) => right.updatedAtMs - left.updatedAtMs)
-          .slice(0, 20)
-      : [];
-    return status(
-      httpStatus.ok,
-      successEnvelope({
-        activeSessions: await gameLoop.countActiveSessions(),
-        readiness,
-        automationRunHistory,
-        ai: {
-          providers: aiStatus.providers,
-          preferredProvider: aiStatus.preferredProvider,
-          rag: {
-            chunkSize: appConfig.ai.ragChunkSize,
-            chunkOverlap: appConfig.ai.ragChunkOverlap,
-            searchLimit: appConfig.ai.ragSearchLimit,
+  .get(
+    "/ops/observability",
+    async ({ params, builderLocale, builderProjectId, builderCurrentPath, status }) => {
+      const actionContext = readBuilderScopedContext(
+        { builderLocale, builderProjectId, builderCurrentPath },
+        { params },
+      );
+      const project = await builderService.peekProject(actionContext.builderProjectId);
+      const registry = await ProviderRegistry.getInstance();
+      const aiStatus = await registry.getStatus();
+      const readinessAudit =
+        project === null
+          ? undefined
+          : deriveBuilderReadinessAudit({
+              scenes: project.scenes.values(),
+              assets: project.assets.values(),
+              animationClips: project.animationClips.values(),
+              animationTimelines: project.animationTimelines.values(),
+              dialogueGraphs: project.dialogueGraphs.values(),
+              quests: project.quests.values(),
+              triggers: project.triggers.values(),
+              flags: project.flags.values(),
+              generationJobs: project.generationJobs.values(),
+              automationRuns: project.automationRuns.values(),
+              latestReleaseVersion: project.latestReleaseVersion,
+              publishedReleaseVersion: project.publishedReleaseVersion,
+            });
+      const readiness = evaluateBuilderPlatformReadiness({
+        sceneCount: project?.scenes.size ?? 0,
+        spriteManifestCount: countProjectSpriteManifests(actionContext.builderProjectId),
+        aiFeatures: await detectAvailableFeatures(),
+        rendererPreference: appConfig.playableGame.rendererPreference,
+        onnxDevice: appConfig.ai.onnxDevice,
+        audit: readinessAudit,
+      });
+      const automationRunHistory = project
+        ? [...project.automationRuns.values()]
+            .sort((left, right) => right.updatedAtMs - left.updatedAtMs)
+            .slice(0, 20)
+        : [];
+      return status(
+        httpStatus.ok,
+        successEnvelope({
+          activeSessions: await gameLoop.countActiveSessions(),
+          readiness,
+          automationRunHistory,
+          ai: {
+            providers: aiStatus.providers,
+            preferredProvider: aiStatus.preferredProvider,
+            rag: {
+              chunkSize: appConfig.ai.ragChunkSize,
+              chunkOverlap: appConfig.ai.ragChunkOverlap,
+              searchLimit: appConfig.ai.ragSearchLimit,
+            },
           },
-        },
-        recentAuditEvents: await auditService.listRecent(50),
-      }),
-    );
-  })
+          recentAuditEvents: await auditService.listRecent(50),
+        }),
+      );
+    },
+  )
   .get("/ops/retention-export", async ({ status }) => {
     return status(
       httpStatus.ok,
@@ -1772,12 +1798,22 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       const messages = getBuilderMessages(actionLocale);
       const raw =
         body instanceof FormData
-          ? Object.fromEntries(Array.from(body.entries()).map(([key, value]) => [key, String(value)]))
+          ? Object.fromEntries(
+              Array.from(body.entries()).map(([key, value]) => [key, String(value)]),
+            )
           : body && typeof body === "object"
             ? (body as Record<string, unknown>)
             : {};
-      const toField = (key: string): string =>
-        typeof raw[key] === "string" ? (raw[key] as string).trim() : "";
+      const toField = (key: string): string => {
+        const value = raw[key];
+        if (typeof value === "string") {
+          return value.trim();
+        }
+        if (typeof value === "number") {
+          return String(value);
+        }
+        return "";
+      };
       const datasetId = toField("datasetId");
       const datasetSplit = toField("datasetSplit") || "train";
       const baseModel = toField("baseModel");
@@ -1797,7 +1833,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
             set.headers,
             "VALIDATION_ERROR",
             httpStatus.badRequest,
-            messages.missingPrompt,
+            messages.hfTrainingInvalidRequest,
           ),
         );
       }
@@ -1901,7 +1937,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       );
     },
     {
-      body: t.Object({}, { additionalProperties: t.String() }),
+      body: hfTrainingRequestSchema,
       response: {
         [httpStatus.ok]: t.Union([t.String(), builderOkResponse]),
         [httpStatus.badRequest]: builderErrorResponse,
@@ -2474,10 +2510,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         return status(httpStatus.ok, "");
       }
 
-      return status(
-        httpStatus.ok,
-        successEnvelope(toBuilderMutationResult(mutation.result)),
-      );
+      return status(httpStatus.ok, successEnvelope(toBuilderMutationResult(mutation.result)));
     },
     {
       params: t.Object({ projectId: t.String() }),

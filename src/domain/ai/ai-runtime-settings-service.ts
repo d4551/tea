@@ -5,18 +5,18 @@ import {
   parseInteger,
 } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
+import { prismaBase } from "../../shared/services/db.ts";
 import { ModelManager } from "./model-manager.ts";
 import { synchronizeModelRegistry } from "./model-registry.ts";
 import { ProviderRegistry } from "./providers/provider-registry.ts";
-import { prismaBase } from "../../shared/services/db.ts";
 
 const logger = createLogger("ai.runtime-settings");
 
 type SettingPrimitive = string | number | boolean;
 type SettingValueType = "string" | "integer" | "float" | "boolean";
 type SettingSource = "override" | "env" | "default";
-type SettingGetter = () => SettingPrimitive;
-type SettingSetter = (value: SettingPrimitive) => void;
+type SettingGetter<TValue extends SettingPrimitive = SettingPrimitive> = () => TValue;
+type SettingSetter<TValue extends SettingPrimitive = SettingPrimitive> = (value: TValue) => void;
 
 /**
  * Persisted AI runtime setting value.
@@ -52,7 +52,7 @@ export interface AiRuntimeSettingMutation {
   readonly reset?: boolean;
 }
 
-interface SettingDescriptor {
+interface SettingDescriptor<TValue extends SettingPrimitive = SettingPrimitive> {
   readonly key: string;
   readonly valueType: SettingValueType;
   readonly providerLane: string;
@@ -61,30 +61,29 @@ interface SettingDescriptor {
   readonly editable: boolean;
   readonly envKey: string;
   readonly allowEmpty?: boolean;
-  readonly parse: (value: string | number | boolean) => SettingPrimitive;
-  readonly getBaseValue: SettingGetter;
-  readonly getCurrentValue: SettingGetter;
-  readonly setCurrentValue: SettingSetter;
+  readonly parse: (value: string | number | boolean) => TValue;
+  readonly getBaseValue: SettingGetter<TValue>;
+  readonly getCurrentValue: SettingGetter<TValue>;
+  readonly setCurrentValue: SettingSetter<TValue>;
 }
-<<<<<<< Current (Your changes)
-type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
-type MutableAiConfig = Mutable<typeof appConfig.ai>;
-type MutableOpenAiCompatibleConfig = Mutable<typeof appConfig.ai.openAiCompatible.local>;
-type MutableHfInferenceConfig = Mutable<typeof appConfig.ai.huggingfaceInference>;
+type AnySettingDescriptor =
+  | SettingDescriptor<string>
+  | SettingDescriptor<number>
+  | SettingDescriptor<boolean>;
 
-const mutableAiConfig = appConfig.ai as MutableAiConfig;
-const mutableLocalApiConfig = appConfig.ai.openAiCompatible.local as MutableOpenAiCompatibleConfig;
-const mutableCloudApiConfig = appConfig.ai.openAiCompatible.cloud as MutableOpenAiCompatibleConfig;
-const mutableHfInferenceConfig = appConfig.ai.huggingfaceInference as MutableHfInferenceConfig;
-=======
-const mutableAiConfig: Record<string, SettingPrimitive | undefined> = {};
-const mutableLocalApiConfig: Record<string, SettingPrimitive | undefined> = {};
-const mutableCloudApiConfig: Record<string, SettingPrimitive | undefined> = {};
-const mutableHfInferenceConfig: Record<string, SettingPrimitive | undefined> = {};
+const isBooleanDescriptor = (
+  descriptor: AnySettingDescriptor,
+): descriptor is SettingDescriptor<boolean> => descriptor.valueType === "boolean";
 
-const runtimeSettingOverrides = new Map<string, SettingPrimitive>();
->>>>>>> Incoming (Background Agent changes)
+const isNumberDescriptor = (
+  descriptor: AnySettingDescriptor,
+): descriptor is SettingDescriptor<number> =>
+  descriptor.valueType === "integer" || descriptor.valueType === "float";
+
+const isStringDescriptor = (
+  descriptor: AnySettingDescriptor,
+): descriptor is SettingDescriptor<string> => descriptor.valueType === "string";
 
 const parseNonEmptyString = (value: string | number | boolean, key: string): string => {
   const normalized = String(value ?? "").trim();
@@ -94,11 +93,7 @@ const parseNonEmptyString = (value: string | number | boolean, key: string): str
   return normalized;
 };
 
-const parseString = (
-  value: string | number | boolean,
-  key: string,
-  allowEmpty = false,
-): string => {
+const parseString = (value: string | number | boolean, key: string, allowEmpty = false): string => {
   const normalized = String(value ?? "").trim();
   if (!allowEmpty && normalized.length === 0) {
     throw new Error(`Setting ${key} must not be empty.`);
@@ -115,22 +110,16 @@ const parseDescriptorInteger = (
   min: number,
 ): number => parseInteger(String(value), min, min, key);
 
-const parseDescriptorFloat = (
-  value: string | number | boolean,
-  key: string,
-  min: number,
-): number => parseFloatValue(String(value), min, min, key);
+const parseDescriptorFloat = (value: string | number | boolean, key: string, min: number): number =>
+  parseFloatValue(String(value), min, min, key);
 
-const defineSetting = (descriptor: SettingDescriptor): SettingDescriptor => {
+const defineSetting = <TValue extends SettingPrimitive>(
+  descriptor: SettingDescriptor<TValue>,
+): SettingDescriptor<TValue> => {
   const baseValue = descriptor.getBaseValue();
-  const baseCurrentValue = descriptor.getCurrentValue;
   return {
     ...descriptor,
     getBaseValue: () => baseValue,
-    getCurrentValue: () => {
-      const override = runtimeSettingOverrides.get(descriptor.key);
-      return override ?? baseCurrentValue();
-    },
   };
 };
 
@@ -147,7 +136,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.localSentimentModel,
     getCurrentValue: () => appConfig.ai.localSentimentModel,
     setCurrentValue: (value) => {
-      mutableAiConfig["localSentimentModel"] = value;
+      appConfig.ai.localSentimentModel = value;
     },
   }),
   defineSetting({
@@ -162,7 +151,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.localTextGenerationModel,
     getCurrentValue: () => appConfig.ai.localTextGenerationModel,
     setCurrentValue: (value) => {
-      mutableAiConfig["localTextGenerationModel"] = value;
+      appConfig.ai.localTextGenerationModel = value;
     },
   }),
   defineSetting({
@@ -177,7 +166,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.localNpcDialogueModel,
     getCurrentValue: () => appConfig.ai.localNpcDialogueModel,
     setCurrentValue: (value) => {
-      mutableAiConfig["localNpcDialogueModel"] = value;
+      appConfig.ai.localNpcDialogueModel = value;
     },
   }),
   defineSetting({
@@ -192,7 +181,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.localEmbeddingModel,
     getCurrentValue: () => appConfig.ai.localEmbeddingModel,
     setCurrentValue: (value) => {
-      mutableAiConfig["localEmbeddingModel"] = value;
+      appConfig.ai.localEmbeddingModel = value;
     },
   }),
   defineSetting({
@@ -207,7 +196,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.localSpeechToTextModel,
     getCurrentValue: () => appConfig.ai.localSpeechToTextModel,
     setCurrentValue: (value) => {
-      mutableAiConfig["localSpeechToTextModel"] = value;
+      appConfig.ai.localSpeechToTextModel = value;
     },
   }),
   defineSetting({
@@ -222,7 +211,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.localTextToSpeechModel,
     getCurrentValue: () => appConfig.ai.localTextToSpeechModel,
     setCurrentValue: (value) => {
-      mutableAiConfig["localTextToSpeechModel"] = value;
+      appConfig.ai.localTextToSpeechModel = value;
     },
   }),
   defineSetting({
@@ -237,7 +226,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.localImageGenerationEnabled,
     getCurrentValue: () => appConfig.ai.localImageGenerationEnabled,
     setCurrentValue: (value) => {
-      mutableAiConfig["localImageGenerationEnabled"] = value;
+      appConfig.ai.localImageGenerationEnabled = value;
     },
   }),
   defineSetting({
@@ -253,7 +242,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.localImageGenerationModel,
     getCurrentValue: () => appConfig.ai.localImageGenerationModel,
     setCurrentValue: (value) => {
-      mutableAiConfig["localImageGenerationModel"] = value;
+      appConfig.ai.localImageGenerationModel = value;
     },
   }),
   defineSetting({
@@ -268,7 +257,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.imageGenerationSquareSizePx,
     getCurrentValue: () => appConfig.ai.imageGenerationSquareSizePx,
     setCurrentValue: (value) => {
-      mutableAiConfig["imageGenerationSquareSizePx"] = value;
+      appConfig.ai.imageGenerationSquareSizePx = value;
     },
   }),
   defineSetting({
@@ -283,7 +272,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.imageGenerationLandscapeWidthPx,
     getCurrentValue: () => appConfig.ai.imageGenerationLandscapeWidthPx,
     setCurrentValue: (value) => {
-      mutableAiConfig["imageGenerationLandscapeWidthPx"] = value;
+      appConfig.ai.imageGenerationLandscapeWidthPx = value;
     },
   }),
   defineSetting({
@@ -294,12 +283,11 @@ const editableSettingDescriptors = [
     slot: "landscapeHeight",
     label: "Landscape height",
     editable: true,
-    parse: (value) =>
-      parseDescriptorInteger(value, "AI_IMAGE_GENERATION_LANDSCAPE_HEIGHT_PX", 64),
+    parse: (value) => parseDescriptorInteger(value, "AI_IMAGE_GENERATION_LANDSCAPE_HEIGHT_PX", 64),
     getBaseValue: () => appConfig.ai.imageGenerationLandscapeHeightPx,
     getCurrentValue: () => appConfig.ai.imageGenerationLandscapeHeightPx,
     setCurrentValue: (value) => {
-      mutableAiConfig["imageGenerationLandscapeHeightPx"] = value;
+      appConfig.ai.imageGenerationLandscapeHeightPx = value;
     },
   }),
   defineSetting({
@@ -314,7 +302,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.imageGenerationPortraitWidthPx,
     getCurrentValue: () => appConfig.ai.imageGenerationPortraitWidthPx,
     setCurrentValue: (value) => {
-      mutableAiConfig["imageGenerationPortraitWidthPx"] = value;
+      appConfig.ai.imageGenerationPortraitWidthPx = value;
     },
   }),
   defineSetting({
@@ -325,12 +313,11 @@ const editableSettingDescriptors = [
     slot: "portraitHeight",
     label: "Portrait height",
     editable: true,
-    parse: (value) =>
-      parseDescriptorInteger(value, "AI_IMAGE_GENERATION_PORTRAIT_HEIGHT_PX", 64),
+    parse: (value) => parseDescriptorInteger(value, "AI_IMAGE_GENERATION_PORTRAIT_HEIGHT_PX", 64),
     getBaseValue: () => appConfig.ai.imageGenerationPortraitHeightPx,
     getCurrentValue: () => appConfig.ai.imageGenerationPortraitHeightPx,
     setCurrentValue: (value) => {
-      mutableAiConfig["imageGenerationPortraitHeightPx"] = value;
+      appConfig.ai.imageGenerationPortraitHeightPx = value;
     },
   }),
   defineSetting({
@@ -345,7 +332,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.imageGenerationSteps,
     getCurrentValue: () => appConfig.ai.imageGenerationSteps,
     setCurrentValue: (value) => {
-      mutableAiConfig["imageGenerationSteps"] = value;
+      appConfig.ai.imageGenerationSteps = value;
     },
   }),
   defineSetting({
@@ -360,7 +347,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.imageGenerationGuidanceScale,
     getCurrentValue: () => appConfig.ai.imageGenerationGuidanceScale,
     setCurrentValue: (value) => {
-      mutableAiConfig["imageGenerationGuidanceScale"] = value;
+      appConfig.ai.imageGenerationGuidanceScale = value;
     },
   }),
   defineSetting({
@@ -375,7 +362,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.ollamaChatModel,
     getCurrentValue: () => appConfig.ai.ollamaChatModel,
     setCurrentValue: (value) => {
-      mutableAiConfig["ollamaChatModel"] = value;
+      appConfig.ai.ollamaChatModel = value;
     },
   }),
   defineSetting({
@@ -390,7 +377,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.ollamaVisionModel,
     getCurrentValue: () => appConfig.ai.ollamaVisionModel,
     setCurrentValue: (value) => {
-      mutableAiConfig["ollamaVisionModel"] = value;
+      appConfig.ai.ollamaVisionModel = value;
     },
   }),
   defineSetting({
@@ -405,7 +392,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.openAiCompatible.local.chatModel,
     getCurrentValue: () => appConfig.ai.openAiCompatible.local.chatModel,
     setCurrentValue: (value) => {
-      mutableLocalApiConfig["chatModel"] = value;
+      appConfig.ai.openAiCompatible.local.chatModel = value;
     },
   }),
   defineSetting({
@@ -421,7 +408,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.openAiCompatible.local.embeddingModel ?? "",
     getCurrentValue: () => appConfig.ai.openAiCompatible.local.embeddingModel ?? "",
     setCurrentValue: (value) => {
-      mutableLocalApiConfig["embeddingModel"] = value || undefined;
+      appConfig.ai.openAiCompatible.local.embeddingModel = value || undefined;
     },
   }),
   defineSetting({
@@ -437,7 +424,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.openAiCompatible.local.visionModel ?? "",
     getCurrentValue: () => appConfig.ai.openAiCompatible.local.visionModel ?? "",
     setCurrentValue: (value) => {
-      mutableLocalApiConfig["visionModel"] = value || undefined;
+      appConfig.ai.openAiCompatible.local.visionModel = value || undefined;
     },
   }),
   defineSetting({
@@ -453,7 +440,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.openAiCompatible.local.transcriptionModel ?? "",
     getCurrentValue: () => appConfig.ai.openAiCompatible.local.transcriptionModel ?? "",
     setCurrentValue: (value) => {
-      mutableLocalApiConfig["transcriptionModel"] = value || undefined;
+      appConfig.ai.openAiCompatible.local.transcriptionModel = value || undefined;
     },
   }),
   defineSetting({
@@ -469,7 +456,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.openAiCompatible.local.speechModel ?? "",
     getCurrentValue: () => appConfig.ai.openAiCompatible.local.speechModel ?? "",
     setCurrentValue: (value) => {
-      mutableLocalApiConfig["speechModel"] = value || undefined;
+      appConfig.ai.openAiCompatible.local.speechModel = value || undefined;
     },
   }),
   defineSetting({
@@ -485,7 +472,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.openAiCompatible.local.moderationModel ?? "",
     getCurrentValue: () => appConfig.ai.openAiCompatible.local.moderationModel ?? "",
     setCurrentValue: (value) => {
-      mutableLocalApiConfig["moderationModel"] = value || undefined;
+      appConfig.ai.openAiCompatible.local.moderationModel = value || undefined;
     },
   }),
   defineSetting({
@@ -501,7 +488,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.openAiCompatible.local.speechVoice ?? "",
     getCurrentValue: () => appConfig.ai.openAiCompatible.local.speechVoice ?? "",
     setCurrentValue: (value) => {
-      mutableLocalApiConfig["speechVoice"] = value || undefined;
+      appConfig.ai.openAiCompatible.local.speechVoice = value || undefined;
     },
   }),
   defineSetting({
@@ -516,7 +503,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.openAiCompatible.cloud.chatModel,
     getCurrentValue: () => appConfig.ai.openAiCompatible.cloud.chatModel,
     setCurrentValue: (value) => {
-      mutableCloudApiConfig["chatModel"] = value;
+      appConfig.ai.openAiCompatible.cloud.chatModel = value;
     },
   }),
   defineSetting({
@@ -532,7 +519,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.openAiCompatible.cloud.embeddingModel ?? "",
     getCurrentValue: () => appConfig.ai.openAiCompatible.cloud.embeddingModel ?? "",
     setCurrentValue: (value) => {
-      mutableCloudApiConfig["embeddingModel"] = value || undefined;
+      appConfig.ai.openAiCompatible.cloud.embeddingModel = value || undefined;
     },
   }),
   defineSetting({
@@ -548,7 +535,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.openAiCompatible.cloud.visionModel ?? "",
     getCurrentValue: () => appConfig.ai.openAiCompatible.cloud.visionModel ?? "",
     setCurrentValue: (value) => {
-      mutableCloudApiConfig["visionModel"] = value || undefined;
+      appConfig.ai.openAiCompatible.cloud.visionModel = value || undefined;
     },
   }),
   defineSetting({
@@ -564,7 +551,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.openAiCompatible.cloud.transcriptionModel ?? "",
     getCurrentValue: () => appConfig.ai.openAiCompatible.cloud.transcriptionModel ?? "",
     setCurrentValue: (value) => {
-      mutableCloudApiConfig["transcriptionModel"] = value || undefined;
+      appConfig.ai.openAiCompatible.cloud.transcriptionModel = value || undefined;
     },
   }),
   defineSetting({
@@ -580,7 +567,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.openAiCompatible.cloud.speechModel ?? "",
     getCurrentValue: () => appConfig.ai.openAiCompatible.cloud.speechModel ?? "",
     setCurrentValue: (value) => {
-      mutableCloudApiConfig["speechModel"] = value || undefined;
+      appConfig.ai.openAiCompatible.cloud.speechModel = value || undefined;
     },
   }),
   defineSetting({
@@ -596,7 +583,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.openAiCompatible.cloud.moderationModel ?? "",
     getCurrentValue: () => appConfig.ai.openAiCompatible.cloud.moderationModel ?? "",
     setCurrentValue: (value) => {
-      mutableCloudApiConfig["moderationModel"] = value || undefined;
+      appConfig.ai.openAiCompatible.cloud.moderationModel = value || undefined;
     },
   }),
   defineSetting({
@@ -612,7 +599,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.openAiCompatible.cloud.speechVoice ?? "",
     getCurrentValue: () => appConfig.ai.openAiCompatible.cloud.speechVoice ?? "",
     setCurrentValue: (value) => {
-      mutableCloudApiConfig["speechVoice"] = value || undefined;
+      appConfig.ai.openAiCompatible.cloud.speechVoice = value || undefined;
     },
   }),
   defineSetting({
@@ -627,7 +614,7 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.huggingfaceInference.chatModel,
     getCurrentValue: () => appConfig.ai.huggingfaceInference.chatModel,
     setCurrentValue: (value) => {
-      mutableHfInferenceConfig["chatModel"] = value;
+      appConfig.ai.huggingfaceInference.chatModel = value;
     },
   }),
   defineSetting({
@@ -642,14 +629,33 @@ const editableSettingDescriptors = [
     getBaseValue: () => appConfig.ai.huggingfaceInference.imageModel,
     getCurrentValue: () => appConfig.ai.huggingfaceInference.imageModel,
     setCurrentValue: (value) => {
-      mutableHfInferenceConfig["imageModel"] = value;
+      appConfig.ai.huggingfaceInference.imageModel = value;
     },
   }),
-] as const satisfies readonly SettingDescriptor[];
+] as const satisfies readonly AnySettingDescriptor[];
 
-const settingDescriptorMap = new Map<string, SettingDescriptor>(
+const settingDescriptorMap = new Map<string, AnySettingDescriptor>(
   editableSettingDescriptors.map((descriptor) => [descriptor.key, descriptor]),
 );
+
+const setDescriptorCurrentValue = (
+  descriptor: AnySettingDescriptor,
+  value: SettingPrimitive,
+): void => {
+  if (isBooleanDescriptor(descriptor)) {
+    descriptor.setCurrentValue(value === true);
+    return;
+  }
+
+  if (isNumberDescriptor(descriptor)) {
+    descriptor.setCurrentValue(typeof value === "number" ? value : Number(value));
+    return;
+  }
+
+  if (isStringDescriptor(descriptor)) {
+    descriptor.setCurrentValue(String(value));
+  }
+};
 
 /**
  * Stable editable AI runtime setting keys.
@@ -662,7 +668,7 @@ export type AiRuntimeSettingKey = (typeof editableSettingDescriptors)[number]["k
  * @param key Runtime setting key.
  * @returns Matching descriptor, if configured.
  */
-export const getAiRuntimeSettingDescriptor = (key: string): SettingDescriptor | null =>
+export const getAiRuntimeSettingDescriptor = (key: string): AnySettingDescriptor | null =>
   settingDescriptorMap.get(key) ?? null;
 
 /**
@@ -675,11 +681,7 @@ export const listAiRuntimeSettingDescriptors = (): readonly AiRuntimeSettingValu
     key: descriptor.key,
     value: descriptor.getCurrentValue(),
     valueType: descriptor.valueType,
-    source: runtimeSettingOverrides.has(descriptor.key)
-      ? "override"
-      : Bun.env[descriptor.envKey] !== undefined
-        ? "env"
-        : "default",
+    source: Bun.env[descriptor.envKey] !== undefined ? "env" : "default",
     editable: descriptor.editable,
     providerLane: descriptor.providerLane,
     slot: descriptor.slot,
@@ -819,8 +821,7 @@ export class AiRuntimeSettingsService {
     this.initializationPromise = null;
     this.overrideKeys.clear();
     for (const descriptor of editableSettingDescriptors) {
-      descriptor.setCurrentValue(descriptor.getBaseValue());
-      runtimeSettingOverrides.delete(descriptor.key);
+      setDescriptorCurrentValue(descriptor, descriptor.getBaseValue());
     }
     synchronizeModelRegistry();
   }
@@ -833,14 +834,12 @@ export class AiRuntimeSettingsService {
     for (const descriptor of editableSettingDescriptors) {
       const override = overrides.get(descriptor.key);
       if (!override) {
-        descriptor.setCurrentValue(descriptor.getBaseValue());
-        runtimeSettingOverrides.delete(descriptor.key);
+        setDescriptorCurrentValue(descriptor, descriptor.getBaseValue());
         continue;
       }
 
       const parsedValue = this.parseStoredValue(descriptor, override.value);
-      descriptor.setCurrentValue(parsedValue);
-      runtimeSettingOverrides.set(descriptor.key, parsedValue);
+      setDescriptorCurrentValue(descriptor, parsedValue);
     }
     synchronizeModelRegistry();
 
@@ -850,7 +849,7 @@ export class AiRuntimeSettingsService {
     });
   }
 
-  private parseStoredValue(descriptor: SettingDescriptor, value: string): SettingPrimitive {
+  private parseStoredValue(descriptor: AnySettingDescriptor, value: string): SettingPrimitive {
     return descriptor.parse(value);
   }
 
@@ -858,15 +857,12 @@ export class AiRuntimeSettingsService {
     switch (valueType) {
       case "boolean":
         return value === true ? "true" : "false";
-      case "integer":
-      case "float":
-      case "string":
       default:
         return String(value);
     }
   }
 
-  private toSettingValue(descriptor: SettingDescriptor): AiRuntimeSettingValue {
+  private toSettingValue(descriptor: AnySettingDescriptor): AiRuntimeSettingValue {
     return {
       key: descriptor.key,
       value: descriptor.getCurrentValue(),

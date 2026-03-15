@@ -10,11 +10,7 @@ import {
   type ProjectBranding,
 } from "../../shared/branding/project-branding.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
-import {
-  appRoutes,
-  withLocaleQuery,
-  withQueryParameters,
-} from "../../shared/constants/routes.ts";
+import { appRoutes, withLocaleQuery, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml, renderDrawerToggleControl } from "../layout.ts";
 import {
@@ -31,8 +27,8 @@ import {
   iconAssets,
   iconAutomation,
   iconDashboard,
-  iconDocs,
   iconDialogue,
+  iconDocs,
   iconMechanics,
   iconMenu,
   iconNpcs,
@@ -231,24 +227,14 @@ const buildProjectConsoleNavigationGroups = (
         key: "models",
         label: messages.builder.aiModelCatalogWorkspaceTitle,
         shortLabel: messages.builder.aiModelCatalogWorkspaceTitle,
-        href: withBuilderSection(
-          appRoutes.builderAi,
-          locale,
-          projectId,
-          "builder-model-catalog",
-        ),
+        href: withBuilderSection(appRoutes.builderAi, locale, projectId, "builder-model-catalog"),
         icon: iconAi(),
       },
       {
         key: "preview",
         label: messages.builder.previewChanges,
         shortLabel: messages.builder.previewChanges,
-        href: withBuilderSection(
-          appRoutes.builderAi,
-          locale,
-          projectId,
-          "builder-patch-preview",
-        ),
+        href: withBuilderSection(appRoutes.builderAi, locale, projectId, "builder-patch-preview"),
         icon: iconAutomation(),
       },
     ],
@@ -765,7 +751,7 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
     shellLabel: messages.builder.title,
     activeWorkspaceLabel,
     playHref,
-    dockHtml: `<nav class="dock dock-sm fixed inset-x-0 bottom-0 z-30 border-t border-base-300/80 bg-base-100/95 px-2 pb-[env(safe-area-inset-bottom)] shadow-2xl backdrop-blur lg:hidden" aria-label="${escapeHtml(messages.builder.title)}">
+    dockHtml: `<nav class="surface-scroll surface-scroll-x surface-scroll-fade-x touch-pan-x dock dock-sm fixed inset-x-0 bottom-0 z-30 border-t border-base-300/80 bg-base-100/95 px-2 pb-[env(safe-area-inset-bottom)] shadow-2xl backdrop-blur lg:hidden" aria-label="${escapeHtml(messages.builder.title)}" aria-orientation="horizontal">
       ${dockItems
         .map(
           (
@@ -853,8 +839,8 @@ const renderShellFrame = (config: ShellFrameConfig): string => {
     <div class="isolate flex min-h-[calc(100vh-4rem)] flex-col overflow-hidden rounded-[1.75rem] border border-base-300/80 bg-base-100/85 shadow-xl backdrop-blur">
 
       <!-- Mobile Builder Top Bar -->
-      <div class="flex flex-col flex-1 w-full max-w-[100vw]">
-        <nav class="navbar border-b border-base-300/80 bg-base-100 lg:hidden" role="navigation" aria-label="${escapeHtml(shellLabel)}">
+      <div class="flex min-h-0 flex-col flex-1 w-full max-w-[100vw]">
+        <nav class="navbar border-b border-base-300/80 bg-base-100 sticky top-0 z-40 lg:hidden" role="navigation" aria-label="${escapeHtml(shellLabel)}">
           <div class="flex-none">
             ${renderDrawerToggleControl({
               targetId: "main-nav-drawer",
@@ -881,7 +867,7 @@ const renderShellFrame = (config: ShellFrameConfig): string => {
         </nav>
 
         ${renderBuilderProjectShell(messages, locale, projectId, currentPath, project, activeTab)}
-        <div id="builder-content" class="flex-1 overflow-x-clip px-4 py-4 pb-[calc(8.5rem+env(safe-area-inset-bottom))] md:pb-36 lg:px-6 lg:py-6 lg:pb-6" role="region" aria-live="polite">
+        <div id="builder-content" class="flex-1 min-h-0 overflow-x-clip overflow-y-auto surface-scroll surface-scroll-y touch-pan-y px-4 py-4 pb-[calc(8.5rem+env(safe-area-inset-bottom))] md:pb-36 lg:px-6 lg:py-6 lg:pb-6" role="region" aria-live="polite">
           ${body}
         </div>
 

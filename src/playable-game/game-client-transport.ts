@@ -11,7 +11,7 @@ import {
 } from "../shared/contracts/game.ts";
 import type { GameClientRuntimeConfig } from "../shared/contracts/game-client-bootstrap.ts";
 import { readJsonResponse, settleAsync } from "../shared/utils/async-result.ts";
-import { acceptUnknown, safeJsonParse } from "../shared/utils/safe-json.ts";
+import { isRecord, safeJsonParse } from "../shared/utils/safe-json.ts";
 import { isResumeTokenExpiredSoon } from "./game-client-bootstrap-session.ts";
 import type {
   GameClientAlertTone,
@@ -21,7 +21,6 @@ import type {
 } from "./game-client-types.ts";
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
 const buildSessionSocketUrl = (sessionId: string, resumeToken: string): string => {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const path = interpolateRoutePath(GAME_SESSION_ROUTE_PATTERNS.websocket, { id: sessionId });
@@ -48,7 +47,9 @@ const parseGameFrameFromMessage = (incoming: unknown): GameRealtimeFrame | null 
   }
 
   const payload =
-    typeof incoming === "string" ? safeJsonParse(incoming, null, acceptUnknown) : incoming;
+    typeof incoming === "string"
+      ? safeJsonParse<Record<string, unknown> | null>(incoming, null, isRecord)
+      : incoming;
   const validation = validateGameRealtimeFrame(payload);
   if (!validation.ok) {
     return null;

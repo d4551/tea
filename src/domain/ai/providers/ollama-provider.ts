@@ -19,7 +19,7 @@ import {
   toRetryableError,
 } from "../../../shared/contracts/external-boundary.ts";
 import { readJsonResponse, settleAsync } from "../../../shared/utils/async-result.ts";
-import { acceptUnknown, safeJsonParse } from "../../../shared/utils/safe-json.ts";
+import { isRecord, safeJsonParse } from "../../../shared/utils/safe-json.ts";
 import type {
   AiCapability,
   AiChatParams,
@@ -107,9 +107,6 @@ interface OllamaStreamChunk {
  * Families that indicate vision capability.
  */
 const VISION_FAMILIES: ReadonlySet<string> = new Set(["clip", "llava", "mllama"]);
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const readString = (value: unknown): string | null => (typeof value === "string" ? value : null);
 
@@ -714,7 +711,9 @@ export class OllamaProvider implements AiProvider {
           continue;
         }
 
-        const chunk = parseOllamaStreamChunk(safeJsonParse<unknown>(line, null, acceptUnknown));
+        const chunk = parseOllamaStreamChunk(
+          safeJsonParse<Record<string, unknown> | null>(line, null, isRecord),
+        );
         if (!chunk) {
           continue;
         }
@@ -779,7 +778,7 @@ export class OllamaProvider implements AiProvider {
   async describeImage(image: Uint8Array, prompt: string): Promise<AiGenerationResult> {
     const startMs = Date.now();
     const model = appConfig.ai.ollamaVisionModel;
-    const base64Image = Buffer.from(image).toString("base64");
+    const base64Image = image.toBase64();
 
     return this.chat({
       model,

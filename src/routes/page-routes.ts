@@ -1,11 +1,15 @@
 import { Elysia, t } from "elysia";
-import { controlPlaneService } from "../domain/platform/control-plane-service.ts";
 import type { OracleService } from "../domain/oracle/oracle-service.ts";
+import { controlPlaneService } from "../domain/platform/control-plane-service.ts";
 import { authSessionContextPlugin, authSessionGuard } from "../plugins/auth-session.ts";
 import { i18nContextPlugin } from "../plugins/i18n-context.ts";
 import { defaultOracleMode } from "../shared/constants/oracle.ts";
-import { appRoutes, resolveRequestPathWithQuery, type AppRouteKey } from "../shared/constants/routes.ts";
-import { renderDocument, type LayoutContext } from "../views/layout.ts";
+import {
+  type AppRouteKey,
+  appRoutes,
+  resolveRequestPathWithQuery,
+} from "../shared/constants/routes.ts";
+import { type LayoutContext, renderDocument } from "../views/layout.ts";
 import { type OraclePanelState, renderOraclePanel, toOraclePanelState } from "../views/oracle.ts";
 import { renderHomePage } from "../views/pages.ts";
 import { renderControlPlanePage } from "../views/platform/control-plane.ts";

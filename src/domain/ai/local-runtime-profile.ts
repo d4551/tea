@@ -1,11 +1,11 @@
 import {
-  appConfig,
   type AiApiCompatibleVendor,
+  appConfig,
   type OnnxDevicePreference,
 } from "../../config/environment.ts";
 import {
-  aiRuntimeSettingsService,
   type AiRuntimeSettingValue,
+  aiRuntimeSettingsService,
 } from "./ai-runtime-settings-service.ts";
 import { getLocalModelCatalog, type LocalModelCatalogEntry } from "./model-registry.ts";
 

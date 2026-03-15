@@ -1,6 +1,6 @@
 import { appConfig, type LocaleCode } from "../config/environment.ts";
-import { joinUrlPath } from "../shared/constants/assets.ts";
 import type { ProjectBranding } from "../shared/branding/project-branding.ts";
+import { joinUrlPath } from "../shared/constants/assets.ts";
 
 type PageScript = {
   readonly src: string;
@@ -24,12 +24,7 @@ import {
 import type { Messages } from "../shared/i18n/messages.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
 import { buildBuilderJourneyConfig } from "./builder/builder-journey.ts";
-import {
-  escapeHtml,
-  type LayoutContext,
-  type OraclePanelState,
-  renderDocument,
-} from "./layout.ts";
+import { escapeHtml, type LayoutContext, type OraclePanelState, renderDocument } from "./layout.ts";
 import { renderBreadcrumbRow, renderSecondaryNav } from "./shared/navigation.ts";
 import { spinnerClasses } from "./shared/ui-components.ts";
 
@@ -797,5 +792,10 @@ export function GamePage(props: GamePageProps) {
     </div>
   `;
 
-  return renderDocument(layout, props.brand?.playerShellName ?? messages.navigation.game, content, pageScripts);
+  return renderDocument(
+    layout,
+    props.brand?.playerShellName ?? messages.navigation.game,
+    content,
+    pageScripts,
+  );
 }

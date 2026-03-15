@@ -15,6 +15,7 @@ import type { ProviderModelCatalogEntry } from "../../domain/ai/provider-model-c
 import type { AiToolPlanSuccess } from "../../domain/ai/providers/provider-types.ts";
 import type { BuilderPlatformReadiness } from "../../domain/builder/platform-readiness.ts";
 import type { AvailableAiFeatures } from "../../domain/game/ai/game-ai-service.ts";
+import type { ProjectBranding } from "../../shared/branding/project-branding.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { CapabilityState, FeatureCapability } from "../../shared/contracts/game.ts";
@@ -195,6 +196,85 @@ const renderCapabilityNotice = (
     </div>
   </div>`;
 };
+
+const renderBrandControlPlane = (messages: Messages, branding: ProjectBranding): string => `
+  <section id="builder-brand-control-plane" class="rounded-[1.5rem] border border-base-300 bg-base-100 shadow-sm">
+    <div class="flex flex-col gap-5 p-5 lg:p-6">
+      <div class="space-y-2">
+        <h2 class="text-xl font-semibold tracking-tight">${escapeHtml(messages.builder.brandControlPlaneTitle)}</h2>
+        <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.brandControlPlaneDescription)}</p>
+      </div>
+      <div class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <article class="${cardClasses.bordered}">
+          <div class="card-body gap-4">
+            <div>
+              <h3 class="card-title text-base">${escapeHtml(messages.builder.brandIdentityTitle)}</h3>
+              <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.brandIdentityDescription)}</p>
+            </div>
+            <div class="flex items-center gap-4 rounded-[1.25rem] border border-base-300 bg-base-200/60 p-4">
+              <div class="inline-flex size-14 items-center justify-center rounded-2xl bg-primary text-lg font-semibold text-primary-content shadow-sm">
+                ${escapeHtml(branding.logoMark)}
+              </div>
+              <div class="space-y-1">
+                <p class="text-lg font-semibold">${escapeHtml(branding.appName)}</p>
+                <p class="text-sm text-base-content/70">${escapeHtml(branding.appSubtitle)}</p>
+              </div>
+            </div>
+            <dl class="grid gap-3 sm:grid-cols-2">
+              <div class="rounded-box border border-base-300 bg-base-200/60 p-3">
+                <dt class="text-xs uppercase tracking-[0.18em] text-base-content/55">${escapeHtml(messages.builder.brandBuilderShellNameLabel)}</dt>
+                <dd class="mt-2 text-sm font-medium">${escapeHtml(branding.builderShellName)}</dd>
+              </div>
+              <div class="rounded-box border border-base-300 bg-base-200/60 p-3">
+                <dt class="text-xs uppercase tracking-[0.18em] text-base-content/55">${escapeHtml(messages.builder.brandPlayerShellNameLabel)}</dt>
+                <dd class="mt-2 text-sm font-medium">${escapeHtml(branding.playerShellName)}</dd>
+              </div>
+            </dl>
+          </div>
+        </article>
+        <article class="${cardClasses.bordered}">
+          <div class="card-body gap-4">
+            <div>
+              <h3 class="card-title text-base">${escapeHtml(messages.builder.brandVisualSystemTitle)}</h3>
+              <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.brandVisualSystemDescription)}</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="rounded-box border border-base-300 bg-base-200/60 p-3">
+                <p class="text-xs uppercase tracking-[0.18em] text-base-content/55">${escapeHtml(messages.builder.brandSurfaceThemeLabel)}</p>
+                <p class="mt-2 text-sm font-medium">${escapeHtml(branding.surfaceTheme)}</p>
+              </div>
+              <div class="rounded-box border border-base-300 bg-base-200/60 p-3">
+                <p class="text-xs uppercase tracking-[0.18em] text-base-content/55">${escapeHtml(messages.builder.brandHeadingFontLabel)}</p>
+                <p class="mt-2 text-sm font-medium">${escapeHtml(branding.headingFont)}</p>
+              </div>
+              <div class="rounded-box border border-base-300 bg-base-200/60 p-3">
+                <p class="text-xs uppercase tracking-[0.18em] text-base-content/55">${escapeHtml(messages.builder.brandBodyFontLabel)}</p>
+                <p class="mt-2 text-sm font-medium">${escapeHtml(branding.bodyFont)}</p>
+              </div>
+              <div class="rounded-box border border-base-300 bg-base-200/60 p-3">
+                <p class="text-xs uppercase tracking-[0.18em] text-base-content/55">${escapeHtml(messages.builder.brandMonoFontLabel)}</p>
+                <p class="mt-2 text-sm font-medium">${escapeHtml(branding.monoFont)}</p>
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <div class="rounded-box border border-base-300 p-3" style="background:${escapeHtml(branding.primaryColor)};">
+                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-white/80">Primary</p>
+                <p class="mt-6 text-xs font-medium text-white">${escapeHtml(branding.primaryColor)}</p>
+              </div>
+              <div class="rounded-box border border-base-300 p-3" style="background:${escapeHtml(branding.secondaryColor)};">
+                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-white/80">Secondary</p>
+                <p class="mt-6 text-xs font-medium text-white">${escapeHtml(branding.secondaryColor)}</p>
+              </div>
+              <div class="rounded-box border border-base-300 p-3" style="background:${escapeHtml(branding.accentColor)};">
+                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-white/80">Accent</p>
+                <p class="mt-6 text-xs font-medium text-white">${escapeHtml(branding.accentColor)}</p>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>`;
 
 /* ------------------------------------------------------------------ */
 /*  Sub-section renderers                                              */
@@ -1276,6 +1356,7 @@ export const renderAiPanel = (
   runtimeProfile: AiRuntimeProfile,
   locale: LocaleCode,
   projectId: string,
+  branding: ProjectBranding,
   readiness: BuilderPlatformReadiness,
   documents: readonly KnowledgeDocumentRecord[],
 ): string => {
@@ -1299,6 +1380,10 @@ export const renderAiPanel = (
     `${interpolateRoutePath(appRoutes.builderAi, { projectId })}#builder-knowledge-workspace`,
     { lang: locale },
   );
+  const brandingHref = withQueryParameters(
+    `${interpolateRoutePath(appRoutes.builderAi, { projectId })}#builder-brand-control-plane`,
+    { lang: locale },
+  );
   const modelCatalogHref = withQueryParameters(
     `${interpolateRoutePath(appRoutes.builderAi, { projectId })}#builder-model-catalog`,
     { lang: locale },
@@ -1308,6 +1393,7 @@ export const renderAiPanel = (
     { lang: locale },
   );
   const jumpLinks = renderWorkbenchJumpLinks(messages.builder.projectSettings, [
+    { label: messages.builder.brandControlPlaneTitle, href: brandingHref },
     { label: messages.builder.providerStatus, href: providerHref, tone: "primary" },
     { label: messages.builder.assistantReviewTitle, href: assistantReviewHref },
     { label: messages.builder.knowledgeWorkspaceTitle, href: knowledgeHref },
@@ -1316,6 +1402,14 @@ export const renderAiPanel = (
     { label: messages.builder.operations, href: reviewQueueHref, tone: "outline" },
   ]);
   const workbenchCards = [
+    renderWorkbenchSummaryCard(
+      messages.builder.brandControlPlaneTitle,
+      messages.builder.brandControlPlaneDescription,
+      [
+        { label: messages.builder.brandControlPlaneTitle, href: brandingHref, tone: "primary" },
+        { label: messages.builder.knowledgeWorkspaceTitle, href: knowledgeHref },
+      ],
+    ),
     renderWorkbenchSummaryCard(
       messages.builder.providerStatus,
       messages.builder.advancedSettingsDescription,
@@ -1382,7 +1476,7 @@ export const renderAiPanel = (
       ${renderWorkspaceFrame({
         navigatorTitle: messages.builder.projectSettings,
         navigatorDescription: messages.builder.advancedSettingsDescription,
-        navigatorBody: `<div id="builder-provider-workbench" role="alert" class="alert alert-warning alert-soft">
+        navigatorBody: `<div role="alert" class="alert alert-warning alert-soft">
             <span>${escapeHtml(messages.builder.creatorSafeAiDescription)}</span>
           </div>
           <div class="rounded-[1.25rem] border border-base-300 bg-base-100 p-4 shadow-sm">
@@ -1401,11 +1495,13 @@ export const renderAiPanel = (
                 <h2 class="text-xl font-semibold tracking-tight">${escapeHtml(messages.builder.projectSettings)}</h2>
                 <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.advancedSettingsDescription)}</p>
               </div>
-              <div class="grid gap-4 xl:grid-cols-3">
+              <div class="grid gap-4 xl:grid-cols-4">
                 ${workbenchCards}
               </div>
             </div>
           </section>
+
+          ${renderBrandControlPlane(messages, branding)}
 
           <section id="builder-provider-workbench">
             <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box" open>

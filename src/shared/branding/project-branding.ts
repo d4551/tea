@@ -2,12 +2,7 @@ import { DEFAULT_UI_THEME, normalizeUiTheme, type UiTheme } from "../constants/u
 import type { StarterProjectTemplateId } from "../contracts/game.ts";
 
 /** Supported heading-font presets for project branding. */
-export const supportedProjectHeadingFonts = [
-  "sora",
-  "outfit",
-  "manrope",
-  "fraunces",
-] as const;
+export const supportedProjectHeadingFonts = ["sora", "outfit", "manrope", "fraunces"] as const;
 
 /** Supported body-font presets for project branding. */
 export const supportedProjectBodyFonts = [
@@ -18,11 +13,7 @@ export const supportedProjectBodyFonts = [
 ] as const;
 
 /** Supported mono-font presets for project branding. */
-export const supportedProjectMonoFonts = [
-  "space-mono",
-  "jetbrains-mono",
-  "ibm-plex-mono",
-] as const;
+export const supportedProjectMonoFonts = ["space-mono", "jetbrains-mono", "ibm-plex-mono"] as const;
 
 /** Concrete heading-font preset union. */
 export type ProjectHeadingFont = (typeof supportedProjectHeadingFonts)[number];
@@ -296,7 +287,9 @@ const normalizeHexColor = (value: string | undefined, fallback: string): string 
   return normalized.toUpperCase();
 };
 
-const hexToRgb = (value: string): { readonly r: number; readonly g: number; readonly b: number } => {
+const hexToRgb = (
+  value: string,
+): { readonly r: number; readonly g: number; readonly b: number } => {
   const normalized = normalizeHexColor(value, "#000000");
   return {
     r: Number.parseInt(normalized.slice(1, 3), 16),
@@ -321,9 +314,7 @@ const mixHexColors = (left: string, right: string, weight: number): string => {
 
 const relativeChannel = (channel: number): number => {
   const normalized = channel / 255;
-  return normalized <= 0.03928
-    ? normalized / 12.92
-    : ((normalized + 0.055) / 1.055) ** 2.4;
+  return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
 };
 
 const resolveReadableContentColor = (backgroundColor: string): string => {

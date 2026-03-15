@@ -14,10 +14,10 @@ import { MODEL_REGISTRY, type ModelKey } from "../model-registry.ts";
 import type {
   AiCapability,
   AiChatParams,
-  AiImageGenerationParams,
-  AiImageGenerationResult,
   AiClassificationResult,
   AiGenerationResult,
+  AiImageGenerationParams,
+  AiImageGenerationResult,
   AiModelCapabilities,
   AiProvider,
   AiSpeechSynthesisParams,

@@ -1,9 +1,9 @@
 import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
-import { safeJsonParse } from "../../shared/utils/safe-json.ts";
+import { readJsonResponse, settleAsync } from "../../shared/utils/async-result.ts";
+import { isRecord } from "../../shared/utils/safe-json.ts";
 
 const logger = createLogger("ai.hf-dataset-source");
-const DATASET_SERVER_BASE_URL = "https://datasets-server.huggingface.co";
 
 export interface HfDatasetSnippet {
   readonly id: string;
@@ -18,17 +18,20 @@ interface HfDatasetRowsResponse {
   }[];
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
-
-const isHfDatasetRowsResponse = (
-  value: unknown,
-): value is HfDatasetRowsResponse => {
-  if (!isRecord(value) || !("rows" in value)) {
+const isHfDatasetRowsResponse = (value: unknown): value is HfDatasetRowsResponse => {
+  if (!isRecord(value)) {
     return false;
   }
-  const rows = value.rows;
-  return rows === undefined || Array.isArray(rows);
+  if (value.rows !== undefined && !Array.isArray(value.rows)) {
+    return false;
+  }
+  return (value.rows ?? []).every(
+    (entry): entry is { readonly row?: Record<string, unknown> } =>
+      entry === null ||
+      (typeof entry === "object" &&
+        !Array.isArray(entry) &&
+        (entry.row === undefined || isRecord(entry.row))),
+  );
 };
 
 const tokenize = (value: string): readonly string[] =>
@@ -60,7 +63,7 @@ const toTextFromRecord = (record: Record<string, unknown>): string => {
     appConfig.ai.ragHfDatasetTextColumn &&
     typeof record[appConfig.ai.ragHfDatasetTextColumn] === "string"
   ) {
-    return record[appConfig.ai.ragHfDatasetTextColumn].trim();
+    return (record[appConfig.ai.ragHfDatasetTextColumn] as string).trim();
   }
 
   let longest = "";
@@ -78,9 +81,7 @@ const toTextFromRecord = (record: Record<string, unknown>): string => {
 
 const resolveAuthHeaders = (): HeadersInit => {
   const token =
-    appConfig.ai.huggingfaceInference.apiKey ||
-    appConfig.ai.huggingfaceEndpoints.apiKey ||
-    "";
+    appConfig.ai.huggingfaceInference.apiKey || appConfig.ai.huggingfaceEndpoints.apiKey || "";
   return token.length > 0 ? { Authorization: `Bearer ${token}` } : {};
 };
 
@@ -101,26 +102,31 @@ export const fetchHfDatasetSnippets = async (
 
   const split = appConfig.ai.ragHfDatasetSplit.trim() || "train";
   const sampleLength = Math.max(10, Math.min(100, limit * 8));
-  const url = new URL(`${DATASET_SERVER_BASE_URL}/rows`);
+  const normalizedBaseUrl = appConfig.ai.ragHfDatasetServerBaseUrl.trim().replace(/\/$/u, "");
+  const url = new URL(`${normalizedBaseUrl}/rows`);
   url.searchParams.set("dataset", dataset);
   url.searchParams.set("config", config);
   url.searchParams.set("split", split);
   url.searchParams.set("offset", "0");
   url.searchParams.set("length", String(sampleLength));
 
-  const response = await fetch(url, {
-    headers: resolveAuthHeaders(),
-    signal: AbortSignal.timeout(appConfig.ai.requestTimeoutMs),
-  }).catch(() => null);
-  if (!response) {
-    logger.warn("hf.dataset.rows.exception", {
+  const fetchResult = await settleAsync(
+    fetch(url, {
+      headers: resolveAuthHeaders(),
+      signal: AbortSignal.timeout(appConfig.ai.requestTimeoutMs),
+    }),
+  );
+  if (!fetchResult.ok) {
+    logger.warn("hf.dataset.rows.failed", {
       dataset,
       config,
       split,
-      message: "Failed to connect to Hugging Face dataset server.",
+      message: fetchResult.error.message,
     });
     return [];
   }
+
+  const response = fetchResult.value;
   if (!response.ok) {
     logger.warn("hf.dataset.rows.failed", {
       dataset,
@@ -131,8 +137,29 @@ export const fetchHfDatasetSnippets = async (
     return [];
   }
 
-  const payload = safeJsonParse(await response.text().catch(() => ""), null, isHfDatasetRowsResponse);
-  const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+  const payloadResult = await readJsonResponse<unknown>(response);
+  if (!payloadResult.ok) {
+    logger.warn("hf.dataset.rows.failed", {
+      dataset,
+      config,
+      split,
+      message: payloadResult.error.message,
+    });
+    return [];
+  }
+
+  const payload = isHfDatasetRowsResponse(payloadResult.value) ? payloadResult.value : null;
+  if (payload === null) {
+    logger.warn("hf.dataset.rows.failed", {
+      dataset,
+      config,
+      split,
+      message: "Dataset response payload did not match expected shape.",
+    });
+    return [];
+  }
+
+  const rows = Array.isArray(payload.rows) ? payload.rows : [];
   const snippets = rows
     .map((entry, index) => {
       const row = entry.row;
@@ -160,4 +187,3 @@ export const fetchHfDatasetSnippets = async (
 
   return snippets;
 };
-

@@ -78,7 +78,9 @@ describe("shared navigation renderers", () => {
       "secondary",
     );
 
-    expect(html).toContain('class="overflow-x-auto pb-1"');
+    expect(html).toContain(
+      'class="surface-scroll surface-scroll-x surface-scroll-fade-x touch-pan-x pb-1"',
+    );
     expect(html).toContain('role="tablist"');
     expect(html).toContain('aria-label="AI tabs"');
     expect(html).toContain('aria-selected="true"');
@@ -87,6 +89,24 @@ describe("shared navigation renderers", () => {
     expect(html).toContain('hx-target="#main-content"');
     expect(html).toContain('hx-swap="innerHTML"');
     expect(html).toContain('hx-push-url="true"');
+  });
+
+  test("adds locale metadata to linked secondary tabs", () => {
+    const html = renderSecondaryNav(
+      [
+        {
+          key: "status",
+          label: "状态",
+          href: "/projects/test/settings?lang=zh-CN",
+          linkLanguage: "zh-CN",
+        },
+      ],
+      "status",
+      "AI tabs",
+    );
+
+    expect(html).toContain('hreflang="zh-CN"');
+    expect(html).toContain('lang="zh-CN"');
   });
 
   test("renders action dropdown entries without placeholder hrefs", () => {
@@ -108,6 +128,7 @@ describe("shared navigation renderers", () => {
     expect(html).toContain('class="dropdown dropdown-end"');
     expect(html).toContain('href="/public/assets/item.png"');
     expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noreferrer noopener"');
     expect(html).not.toContain('href="#"');
   });
 

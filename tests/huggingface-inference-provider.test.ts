@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { HuggingFaceInferenceProvider } from "../src/domain/ai/providers/huggingface-inference-provider.ts";
 import { appConfig } from "../src/config/environment.ts";
+import { HuggingFaceInferenceProvider } from "../src/domain/ai/providers/huggingface-inference-provider.ts";
 
 const originalFetch = globalThis.fetch;
 

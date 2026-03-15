@@ -16,82 +16,7 @@ import {
   DEFAULT_SCENE_SPAWN_Y,
 } from "../shared/constants/builder-defaults.ts";
 import type { SceneDefinition, SceneNodeDefinition } from "../shared/contracts/game.ts";
-import { safeJsonParse } from "../shared/utils/safe-json.ts";
-
-const isRecordLike = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
-const isFiniteNumber = (value: unknown): value is number =>
-  typeof value === "number" && Number.isFinite(value);
-
-const isFiniteFiniteNumber = (value: unknown): value is number =>
-  isFiniteNumber(value) && value > 0;
-
-const isSceneGeometry = (value: unknown): value is { readonly width: number; readonly height: number } =>
-  isRecordLike(value) &&
-  isFiniteFiniteNumber(value.width) &&
-  isFiniteFiniteNumber(value.height);
-
-const isSceneNodePosition = (
-  value: unknown,
-): value is { readonly x: number; readonly y: number; readonly z?: number } =>
-  isRecordLike(value) &&
-  isFiniteNumber(value.x) &&
-  isFiniteNumber(value.y) &&
-  (value.z === undefined || isFiniteNumber(value.z));
-
-const isSceneNode2dType = (value: string): value is "sprite" | "tile" | "spawn" | "trigger" | "camera" =>
-  value === "sprite" || value === "tile" || value === "spawn" || value === "trigger" || value === "camera";
-
-const isSceneNode3dType = (
-  value: string,
-): value is "model" | "light" | "camera" | "spawn" | "trigger" =>
-  value === "model" ||
-  value === "light" ||
-  value === "camera" ||
-  value === "spawn" ||
-  value === "trigger";
-
-const isSceneNodeType = (value: string): value is SceneNodeDefinition["nodeType"] =>
-  isSceneNode2dType(value) || isSceneNode3dType(value);
-
-const isSceneNodePayload = (
-  value: unknown,
-): value is SceneNodeDefinition =>
-  isRecordLike(value) &&
-  typeof value.id === "string" &&
-  typeof value.nodeType === "string" &&
-  isSceneNodeType(value.nodeType) &&
-  isSceneNodePosition(value.position) &&
-  (() => {
-    const hasSize = "size" in value;
-    const hasTransform = "rotation" in value || "scale" in value;
-    if (hasSize && hasTransform) {
-      return false;
-    }
-    if (hasSize) {
-      return isRecordLike(value.size) &&
-        isFiniteFiniteNumber(value.size.width) &&
-        isFiniteFiniteNumber(value.size.height);
-    }
-    if (hasTransform) {
-      return isRecordLike(value.rotation) &&
-        isFiniteNumber(value.rotation.x) &&
-        isFiniteNumber(value.rotation.y) &&
-        isFiniteNumber(value.rotation.z) &&
-        isRecordLike(value.scale) &&
-        isFiniteNumber(value.scale.x) &&
-        isFiniteNumber(value.scale.y) &&
-        isFiniteNumber(value.scale.z);
-    }
-    return false;
-  })();
-
-const isSceneDefinitionPayload = (value: unknown): value is SceneDefinition =>
-  isRecordLike(value) &&
-  typeof value.id === "string" &&
-  isSceneGeometry(value.geometry) &&
-  (Array.isArray(value.nodes) ? value.nodes.every(isSceneNodePayload) : value.nodes === undefined);
+import { isRecord, safeJsonParse } from "../shared/utils/safe-json.ts";
 
 type SceneEditorPayload = {
   readonly scene: SceneDefinition;
@@ -118,6 +43,53 @@ type SceneNodeFormField =
   | "scaleZ";
 
 type SceneNodeNumericValues = Partial<Record<SceneNodeFormField, number>>;
+type SceneMode = "2d" | "3d";
+
+const isSceneMode = (value: unknown): value is SceneMode => value === "2d" || value === "3d";
+
+const isSceneEditorPayload = (value: unknown): value is SceneEditorPayload => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const scene = value.scene;
+  if (!isRecord(scene)) {
+    return false;
+  }
+
+  if (!isRecord(scene.geometry)) {
+    return false;
+  }
+
+  if (!isRecord(scene.spawn)) {
+    return false;
+  }
+
+  if (
+    typeof scene.id !== "string" ||
+    typeof scene.displayTitle !== "string" ||
+    typeof scene.titleKey !== "string" ||
+    typeof scene.background !== "string" ||
+    typeof scene.geometry.width !== "number" ||
+    !Number.isFinite(scene.geometry.width) ||
+    typeof scene.geometry.height !== "number" ||
+    !Number.isFinite(scene.geometry.height) ||
+    typeof scene.spawn.x !== "number" ||
+    !Number.isFinite(scene.spawn.x) ||
+    typeof scene.spawn.y !== "number" ||
+    !Number.isFinite(scene.spawn.y) ||
+    !Array.isArray(scene.npcs) ||
+    !Array.isArray(scene.collisions)
+  ) {
+    return false;
+  }
+
+  if (scene.sceneMode !== undefined && !isSceneMode(scene.sceneMode)) {
+    return false;
+  }
+
+  return true;
+};
 
 declare global {
   interface Window {
@@ -134,11 +106,7 @@ const readPayload = (element: HTMLElement): SceneEditorPayload | null => {
   return safeJsonParse<SceneEditorPayload | null>(
     script.textContent ?? "",
     null,
-    (value): value is SceneEditorPayload | null =>
-      value === null ||
-      (isRecordLike(value) &&
-        isRecordLike(value.scene) &&
-        isSceneDefinitionPayload(value.scene)),
+    (v): v is SceneEditorPayload | null => v === null || isSceneEditorPayload(v),
   );
 };
 

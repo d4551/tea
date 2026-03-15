@@ -1,4 +1,5 @@
 import type { LocaleCode } from "../../config/environment.ts";
+import { isRecord } from "../utils/safe-json.ts";
 
 /**
  * Full translation contract used by pages, API payloads, and UI partials.
@@ -372,6 +373,7 @@ export interface Messages {
     readonly npcNotFound: string;
     readonly dialogueNotFound: string;
     readonly missingPrompt: string;
+    readonly hfTrainingInvalidRequest: string;
     readonly sceneIdRequired: string;
     readonly sceneTitleRequired: string;
     readonly npcNameRequired: string;
@@ -1040,9 +1042,6 @@ export interface MessageLookupOptions {
   readonly missingValueFallback?: string;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
 export const readMessageValue = (messages: Messages, key: string): unknown => {
   const parts = key.split(".");
   let current: unknown = messages;
@@ -1262,8 +1261,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         emptyCapabilitiesDescription:
           "Provider settings and runtime lanes will appear here once the AI runtime is initialized.",
         emptyReleasesTitle: "No releases published yet",
-        emptyReleasesDescription:
-          "Publish a project to create the first immutable release record.",
+        emptyReleasesDescription: "Publish a project to create the first immutable release record.",
         emptyReviewTitle: "Review queue clear",
         emptyReviewDescription:
           "Queued generation, pending artifacts, and automation approvals will appear here.",
@@ -1496,6 +1494,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       npcNotFound: "NPC not found",
       dialogueNotFound: "Dialogue key not found",
       missingPrompt: "Prompt is required",
+      hfTrainingInvalidRequest: "HF training request is incomplete or invalid.",
       sceneIdRequired: "Scene id is required",
       sceneTitleRequired: "Scene title is required",
       npcNameRequired: "Character name is required",
@@ -2335,11 +2334,13 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         gamesTitle: "游戏",
         gamesDescription: "在组合视图中查看每个游戏的品牌、创作范围与发布状态。",
         librariesTitle: "素材库",
-        librariesDescription: "把已批准素材与待审素材作为可复用资产包来浏览，而不是深埋在单个项目里。",
+        librariesDescription:
+          "把已批准素材与待审素材作为可复用资产包来浏览，而不是深埋在单个项目里。",
         templatesTitle: "模板",
         templatesDescription: "把起始模板与可复用的场景基础提升为顶层模板目录。",
         capabilitiesTitle: "能力",
-        capabilitiesDescription: "把提供商策略、模型路由与运行时设置作为平台能力来管理，而不是项目私有开关。",
+        capabilitiesDescription:
+          "把提供商策略、模型路由与运行时设置作为平台能力来管理，而不是项目私有开关。",
         releasesTitle: "发布",
         releasesDescription: "把不可变发布版本与可变草稿项目清晰分离。",
         reviewTitle: "审查队列",
@@ -2609,6 +2610,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       npcNotFound: "NPC 未找到",
       dialogueNotFound: "对话键未找到",
       missingPrompt: "必须提供提示词",
+      hfTrainingInvalidRequest: "HF 微调请求不完整或无效。",
       sceneIdRequired: "必须提供场景 ID",
       sceneTitleRequired: "必须提供场景标题",
       npcNameRequired: "必须提供角色名称",
@@ -2823,11 +2825,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       brandControlPlaneDescription:
         "在单一项目级品牌套件中掌控名称、Logo、色彩与排版，统一 Builder 与玩家界面。",
       brandIdentityTitle: "品牌身份",
-      brandIdentityDescription:
-        "设置将在构建器与玩家界面中使用的对外名称、副标题与 Logo 体系。",
+      brandIdentityDescription: "设置将在构建器与玩家界面中使用的对外名称、副标题与 Logo 体系。",
       brandVisualSystemTitle: "视觉系统",
-      brandVisualSystemDescription:
-        "调整支撑所有品牌化界面的主题、字体与强调色。",
+      brandVisualSystemDescription: "调整支撑所有品牌化界面的主题、字体与强调色。",
       brandExperienceCopyTitle: "界面命名",
       brandExperienceCopyDescription:
         "重命名 Builder 与玩家界面，让控制平面语言与你的世界设定保持一致。",

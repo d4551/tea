@@ -1,9 +1,9 @@
 import { describe, expect, spyOn, test } from "bun:test";
+import { ProviderRegistry } from "../src/domain/ai/providers/provider-registry.ts";
 import {
   executeAutomationRun,
   executeGenerationJob,
 } from "../src/domain/builder/creator-worker.ts";
-import { ProviderRegistry } from "../src/domain/ai/providers/provider-registry.ts";
 import type { AutomationRun, GenerationJob } from "../src/shared/contracts/game.ts";
 
 const withMockedRegistry = async <T>(

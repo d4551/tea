@@ -2,11 +2,7 @@ import type { LocaleCode } from "../../config/environment.ts";
 import { BUILDER_LIBRARY_PAGE_SIZE } from "../../shared/constants/builder-defaults.ts";
 import { BUILDER_QUERY_PARAM_PAGE } from "../../shared/constants/builder-query.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
-import {
-  appRoutes,
-  withLocaleQuery,
-  withQueryParameters,
-} from "../../shared/constants/routes.ts";
+import { appRoutes, withLocaleQuery, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { AutomationRun, GenerationArtifact } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
@@ -68,7 +64,7 @@ const renderWorkbenchSummaryCard = (
 const renderAutomationRunCard = (
   messages: Messages,
   projectId: string,
-  locale: LocaleCode,
+  _locale: LocaleCode,
   run: AutomationRun,
   artifactLookup: ReadonlyMap<string, GenerationArtifact>,
 ): string => {
@@ -222,7 +218,7 @@ export const renderAutomationPanel = (
   });
   const jumpLinks = renderWorkbenchJumpLinks(messages.builder.operations, [
     { label: messages.builder.createAutomationRun, href: composerHref, tone: "primary" },
-        { label: messages.builder.automationArtifactsLabel, href: reviewQueueHrefLocalized },
+    { label: messages.builder.automationArtifactsLabel, href: reviewQueueHrefLocalized },
     { label: messages.builder.projectSettings, href: settingsHref },
     { label: messages.builder.playtest, href: playtestHref, tone: "outline" },
   ]);
@@ -247,14 +243,10 @@ export const renderAutomationPanel = (
         { label: messages.builder.operations, href: operationsAction },
       ],
     ),
-    renderWorkbenchSummaryCard(
-      messages.builder.playtest,
-      messages.builder.projectPlayHint,
-      [
-        { label: messages.builder.playtest, href: playtestHref, tone: "outline" },
-        { label: messages.builder.projectSettings, href: settingsHref, tone: "ghost" },
-      ],
-    ),
+    renderWorkbenchSummaryCard(messages.builder.playtest, messages.builder.projectPlayHint, [
+      { label: messages.builder.playtest, href: playtestHref, tone: "outline" },
+      { label: messages.builder.projectSettings, href: settingsHref, tone: "ghost" },
+    ]),
   ].join("");
 
   return `<section class="space-y-6 animate-fade-in-up">
@@ -330,9 +322,15 @@ export const renderAutomationPanel = (
             <span class="badge badge-outline">${runs.length}</span>
           </div>
           ${browseControls}
-          <div class="grid gap-4 xl:grid-cols-2">${paginatedRuns.items.length === 0 ? emptyRunAlert : paginatedRuns.items
-            .map((run) => renderAutomationRunCard(messages, projectId, locale, run, artifactLookup))
-            .join("")}</div>
+          <div class="grid gap-4 xl:grid-cols-2">${
+            paginatedRuns.items.length === 0
+              ? emptyRunAlert
+              : paginatedRuns.items
+                  .map((run) =>
+                    renderAutomationRunCard(messages, projectId, locale, run, artifactLookup),
+                  )
+                  .join("")
+          }</div>
         </section>
       </div>`,
       sideSections: [

@@ -221,7 +221,9 @@ export const MODEL_REGISTRY: ModelRegistry = {
     device: appConfig.ai.onnxDevice,
     capabilities: ["image-generation"],
     configKey: "AI_LOCAL_IMAGE_GENERATION_MODEL",
-    enabled: appConfig.ai.localImageGenerationEnabled && appConfig.ai.localImageGenerationModel.trim().length > 0,
+    enabled:
+      appConfig.ai.localImageGenerationEnabled &&
+      appConfig.ai.localImageGenerationModel.trim().length > 0,
     warmup: false,
     maxContextLength: 512,
   },
@@ -250,7 +252,8 @@ export const synchronizeModelRegistry = (): void => {
   textToSpeech.enabled = appConfig.ai.localTextToSpeechEnabled;
   imageGeneration.model = appConfig.ai.localImageGenerationModel;
   imageGeneration.enabled =
-    appConfig.ai.localImageGenerationEnabled && appConfig.ai.localImageGenerationModel.trim().length > 0;
+    appConfig.ai.localImageGenerationEnabled &&
+    appConfig.ai.localImageGenerationModel.trim().length > 0;
 };
 
 synchronizeModelRegistry();

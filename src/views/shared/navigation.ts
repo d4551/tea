@@ -6,6 +6,7 @@ import {
   withLocaleQuery,
   withQueryParameters,
 } from "../../shared/constants/routes.ts";
+import { renderLinkAttrs as renderSharedLinkAttrs } from "./link-attrs.ts";
 
 const escapeHtml = (value: unknown): string =>
   String(value ?? "")
@@ -14,6 +15,15 @@ const escapeHtml = (value: unknown): string =>
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+
+const renderLinkAttrs = (config: {
+  readonly href: string;
+  readonly ariaLabel?: string;
+  readonly active?: boolean;
+  readonly linkLanguage?: string;
+  readonly target?: "_blank" | "_self";
+  readonly rel?: string;
+}): string => renderSharedLinkAttrs(config).trimStart();
 
 /**
  * Shared navigation entry for links shown in primary navigation surfaces.
@@ -31,6 +41,8 @@ export interface NavigationItem {
   readonly badge?: number;
   /** Optional active-state override. */
   readonly active?: boolean;
+  /** Optional locale code for localized link metadata. */
+  readonly linkLanguage?: string;
   /** Optional tooltip label for collapsed navigation. */
   readonly shortLabel?: string;
   /** Whether the item should issue an HTMX navigation request. */
@@ -65,6 +77,12 @@ export interface NavigationAction {
   readonly content: string;
   /** Optional href for link actions. */
   readonly href?: string;
+  /** Optional locale code for localized link metadata. */
+  readonly linkLanguage?: string;
+  /** Optional target attribute for link actions. */
+  readonly target?: "_blank" | "_self";
+  /** Optional rel attribute for link actions. */
+  readonly rel?: string;
   /** Optional button classes. */
   readonly className?: string;
   /** Optional target drawer or element. */
@@ -93,6 +111,8 @@ export interface SecondaryNavItem {
   readonly badge?: number;
   /** Optional href target. */
   readonly href?: string;
+  /** Optional locale code for localized link metadata. */
+  readonly linkLanguage?: string;
   /** Optional HTMX navigation metadata. */
   readonly htmx?: {
     readonly get?: string;
@@ -212,7 +232,13 @@ export const renderNavigationActions = (actions: readonly NavigationAction[]): s
       }
 
       if (action.href) {
-        return `<a href="${escapeHtml(action.href)}" class="${className}" aria-label="${escapeHtml(action.label)}">${action.content}</a>`;
+        return `<a ${renderLinkAttrs({
+          href: action.href,
+          ariaLabel: action.label,
+          linkLanguage: action.linkLanguage,
+          target: action.target,
+          rel: action.rel,
+        })} class="${className}">${action.content}</a>`;
       }
 
       return `<button type="button" class="${className}" aria-label="${escapeHtml(action.label)}">${action.content}</button>`;
@@ -262,9 +288,12 @@ export const renderActionDropdown = (
       }
 
       if (item.href) {
-        const target = item.target ? ` target="${escapeHtml(item.target)}"` : "";
-        const rel = item.rel ? ` rel="${escapeHtml(item.rel)}"` : "";
-        return `<li><a href="${escapeHtml(item.href)}"${target}${rel} class="${escapeHtml(item.className ?? "")}">${escapeHtml(item.label)}</a></li>`;
+        return `<li><a ${renderLinkAttrs({
+          href: item.href,
+          ariaLabel: item.label,
+          target: item.target,
+          rel: item.rel,
+        })} class="${escapeHtml(item.className ?? "")}">${escapeHtml(item.label)}</a></li>`;
       }
 
       const disabledAttr = item.disabled ? " disabled" : "";
@@ -304,7 +333,12 @@ export const renderHeaderNavbar = (
         item.badge !== undefined && item.badge > 0
           ? `<span class="badge badge-neutral badge-xs">${item.badge}</span>`
           : "";
-      return `<li><a href="${escapeHtml(item.href)}"${item.active ? ' aria-current="page"' : ""} class="${item.active ? "menu-active font-semibold" : ""}">${item.icon ?? ""}<span>${escapeHtml(item.label)}</span>${badgeHtml}</a></li>`;
+      return `<li><a ${renderLinkAttrs({
+        href: item.href,
+        ariaLabel: item.label,
+        active: item.active,
+        linkLanguage: item.linkLanguage,
+      })} class="${item.active ? "menu-active font-semibold" : ""}">${item.icon ?? ""}<span>${escapeHtml(item.label)}</span>${badgeHtml}</a></li>`;
     })
     .join("");
 
@@ -346,7 +380,12 @@ export const renderMobileDrawerMenu = (
             item.badge !== undefined && item.badge > 0
               ? `<span class="badge badge-neutral badge-xs">${item.badge}</span>`
               : "";
-          return `<li><a href="${escapeHtml(item.href)}"${item.active ? ' aria-current="page"' : ""} class="${item.active ? "menu-active font-semibold" : ""}">${item.icon ?? ""}<span>${escapeHtml(item.label)}</span>${badgeHtml}</a></li>`;
+          return `<li><a ${renderLinkAttrs({
+            href: item.href,
+            ariaLabel: item.label,
+            active: item.active,
+            linkLanguage: item.linkLanguage,
+          })} class="${item.active ? "menu-active font-semibold" : ""}">${item.icon ?? ""}<span>${escapeHtml(item.label)}</span>${badgeHtml}</a></li>`;
         })
         .join("");
 
@@ -357,9 +396,9 @@ export const renderMobileDrawerMenu = (
     })
     .join("");
 
-  return `<div class="${escapeHtml(options.className ?? "flex min-h-full w-80 max-w-[85vw] flex-col bg-base-100")}">
+  return `<div class="${escapeHtml(options.className ?? "surface-shell surface-section flex min-h-full w-80 max-w-[85vw] flex-col bg-base-100")}">
     ${options.brandHtml ? `<div class="border-b border-base-300 px-4 py-4">${options.brandHtml}</div>` : ""}
-    <div role="navigation" aria-label="${escapeHtml(options.ariaLabel)}" class="flex-1 space-y-4 px-0 py-4">
+    <div role="navigation" aria-label="${escapeHtml(options.ariaLabel)}" class="surface-scroll surface-scroll-y touch-pan-y flex-1 space-y-4 px-0 py-4">
       ${sections}
     </div>
     ${options.footerHtml ? `<div class="border-t border-base-300 px-4 py-4">${options.footerHtml}</div>` : ""}
@@ -406,7 +445,12 @@ export const renderCollapsibleSidebarMenu = (
                 .join(" ")
             : "";
           return `<li>
-            <a href="${escapeHtml(item.href)}" class="gap-3 rounded-box px-3 py-3 text-sm transition-colors ${activeClass}"${item.active ? ' aria-current="page"' : ""} aria-label="${escapeHtml(item.label)}" ${htmxAttrs}>
+            <a ${renderLinkAttrs({
+              href: item.href,
+              ariaLabel: item.label,
+              active: item.active,
+              linkLanguage: item.linkLanguage,
+            })} class="gap-3 rounded-box px-3 py-3 text-sm transition-colors ${activeClass}" ${htmxAttrs}>
               ${item.icon ?? ""}
               <span>${escapeHtml(item.label)}</span>
               ${badgeHtml}
@@ -419,10 +463,10 @@ export const renderCollapsibleSidebarMenu = (
     })
     .join("");
 
-  return `<aside class="${escapeHtml(options.className ?? "flex min-h-full w-[20rem] max-w-[85vw] flex-col border-r border-base-300 bg-base-200 text-base-content shadow-2xl lg:w-72 lg:max-w-none")}" aria-label="${escapeHtml(options.ariaLabel)}">
+  return `<aside class="${escapeHtml(options.className ?? "surface-shell surface-section flex min-h-full w-[20rem] max-w-[85vw] flex-col border-r border-base-300 bg-base-200 text-base-content shadow-2xl lg:w-72 lg:max-w-none")}" aria-label="${escapeHtml(options.ariaLabel)}">
     ${options.brandHtml ? `<div class="w-full border-b border-base-300 px-4 py-4">${options.brandHtml}</div>` : ""}
     ${options.mastheadHtml ? `<div class="w-full border-b border-base-300/70 px-4 py-4">${options.mastheadHtml}</div>` : ""}
-    <ul class="menu w-full grow gap-1 overflow-y-auto px-3 py-2">${sections}</ul>
+    <ul class="menu surface-scroll surface-scroll-y touch-pan-y w-full grow gap-1 overflow-y-auto px-3 py-2">${sections}</ul>
     ${options.footerHtml ? `<div class="w-full border-t border-base-300/70 p-4">${options.footerHtml}</div>` : ""}
   </aside>`;
 };
@@ -452,7 +496,7 @@ export const renderBreadcrumbRow = (
       if (isLast) {
         return `<li><span aria-current="page">${escapeHtml(item.label)}</span></li>`;
       }
-      return `<li><a href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a></li>`;
+      return `<li><a ${renderLinkAttrs({ href: item.href, ariaLabel: item.label })}>${escapeHtml(item.label)}</a></li>`;
     })
     .join("");
 
@@ -488,6 +532,7 @@ export const renderSecondaryNav = (
           : "";
       const content = `${item.icon ? `<span class="icon">${item.icon}</span>` : ""}<span>${escapeHtml(item.label)}</span>${badgeHtml}`;
       const ariaSelected = item.key === activeKey ? "true" : "false";
+      const ariaCurrent = ariaSelected === "true" ? ' aria-current="page"' : "";
       const htmxAttrs = item.htmx
         ? [
             item.htmx.get ? `hx-get="${escapeHtml(item.htmx.get)}"` : "",
@@ -500,15 +545,18 @@ export const renderSecondaryNav = (
         : "";
 
       if (item.href) {
-        return `<a href="${escapeHtml(item.href)}" role="tab" class="tab ${activeClass}" aria-selected="${ariaSelected}" aria-label="${escapeHtml(item.label)}" ${htmxAttrs}>${content}</a>`;
+        return `<a ${renderLinkAttrs({
+          href: item.href,
+          linkLanguage: item.linkLanguage,
+        })} role="tab" class="tab ${activeClass}" aria-selected="${ariaSelected}"${ariaCurrent} aria-label="${escapeHtml(item.label)}" ${htmxAttrs}>${content}</a>`;
       }
 
-      return `<button type="button" role="tab" class="tab ${activeClass}" aria-selected="${ariaSelected}" aria-label="${escapeHtml(item.label)}" ${htmxAttrs}>${content}</button>`;
+      return `<button type="button" role="tab" class="tab ${activeClass}" aria-selected="${ariaSelected}"${ariaCurrent} aria-label="${escapeHtml(item.label)}" ${htmxAttrs}>${content}</button>`;
     })
     .join("");
 
-  return `<div class="overflow-x-auto pb-1">
-    <nav class="tabs tabs-lg tabs-box bg-base-200/80 min-w-max" role="tablist" aria-label="${escapeHtml(ariaLabel)}">
+  return `<div class="surface-scroll surface-scroll-x surface-scroll-fade-x touch-pan-x pb-1">
+    <nav class="tabs tabs-lg tabs-box interactive-surface min-w-max border border-base-300/70 bg-base-200/85 p-1 shadow-sm" role="tablist" aria-orientation="horizontal" aria-label="${escapeHtml(ariaLabel)}">
       ${renderedItems}
     </nav>
   </div>`;

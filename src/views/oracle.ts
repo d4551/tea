@@ -1,6 +1,6 @@
 import { appConfig, type LocaleCode } from "../config/environment.ts";
 import type { OracleMode, OracleOutcome } from "../domain/oracle/oracle-types.ts";
-import { appRoutes, type AppRouteKey } from "../shared/constants/routes.ts";
+import { type AppRouteKey, appRoutes } from "../shared/constants/routes.ts";
 import type { UiErrorState } from "../shared/contracts/ui-state.ts";
 import type { Messages } from "../shared/i18n/messages.ts";
 import { escapeHtml } from "./layout.ts";

@@ -85,7 +85,9 @@ describe("oracle view contract", () => {
       },
     );
 
-    expect(html).toContain('<input type="hidden" name="context_path" value="/projects/abc/world" />');
+    expect(html).toContain(
+      '<input type="hidden" name="context_path" value="/projects/abc/world" />',
+    );
     expect(html).toContain('<input type="hidden" name="context_route" value="builderScenes" />');
     expect(html).toContain('<input type="hidden" name="context_project" value="abc-123" />');
   });
@@ -110,7 +112,9 @@ describe("oracle view contract", () => {
       },
     );
 
-    expect(html).toContain('<input type="hidden" name="context_path" value="/projects/abc/world" />');
+    expect(html).toContain(
+      '<input type="hidden" name="context_path" value="/projects/abc/world" />',
+    );
     expect(html).toContain('<input type="hidden" name="context_route" value="builderScenes" />');
     expect(html).not.toContain('name="context_project"');
   });

@@ -9,7 +9,7 @@ import { resolveRequestLocale } from "../shared/i18n/translator.ts";
 import type { AuthCookieBag, AuthRequestContext } from "./auth-session.ts";
 import { resolveAuthSession } from "./auth-session.ts";
 
-type ContextSourceValue = string;
+type ContextSourceValue = unknown;
 type ContextSource = Readonly<Record<string, ContextSourceValue | undefined>>;
 
 /**
@@ -39,11 +39,9 @@ const toContextSource = (value: unknown): ContextSource => {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return {};
   }
-  const next: ContextSource = {};
+  const next: Record<string, ContextSourceValue | undefined> = {};
   for (const [key, raw] of Object.entries(value)) {
-    if (typeof raw === "string") {
-      next[key] = raw;
-    }
+    next[key] = raw;
   }
   return next;
 };
@@ -182,11 +180,9 @@ export const mergeBuilderRequestContext = (
         ? resolveBuilderLocale(undefined, querySource, bodySource)
         : base.builderLocale,
     builderProjectId:
-      (
-        readStringField(paramSource, "projectId") ??
-        readStringField(bodySource, "projectId") ??
-        readStringField(querySource, "projectId")
-      )
+      (readStringField(paramSource, "projectId") ??
+      readStringField(bodySource, "projectId") ??
+      readStringField(querySource, "projectId"))
         ? resolveBuilderProjectId(querySource, bodySource, paramSource)
         : base.builderProjectId,
     builderCurrentPath:

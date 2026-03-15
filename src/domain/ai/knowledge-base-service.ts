@@ -743,11 +743,10 @@ export class KnowledgeBaseService {
       return ranked;
     }
 
-    const supplementalResult = await fetchHfDatasetSnippets(
+    const supplemental = await fetchHfDatasetSnippets(
       trimmedQuery,
       Math.max(1, effectiveLimit - ranked.length),
     );
-    const supplemental = supplementalResult.ok ? supplementalResult.value : [];
     if (supplemental.length === 0) {
       return ranked;
     }

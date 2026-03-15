@@ -17,7 +17,7 @@ import type {
   SceneDefinition,
   TriggerDefinition,
 } from "../contracts/game.ts";
-import { safeJsonParse } from "../utils/safe-json.ts";
+import { isInputJsonValue, safeJsonParse } from "../utils/safe-json.ts";
 
 declare global {
   // biome-lint: globalThis.prisma intentionally re-assigned in dev for HMR
@@ -1942,7 +1942,7 @@ const withBuilderCoreExtensions = (base: PrismaClient) =>
                     safeJsonParse<Prisma.InputJsonValue>(
                       JSON.stringify(row.state ?? {}),
                       {},
-                      (v): v is Prisma.InputJsonValue => true,
+                      isInputJsonValue,
                     ),
                 },
               });

@@ -1,8 +1,9 @@
-import type { BuilderWorkflowStageStatus, CreatorCapabilities } from "../../shared/contracts/game.ts";
+import type {
+  BuilderWorkflowStageStatus,
+  CreatorCapabilities,
+} from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
-import {
-  deriveCreatorCapabilities as deriveCapabilitySnapshotCreatorCapabilities,
-} from "../ai/capability-snapshot.ts";
+import { deriveCreatorCapabilities as deriveCapabilitySnapshotCreatorCapabilities } from "../ai/capability-snapshot.ts";
 import type { AiSystemStatus } from "../ai/providers/provider-registry.ts";
 import type { BuilderPlatformReadiness } from "./platform-readiness.ts";
 

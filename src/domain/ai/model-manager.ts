@@ -15,11 +15,13 @@ import {
   MODEL_STT_EMPTY_TEXT_ERROR,
   MODEL_STT_INVALID_PAYLOAD_ERROR,
 } from "../../shared/constants/errors.ts";
+import { settleAsync } from "../../shared/utils/async-result.ts";
+import { isRecord } from "../../shared/utils/safe-json.ts";
 import {
   type LocalEmbeddingOperationResult,
+  type LocalImageGenerationOperationResult,
   type LocalModelFailure,
   type LocalModelResult,
-  type LocalImageGenerationOperationResult,
   type LocalSentimentOperationResult,
   type LocalSpeechSynthesisOperationResult,
   type LocalTextGenerationOperationResult,
@@ -35,7 +37,6 @@ import { LocalModelPipelineCache } from "./model-pipeline-cache.ts";
 import { type AnyPipeline, loadModelPipeline } from "./model-pipeline-loader.ts";
 import { MODEL_REGISTRY, type ModelKey } from "./model-registry.ts";
 import { LocalModelRuntimeHealth } from "./model-runtime-health.ts";
-import { settleAsync } from "../../shared/utils/async-result.ts";
 
 const logger = createLogger("ai.model-manager");
 
@@ -57,9 +58,6 @@ type ImageGenerationRawOutput = {
   readonly image_data?: unknown;
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 
@@ -79,20 +77,14 @@ const isHttpUrl = (value: string): boolean =>
   value.startsWith("http://") || value.startsWith("https://");
 
 const isLikelyBase64 = (value: string): boolean =>
-  /^[A-Za-z0-9+/=]+$/.test(value) && value.length % 4 === 0;
+  /^[A-Za-z0-9+/]+={0,2}$/u.test(value) && value.length % 4 !== 1;
 
 const decodeBase64ToBytes = (encoded: string): Uint8Array | null => {
   const normalized = encoded.replace(/[\r\n\s]/g, "");
-  if (!isLikelyBase64(normalized) || typeof atob === "undefined") {
+  if (!isLikelyBase64(normalized)) {
     return null;
   }
-
-  const binary = atob(normalized);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
+  return Uint8Array.fromBase64(normalized);
 };
 
 const decodeImageDataUrl = (value: string): { bytes: Uint8Array; mimeType: string } | null => {
@@ -126,17 +118,18 @@ const fetchImageBytes = async (url: string): Promise<Uint8Array | null> => {
     return null;
   }
 
-  const responseResult = await settleAsync(fetch(url));
-  if (!responseResult.ok || !responseResult.value.ok) {
-    return null;
-  }
+  const responseResult = await settleAsync(
+    fetch(url).then(async (response) => {
+      if (!response.ok) {
+        return null;
+      }
 
-  const bufferResult = await settleAsync(responseResult.value.arrayBuffer());
-  if (!bufferResult.ok) {
-    return null;
-  }
+      const buffer = await response.arrayBuffer();
+      return new Uint8Array(buffer);
+    }),
+  );
 
-  return new Uint8Array(bufferResult.value);
+  return responseResult.ok ? responseResult.value : null;
 };
 
 const normalizeImageOutput = async (
@@ -225,7 +218,6 @@ const resolveImageGenerationDimensions = (
         width: appConfig.ai.imageGenerationPortraitWidthPx,
         height: appConfig.ai.imageGenerationPortraitHeightPx,
       };
-    case "square":
     default:
       return {
         width: appConfig.ai.imageGenerationSquareSizePx,

@@ -1,5 +1,5 @@
 import { createLogger } from "../../lib/logger.ts";
-import { acceptUnknown, safeJsonParse } from "../../shared/utils/safe-json.ts";
+import { acceptUnknown, isRecord, safeJsonParse } from "../../shared/utils/safe-json.ts";
 import type { AiChatParams, AiGenerationResult } from "../ai/providers/provider-types.ts";
 
 const logger = createLogger("builder.ai-authoring");
@@ -202,11 +202,8 @@ export type GeneratedAnimationPlanResult =
 const extractJson = (raw: string): unknown | null => {
   const fencedMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/u);
   const jsonStr = fencedMatch ? (fencedMatch[1]?.trim() ?? "") : raw.trim();
-  return safeJsonParse(jsonStr, null, acceptUnknown);
+  return safeJsonParse<unknown | null>(jsonStr, null, acceptUnknown);
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
 
 const isNumberRecord = (value: unknown): value is Record<string, number> =>
   isRecord(value) && Object.values(value).every((entry) => typeof entry === "number");

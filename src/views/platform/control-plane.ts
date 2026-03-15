@@ -1,4 +1,7 @@
 import type { LocaleCode } from "../../config/environment.ts";
+import { BUILDER_QUERY_PARAM_TEMPLATE_ID } from "../../shared/constants/builder-query.ts";
+import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
+import { appRoutes, withLocaleQuery, withQueryParameters } from "../../shared/constants/routes.ts";
 import type {
   AssetLibrary,
   CapabilityProfile,
@@ -10,13 +13,10 @@ import type {
   ReviewQueueItem,
   SharedAsset,
 } from "../../shared/contracts/platform-control-plane.ts";
-import { BUILDER_QUERY_PARAM_TEMPLATE_ID } from "../../shared/constants/builder-query.ts";
-import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
-import { appRoutes, withLocaleQuery, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
-import { escapeHtml } from "../layout.ts";
 import { renderWorkspaceFrame, renderWorkspaceShell } from "../builder/workspace-shell.ts";
-import { type SecondaryNavItem, renderSecondaryNav } from "../shared/navigation.ts";
+import { escapeHtml } from "../layout.ts";
+import { renderSecondaryNav, type SecondaryNavItem } from "../shared/navigation.ts";
 import { renderEmptyState } from "../shared/ui-components.ts";
 
 /**
@@ -62,11 +62,7 @@ const formatTimestamp = (locale: LocaleCode, timestamp: number): string =>
     timeStyle: "short",
   }).format(new Date(timestamp));
 
-const withPlatformQuery = (
-  path: string,
-  locale: LocaleCode,
-  projectId?: string,
-): string =>
+const withPlatformQuery = (path: string, locale: LocaleCode, projectId?: string): string =>
   withQueryParameters(withLocaleQuery(path, locale), projectId ? { projectId } : {});
 
 const buildWorkspaceHref = (
@@ -81,15 +77,11 @@ const buildProjectRoute = (
   projectId: string,
   hash?: string,
 ): string =>
-  withQueryParameters(
-    `${interpolateRoutePath(path, { projectId })}${hash ? `#${hash}` : ""}`,
-    { lang: locale },
-  );
+  withQueryParameters(`${interpolateRoutePath(path, { projectId })}${hash ? `#${hash}` : ""}`, {
+    lang: locale,
+  });
 
-const resolveWorkspaceLabel = (
-  messages: Messages,
-  workspace: ControlPlaneWorkspaceId,
-): string => {
+const resolveWorkspaceLabel = (messages: Messages, workspace: ControlPlaneWorkspaceId): string => {
   switch (workspace) {
     case "games":
       return messages.pages.controlPlane.gamesTitle;
@@ -144,12 +136,12 @@ const renderWorkspaceTabs = (
     },
   }));
 
-  return renderSecondaryNav(
+  return `<div class="overflow-x-auto pb-1">${renderSecondaryNav(
     tabs,
     activeWorkspace,
     messages.pages.controlPlane.workspaceLabel,
     "secondary",
-  );
+  )}</div>`;
 };
 
 const renderNavigatorLinks = (
@@ -236,7 +228,10 @@ const renderGameCard = (
   </div>
 </article>`;
 
-const renderLibraryCard = (messages: Messages, library: AssetLibrary): string => `<article class="card card-border bg-base-100 shadow-sm">
+const renderLibraryCard = (
+  messages: Messages,
+  library: AssetLibrary,
+): string => `<article class="card card-border bg-base-100 shadow-sm">
   <div class="card-body gap-3">
     <div class="flex items-start justify-between gap-3">
       <div class="space-y-1">
@@ -258,7 +253,10 @@ const renderLibraryCard = (messages: Messages, library: AssetLibrary): string =>
   </div>
 </article>`;
 
-const renderSharedAssetRow = (messages: Messages, asset: SharedAsset): string => `<article class="rounded-[1.25rem] border border-base-300 bg-base-100 p-4 shadow-sm">
+const renderSharedAssetRow = (
+  messages: Messages,
+  asset: SharedAsset,
+): string => `<article class="rounded-[1.25rem] border border-base-300 bg-base-100 p-4 shadow-sm">
   <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
     <div class="space-y-1">
       <div class="flex flex-wrap items-center gap-2">
@@ -315,7 +313,10 @@ const renderTemplateCard = (
   </div>
 </article>`;
 
-const renderCapabilityCard = (messages: Messages, profile: CapabilityProfile): string => `<article class="card card-border bg-base-100 shadow-sm">
+const renderCapabilityCard = (
+  messages: Messages,
+  profile: CapabilityProfile,
+): string => `<article class="card card-border bg-base-100 shadow-sm">
   <div class="card-body gap-4">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="space-y-1">
@@ -364,7 +365,9 @@ const renderReleaseCard = (
         )}</p>
       </div>
       <span class="badge ${release.published ? "badge-success" : "badge-ghost"} badge-soft">${escapeHtml(
-        release.published ? messages.pages.controlPlane.activeReleaseLabel : messages.pages.controlPlane.archivedReleaseLabel,
+        release.published
+          ? messages.pages.controlPlane.activeReleaseLabel
+          : messages.pages.controlPlane.archivedReleaseLabel,
       )}</span>
     </div>
     <div class="card-actions justify-start">
@@ -476,7 +479,7 @@ const renderWorkspaceMain = (input: ControlPlanePageInput): string => {
 export const renderControlPlanePage = (input: ControlPlanePageInput): string => {
   const { messages, locale, workspace, snapshot, projectId } = input;
   const focusedProject = projectId
-    ? snapshot.games.find((game) => game.id === projectId) ?? null
+    ? (snapshot.games.find((game) => game.id === projectId) ?? null)
     : null;
 
   const actions = [
@@ -500,7 +503,9 @@ export const renderControlPlanePage = (input: ControlPlanePageInput): string => 
           : messages.pages.controlPlane.allProjectsLabel,
       },
       { label: `${messages.pages.controlPlane.scopeContractLabel}: global → session` },
-      { label: `${messages.pages.controlPlane.globalKnowledgeLabel}: ${snapshot.globalKnowledgeDocumentCount}` },
+      {
+        label: `${messages.pages.controlPlane.globalKnowledgeLabel}: ${snapshot.globalKnowledgeDocumentCount}`,
+      },
     ],
     metrics: [
       { label: messages.pages.controlPlane.gamesMetric, value: snapshot.games.length },
@@ -535,29 +540,31 @@ export const renderControlPlanePage = (input: ControlPlanePageInput): string => 
 
   return `<div class="space-y-6">
     ${hero}
-    ${renderWorkspaceFrame({
-      navigatorTitle: messages.pages.controlPlane.workspaceLabel,
-      navigatorDescription: messages.pages.controlPlane.workspaceDescription,
-      navigatorBody,
-      mainBody: `<section class="space-y-4">
-        <header class="space-y-2">
-          <h2 class="text-xl font-semibold tracking-tight">${escapeHtml(resolveWorkspaceLabel(messages, workspace))}</h2>
-          <p class="text-sm leading-6 text-base-content/72">${escapeHtml(resolveWorkspaceDescription(messages, workspace))}</p>
-        </header>
-        ${renderWorkspaceMain(input)}
-      </section>`,
-      sideSections: [
-        {
-          title: messages.pages.controlPlane.ownershipModelTitle,
-          description: messages.pages.controlPlane.ownershipModelDescription,
-          body: `<div class="grid gap-2">${renderScopeCards(messages)}</div>`,
-        },
-        {
-          title: messages.pages.controlPlane.focusedProjectTitle,
-          description: messages.pages.controlPlane.focusedProjectDescription,
-          body: currentProjectRail,
-        },
-      ],
-    })}
+    <div class="xl:grid-cols-[22rem_minmax(0,1fr)] 2xl:grid-cols-[22rem_minmax(0,1fr)_22rem]">
+      ${renderWorkspaceFrame({
+        navigatorTitle: messages.pages.controlPlane.workspaceLabel,
+        navigatorDescription: messages.pages.controlPlane.workspaceDescription,
+        navigatorBody,
+        mainBody: `<section class="space-y-4">
+          <header class="space-y-2">
+            <h2 class="text-xl font-semibold tracking-tight">${escapeHtml(resolveWorkspaceLabel(messages, workspace))}</h2>
+            <p class="text-sm leading-6 text-base-content/72">${escapeHtml(resolveWorkspaceDescription(messages, workspace))}</p>
+          </header>
+          ${renderWorkspaceMain(input)}
+        </section>`,
+        sideSections: [
+          {
+            title: messages.pages.controlPlane.ownershipModelTitle,
+            description: messages.pages.controlPlane.ownershipModelDescription,
+            body: `<div class="grid gap-2">${renderScopeCards(messages)}</div>`,
+          },
+          {
+            title: messages.pages.controlPlane.focusedProjectTitle,
+            description: messages.pages.controlPlane.focusedProjectDescription,
+            body: currentProjectRail,
+          },
+        ],
+      })}
+    </div>
   </div>`;
 };

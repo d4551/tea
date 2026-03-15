@@ -49,7 +49,7 @@ import {
   type BuilderProjectTriggerRow,
   prisma,
 } from "../../shared/services/db.ts";
-import { acceptUnknown, safeJsonParse } from "../../shared/utils/safe-json.ts";
+import { isInputJsonValue, isRecord, safeJsonParse } from "../../shared/utils/safe-json.ts";
 import { gameTextByLocale } from "../game/data/game-text.ts";
 import {
   gameScenes,
@@ -1015,11 +1015,7 @@ const toDraftStateInput = (state: BuilderProjectState): Prisma.InputJsonValue =>
     automationRuns: _automationRuns,
     ...draftState
   } = state;
-  return safeJsonParse<Prisma.InputJsonValue>(
-    JSON.stringify(draftState),
-    {},
-    (v): v is Prisma.InputJsonValue => true,
-  );
+  return safeJsonParse<Prisma.InputJsonValue>(JSON.stringify(draftState), {}, isInputJsonValue);
 };
 
 const toNumberValue = (value: unknown): number | null =>
@@ -1455,6 +1451,30 @@ const toDialoguesFromRows = (
   return dialogues;
 };
 
+const isAssetVariant = (value: unknown): value is AssetVariant => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  if (typeof value.id !== "string" || value.id.length === 0) {
+    return false;
+  }
+
+  if (typeof value.format !== "string" || value.format.length === 0) {
+    return false;
+  }
+
+  if (typeof value.source !== "string" || value.source.length === 0) {
+    return false;
+  }
+
+  if (typeof value.usage !== "string" || value.usage.length === 0) {
+    return false;
+  }
+
+  return !("mimeType" in value) || typeof value.mimeType === "string";
+};
+
 const withDraftContent = (
   state: BuilderProjectState,
   scenes: Record<string, SceneDefinition>,
@@ -1467,27 +1487,19 @@ const withDraftContent = (
 
 const toAssetVariantArray = (value: unknown): readonly AssetVariant[] =>
   Array.isArray(value)
-    ? value.flatMap((item) => {
-        if (
-          item &&
-          typeof item === "object" &&
-          typeof item.id === "string" &&
-          typeof item.format === "string" &&
-          typeof item.source === "string" &&
-          typeof item.usage === "string"
-        ) {
-          return [
-            {
-              id: item.id,
-              format: item.format,
-              source: item.source,
-              usage: item.usage,
-            } satisfies AssetVariant,
-          ];
-        }
-
-        return [];
-      })
+    ? value.flatMap((item) =>
+        isAssetVariant(item)
+          ? [
+              {
+                id: item.id,
+                format: item.format,
+                source: item.source,
+                usage: item.usage,
+                ...(typeof item.mimeType === "string" ? { mimeType: item.mimeType } : {}),
+              },
+            ]
+          : [],
+      )
     : [];
 
 const toBuilderAssetsFromRows = (
@@ -2189,7 +2201,11 @@ const parseAutomationStepSpecValue = (value: unknown): AutomationStepSpec | unde
 };
 
 const parseAutomationStepSpec = (raw: string | null): AutomationStepSpec | undefined =>
-  raw ? parseAutomationStepSpecValue(safeJsonParse<unknown>(raw, null, acceptUnknown)) : undefined;
+  raw
+    ? parseAutomationStepSpecValue(
+        safeJsonParse<Record<string, unknown> | null>(raw, null, isRecord),
+      )
+    : undefined;
 
 const toAutomationRunsFromRows = (
   rows: readonly BuilderProjectAutomationRunRow[],
@@ -2625,8 +2641,7 @@ const parseAutomationRunRecord = (runId: string, value: unknown): AutomationRun 
 };
 
 const parseProjectState = (state: Prisma.JsonValue): BuilderProjectState => {
-  const parsed = safeJsonParse<unknown>(JSON.stringify(state), {}, acceptUnknown);
-  const record = asRecord(parsed);
+  const record = asRecord(state);
   const brandRecord = asRecord(record.brand);
   const scenesRecord = asRecord(record.scenes);
   const dialoguesRecord = asRecord(record.dialogues);
@@ -3270,7 +3285,7 @@ export class BuilderProjectStateStore {
         state: safeJsonParse<Prisma.InputJsonValue>(
           JSON.stringify(entry.state),
           {},
-          (v): v is Prisma.InputJsonValue => true,
+          isInputJsonValue,
         ),
         checksum: checksumOf(entry.state),
       },

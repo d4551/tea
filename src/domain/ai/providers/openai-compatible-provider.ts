@@ -24,7 +24,7 @@ import {
   toRetryableError,
 } from "../../../shared/contracts/external-boundary.ts";
 import { readJsonResponse, settleAsync } from "../../../shared/utils/async-result.ts";
-import { acceptUnknown, safeJsonParse } from "../../../shared/utils/safe-json.ts";
+import { isRecord, safeJsonParse } from "../../../shared/utils/safe-json.ts";
 import { encodeMonoWavAudio, safeDecodeWavAudio } from "../../../shared/utils/wav-audio.ts";
 import type {
   AiCapability,
@@ -132,9 +132,6 @@ interface OpenAiCompatibleChatCompletionChunk {
     readonly finish_reason?: string | null;
   }[];
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const readString = (value: unknown): string | null => (typeof value === "string" ? value : null);
 
@@ -817,7 +814,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
           }
 
           const payload = parseChatCompletionChunk(
-            safeJsonParse<unknown>(line, null, acceptUnknown),
+            safeJsonParse<Record<string, unknown> | null>(line, null, isRecord),
           );
           const content = payload?.choices
             .map((choice) =>
@@ -961,7 +958,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
     const textPayloadResult = await settleAsync(response.data.text());
     const textPayload = textPayloadResult.ok ? textPayloadResult.value : "";
     const payload = parseTranscriptionResponse(
-      safeJsonParse<unknown>(textPayload, null, acceptUnknown),
+      safeJsonParse<Record<string, unknown> | null>(textPayload, null, isRecord),
     ) ?? {
       text: textPayload.trim(),
     };
@@ -1088,7 +1085,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
         {
           role: "user",
           content: prompt,
-          images: [Buffer.from(image).toString("base64")],
+          images: [image.toBase64()],
         },
       ],
     });

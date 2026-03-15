@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { aiRuntimeSettingsService } from "../src/domain/ai/ai-runtime-settings-service.ts";
 import { appConfig } from "../src/config/environment.ts";
+import { aiRuntimeSettingsService } from "../src/domain/ai/ai-runtime-settings-service.ts";
 import { prismaBase } from "../src/shared/services/db.ts";
 
 afterEach(async () => {

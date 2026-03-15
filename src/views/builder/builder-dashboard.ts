@@ -8,13 +8,10 @@ import type {
 } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
-import { cardClasses, type ColorToken, renderStats } from "../shared/ui-components.ts";
+import { type ColorToken, cardClasses, renderStats } from "../shared/ui-components.ts";
 import { buildBuilderWorkflowStages } from "./builder-flow.ts";
 import { buildBuilderJourneyConfig } from "./builder-journey.ts";
-import {
-  getCapabilityStatusBadgeClass,
-  getCapabilityStatusLabel,
-} from "./capability-state.ts";
+import { getCapabilityStatusBadgeClass, getCapabilityStatusLabel } from "./capability-state.ts";
 
 import { renderWorkspaceFrame, renderWorkspaceShell } from "./workspace-shell.ts";
 
@@ -59,7 +56,7 @@ const renderGuidedWorkflowCard = (
   href: string,
   actionLabel: string,
   toneClassName: string,
-): string => `<article class="${cardClasses.bordered} transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
+): string => `<article class="${cardClasses.bordered} surface-tappable transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
   <div class="card-body gap-4">
     <div class="space-y-2">
       <h3 class="card-title text-lg ${toneClassName}">${escapeHtml(title)}</h3>
@@ -87,7 +84,7 @@ const renderWorkflowStageCard = (stage: BuilderWorkflowStage, messages: Messages
         ? messages.builder.workflowStatusInProgress
         : messages.builder.workflowStatusStart;
 
-  return `<article class="${cardClasses.bordered} transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
+return `<article class="${cardClasses.bordered} surface-tappable transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
     <div class="card-body gap-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="space-y-2">
@@ -118,7 +115,7 @@ const renderWorkflowStageCard = (stage: BuilderWorkflowStage, messages: Messages
 const renderCreatorCapabilityCard = (
   messages: Messages,
   capability: CreatorCapability,
-): string => `<article class="${cardClasses.bordered} transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
+): string => `<article class="${cardClasses.bordered} surface-tappable transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
   <div class="card-body gap-3">
     <div class="flex items-center justify-between gap-3">
       <h3 class="card-title text-base">${escapeHtml(capability.label)}</h3>
@@ -148,7 +145,7 @@ const renderWorkflowNavigatorItem = (
         ? messages.builder.workflowStatusInProgress
         : messages.builder.workflowStatusStart;
 
-  return `<a href="${escapeHtml(href)}" class="group flex items-start gap-3 rounded-[1.25rem] border border-base-300 bg-base-100 px-4 py-3 transition hover:border-primary/40 hover:bg-base-200/50">
+  return `<a href="${escapeHtml(href)}" class="group surface-tappable flex items-start gap-3 rounded-[1.25rem] border border-base-300 bg-base-100 px-4 py-3 transition hover:border-primary/40 hover:bg-base-200/50">
     <span class="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-base-200 text-xs font-semibold text-base-content/70">${escapeHtml(String(stepNumber))}</span>
     <span class="min-w-0 flex-1 space-y-1">
       <span class="flex flex-wrap items-center gap-2">
@@ -165,7 +162,7 @@ const renderWorkbenchSurfaceCard = (
   description: string,
   badge: string,
   actions: ReadonlyArray<{ label: string; href: string; tone?: "primary" | "ghost" | "outline" }>,
-): string => `<article class="${cardClasses.bordered} transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
+): string => `<article class="${cardClasses.bordered} surface-tappable transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
   <div class="card-body gap-4">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="space-y-2">
@@ -219,10 +216,7 @@ export const renderBuilderDashboard = (
   const knowledgeHref = withProjectSection(appRoutes.builderAi, "builder-knowledge-workspace");
   const providerHref = withProjectSection(appRoutes.builderAi, "builder-provider-workbench");
   const operationsHref = withProjectLocale(appRoutes.builderAutomation);
-  const reviewQueueHref = withProjectSection(
-    appRoutes.builderAutomation,
-    "builder-review-queue",
-  );
+  const reviewQueueHref = withProjectSection(appRoutes.builderAutomation, "builder-review-queue");
   const gameHref = withProjectLocale(appRoutes.game);
   const workflowStages = buildBuilderWorkflowStages(messages, locale, projectId, {
     scenes: context.totalScenes,
@@ -447,7 +441,9 @@ export const renderBuilderDashboard = (
                 <a class="btn btn-primary btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
                   published ? gameHref : (workflowStages[0]?.primaryAction.href ?? worldHref),
                 )}" aria-label="${escapeHtml(
-                  published ? messages.builder.playPublishedBuild : messages.builder.continueAuthoring,
+                  published
+                    ? messages.builder.playPublishedBuild
+                    : messages.builder.continueAuthoring,
                 )}">${escapeHtml(published ? messages.builder.playPublishedBuild : messages.builder.continueAuthoring)}</a>
                 <a class="btn btn-outline btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
                   settingsHref,

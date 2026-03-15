@@ -29,6 +29,11 @@
     --shadow-card: 0 4px 12px color-mix(in oklab, var(--color-base-content) 6%, transparent);
     --shadow-elevated:
       0 8px 24px -4px color-mix(in oklab, var(--color-base-content) 10%, transparent);
+    --shadow-glow:
+      0 0 20px -4px color-mix(in oklab, var(--color-primary) 18%, transparent);
+    --shadow-deep:
+      0 20px 60px -12px color-mix(in oklab, var(--color-base-content) 20%, transparent),
+      0 8px 16px -8px color-mix(in oklab, var(--color-base-content) 10%, transparent);
 
     --ease-instant: ease;
     --ease-standard: cubic-bezier(0.16, 1, 0.3, 1);

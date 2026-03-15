@@ -11,16 +11,17 @@ import { createLogger } from "../../../lib/logger.ts";
 import type { ProviderReadiness } from "../../../shared/contracts/game.ts";
 import { settleAsync } from "../../../shared/utils/async-result.ts";
 import { aiRuntimeSettingsService } from "../ai-runtime-settings-service.ts";
+import { HuggingFaceInferenceProvider } from "./huggingface-inference-provider.ts";
 import { OllamaProvider } from "./ollama-provider.ts";
 import { OpenAiCompatibleProvider } from "./openai-compatible-provider.ts";
 import type {
   AiCapability,
   AiChatParams,
-  AiImageGenerationParams,
-  AiImageGenerationResult,
   AiClassificationResult,
   AiGenerationResult,
   AiGovernanceContext,
+  AiImageGenerationParams,
+  AiImageGenerationResult,
   AiModelCapabilities,
   AiModelProvenance,
   AiProvider,
@@ -31,7 +32,6 @@ import type {
   AiTranscriptionParams,
   AiTranscriptionResult,
 } from "./provider-types.ts";
-import { HuggingFaceInferenceProvider } from "./huggingface-inference-provider.ts";
 import { TransformersProvider } from "./transformers-provider.ts";
 
 const logger = createLogger("ai.provider-registry");

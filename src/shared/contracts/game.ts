@@ -1,5 +1,5 @@
 import type { LocaleCode } from "../types/locale.ts";
-import { safeJsonParse } from "../utils/safe-json.ts";
+import { isRecord, safeJsonParse } from "../utils/safe-json.ts";
 
 /**
  * Application-defined WebSocket close code: session not found.
@@ -1788,9 +1788,6 @@ export interface GameRealtimeFrame {
  * Common shape for commands accepted by both REST and WS game boundaries.
  */
 export type GameCommandPayload = Record<string, unknown>;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);

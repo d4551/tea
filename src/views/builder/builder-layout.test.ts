@@ -77,13 +77,21 @@ describe("renderBuilderLayout", () => {
     expect(sidebarHtml).toContain(`>${messages.builder.projectSettings}<`);
     expect(sidebarHtml).toContain(`>${messages.builder.operations}<`);
     expect(sidebarHtml).toContain(`>${messages.builder.navGroupRuntime}<`);
-    expect(sidebarHtml).toContain("/projects/default/settings?lang=en-US#builder-brand-control-plane");
-    expect(sidebarHtml).toContain("/projects/default/settings?lang=en-US#builder-knowledge-workspace");
-    expect(sidebarHtml).toContain("/projects/default/settings?lang=en-US#builder-provider-workbench");
+    expect(sidebarHtml).toContain(
+      "/projects/default/settings?lang=en-US#builder-brand-control-plane",
+    );
+    expect(sidebarHtml).toContain(
+      "/projects/default/settings?lang=en-US#builder-knowledge-workspace",
+    );
+    expect(sidebarHtml).toContain(
+      "/projects/default/settings?lang=en-US#builder-provider-workbench",
+    );
     expect(sidebarHtml).toContain("/projects/default/settings?lang=en-US#builder-model-catalog");
     expect(sidebarHtml).toContain("/projects/default/settings?lang=en-US#builder-patch-preview");
     expect(sidebarHtml).toContain("/projects/default/operations?lang=en-US#builder-review-queue");
-    expect(sidebarHtml).toContain("/projects/default/operations?lang=en-US#builder-automation-composer");
+    expect(sidebarHtml).toContain(
+      "/projects/default/operations?lang=en-US#builder-automation-composer",
+    );
     expect(layoutHtml).toContain("/projects/default/start?lang=en-US");
     expect(layoutHtml).toContain("/projects/default/settings?lang=en-US");
     expect(layoutHtml).toContain("/projects/default/operations?lang=en-US");

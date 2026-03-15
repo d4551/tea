@@ -38,7 +38,7 @@ const renderTriggerEventOptions = (
  */
 export const renderQuestEditForm = (
   messages: Messages,
-  locale: LocaleCode,
+  _locale: LocaleCode,
   projectId: string,
   quest: QuestDefinition,
 ): string => {
@@ -87,7 +87,7 @@ export const renderQuestEditForm = (
  */
 export const renderTriggerEditForm = (
   messages: Messages,
-  locale: LocaleCode,
+  _locale: LocaleCode,
   projectId: string,
   trigger: TriggerDefinition,
 ): string => {
@@ -139,7 +139,7 @@ export const renderTriggerEditForm = (
  */
 export const renderDialogueGraphEditForm = (
   messages: Messages,
-  locale: LocaleCode,
+  _locale: LocaleCode,
   projectId: string,
   graph: DialogueGraph,
 ): string => {

@@ -1,6 +1,6 @@
 import type { LocaleCode } from "../../config/environment.ts";
-import { appRoutes } from "../../shared/constants/routes.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
+import { appRoutes } from "../../shared/constants/routes.ts";
 import type { CreatorAssistContext } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
@@ -23,7 +23,7 @@ const buildAssistSpinnerId = (entityId: string, actionKey: string): string =>
  */
 export const renderCreatorAssistPanel = (
   messages: Messages,
-  locale: LocaleCode,
+  _locale: LocaleCode,
   projectId: string,
   context: CreatorAssistContext,
 ): string => {

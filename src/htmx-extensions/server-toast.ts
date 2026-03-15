@@ -8,12 +8,10 @@
  *   HX-Trigger: {"showToast": {"message": "Project saved", "type": "success"}}
  */
 import { TOAST_DISMISS_MS, TOAST_FADE_MS } from "../shared/constants/ui.ts";
+import { isRecord } from "../shared/utils/safe-json.ts";
 import { escapeHtml } from "./shared.ts";
 
 const CONTAINER_ID = "toast-container";
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
 
 /** Maps toast type to DaisyUI alert class. */
 const alertClass = (type: string): string => {

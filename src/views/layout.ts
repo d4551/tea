@@ -1,8 +1,8 @@
 import { appConfig, type LocaleCode } from "../config/environment.ts";
 import {
   PROJECT_BRAND_FONTS_STYLESHEET_HREF,
-  resolveProjectBrandingStyleVariables,
   type ProjectBranding,
+  resolveProjectBrandingStyleVariables,
 } from "../shared/branding/project-branding.ts";
 
 import { assetRelativePaths, joinUrlPath } from "../shared/constants/assets.ts";
@@ -10,6 +10,7 @@ import { appRoutes, withLocaleQuery } from "../shared/constants/routes.ts";
 import { supportedUiThemes, type UiTheme } from "../shared/constants/ui-theme.ts";
 import type { Messages } from "../shared/i18n/messages.ts";
 import { type OraclePanelState, renderOracleSection } from "./oracle.ts";
+import { renderLinkMetadataAttrs } from "./shared/link-attrs.ts";
 import {
   buildPublicPrimaryNavigation,
   type NavigationAction,
@@ -148,10 +149,12 @@ export const renderDocument = (
     const baseContainer =
       "mx-auto flex w-full max-w-[1600px] flex-col gap-8 px-4 lg:px-8 py-6 lg:py-8";
     const layoutModifier =
-      context.activeRoute === "game" ? "game-page-layout items-start" : "layout-asymmetric gap-8 lg:gap-12";
+      context.activeRoute === "game"
+        ? "game-page-layout items-start"
+        : "layout-asymmetric gap-8 lg:gap-12";
     const containerClass = `${baseContainer} vt-main flex-1 ${layoutModifier}`;
 
-    return `<title>${escapeHtml(title)} · ${escapeHtml(context.brand?.appName ?? context.messages.metadata.appName)}</title><main id="main-content" tabindex="-1" class="${escapeHtml(containerClass)}">${body}</main>`;
+    return `<title>${escapeHtml(title)} · ${escapeHtml(context.brand?.appName ?? context.messages.metadata.appName)}</title><main id="main-content" tabindex="-1" class="${escapeHtml(`${containerClass} min-w-0 section-stack`)}">${body}</main>`;
   }
 
   return renderLayout({
@@ -242,6 +245,8 @@ export const renderLayout = (input: LayoutInput): string => {
   const appName = brand?.appName ?? messages.metadata.appName;
   const appSubtitle = brand?.appSubtitle ?? messages.metadata.appSubtitle;
   const documentTheme = brand?.surfaceTheme ?? appConfig.ui.defaultTheme;
+  const englishHref = withLocaleQuery(currentPathWithQuery, "en-US");
+  const chineseHref = withLocaleQuery(currentPathWithQuery, "zh-CN");
   const bodyStyleAttribute = brand
     ? ` style="${escapeHtml(resolveProjectBrandingStyleVariables(brand))}"`
     : "";
@@ -259,6 +264,9 @@ export const renderLayout = (input: LayoutInput): string => {
     <meta name="view-transition" content="same-origin" />
     <title>${escapeHtml(title)} · ${escapeHtml(appName)}</title>
     <meta name="description" content="${escapeHtml(appSubtitle)}" />
+    <link rel="alternate" hreflang="en-US" href="${escapeHtml(englishHref)}" />
+    <link rel="alternate" hreflang="zh-CN" href="${escapeHtml(chineseHref)}" />
+    <link rel="alternate" hreflang="x-default" href="${escapeHtml(englishHref)}" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="${escapeHtml(PROJECT_BRAND_FONTS_STYLESHEET_HREF)}" media="print" onload="this.media='all'" />
@@ -280,7 +288,7 @@ export const renderLayout = (input: LayoutInput): string => {
     </a>
     
     <!-- AI Chat Wrapper (Right Drawer) -->
-    <div class="drawer drawer-end">
+    <div class="drawer drawer-end touch-pan-y">
       <input
         id="ai-chat-drawer"
         type="checkbox"
@@ -288,12 +296,12 @@ export const renderLayout = (input: LayoutInput): string => {
         aria-label="${escapeHtml(messages.common.openAiAssistant)}"
         ${isOracleDrawerOpen ? "checked" : ""}
       />
-      <div class="drawer-content flex flex-col min-h-screen relative">
+      <div class="drawer-content relative flex min-h-screen flex-col">
 
         <!-- Main Nav Wrapper (Left Drawer) -->
-        <div class="${escapeHtml(drawerClassName)}">
+        <div class="${escapeHtml(`${drawerClassName} min-w-0`)}">
           <input id="main-nav-drawer" type="checkbox" class="drawer-toggle" aria-label="${escapeHtml(messages.common.openMenu)}" />
-          <div class="drawer-content flex flex-col w-full max-w-[100vw]">
+          <div class="drawer-content flex w-full max-w-[100vw] min-w-0 flex-col">
 
             ${
               hideTopBar
@@ -301,7 +309,7 @@ export const renderLayout = (input: LayoutInput): string => {
                 : `${renderTopBar(messages, locale, languageSwitch, currentPathWithQuery, publicPrimaryItems, isOracleDrawerOpen, brand)}${renderBreadcrumbRow(messages.common.breadcrumbLabel, breadcrumbItems)}`
             }
 
-            <main id="main-content" tabindex="-1" class="${escapeHtml(containerClass)}">
+            <main id="main-content" tabindex="-1" class="${escapeHtml(`${containerClass} min-w-0 section-stack`)}">
               ${body}
             </main>
 
@@ -327,7 +335,8 @@ export const renderLayout = (input: LayoutInput): string => {
           ${renderDrawerToggleControl({
             targetId: "ai-chat-drawer",
             label: messages.common.openAiAssistant,
-            className: "btn btn-circle btn-primary drawer-button h-14 w-14 sm:h-16 sm:w-16 shrink-0 shadow-2xl",
+            className:
+              "btn btn-circle btn-primary drawer-button h-14 w-14 sm:h-16 sm:w-16 shrink-0 shadow-2xl fab-attention-pulse",
             hasPopup: "dialog",
             expanded: isOracleDrawerOpen,
             content:
@@ -339,7 +348,7 @@ export const renderLayout = (input: LayoutInput): string => {
       <!-- AI Chat Sidebar (Right) (z-[95] ensures visibility above game canvas) -->
       <div class="drawer-side z-[95]">
         <label for="ai-chat-drawer" aria-label="${escapeHtml(messages.common.closeAiChat)}" class="drawer-overlay"></label>
-        <aside class="flex min-h-full w-80 flex-col border-l border-base-300 bg-base-100 text-base-content sm:w-96" role="dialog" aria-modal="false" aria-label="${escapeHtml(messages.common.openAiAssistant)}">
+        <aside class="surface-shell surface-section flex min-h-full w-80 flex-col border-l border-base-300 bg-base-100 text-base-content sm:w-96" role="dialog" aria-modal="false" aria-label="${escapeHtml(messages.common.openAiAssistant)}">
           <div class="flex shrink-0 items-center justify-end border-b border-base-300 px-4 py-3">
             ${renderDrawerToggleControl({
               targetId: "ai-chat-drawer",
@@ -349,20 +358,15 @@ export const renderLayout = (input: LayoutInput): string => {
               content: escapeHtml(messages.common.closeAiChat),
             })}
           </div>
-          <div class="flex-1 overflow-y-auto p-4">
-          ${renderOracleSection(
-            messages,
-            oraclePanelState,
-            locale,
-            {
-              variant: "drawer",
-              pageContext: {
-                currentPath: currentPathWithQuery,
-                activeRoute,
-                projectId: persistentProjectId,
-              },
+          <div class="surface-scroll surface-scroll-y surface-scroll-fade-y touch-pan-y flex-1 overflow-y-auto p-4">
+          ${renderOracleSection(messages, oraclePanelState, locale, {
+            variant: "drawer",
+            pageContext: {
+              currentPath: currentPathWithQuery,
+              activeRoute,
+              projectId: persistentProjectId,
             },
-          )}
+          })}
           </div>
         </aside>
       </div>
@@ -398,6 +402,7 @@ const renderTopBar = (
       key: "locale",
       label: localeSwitchAriaLabel,
       href: localeSwitchHref,
+      linkLanguage: languageSwitch,
       className: "btn btn-outline btn-sm font-medium",
       content: escapeHtml(localeSwitchButtonText),
     },
@@ -424,7 +429,7 @@ const renderTopBar = (
     ${renderHeaderNavbar(renderBrand(messages, locale, brand), navigationItems, headerActions, {
       ariaLabel: messages.common.primaryNavigation,
       className:
-        "navbar w-full border-b border-base-300/80 bg-base-100/90 px-4 backdrop-blur lg:px-8",
+        "navbar surface-tappable navbar-glass w-full border-b border-base-300/80 bg-base-100/88 px-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-base-100/72 sm:px-4 lg:px-8",
       mobileLead: `<div class="lg:hidden">${renderDrawerToggleControl({
         targetId: "main-nav-drawer",
         label: messages.common.openMenu,
@@ -469,11 +474,7 @@ const renderThemeDropdown = (messages: Messages): string => {
   );
 };
 
-const renderBrand = (
-  messages: Messages,
-  locale: LocaleCode,
-  brand?: ProjectBranding,
-): string =>
+const renderBrand = (messages: Messages, locale: LocaleCode, brand?: ProjectBranding): string =>
   `<a href="${withLocaleQuery(appRoutes.home, locale)}" class="btn btn-ghost px-2 text-base font-bold tracking-tight gap-2 normal-case">
     ${
       brand?.logoImagePath
@@ -513,7 +514,7 @@ const renderFooter = (messages: Messages, locale: LocaleCode): string => {
     },
     {
       label: messages.navigation.game,
-      href: withLocaleQuery(appRoutes.builder, locale),
+      href: withLocaleQuery(appRoutes.home, locale),
     },
     {
       label: messages.pages.home.docsCta,
@@ -522,7 +523,11 @@ const renderFooter = (messages: Messages, locale: LocaleCode): string => {
   ]
     .map(
       (item) =>
-        `<a class="link link-hover" href="${escapeHtml(item.href)}" aria-label="${escapeHtml(item.label)}">${escapeHtml(item.label)}</a>`,
+        `<a class="link link-hover"${renderLinkMetadataAttrs({
+          href: item.href,
+          ariaLabel: item.label,
+          linkLanguage: locale,
+        })}>${escapeHtml(item.label)}</a>`,
     )
     .join("");
   const socialLinks = [
@@ -556,8 +561,8 @@ const renderFooter = (messages: Messages, locale: LocaleCode): string => {
       ? `<nav aria-label="${escapeHtml(messages.common.socialNavLabel)}" class="grid grid-flow-col gap-3">${socialLinks}</nav>`
       : "";
 
-  return `<footer class="bg-neutral text-neutral-content border-t border-base-300/30 sm:footer-horizontal">
-    <div class="footer mx-auto w-full ${escapeHtml(appConfig.ui.maxContentWidthClass)} p-6 lg:p-8">
+  return `<footer class="border-t border-base-300/30 bg-neutral text-neutral-content sm:footer-horizontal" style="border-image: linear-gradient(90deg, var(--color-primary), var(--color-secondary), var(--color-accent)) 1">
+    <div class="footer mx-auto w-full ${escapeHtml(appConfig.ui.maxContentWidthClass)} gap-8 p-6 lg:p-8">
       <aside>
         <div class="footer-title flex items-center gap-2">
           <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" /></svg>

@@ -60,9 +60,11 @@ describe("renderBuilderDashboard", () => {
       true,
     );
 
-    expect(html).toContain('class="overflow-x-auto pb-1"');
-    expect(html).toContain("xl:grid-cols-[22rem_minmax(0,1fr)]");
-    expect(html).toContain("2xl:grid-cols-[22rem_minmax(0,1fr)_22rem]");
-    expect(html).toContain("sm:grid-cols-2 xl:grid-cols-4");
+    expect(html).toContain(
+      'class="surface-scroll surface-scroll-x surface-scroll-fade-x touch-pan-x pb-1"',
+    );
+    expect(html).toContain('class="workspace-grid has-side-rail"');
+    expect(html).toContain("xl:surface-sticky");
+    expect(html).toContain("workspace-card-grid");
   });
 });

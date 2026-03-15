@@ -184,8 +184,7 @@ const runWorkerStep = async <TPayload>(
 };
 
 const enrichPromptWithDataset = async (prompt: string): Promise<string> => {
-  const result = await fetchHfDatasetSnippets(prompt, 3);
-  const snippets = result.ok ? result.value : [];
+  const snippets = await fetchHfDatasetSnippets(prompt, 3);
   if (snippets.length === 0) {
     return prompt;
   }

@@ -67,7 +67,10 @@ export const toJsonValue = (value: unknown): JsonValue => {
  * @param value Record-like input.
  * @returns JSON-safe object.
  */
-export const toJsonObject = (value: Record<string, unknown>): JsonObject => {
+export const toJsonObject = (value: Record<string, unknown> | null | undefined): JsonObject => {
+  if (value === null || value === undefined) {
+    return {};
+  }
   const normalized: Record<string, JsonValue | undefined> = {};
   for (const [key, nestedValue] of Object.entries(value)) {
     normalized[key] = nestedValue === undefined ? undefined : toJsonValue(nestedValue);

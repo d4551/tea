@@ -20,10 +20,7 @@ const unavailableState = (reasonCode: string): CapabilityState => ({
   reasonCode,
 });
 
-const degradedState = (
-  mode: CapabilityState["mode"],
-  reasonCode: string,
-): CapabilityState => ({
+const degradedState = (mode: CapabilityState["mode"], reasonCode: string): CapabilityState => ({
   status: "degraded",
   mode,
   reasonCode,
@@ -241,9 +238,7 @@ export const countReadyCreatorCapabilities = (capabilities: CreatorCapabilities)
  * @param featureCapabilities Feature capability matrix.
  * @returns Number of ready features.
  */
-export const countReadyFeatureCapabilities = (
-  featureCapabilities: FeatureCapability,
-): number =>
+export const countReadyFeatureCapabilities = (featureCapabilities: FeatureCapability): number =>
   (Object.keys(featureCapabilities) as CapabilityKey[]).filter(
     (key) => featureCapabilities[key].status === "ready",
   ).length;

@@ -16,10 +16,10 @@ import {
   deriveBuilderReadinessAudit,
   evaluateBuilderPlatformReadiness,
 } from "../domain/builder/platform-readiness.ts";
+import { starterProjectTemplateIds } from "../domain/builder/starter-projects.ts";
 import { detectAvailableFeatures } from "../domain/game/ai/game-ai-service.ts";
 import { gameSpriteManifests } from "../domain/game/data/sprite-data.ts";
 import { gameLoop } from "../domain/game/game-loop.ts";
-import { defaultOracleMode } from "../shared/constants/oracle.ts";
 import { builderRequestContextPlugin } from "../plugins/builder-request-context.ts";
 import { assetRelativePaths, toPublicAssetUrl } from "../shared/constants/assets.ts";
 import {
@@ -28,10 +28,10 @@ import {
   BUILDER_QUERY_PARAM_SCENE_ID,
   BUILDER_QUERY_PARAM_TEMPLATE_ID,
 } from "../shared/constants/builder-query.ts";
+import { defaultOracleMode } from "../shared/constants/oracle.ts";
 import { appRoutes, resolveRequestPathWithQuery } from "../shared/constants/routes.ts";
+import type { StarterProjectTemplateId } from "../shared/contracts/game.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
-import { starterProjectTemplateIds } from "../domain/builder/starter-projects.ts";
-import { type StarterProjectTemplateId } from "../shared/contracts/game.ts";
 import { renderAiPanel } from "../views/builder/ai-panel.ts";
 import { renderAssetsEditor } from "../views/builder/assets-editor.ts";
 import { renderAutomationPanel } from "../views/builder/automation-panel.ts";
@@ -49,7 +49,13 @@ import { renderDialogueEditor } from "../views/builder/dialogue-editor.ts";
 import { renderMechanicsEditor } from "../views/builder/mechanics-editor.ts";
 import { renderNpcEditor } from "../views/builder/npc-editor.ts";
 import { renderSceneEditor } from "../views/builder/scene-editor.ts";
-import { type LayoutContext, type LayoutScript, type OraclePanelState, renderDocument, escapeHtml } from "../views/layout.ts";
+import {
+  escapeHtml,
+  type LayoutContext,
+  type LayoutScript,
+  type OraclePanelState,
+  renderDocument,
+} from "../views/layout.ts";
 import { parseOracleMode } from "./oracle-input.ts";
 
 /**
@@ -80,7 +86,8 @@ const wrapOrPartial = (
   });
 
   if (isHtmx) {
-    const baseContainer = "mx-auto flex w-full max-w-[1600px] flex-col gap-8 px-4 lg:px-8 py-6 lg:py-8";
+    const baseContainer =
+      "mx-auto flex w-full max-w-[1600px] flex-col gap-8 px-4 lg:px-8 py-6 lg:py-8";
     const layoutModifier = "layout-asymmetric gap-8 lg:gap-12";
     const containerClass = `${baseContainer} vt-main flex-1 ${layoutModifier}`;
     return `<title>${escapeHtml(messages.builder.title)} · ${escapeHtml(project?.branding?.appName ?? messages.metadata.appName)}</title><main id="main-content" tabindex="-1" class="${escapeHtml(containerClass)}">${builderBody}</main>`;
@@ -167,7 +174,8 @@ const wrapOrPartialConsole = (
   });
 
   if (isHtmx) {
-    const baseContainer = "mx-auto flex w-full max-w-[1600px] flex-col gap-8 px-4 lg:px-8 py-6 lg:py-8";
+    const baseContainer =
+      "mx-auto flex w-full max-w-[1600px] flex-col gap-8 px-4 lg:px-8 py-6 lg:py-8";
     const layoutModifier = "layout-asymmetric gap-8 lg:gap-12";
     const containerClass = `${baseContainer} vt-main flex-1 ${layoutModifier}`;
     return `<title>${escapeHtml(messages.builder.advancedTools)} · ${escapeHtml(project?.branding?.appName ?? messages.metadata.appName)}</title><main id="main-content" tabindex="-1" class="${escapeHtml(containerClass)}">${consoleBody}</main>`;
@@ -275,7 +283,9 @@ const resolveRouteProjectId = (
   return normalized.length > 0 ? normalized : fallbackProjectId;
 };
 
-const parseStarterTemplateFromRequest = (request: Request): StarterProjectTemplateId | undefined => {
+const parseStarterTemplateFromRequest = (
+  request: Request,
+): StarterProjectTemplateId | undefined => {
   const candidate = new URL(request.url).searchParams.get(BUILDER_QUERY_PARAM_TEMPLATE_ID);
   return candidate && starterProjectTemplateIds.includes(candidate as StarterProjectTemplateId)
     ? (candidate as StarterProjectTemplateId)
@@ -445,7 +455,14 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
   )
   .get(
     "/:projectId/characters",
-    async ({ request, params, builderLocale, builderProjectId, builderCurrentPath, builderSearch }) => {
+    async ({
+      request,
+      params,
+      builderLocale,
+      builderProjectId,
+      builderCurrentPath,
+      builderSearch,
+    }) => {
       const projectId = resolveRouteProjectId(params.projectId, builderProjectId);
       const messages = getMessages(builderLocale);
       const project = await builderService.getProject(projectId);
@@ -466,7 +483,15 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       }
       const scenes = toRecord(project.scenes);
       const builderPage = resolveBuilderPage(request);
-      const body = renderNpcEditor(messages, scenes, gameSpriteManifests, builderLocale, projectId, builderSearch, builderPage);
+      const body = renderNpcEditor(
+        messages,
+        scenes,
+        gameSpriteManifests,
+        builderLocale,
+        projectId,
+        builderSearch,
+        builderPage,
+      );
       return wrapOrPartial(
         request,
         builderLocale,
@@ -510,7 +535,14 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       }
       const catalog = await builderService.getDialogues(projectId, builderLocale);
       const builderPage = resolveBuilderPage(request);
-      const body = renderDialogueEditor(messages, catalog, builderLocale, projectId, builderSearch, builderPage);
+      const body = renderDialogueEditor(
+        messages,
+        catalog,
+        builderLocale,
+        projectId,
+        builderSearch,
+        builderPage,
+      );
       return wrapOrPartial(
         request,
         builderLocale,

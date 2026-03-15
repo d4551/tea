@@ -19,6 +19,7 @@ import {
   toRetryableError,
 } from "../../../shared/contracts/external-boundary.ts";
 import { readJsonResponse, settleAsync } from "../../../shared/utils/async-result.ts";
+import { isRecord } from "../../../shared/utils/safe-json.ts";
 import type {
   AiCapability,
   AiChatParams,
@@ -39,9 +40,6 @@ const logger = createLogger("ai.provider.huggingface-inference");
 /** Maximum allowed prompt length for image generation requests. */
 const IMAGE_PROMPT_MAX_LENGTH = 1000;
 type HuggingFaceInferenceProviderName = "huggingface-inference" | "huggingface-endpoints";
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const readString = (value: unknown): string | null => (typeof value === "string" ? value : null);
 
@@ -131,7 +129,6 @@ const resolveImageDimensions = (
         width: appConfig.ai.imageGenerationPortraitWidthPx,
         height: appConfig.ai.imageGenerationPortraitHeightPx,
       };
-    case "square":
     default:
       return {
         width: appConfig.ai.imageGenerationSquareSizePx,

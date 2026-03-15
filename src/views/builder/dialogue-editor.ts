@@ -11,11 +11,7 @@ import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
-import {
-  cardClasses,
-  renderEmptyStateCompact,
-  spinnerClasses,
-} from "../shared/ui-components.ts";
+import { cardClasses, renderEmptyStateCompact, spinnerClasses } from "../shared/ui-components.ts";
 import { buildBuilderJourneyConfig } from "./builder-journey.ts";
 import {
   paginateWorkspaceItems,
@@ -320,10 +316,13 @@ export const renderDialogueDetail = (
   messages: Messages,
   key: string,
   text: string,
-  locale: LocaleCode,
+  _locale: LocaleCode,
   projectId: string,
 ): string => {
-  const formAction = interpolateRoutePath(appRoutes.builderApiDialogueEntryForm, { projectId, key });
+  const formAction = interpolateRoutePath(appRoutes.builderApiDialogueEntryForm, {
+    projectId,
+    key,
+  });
   const deleteAction = interpolateRoutePath(appRoutes.builderApiDialogueEntry, { projectId, key });
 
   return `

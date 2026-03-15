@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import type { AiRuntimeProfile } from "../../domain/ai/local-runtime-profile.ts";
 import type { KnowledgeDocumentRecord } from "../../domain/ai/knowledge-base-service.ts";
+import type { AiRuntimeProfile } from "../../domain/ai/local-runtime-profile.ts";
+import type { BuilderPlatformReadiness } from "../../domain/builder/platform-readiness.ts";
 import type { AvailableAiFeatures } from "../../domain/game/ai/game-ai-service.ts";
 import { createStarterProjectBranding } from "../../shared/branding/project-branding.ts";
-import type { BuilderPlatformReadiness } from "../../domain/builder/platform-readiness.ts";
 import type { FeatureCapability } from "../../shared/contracts/game.ts";
 import { getMessages } from "../../shared/i18n/translator.ts";
 import { renderAiPanel } from "./ai-panel.ts";

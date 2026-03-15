@@ -70,7 +70,7 @@ const normalizeTransportString = (value: unknown): string | null => {
 const resolveTrimmedQueryValue = (request: Request, key: string): string | null =>
   normalizeTransportString(resolveRequestQueryParam(request, key));
 
-type RouteParams = Readonly<Record<string, string | readonly string[]>>;
+type RouteParams = Readonly<Record<string, string | readonly string[] | undefined>>;
 
 const resolveTrimmedParamValue = (params: RouteParams | undefined, key: string): string | null => {
   if (!params || typeof params !== "object") {

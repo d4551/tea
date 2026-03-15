@@ -5,11 +5,7 @@ import {
   normalizeUiTheme as normalizeSupportedUiTheme,
   type UiTheme,
 } from "../shared/constants/ui-theme.ts";
-import {
-  defaultLocaleCode,
-  type LocaleCode,
-  supportedLocaleCodes,
-} from "../shared/types/locale.ts";
+import { type LocaleCode, supportedLocaleCodes } from "../shared/types/locale.ts";
 
 export {
   DEFAULT_UI_THEME,
@@ -285,8 +281,8 @@ export interface AppConfig {
     readonly ragHfDataset: string | null;
     readonly ragHfDatasetConfig: string | null;
     readonly ragHfDatasetSplit: string;
-    readonly ragHfDatasetTextColumn: string | null;
     readonly ragHfDatasetServerBaseUrl: string;
+    readonly ragHfDatasetTextColumn: string | null;
     readonly audioInputSampleRateHz: number;
     readonly audioUploadMaxBytes: number;
     readonly textToSpeechSpeakerEmbeddings: string;
@@ -316,6 +312,14 @@ export interface AppConfig {
     readonly exportDirectory: string;
   };
 }
+
+type DeepWritable<T> = T extends readonly (infer U)[]
+  ? U[]
+  : T extends object
+    ? { -readonly [K in keyof T]: DeepWritable<T[K]> }
+    : T;
+
+type MutableAppConfig = DeepWritable<AppConfig>;
 
 const DEFAULT_PORT = 3088;
 const DEFAULT_RESPONSE_DELAY_MS = 180;
@@ -423,7 +427,7 @@ const DEFAULT_MAX_CONTENT_WIDTH_CLASS = "max-w-6xl";
 const DEFAULT_SESSION_COOKIE_NAME = "lotfk_session";
 const DEFAULT_SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 const DEFAULT_ANSWER_HASH_MULTIPLIER = 7;
-const DEFAULT_LOCALE: LocaleCode = defaultLocaleCode;
+const DEFAULT_LOCALE: LocaleCode = "en-US";
 const DEFAULT_SUPPORTED_BUN_RANGE = "1.3.x";
 const DEFAULT_INSTALL_BUN_VERSION = "1.3.10";
 const DEFAULT_BUILDER_UPLOADS_DIRECTORY = "uploads/builder";
@@ -735,7 +739,7 @@ const parseOptionalString = (value: string | undefined): string | undefined => {
   return normalized.length > 0 ? normalized : undefined;
 };
 
-const parseCsvValues = (value: string | undefined, fallback: string): readonly string[] =>
+const parseCsvValues = (value: string | undefined, fallback: string): string[] =>
   (value ?? fallback)
     .split(",")
     .map((entry) => entry.trim())
@@ -1034,7 +1038,7 @@ export const matchLocale = (value: string | undefined | null): LocaleCode | null
 const resolvedApplicationName = Bun.env.APP_NAME ?? "TEA 🍵";
 const resolvedApplicationVersion = Bun.env.APP_VERSION ?? "1.0.0";
 
-export const appConfig: AppConfig = {
+export const appConfig: MutableAppConfig = {
   applicationName: resolvedApplicationName,
   applicationVersion: resolvedApplicationVersion,
   host: resolvedHost,
@@ -1637,12 +1641,12 @@ export const appConfig: AppConfig = {
     ragHfDataset: parseOptionalString(Bun.env.AI_RAG_HF_DATASET) ?? null,
     ragHfDatasetConfig: parseOptionalString(Bun.env.AI_RAG_HF_DATASET_CONFIG) ?? null,
     ragHfDatasetSplit: parseOptionalString(Bun.env.AI_RAG_HF_DATASET_SPLIT) ?? "train",
-    ragHfDatasetTextColumn: parseOptionalString(Bun.env.AI_RAG_HF_DATASET_TEXT_COLUMN) ?? null,
     ragHfDatasetServerBaseUrl: parseConfiguredAbsoluteUrl(
       Bun.env.AI_RAG_HF_DATASET_SERVER_BASE_URL,
       DEFAULT_AI_RAG_HF_DATASET_SERVER_BASE_URL,
       "AI_RAG_HF_DATASET_SERVER_BASE_URL",
     ),
+    ragHfDatasetTextColumn: parseOptionalString(Bun.env.AI_RAG_HF_DATASET_TEXT_COLUMN) ?? null,
     audioInputSampleRateHz: parseInteger(
       Bun.env.AI_AUDIO_INPUT_SAMPLE_RATE_HZ,
       DEFAULT_AI_AUDIO_INPUT_SAMPLE_RATE_HZ,

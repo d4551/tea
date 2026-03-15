@@ -17,11 +17,7 @@ import type {
 } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
-import {
-  cardClasses,
-  renderEmptyStateCompact,
-  spinnerClasses,
-} from "../shared/ui-components.ts";
+import { cardClasses, renderEmptyStateCompact, spinnerClasses } from "../shared/ui-components.ts";
 import { buildBuilderJourneyConfig } from "./builder-journey.ts";
 import { getBooleanLabel } from "./view-labels.ts";
 import {
@@ -313,8 +309,14 @@ export const renderNpcDetail = (
   sceneId: string,
   manifest: SpriteManifest | null,
 ): string => {
-  const formAction = interpolateRoutePath(appRoutes.builderApiNpcForm, { projectId, npcId: npc.characterKey });
-  const deleteAction = interpolateRoutePath(appRoutes.builderApiNpcDetail, { projectId, npcId: npc.characterKey });
+  const formAction = interpolateRoutePath(appRoutes.builderApiNpcForm, {
+    projectId,
+    npcId: npc.characterKey,
+  });
+  const deleteAction = interpolateRoutePath(appRoutes.builderApiNpcDetail, {
+    projectId,
+    npcId: npc.characterKey,
+  });
   const dialogueKeys = npc.dialogueKeys.join(", ");
   const npcDisplayName = resolveNpcDisplayName(locale, npc);
 

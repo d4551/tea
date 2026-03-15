@@ -1,10 +1,3 @@
-import { getAiRuntimeProfile } from "../ai/local-runtime-profile.ts";
-import { knowledgeBaseService } from "../ai/knowledge-base-service.ts";
-import { ProviderRegistry } from "../ai/providers/provider-registry.ts";
-import { builderService } from "../builder/builder-service.ts";
-import type { BuilderProjectSnapshot } from "../builder/builder-project-state-store.ts";
-import { recommendedStarterProjectTemplateId, resolveStarterProjectTemplateId, starterProjectTemplateIds } from "../builder/starter-projects.ts";
-import type { AiRuntimeSettingValue } from "../ai/ai-runtime-settings-service.ts";
 import type {
   AssetLibrary,
   CapabilityProfile,
@@ -18,6 +11,17 @@ import type {
   ScopeReference,
   SharedAsset,
 } from "../../shared/contracts/platform-control-plane.ts";
+import type { AiRuntimeSettingValue } from "../ai/ai-runtime-settings-service.ts";
+import { knowledgeBaseService } from "../ai/knowledge-base-service.ts";
+import { getAiRuntimeProfile } from "../ai/local-runtime-profile.ts";
+import { ProviderRegistry } from "../ai/providers/provider-registry.ts";
+import type { BuilderProjectSnapshot } from "../builder/builder-project-state-store.ts";
+import { builderService } from "../builder/builder-service.ts";
+import {
+  recommendedStarterProjectTemplateId,
+  resolveStarterProjectTemplateId,
+  starterProjectTemplateIds,
+} from "../builder/starter-projects.ts";
 
 const organizationScopeId = "tea-studio";
 
@@ -74,7 +78,8 @@ const buildGames = (projects: readonly BuilderProjectSnapshot[]): readonly Platf
       sceneCount: project.scenes.size,
       assetCount: project.assets.size + project.animationClips.size,
       reviewCount:
-        Array.from(project.generationJobs.values()).filter((job) => job.status !== "succeeded").length +
+        Array.from(project.generationJobs.values()).filter((job) => job.status !== "succeeded")
+          .length +
         Array.from(project.artifacts.values()).filter((artifact) => !artifact.approved).length +
         Array.from(project.automationRuns.values()).filter((run) =>
           ["queued", "running", "blocked_for_approval"].includes(run.status),
@@ -123,7 +128,9 @@ const buildLibraries = (sharedAssets: readonly SharedAsset[]): readonly AssetLib
       description: "Approved assets ready for reuse across games and releases.",
       assetCount: approvedAssets.length,
       attachedProjectCount: new Set(
-        approvedAssets.flatMap((asset) => asset.attachments.map((attachment) => attachment.projectId)),
+        approvedAssets.flatMap((asset) =>
+          asset.attachments.map((attachment) => attachment.projectId),
+        ),
       ).size,
     },
     {
@@ -133,7 +140,9 @@ const buildLibraries = (sharedAssets: readonly SharedAsset[]): readonly AssetLib
       description: "Draft and generated assets that still need approval before broad reuse.",
       assetCount: pendingAssets.length,
       attachedProjectCount: new Set(
-        pendingAssets.flatMap((asset) => asset.attachments.map((attachment) => attachment.projectId)),
+        pendingAssets.flatMap((asset) =>
+          asset.attachments.map((attachment) => attachment.projectId),
+        ),
       ).size,
     },
   ] as const;
@@ -213,9 +222,7 @@ const buildCapabilityProfiles = async (): Promise<readonly CapabilityProfile[]> 
     .sort((left, right) => left.name.localeCompare(right.name));
 };
 
-const buildReleases = (
-  projects: readonly BuilderProjectSnapshot[],
-): readonly ReleaseRecord[] =>
+const buildReleases = (projects: readonly BuilderProjectSnapshot[]): readonly ReleaseRecord[] =>
   projects
     .filter((project) => project.latestReleaseVersion > 0)
     .map((project) => ({
@@ -307,11 +314,10 @@ export class ControlPlaneService {
    */
   public async getSnapshot(): Promise<ControlPlaneSnapshot> {
     const projects = await builderService.listProjects();
-    const [capabilityProfiles, globalKnowledgeDocumentCount] =
-      await Promise.all([
-        buildCapabilityProfiles(),
-        knowledgeBaseService.countDocuments(),
-      ]);
+    const [capabilityProfiles, globalKnowledgeDocumentCount] = await Promise.all([
+      buildCapabilityProfiles(),
+      knowledgeBaseService.countDocuments(),
+    ]);
     const games = buildGames(projects);
     const sharedAssets = buildSharedAssets(projects);
     const releases = buildReleases(projects);

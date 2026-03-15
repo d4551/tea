@@ -14,6 +14,7 @@ import { interpolateRoutePath } from "../src/shared/constants/route-patterns.ts"
 import { appRoutes, withQueryParameters } from "../src/shared/constants/routes.ts";
 import type { SceneDefinition } from "../src/shared/contracts/game.ts";
 import { prismaBase } from "../src/shared/services/db.ts";
+import { isRecord } from "../src/shared/utils/safe-json.ts";
 
 let app: Awaited<ReturnType<typeof createApp>>;
 const baseUrl = "http://localhost";
@@ -56,9 +57,6 @@ const readSseUntil = async (
   }
   return collected;
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
 
 const waitUntil = async (
   predicate: () => Promise<boolean>,

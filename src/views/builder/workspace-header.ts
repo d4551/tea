@@ -61,13 +61,13 @@ export const renderWorkspaceHeader = (config: WorkspaceHeaderConfig): string => 
 
   const metricsHtml =
     config.metrics && config.metrics.length > 0
-      ? `<div class="flex flex-wrap gap-3 mt-3">
+      ? `<div class="workspace-card-grid mt-3">
         ${config.metrics
           .map((metric) => {
             const valueClass = metric.colorToken
               ? `text-${metric.colorToken}`
               : "text-base-content";
-            return `<div class="rounded-box border border-base-300/70 bg-base-100/80 px-3 py-2">
+            return `<div class="interactive-surface rounded-box border border-base-300/70 bg-base-100/80 px-3 py-2">
             <dt class="text-xs font-semibold uppercase tracking-wider text-base-content/55">${escapeHtml(metric.label)}</dt>
             <dd class="mt-1 text-xl font-semibold ${valueClass}">${escapeHtml(String(metric.value))}</dd>
           </div>`;
@@ -81,7 +81,7 @@ export const renderWorkspaceHeader = (config: WorkspaceHeaderConfig): string => 
     : "";
 
   return `
-    <header class="space-y-3 mb-6">
+    <header class="surface-shell surface-section section-stack mb-6 space-y-3 rounded-[1.5rem] border border-base-300 bg-base-100/80 p-5 shadow-sm sm:p-6">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           ${eyebrowHtml}

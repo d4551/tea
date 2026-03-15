@@ -181,7 +181,9 @@ export interface WorkspacePaginatedItems<T> {
 export const renderWorkspaceShell = (config: WorkspaceShellConfig): string => {
   const metrics = (config.metrics ?? [])
     .map(
-      (metric) => `<div class="rounded-box border border-base-300/70 bg-base-100/80 px-4 py-3">
+      (
+        metric,
+      ) => `<div class="interactive-surface surface-tappable rounded-box border border-base-300/70 bg-base-100/80 px-4 py-3">
         <dt class="text-xs font-semibold uppercase tracking-[0.2em] text-base-content/55">${escapeHtml(metric.label)}</dt>
         <dd class="mt-2 text-2xl font-semibold ${escapeHtml(metric.toneClassName ?? "text-base-content")}">${escapeHtml(String(metric.value))}</dd>
       </div>`,
@@ -191,7 +193,7 @@ export const renderWorkspaceShell = (config: WorkspaceShellConfig): string => {
   const facets = (config.facets ?? [])
     .map(
       (facet) =>
-        `<span class="badge badge-outline ${escapeHtml(facet.badgeClassName ?? "")}">${escapeHtml(facet.label)}</span>`,
+        `<span class="badge badge-outline surface-tappable ${escapeHtml(facet.badgeClassName ?? "")}">${escapeHtml(facet.label)}</span>`,
     )
     .join("");
 
@@ -219,7 +221,7 @@ export const renderWorkspaceShell = (config: WorkspaceShellConfig): string => {
           .join(" ")
       : "";
 
-    return `<a class="${escapeHtml(className)}" href="${escapeHtml(action.href)}" aria-label="${escapeHtml(action.label)}" ${htmxAttrs}>
+    return `<a class="${escapeHtml(`${className} surface-tappable`)}" href="${escapeHtml(action.href)}" aria-label="${escapeHtml(action.label)}" ${htmxAttrs}>
       ${iconAfter ? `<span>${escapeHtml(action.label)}</span>${iconHtml}` : `${iconHtml}<span>${escapeHtml(action.label)}</span>`}
     </a>`;
   };
@@ -245,7 +247,7 @@ export const renderWorkspaceShell = (config: WorkspaceShellConfig): string => {
     .join("");
 
   const journeyHtml = config.journey
-    ? `<section class="rounded-[1.5rem] border border-base-300/80 bg-base-100/85 p-4 shadow-sm">
+    ? `<section class="surface-shell surface-section interactive-surface rounded-[1.5rem] border border-base-300/80 bg-base-100/85 p-4 shadow-sm">
         <div class="flex flex-col gap-4">
           <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div class="space-y-2">
@@ -267,8 +269,8 @@ export const renderWorkspaceShell = (config: WorkspaceShellConfig): string => {
       </section>`
     : "";
 
-  return `<section class="rounded-[2rem] border border-base-300 bg-gradient-to-br from-base-200 via-base-100 to-base-100 shadow-sm">
-    <div class="flex flex-col gap-5 p-6 lg:p-8">
+  return `<section class="surface-shell surface-section section-stack rounded-[2rem] border border-base-300 bg-gradient-to-br from-base-200 via-base-100 to-base-100 shadow-sm">
+    <div class="flex flex-col gap-5 p-5 sm:p-6 lg:p-8">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div class="space-y-3">
           ${
@@ -285,7 +287,7 @@ export const renderWorkspaceShell = (config: WorkspaceShellConfig): string => {
       </div>
       ${journeyHtml}
       ${facets ? `<div class="flex flex-wrap gap-2">${facets}</div>` : ""}
-      ${metrics ? `<dl class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">${metrics}</dl>` : ""}
+      ${metrics ? `<dl class="workspace-card-grid">${metrics}</dl>` : ""}
     </div>
   </section>`;
 };
@@ -370,7 +372,7 @@ export const renderWorkspaceBrowseControls = (config: WorkspaceBrowseControlsCon
           ariaLabel,
         )}" role="link">${escapeHtml(label)}</span>`;
 
-  return `<section class="space-y-3 rounded-[1.25rem] border border-base-300 bg-base-200/40 p-4">
+  return `<section class="surface-shell surface-section section-stack space-y-3 rounded-[1.25rem] border border-base-300 bg-base-200/40 p-4">
     <form method="get" action="${escapeHtml(config.action)}" class="space-y-3" aria-label="${escapeHtml(config.searchLabel)}" ${htmxAttributes}>
       ${hiddenFields}
       <input type="hidden" name="page" value="1" />
@@ -388,7 +390,7 @@ export const renderWorkspaceBrowseControls = (config: WorkspaceBrowseControlsCon
     </form>
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <p class="text-xs uppercase tracking-[0.2em] text-base-content/50">${escapeHtml(config.pageLabel)} ${config.page} / ${config.totalPages}</p>
-      <div class="join join-horizontal">
+      <div class="join join-horizontal surface-tappable">
         ${renderPagerLink(
           config.previousHref,
           config.previousLabel,
@@ -415,8 +417,10 @@ export const renderWorkspaceBrowseControls = (config: WorkspaceBrowseControlsCon
 export const renderWorkspaceFrame = (config: WorkspaceFrameConfig): string => {
   const sideRail = (config.sideSections ?? [])
     .map(
-      (section) => `<section class="rounded-[1.5rem] border border-base-300 bg-base-100 shadow-sm">
-        <div class="flex flex-col gap-3 p-5">
+      (
+        section,
+      ) => `<section class="surface-shell surface-section interactive-surface rounded-[1.5rem] border border-base-300 bg-base-100 shadow-sm">
+        <div class="flex min-h-0 flex-col gap-3 p-5">
           <div class="space-y-1">
             <h2 class="text-lg font-semibold tracking-tight">${escapeHtml(section.title)}</h2>
             ${
@@ -425,15 +429,15 @@ export const renderWorkspaceFrame = (config: WorkspaceFrameConfig): string => {
                 : ""
             }
           </div>
-          <div class="space-y-3 2xl:max-h-[calc(100vh-14rem)] 2xl:overflow-auto 2xl:pr-1">${section.body}</div>
+          <div class="surface-scroll surface-scroll-y touch-pan-y space-y-3 2xl:max-h-[calc(100vh-14rem)] 2xl:overflow-auto 2xl:pr-1">${section.body}</div>
         </div>
       </section>`,
     )
     .join("");
 
-  return `<section class="grid gap-6 xl:grid-cols-[22rem_minmax(0,1fr)] 2xl:grid-cols-[22rem_minmax(0,1fr)_22rem]">
-    <aside class="space-y-4 xl:sticky xl:top-6 xl:self-start">
-      <section class="rounded-[1.5rem] border border-base-300 bg-base-100 shadow-sm">
+  return `<section class="workspace-grid min-h-0 ${sideRail ? "has-side-rail" : ""}">
+    <aside class="space-y-4 min-h-0 xl:surface-sticky">
+      <section class="surface-shell surface-section interactive-surface rounded-[1.5rem] border border-base-300 bg-base-100 shadow-sm">
         <div class="flex flex-col gap-3 p-5">
           <div class="space-y-1">
             <h2 class="text-lg font-semibold tracking-tight">${escapeHtml(config.navigatorTitle)}</h2>
@@ -443,17 +447,13 @@ export const renderWorkspaceFrame = (config: WorkspaceFrameConfig): string => {
                 : ""
             }
           </div>
-          <div class="space-y-4 xl:max-h-[calc(100vh-14rem)] xl:overflow-auto xl:pr-1">${config.navigatorBody}</div>
+          <div class="surface-scroll surface-scroll-y touch-pan-y space-y-4 xl:max-h-[calc(100vh-14rem)] xl:overflow-auto xl:pr-1">${config.navigatorBody}</div>
         </div>
       </section>
     </aside>
-    <div class="min-w-0 space-y-4">
+    <div class="min-w-0 min-h-0 space-y-4">
       ${config.mainBody}
     </div>
-    ${
-      sideRail
-        ? `<aside class="space-y-4 2xl:sticky 2xl:top-6 2xl:self-start">${sideRail}</aside>`
-        : ""
-    }
+    ${sideRail ? `<aside class="space-y-4 min-h-0 2xl:surface-sticky">${sideRail}</aside>` : ""}
   </section>`;
 };

@@ -1,4 +1,4 @@
-import { env, pipeline, type PipelineType } from "@huggingface/transformers";
+import { env, type PipelineType, pipeline } from "@huggingface/transformers";
 import { $ } from "bun";
 import { appConfig } from "../../config/environment.ts";
 import { settleAsync } from "../../shared/utils/async-result.ts";

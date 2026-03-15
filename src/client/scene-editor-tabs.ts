@@ -20,7 +20,7 @@ import {
   TILEMAP_FILL_OPERATION_LIMIT,
   TILEMAP_PERSIST_DEBOUNCE_MS,
 } from "../shared/constants/builder-defaults.ts";
-import { safeJsonParse } from "../shared/utils/safe-json.ts";
+import { isRecord, safeJsonParse } from "../shared/utils/safe-json.ts";
 
 interface TilemapLayer {
   readonly id: string;
@@ -52,9 +52,6 @@ declare global {
 
 const wiredDetails = new WeakSet<HTMLElement>();
 const wiredTilemapPanels = new WeakSet<HTMLElement>();
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
 
 const isInteger = (value: unknown): value is number =>
   typeof value === "number" && Number.isInteger(value);
@@ -214,11 +211,7 @@ const updateSelectionStatus = (panel: HTMLElement, selectedTile: number): void =
     return;
   }
 
-  const selectedTileLabel = resolveLabelValue(
-    panel,
-    "data-tilemap-selected-label",
-    "",
-  );
+  const selectedTileLabel = resolveLabelValue(panel, "data-tilemap-selected-label", "");
   const emptyTileLabel = resolveLabelValue(panel, "data-tilemap-empty-label", "");
   const tileLabel =
     selectedTile === DEFAULT_TILEMAP_EMPTY_VALUE ? emptyTileLabel : `#${selectedTile + 1}`;

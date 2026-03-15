@@ -1,0 +1,235 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+    - text: Skip to main content
+  - generic [ref=e4]:
+    - checkbox "Open AI Assistant"
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - checkbox "Open navigation menu"
+        - generic [ref=e7]:
+          - navigation "Primary navigation" [ref=e9]:
+            - link "TEA 🍵" [ref=e11] [cursor=pointer]:
+              - /url: /?lang=en-US
+              - generic [ref=e12]: 🍵
+              - generic [ref=e13]: TEA 🍵
+            - list [ref=e15]:
+              - listitem [ref=e16]:
+                - link "Studio" [ref=e17] [cursor=pointer]:
+                  - /url: /?lang=en-US
+                  - img [ref=e18]
+                  - generic [ref=e21]: Studio
+              - listitem [ref=e22]:
+                - link "Control Plane" [ref=e23] [cursor=pointer]:
+                  - /url: /games?lang=en-US
+                  - img [ref=e24]
+                  - generic [ref=e26]: Control Plane
+              - listitem [ref=e27]:
+                - link "Craft" [ref=e28] [cursor=pointer]:
+                  - /url: /projects/new?lang=en-US
+                  - img [ref=e29]
+                  - generic [ref=e34]: Craft
+              - listitem [ref=e35]:
+                - link "Play" [ref=e36] [cursor=pointer]:
+                  - /url: /?lang=en-US
+                  - img [ref=e37]
+                  - generic [ref=e39]: Play
+            - generic [ref=e40]:
+              - link "Switch language to Chinese" [ref=e41] [cursor=pointer]:
+                - /url: /?lang=zh-CN
+                - text: 中文
+              - group [ref=e42]:
+                - generic "Theme" [ref=e43]:
+                  - generic [ref=e44] [cursor=pointer]:
+                    - generic [ref=e45]: Theme
+                    - img [ref=e46]
+              - button "Open AI Assistant" [ref=e48] [cursor=pointer]:
+                - img [ref=e49]
+                - generic [ref=e51]: Open AI Assistant
+          - navigation "Breadcrumb" [ref=e53]:
+            - list [ref=e54]:
+              - listitem [ref=e55]:
+                - generic [ref=e56] [cursor=pointer]: TEA 🍵
+          - main [ref=e57]:
+            - generic [ref=e58]:
+              - generic [ref=e60]:
+                - generic [ref=e61]:
+                  - heading "Ship playable worlds from one SSR workspace" [level=1] [ref=e62]
+                  - paragraph [ref=e63]: TEA unifies scene design, NPC authoring, local-first AI operations, and runtime playtest into a single release-grade workspace.
+                  - generic [ref=e64]:
+                    - button "Open Story Oracle" [ref=e65] [cursor=pointer]:
+                      - img [ref=e66]
+                      - text: Open Story Oracle
+                    - link "Open Builder Workspace" [ref=e68] [cursor=pointer]:
+                      - /url: /projects/new?lang=en-US
+                      - text: Open Builder Workspace
+                      - img [ref=e69]
+                - 'status "Status: Initial release" [ref=e71]':
+                  - generic [ref=e72]:
+                    - generic [ref=e73]:
+                      - generic [ref=e74]:
+                        - generic [ref=e75]: "Status: Initial release"
+                        - heading "Initial release control room for worldbuilding, automation, and runtime verification." [level=2] [ref=e76]
+                      - img [ref=e77]
+                    - paragraph [ref=e81]: Start in Builder to shape the first scene, then pressure-test the runtime before you publish.
+                    - generic "Release Standard" [ref=e82]:
+                      - generic [ref=e83]:
+                        - generic [ref=e84]: Worldbuilding
+                        - generic [ref=e85]: SSR
+                        - generic [ref=e86]: Scene system
+                      - generic [ref=e87]:
+                        - generic [ref=e88]: Runtime QA
+                        - generic [ref=e89]: HTMX
+                        - generic [ref=e90]: Character systems
+                      - generic [ref=e91]:
+                        - generic [ref=e92]: Local AI
+                        - generic [ref=e93]: Local
+                        - generic [ref=e94]: Local-first AI
+                    - generic [ref=e95]:
+                      - link "Start worldbuilding" [ref=e96] [cursor=pointer]:
+                        - /url: /projects/new?lang=en-US
+                      - link "Release Standard" [ref=e97] [cursor=pointer]:
+                        - /url: "#release-standard"
+              - status [ref=e98]:
+                - paragraph [ref=e99]: Initial release control room for worldbuilding, automation, and runtime verification.
+                - paragraph [ref=e100]: Start in Builder to shape the first scene, then pressure-test the runtime before you publish.
+                - button "Dismiss" [ref=e101] [cursor=pointer]
+              - generic "Release loop" [ref=e102]:
+                - generic [ref=e103]:
+                  - img [ref=e105]
+                  - generic [ref=e108]: Worldbuilding
+                  - generic [ref=e109]: Author
+                  - generic [ref=e110]: Scenes, interactables, and authored beats stay structured so the runtime can launch cleanly.
+                - generic [ref=e111]:
+                  - img [ref=e113]
+                  - generic [ref=e118]: Characters
+                  - generic [ref=e119]: Refine
+                  - generic [ref=e120]: NPCs, dialogue graphs, and encounter logic stay editable without collapsing into throwaway early-stage content.
+                - generic [ref=e121]:
+                  - img [ref=e123]
+                  - generic [ref=e125]: Local AI
+                  - generic [ref=e126]: Deploy
+                  - generic [ref=e127]: Use local models for generation, critique, and automation while keeping the product surface deterministic.
+              - generic [ref=e128]:
+                - group "Craft" [ref=e129]:
+                  - generic [ref=e130]:
+                    - generic [ref=e131]:
+                      - img [ref=e133]
+                      - generic [ref=e136]: Worldbuilding
+                    - generic [ref=e137]:
+                      - heading "Worldbuilding Workspace" [level=2] [ref=e138]
+                      - paragraph [ref=e139]: Design environments, place interactables, and define the authored surface your players will actually inhabit.
+                    - list [ref=e140]:
+                      - listitem [ref=e141]:
+                        - generic [ref=e142]: •
+                        - generic [ref=e143]: Frame the world
+                      - listitem [ref=e144]:
+                        - generic [ref=e145]: •
+                        - generic [ref=e146]: Author with AI
+                      - listitem [ref=e147]:
+                        - generic [ref=e148]: •
+                        - generic [ref=e149]: Verify the runtime
+                    - generic [ref=e150]:
+                      - link "Open Builder Workspace" [ref=e151] [cursor=pointer]:
+                        - /url: /projects/new?lang=en-US
+                        - text: Open Builder Workspace
+                        - img [ref=e152]
+                      - button "Open Story Oracle" [ref=e154] [cursor=pointer]:
+                        - img [ref=e155]
+                        - text: Open Story Oracle
+                - group "Play" [ref=e157]:
+                  - generic [ref=e158]:
+                    - generic [ref=e159]:
+                      - img [ref=e161]
+                      - generic [ref=e163]: Runtime Playtest
+                    - generic [ref=e164]:
+                      - heading "Runtime Playtest" [level=2] [ref=e165]
+                      - paragraph [ref=e166]: Move from authored scene to live runtime without leaving the product surface.
+                    - status "Runtime Playtest" [ref=e167]:
+                      - generic [ref=e168]:
+                        - img [ref=e170]
+                        - generic [ref=e173]:
+                          - paragraph [ref=e174]: Runtime Playtest
+                          - paragraph [ref=e175]: Launch the runtime surface, validate controls, and tighten mechanics before the first public release.
+                      - generic [ref=e176]:
+                        - generic [ref=e177]: 2D
+                        - generic [ref=e178]: 3D
+                        - generic [ref=e179]: Launch Runtime Surface
+                      - link "Launch runtime" [ref=e180] [cursor=pointer]:
+                        - /url: /projects/new?lang=en-US
+                    - generic [ref=e181]:
+                      - generic [ref=e182]:
+                        - paragraph [ref=e183]: Launch baseline scenes
+                        - paragraph [ref=e184]: Use the starter scenes to validate composition, pacing, and renderer fit.
+                      - group "Launch baseline scenes" [ref=e185]:
+                        - generic "Launch baseline scenes" [ref=e186] [cursor=pointer]
+                        - generic [ref=e188]:
+                          - link "Launch Tea House" [ref=e189] [cursor=pointer]:
+                            - /url: /projects/new?lang=en-US
+                            - generic [ref=e190]:
+                              - text: 2D
+                              - text: Launch Tea House
+                            - img [ref=e191]
+                          - link "Launch Crystal Cavern" [ref=e193] [cursor=pointer]:
+                            - /url: /projects/new?lang=en-US
+                            - generic [ref=e194]:
+                              - text: 3D
+                              - text: Launch Crystal Cavern
+                            - img [ref=e195]
+                - group "Release Standard" [ref=e197]:
+                  - generic [ref=e198]:
+                    - generic [ref=e199]:
+                      - img [ref=e201]
+                      - heading "Release Standard" [level=2] [ref=e203]
+                    - group "Launch-ready operating model" [ref=e204]:
+                      - generic "Launch-ready operating model" [ref=e205] [cursor=pointer]
+                      - generic [ref=e206]:
+                        - status "Launch-ready operating model" [ref=e207]:
+                          - img [ref=e208]
+                          - generic [ref=e211]:
+                            - heading "Launch-ready operating model" [level=3] [ref=e212]
+                            - paragraph [ref=e213]: "Every project starts with the same loop: author the world, generate support assets, and verify runtime quality before publication."
+                          - link "Open Builder Workspace" [ref=e215] [cursor=pointer]:
+                            - /url: /projects/new?lang=en-US
+                        - generic [ref=e216]:
+                          - article [ref=e217]:
+                            - generic [ref=e218]:
+                              - generic [ref=e219]: Scene system
+                              - heading "World architecture defined" [level=3] [ref=e220]
+                              - paragraph [ref=e221]: Scenes, interactables, and authored beats stay structured so the runtime can launch cleanly.
+                          - article [ref=e222]:
+                            - generic [ref=e223]:
+                              - generic [ref=e224]: Character systems
+                              - heading "Runtime validation scheduled" [level=3] [ref=e225]
+                              - paragraph [ref=e226]: NPCs, dialogue graphs, and encounter logic stay editable without collapsing into throwaway early-stage content.
+                          - article [ref=e227]:
+                            - generic [ref=e228]:
+                              - generic [ref=e229]: Local-first AI
+                              - heading "Publication gate pending" [level=3] [ref=e230]
+                              - paragraph [ref=e231]: Use local models for generation, critique, and automation while keeping the product surface deterministic.
+          - contentinfo [ref=e232]:
+            - generic [ref=e233]:
+              - complementary [ref=e234]:
+                - generic [ref=e235]:
+                  - img [ref=e236]
+                  - text: TEA 🍵
+                - paragraph [ref=e238]: Brew ideas into systems, then ship playable worlds.
+              - navigation "Resources" [ref=e239]:
+                - heading "Resources" [level=6] [ref=e240]
+                - link "Control Plane" [ref=e241] [cursor=pointer]:
+                  - /url: /games?lang=en-US
+                - link "Craft" [ref=e242] [cursor=pointer]:
+                  - /url: /projects/new?lang=en-US
+                - link "Play" [ref=e243] [cursor=pointer]:
+                  - /url: /?lang=en-US
+                - link "Read platform docs" [ref=e244] [cursor=pointer]:
+                  - /url: /docs?lang=en-US
+              - navigation "Social links" [ref=e245]:
+                - heading "Social links" [level=6] [ref=e246]
+            - paragraph [ref=e248]: Brew ideas into systems, then ship playable worlds.
+      - button "Open AI Assistant" [ref=e249] [cursor=pointer]:
+        - img [ref=e250]
+```

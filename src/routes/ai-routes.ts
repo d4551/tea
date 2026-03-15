@@ -7,20 +7,17 @@
 
 import { Elysia, t } from "elysia";
 import { appConfig, normalizeLocale, parseBoolean } from "../config/environment.ts";
-import { deriveFeatureCapability } from "../domain/ai/capability-snapshot.ts";
 import {
-  aiRuntimeSettingsService,
   type AiRuntimeSettingMutation,
+  aiRuntimeSettingsService,
 } from "../domain/ai/ai-runtime-settings-service.ts";
+import { deriveFeatureCapability } from "../domain/ai/capability-snapshot.ts";
 import {
   type KnowledgeSearchMatch,
   knowledgeBaseService,
 } from "../domain/ai/knowledge-base-service.ts";
 import { getAiRuntimeProfile } from "../domain/ai/local-runtime-profile.ts";
-import {
-  pullOllamaModel,
-  searchProviderModels,
-} from "../domain/ai/provider-model-catalog.ts";
+import { pullOllamaModel, searchProviderModels } from "../domain/ai/provider-model-catalog.ts";
 import { ProviderRegistry } from "../domain/ai/providers/provider-registry.ts";
 import { auditService } from "../domain/audit/audit-service.ts";
 import {
@@ -39,6 +36,7 @@ import { httpStatus } from "../shared/constants/http.ts";
 import { appRoutes } from "../shared/constants/routes.ts";
 import type { FeatureCapability } from "../shared/contracts/game.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
+import { settleAsync } from "../shared/utils/async-result.ts";
 import {
   encodeMonoWavAudio,
   resampleMonoPcm,
@@ -52,6 +50,8 @@ import {
 type RegistryStatus = Awaited<ReturnType<ProviderRegistry["getStatus"]>>;
 type RegistryCapability = RegistryStatus["capabilities"][number];
 type RegistryProviders = RegistryStatus["providers"];
+
+const resolveOptionalProjectId = (projectId?: string): string => projectId ?? "";
 
 const generationResultSchema = t.Object({
   ok: t.Literal(true),
@@ -224,6 +224,15 @@ const providerModelCatalogItemSchema = t.Object({
     t.Literal("configured"),
   ]),
 });
+
+const aiProviderModelNameSchema = t.Union([
+  t.Literal("ollama"),
+  t.Literal("openai-compatible-local"),
+  t.Literal("openai-compatible-cloud"),
+  t.Literal("huggingface-inference"),
+  t.Literal("huggingface-endpoints"),
+  t.Literal("transformers-local"),
+]);
 
 const providerModelCatalogDataSchema = t.Object({
   provider: t.String(),
@@ -465,10 +474,16 @@ const toGovernanceContext = (context: {
   sensitiveContext: context.sensitiveContext === true,
 });
 
+const isBase64Payload = (value: string): boolean =>
+  value.length > 0 && /^[A-Za-z0-9+/]+={0,2}$/u.test(value) && value.length % 4 !== 1;
+
 const decodeAudioPayload = (audioBase64: string): Uint8Array => {
   const trimmed = audioBase64.trim();
   const payload = trimmed.includes(",") ? trimmed.slice(trimmed.indexOf(",") + 1) : trimmed;
-  return new Uint8Array(Buffer.from(payload, "base64"));
+  if (!isBase64Payload(payload)) {
+    return new Uint8Array();
+  }
+  return Uint8Array.fromBase64(payload);
 };
 
 const toAiRuntimeRecord = async () => {
@@ -575,36 +590,37 @@ const delayWithAbort = (signal: AbortSignal, delayMs: number): Promise<void> =>
     signal.addEventListener("abort", onAbort, { once: true });
   });
 
-type BulkAiRuntimeSettingMutationBody = {
-  readonly updates: readonly AiRuntimeSettingMutation[];
-};
-type SingleAiRuntimeSettingMutationBody = {
-  readonly key: string;
-  readonly value?: string | number | boolean;
-  readonly reset?: string | boolean;
-};
-type AiRuntimeSettingsMutationBody = BulkAiRuntimeSettingMutationBody | SingleAiRuntimeSettingMutationBody;
-
-const normalizeAiSettingsMutations = (body: AiRuntimeSettingsMutationBody): readonly AiRuntimeSettingMutation[] => {
-  if (Array.isArray(body.updates)) {
-    return body.updates;
+const normalizeAiSettingsMutations = (body: unknown): readonly AiRuntimeSettingMutation[] => {
+  if (typeof body !== "object" || body === null) {
+    throw new Error("AI runtime settings payload must be an object.");
   }
 
-  if (body.key.trim().length === 0) {
+  const record = body as {
+    readonly updates?: readonly AiRuntimeSettingMutation[];
+    readonly key?: string;
+    readonly value?: string | number | boolean;
+    readonly reset?: string | boolean;
+  };
+
+  if (Array.isArray(record.updates)) {
+    return record.updates;
+  }
+
+  if (typeof record.key !== "string" || record.key.trim().length === 0) {
     throw new Error("AI runtime setting key is required.");
   }
 
   const reset =
-    typeof body.reset === "boolean"
-      ? body.reset
-      : typeof body.reset === "string"
-        ? parseBoolean(body.reset, false, "reset")
+    typeof record.reset === "boolean"
+      ? record.reset
+      : typeof record.reset === "string"
+        ? parseBoolean(record.reset, false, "reset")
         : false;
 
   return [
     {
-      key: body.key,
-      value: body.value,
+      key: record.key,
+      value: record.value,
       reset,
     },
   ];
@@ -788,54 +804,58 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
       const locale = normalizeLocale(query.locale);
       const messages = getMessages(locale);
 
-      const providerModelSearch = await searchProviderModels({
-        provider,
-        slot: query.slot,
-        search: query.search,
-        author: query.author,
-        cursor: query.cursor,
-        limit: query.limit,
-      }).then(
-        (result) => ({ ok: true as const, result }),
-        (error) => ({ ok: false as const, error }),
+      const providerModelsResult = await settleAsync(
+        searchProviderModels({
+          provider,
+          slot: query.slot,
+          search: query.search,
+          author: query.author,
+          cursor: query.cursor,
+          limit: query.limit,
+        }),
       );
-
-      if (!providerModelSearch.ok) {
+      if (!providerModelsResult.ok) {
         if (request.headers.get("HX-Request") === "true") {
-          return renderAiProviderSearchPanel(messages, locale, query.projectId, {
-            settingKey: query.settingKey ?? "",
-            provider,
-            slot: query.slot,
-            search: query.search ?? "",
-            author: query.author ?? "",
-            items: [],
-            error:
-              providerModelSearch.error instanceof Error
-                ? providerModelSearch.error.message
-                : "Unable to query provider model catalog.",
-          });
+          return renderAiProviderSearchPanel(
+            messages,
+            locale,
+            resolveOptionalProjectId(query.projectId),
+            {
+              settingKey: query.settingKey ?? "",
+              provider,
+              slot: query.slot,
+              search: query.search ?? "",
+              author: query.author ?? "",
+              items: [],
+              error: providerModelsResult.error.message,
+            },
+          );
         }
-        throw providerModelSearch.error;
+        throw providerModelsResult.error;
       }
 
-      const result = providerModelSearch.result;
       if (request.headers.get("HX-Request") === "true") {
-        return renderAiProviderSearchPanel(messages, locale, query.projectId, {
-          settingKey: query.settingKey ?? "",
-          provider: result.provider,
-          slot: result.slot,
-          search: query.search ?? "",
-          author: query.author ?? "",
-          items: result.items,
-        });
+        return renderAiProviderSearchPanel(
+          messages,
+          locale,
+          resolveOptionalProjectId(query.projectId),
+          {
+            settingKey: query.settingKey ?? "",
+            provider: providerModelsResult.value.provider,
+            slot: providerModelsResult.value.slot,
+            search: query.search ?? "",
+            author: query.author ?? "",
+            items: providerModelsResult.value.items,
+          },
+        );
       }
 
       return {
         ok: true as const,
         data: {
-          provider: result.provider,
-          slot: result.slot,
-          items: result.items.map((item) => ({
+          provider: providerModelsResult.value.provider,
+          slot: providerModelsResult.value.slot,
+          items: providerModelsResult.value.items.map((item) => ({
             provider: item.provider,
             model: item.model,
             label: item.label,
@@ -846,26 +866,19 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
             available: item.available,
             source: item.source,
           })),
-          nextCursor: result.nextCursor,
+          nextCursor: providerModelsResult.value.nextCursor,
         },
       };
     },
     {
       query: t.Object({
-        provider: t.Union([
-          t.Literal("ollama"),
-          t.Literal("openai-compatible-local"),
-          t.Literal("openai-compatible-cloud"),
-          t.Literal("huggingface-inference"),
-          t.Literal("huggingface-endpoints"),
-          t.Literal("transformers-local"),
-        ]),
+        provider: aiProviderModelNameSchema,
         slot: t.String({ minLength: 1 }),
         search: t.Optional(t.String()),
         author: t.Optional(t.String()),
         cursor: t.Optional(t.String()),
         limit: t.Optional(t.Number({ minimum: 1, maximum: 25 })),
-        projectId: t.String(),
+        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
         settingKey: t.Optional(t.String()),
       }),
@@ -890,7 +903,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
         return renderAiModelSettingsWorkspace(
           getMessages(locale),
           locale,
-          query.projectId,
+          resolveOptionalProjectId(query.projectId),
           await getAiRuntimeProfile(),
         );
       }
@@ -898,7 +911,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
     },
     {
       query: t.Object({
-        projectId: t.String(),
+        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
       }),
       body: t.Union([
@@ -945,7 +958,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
         return renderAiModelSettingsWorkspace(
           getMessages(locale),
           locale,
-          query.projectId,
+          resolveOptionalProjectId(query.projectId),
           await getAiRuntimeProfile(),
           {
             settingKey: "OLLAMA_CHAT_MODEL",
@@ -983,7 +996,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
     },
     {
       query: t.Object({
-        projectId: t.String(),
+        projectId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
       }),
       body: t.Object({
@@ -1181,6 +1194,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
       authPrincipalRoleKeys,
     }) => {
       const registry = await ProviderRegistry.getInstance();
+      const plannerTargetId = body.projectId ?? correlationId;
       const result = await registry.planTools({
         goal: body.goal,
         projectId: body.projectId,
@@ -1210,7 +1224,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
           }),
           target: {
             type: "ai-planner",
-            id: body.projectId,
+            id: plannerTargetId,
           },
           metadata: {
             reason: result.error,
@@ -1238,7 +1252,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
         }),
         target: {
           type: "ai-planner",
-            id: body.projectId,
+          id: plannerTargetId,
         },
         metadata: {
           stepCount: result.steps.length,
@@ -1255,7 +1269,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
     {
       body: t.Object({
         goal: t.String({ minLength: 1 }),
-        projectId: t.String(),
+        projectId: t.Optional(t.String()),
         sensitiveContext: t.Optional(t.Boolean()),
         requireExplicitApproval: t.Optional(t.Boolean()),
         approvalGranted: t.Optional(t.Boolean()),
@@ -1647,7 +1661,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
         tags: ["ai"],
         summary: "Transcribe local speech audio",
         description:
-          "Accepts a base64-encoded WAV payload, normalizes it to the configured input sample rate, and routes speech-to-text inference through the best available local-first AI provider.",
+          "Accepts `body.audioBase64` containing either raw base64-encoded WAV bytes or a data URL payload. The optional `mimeType`, `language`, and `prompt` fields are forwarded as transcription context. Invalid base64 payloads are rejected as validation errors; otherwise input is normalized to the configured sample rate and sent to the highest-priority local-first provider.",
       },
       response: {
         [httpStatus.ok]: t.Union([transcriptionResponseSchema, errorResultSchema]),
@@ -1673,7 +1687,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
 
       const wav = encodeMonoWavAudio(result.audio, result.sampleRate);
       return successEnvelope({
-        audioBase64: Buffer.from(wav).toString("base64"),
+        audioBase64: wav.toBase64(),
         mimeType: "audio/wav",
         model: result.model,
         durationMs: result.durationMs,

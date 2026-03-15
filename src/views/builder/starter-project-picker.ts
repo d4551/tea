@@ -1,7 +1,10 @@
 import type { LocaleCode } from "../../config/environment.ts";
 import { recommendedStarterProjectTemplateId } from "../../domain/builder/starter-projects.ts";
 import { appRoutes } from "../../shared/constants/routes.ts";
-import type { StarterProjectTemplate, StarterProjectTemplateId } from "../../shared/contracts/game.ts";
+import type {
+  StarterProjectTemplate,
+  StarterProjectTemplateId,
+} from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 import { spinnerClasses } from "../shared/ui-components.ts";
@@ -142,14 +145,7 @@ const renderCardTemplateOptions = (
  * @returns HTML string for the starter-project picker form.
  */
 export const renderStarterProjectPicker = (props: StarterProjectPickerProps): string => {
-  const {
-    messages,
-    locale,
-    redirectPath,
-    compact = false,
-    projectId,
-    starterTemplateId,
-  } = props;
+  const { messages, locale, redirectPath, compact = false, projectId, starterTemplateId } = props;
   const templates = buildStarterProjectTemplates(messages);
   const templateOptions = compact
     ? renderCompactTemplateOptions(templates, messages, starterTemplateId)
@@ -170,7 +166,7 @@ export const renderStarterProjectPicker = (props: StarterProjectPickerProps): st
         required
         minlength="1"
         maxlength="64"
-        value="${escapeHtml(props.projectId ?? "")}"
+        value="${escapeHtml(projectId ?? "")}"
         placeholder="${escapeHtml(messages.builder.projectIdPlaceholder)}"
         aria-label="${escapeHtml(messages.builder.projectIdLabel)}"
       />
