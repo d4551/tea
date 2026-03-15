@@ -246,8 +246,8 @@ export const renderDialogueEditor = (
             title: messages.builder.creatorSupportTitle,
             description: messages.builder.dialogueCreateDescription,
             body: `<div class="space-y-3 text-sm leading-6 text-base-content/72">
-              <div class="rounded-box border border-base-300 bg-base-200/55 p-3">${escapeHtml(messages.builder.assistantReviewDescription)}</div>
-              <div class="rounded-box border border-base-300 bg-base-200/55 p-3">${escapeHtml(messages.builder.assistantReviewDescription)}</div>
+              <div class="rounded-box border border-base-300 bg-base-200/55 p-3">${escapeHtml(messages.builder.dialogueCreateDescription)}</div>
+              <div class="rounded-box border border-base-300 bg-base-200/55 p-3">${escapeHtml(messages.builder.creatorAssistDescription)}</div>
             </div>`,
           },
         ],
@@ -310,7 +310,7 @@ export const renderDialogueDetail = (
             hx-swap="innerHTML"
             hx-indicator="#dialogue-delete-spinner"
             hx-disabled-elt="this"
-            aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(key)}"
+            aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(humanizeBuilderIdentifier(getDialogueReference(key)))}"
         >${escapeHtml(messages.builder.delete)}</button>
           <span id="dialogue-delete-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
         </div>

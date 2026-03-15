@@ -1,4 +1,5 @@
 import type { LocaleCode } from "../../config/environment.ts";
+import { humanizeBuilderIdentifier } from "../../domain/builder/builder-display.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type {
@@ -57,9 +58,9 @@ export const renderQuestEditForm = (
   return `<div class="${cardClasses.bordered}">
     <div class="card-body gap-3">
       <div class="flex items-center justify-between gap-3">
-        <h3 class="card-title">${escapeHtml(messages.builder.editQuest)}: ${escapeHtml(quest.id)}</h3>
+        <h3 class="card-title">${escapeHtml(messages.builder.editQuest)}: ${escapeHtml(quest.title)}</h3>
         <form hx-delete="${escapeHtml(deleteAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#quest-edit-spinner" hx-disabled-elt="button">
-          <button type="submit" class="btn btn-error btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(quest.id)}">${escapeHtml(messages.builder.delete)}</button>
+          <button type="submit" class="btn btn-error btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(quest.title)}">${escapeHtml(messages.builder.delete)}</button>
         </form>
       </div>
       <form hx-post="${escapeHtml(formAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#quest-edit-spinner" hx-disabled-elt="button, input, select, textarea">
@@ -110,9 +111,9 @@ export const renderTriggerEditForm = (
   return `<div class="${cardClasses.bordered}">
     <div class="card-body gap-3">
       <div class="flex items-center justify-between gap-3">
-        <h3 class="card-title">${escapeHtml(messages.builder.editTrigger)}: ${escapeHtml(trigger.id)}</h3>
+        <h3 class="card-title">${escapeHtml(messages.builder.editTrigger)}: ${escapeHtml(trigger.label)}</h3>
         <form hx-delete="${escapeHtml(deleteAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#trigger-edit-spinner" hx-disabled-elt="button">
-          <button type="submit" class="btn btn-error btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(trigger.id)}">${escapeHtml(messages.builder.delete)}</button>
+          <button type="submit" class="btn btn-error btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(trigger.label)}">${escapeHtml(messages.builder.delete)}</button>
         </form>
       </div>
       <form hx-post="${escapeHtml(formAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#trigger-edit-spinner" hx-disabled-elt="button, input, select, textarea">
@@ -170,9 +171,9 @@ export const renderDialogueGraphEditForm = (
   return `<div class="${cardClasses.bordered}">
     <div class="card-body gap-3">
       <div class="flex items-center justify-between gap-3">
-        <h3 class="card-title">${escapeHtml(messages.builder.editDialogueGraph)}: ${escapeHtml(graph.id)}</h3>
+        <h3 class="card-title">${escapeHtml(messages.builder.editDialogueGraph)}: ${escapeHtml(graph.title)}</h3>
         <form hx-delete="${escapeHtml(deleteAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#graph-edit-spinner" hx-disabled-elt="button">
-          <button type="submit" class="btn btn-error btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(graph.id)}">${escapeHtml(messages.builder.delete)}</button>
+          <button type="submit" class="btn btn-error btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(graph.title)}">${escapeHtml(messages.builder.delete)}</button>
         </form>
       </div>
       <form hx-post="${escapeHtml(formAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#graph-edit-spinner" hx-disabled-elt="button, input, select, textarea">
@@ -241,7 +242,7 @@ export const renderMechanicsEditor = (
         <div class="card-body gap-2">
           <div>
             <h3 class="card-title text-base">${escapeHtml(quest.title)}</h3>
-            <p class="font-mono text-xs text-base-content/60">${escapeHtml(quest.id)}</p>
+            <p class="text-xs text-base-content/60">${escapeHtml(messages.builder.triggerIdLabel)} · ${escapeHtml(quest.steps[0]?.triggerId ?? messages.common.notApplicable)}</p>
           </div>
           <p class="text-sm text-base-content/75">${escapeHtml(quest.description)}</p>
           <div class="flex flex-wrap gap-2">
@@ -273,7 +274,7 @@ export const renderMechanicsEditor = (
           <div class="flex items-center justify-between gap-3">
             <div>
               <h3 class="card-title text-base">${escapeHtml(trigger.label)}</h3>
-              <p class="font-mono text-xs text-base-content/60">${escapeHtml(trigger.id)}</p>
+              <p class="text-xs text-base-content/60">${escapeHtml(trigger.npcId ? humanizeBuilderIdentifier(trigger.npcId) : messages.builder.triggerSceneGlobal)}</p>
             </div>
             <span class="badge badge-outline">${escapeHtml(getTriggerEventLabel(messages, trigger.event))}</span>
           </div>
@@ -301,7 +302,7 @@ export const renderMechanicsEditor = (
         <div class="card-body gap-2">
           <div>
             <h3 class="card-title text-base">${escapeHtml(graph.title)}</h3>
-            <div class="font-mono text-xs text-base-content/60">${escapeHtml(graph.id)}</div>
+            <div class="text-xs text-base-content/60">${escapeHtml(graph.npcId ? humanizeBuilderIdentifier(graph.npcId) : messages.builder.dialogueCreateDescription)}</div>
           </div>
           <div class="flex flex-wrap gap-2">
             <span class="badge badge-soft">${graph.nodes.length} ${escapeHtml(messages.builder.nodesCountLabel)}</span>

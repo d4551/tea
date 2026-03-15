@@ -10,6 +10,7 @@ import {
 } from "../../shared/constants/builder-query.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
+import { humanizeBuilderIdentifier } from "../../domain/builder/builder-display.ts";
 import type { AnimationClip, BuilderAsset, BuilderAssetKind } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
@@ -138,7 +139,7 @@ export const renderAssetsEditor = (
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
               <h3 class="card-title text-base truncate">${escapeHtml(getAssetLabel(messages, asset))}</h3>
-              <p class="font-mono text-xs text-base-content/60 truncate">${escapeHtml(asset.id)}</p>
+              <p class="text-xs text-base-content/60 truncate">${escapeHtml(getAssetKindLabel(messages, asset.kind))}</p>
             </div>
             ${renderActionDropdown(
               messages.builder.openDetails,
@@ -171,7 +172,7 @@ export const renderAssetsEditor = (
               hx-target="#builder-content"
               hx-swap="innerHTML"
               hx-push-url="true"
-              aria-label="${escapeHtml(messages.builder.openDetails)}: ${escapeHtml(asset.id)}"
+              aria-label="${escapeHtml(messages.builder.openDetails)}: ${escapeHtml(getAssetLabel(messages, asset))}"
             >${escapeHtml(messages.builder.openDetails)}</a>
           </div>
         </div>
@@ -196,7 +197,7 @@ export const renderAssetsEditor = (
           <div class="flex items-center justify-between gap-3">
             <div>
               <h3 class="card-title text-base">${escapeHtml(clip.label)}</h3>
-              <p class="font-mono text-xs text-base-content/60">${escapeHtml(clip.id)}</p>
+              <p class="text-xs text-base-content/60">${escapeHtml(humanizeBuilderIdentifier(clip.stateTag))}</p>
             </div>
             <span class="badge badge-outline">${escapeHtml(getSceneModeLabel(messages, clip.sceneMode))}</span>
           </div>

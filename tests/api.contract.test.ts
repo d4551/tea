@@ -3038,7 +3038,6 @@ describe("HTMX partial rendering", () => {
     await createBuilderProject(projectId);
     const sceneId = `scene-${crypto.randomUUID().slice(0, 8)}`;
     const npcId = `npc-${crypto.randomUUID().slice(0, 8)}`;
-    const dialogueKey = `npc.${npcId}.intro`;
 
     const sceneResponse = await app.handle(
       new Request(

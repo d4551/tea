@@ -3,6 +3,7 @@
 ## Start here / 从这里开始
 
 - [Platform explainer / 平台白话说明 / ELI5](docs/platform-explainer.md)
+- [GitHub description, technologies, and keywords / GitHub 描述、技术栈与关键词](docs/github-metadata.md)
 - [Documentation index / 文档索引](docs/index.md)
 
 SSR-first game runtime, builder workspace, and AI-enabled game platform built on Bun + TypeScript.

@@ -80,6 +80,7 @@ export const renderNpcEditor = (
       const manifest = manifests[npc.characterKey];
       const scene = scenes[sceneId];
       const sceneDisplayName = scene ? resolveSceneDisplayName(locale, scene) : sceneId;
+      const npcDisplayName = resolveNpcDisplayName(locale, npc);
       const detailHref = withQueryParameters(
         interpolateRoutePath(appRoutes.builderApiNpcDetail, { projectId, npcId: npc.characterKey }),
         {
@@ -94,14 +95,14 @@ export const renderNpcEditor = (
               manifest
                 ? `<div class="avatar">
                     <div class="mask mask-squircle h-14 w-14 bg-base-200">
-                      <img src="${escapeHtml(manifest.sheet)}" alt="${escapeHtml(npc.characterKey)}" loading="lazy" />
+                      <img src="${escapeHtml(manifest.sheet)}" alt="${escapeHtml(npcDisplayName)}" loading="lazy" />
                     </div>
                   </div>`
                 : ""
             }
             <div class="min-w-0 flex-1">
-              <h2 class="card-title text-lg">${escapeHtml(resolveNpcDisplayName(locale, npc))}</h2>
-              <p class="text-sm text-base-content/70">${escapeHtml(sceneDisplayName)} · ${escapeHtml(npc.characterKey)}</p>
+              <h2 class="card-title text-lg">${escapeHtml(npcDisplayName)}</h2>
+              <p class="text-sm text-base-content/70">${escapeHtml(sceneDisplayName)}</p>
             </div>
           </div>
           <div class="flex flex-wrap gap-2 text-sm">
@@ -114,7 +115,7 @@ export const renderNpcEditor = (
             hx-get="${escapeHtml(detailHref)}"
             hx-target="#npc-detail"
             hx-swap="innerHTML"
-            aria-label="${escapeHtml(messages.builder.editNpc)}: ${escapeHtml(npc.characterKey)}"
+            aria-label="${escapeHtml(messages.builder.editNpc)}: ${escapeHtml(npcDisplayName)}"
           >${escapeHtml(messages.builder.openDetails)}</button>
         </div>
       </article>`;
@@ -212,7 +213,7 @@ export const renderNpcEditor = (
                   selectedNpcManifest
                     ? `<div class="avatar">
                       <div class="mask mask-squircle h-32 w-32 bg-base-200">
-                        <img src="${escapeHtml(selectedNpcManifest.sheet)}" alt="${escapeHtml(selectedNpc.npc.characterKey)}" loading="lazy" />
+                        <img src="${escapeHtml(selectedNpcManifest.sheet)}" alt="${escapeHtml(resolveNpcDisplayName(locale, selectedNpc.npc))}" loading="lazy" />
                       </div>
                     </div>`
                     : `<div class="flex h-32 items-center justify-center rounded-box border border-dashed border-base-300 bg-base-200/45 text-sm text-base-content/60">${escapeHtml(messages.builder.assetPlaceholder)}</div>`
@@ -286,19 +287,19 @@ export const renderNpcDetail = (
               manifest
                 ? `<div class="avatar">
                     <div class="mask mask-squircle h-18 w-18 bg-base-200">
-                      <img src="${escapeHtml(manifest.sheet)}" alt="${escapeHtml(npc.characterKey)}" loading="lazy" />
+                      <img src="${escapeHtml(manifest.sheet)}" alt="${escapeHtml(npcDisplayName)}" loading="lazy" />
                     </div>
                   </div>`
                 : ""
             }
             <div>
               <h2 class="card-title text-2xl">${escapeHtml(npcDisplayName)}</h2>
-              <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.editNpc)} · ${escapeHtml(npc.characterKey)}</p>
+              <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.sceneId)} · ${escapeHtml(sceneId)}</p>
             </div>
           </div>
           <form hx-delete="${escapeHtml(deleteAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#npc-delete-spinner" hx-disabled-elt="button">
             <span class="flex items-center gap-2">
-              <button type="submit" class="btn btn-error btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(npc.characterKey)}">${escapeHtml(messages.builder.delete)}</button>
+              <button type="submit" class="btn btn-error btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(npcDisplayName)}">${escapeHtml(messages.builder.delete)}</button>
               <span id="npc-delete-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
             </span>
           </form>

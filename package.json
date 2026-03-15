@@ -1,6 +1,23 @@
 {
   "name": "lotfk-tea-house",
   "description": "SSR-first game runtime, builder workspace, and AI-enabled game platform built on Bun and TypeScript.",
+  "keywords": [
+    "bun",
+    "typescript",
+    "elysia",
+    "htmx",
+    "tailwindcss",
+    "daisyui",
+    "prisma",
+    "sqlite",
+    "pixijs",
+    "threejs",
+    "webgpu",
+    "ai-tools",
+    "game-runtime",
+    "game-builder",
+    "ssr"
+  ],
   "private": true,
   "workspaces": [
     "packages/*"

@@ -60,6 +60,7 @@ const renderScenePreview = (
   locale: LocaleCode,
   spawnLabel: string,
 ): string => {
+  const sceneTitle = resolveSceneTitle(locale, scene);
   const npcMarkers = scene.npcs
     .map((npc) => {
       const labelY = Math.max(20, npc.y - 14);
@@ -88,7 +89,7 @@ const renderScenePreview = (
     .join("");
 
   return `<div class="relative overflow-hidden rounded-box border border-base-300 bg-base-200 aspect-video">
-    <img src="${escapeHtml(scene.background)}" alt="${escapeHtml(scene.id)}" class="h-full w-full object-cover opacity-70" />
+    <img src="${escapeHtml(scene.background)}" alt="${escapeHtml(sceneTitle)}" class="h-full w-full object-cover opacity-70" />
     <svg
       class="absolute inset-0 h-full w-full"
       viewBox="0 0 ${scene.geometry.width} ${scene.geometry.height}"
@@ -418,7 +419,7 @@ export const renderSceneEditor = (
           <div class="flex items-center justify-between gap-3">
             <div>
               <h2 class="text-base font-semibold tracking-tight">${escapeHtml(sceneTitle)}</h2>
-              <p class="text-sm text-base-content/70">${escapeHtml(scene.id)}</p>
+              <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.scenePreviewTitle)}</p>
             </div>
             <div class="flex flex-wrap gap-2">
               ${renderSceneModeBadge(messages, scene.sceneMode)}
@@ -437,7 +438,7 @@ export const renderSceneEditor = (
             hx-target="#builder-content"
             hx-swap="innerHTML"
             hx-push-url="true"
-            aria-label="${escapeHtml(messages.builder.editScene)}: ${escapeHtml(scene.id)}"
+            aria-label="${escapeHtml(messages.builder.editScene)}: ${escapeHtml(sceneTitle)}"
           >${escapeHtml(messages.builder.openDetails)}</a>
         </div>
       </article>`;
@@ -660,7 +661,7 @@ export const renderSceneDetail = (
   const npcBadges = scene.npcs
     .map(
       (npc) =>
-        `<span class="badge badge-outline">${escapeHtml(npc.characterKey)} (${npc.x}, ${npc.y})</span>`,
+        `<span class="badge badge-outline">${escapeHtml(resolveNpcLabel(locale, npc))} (${npc.x}, ${npc.y})</span>`,
     )
     .join("");
   const collisionBadges = scene.collisions
@@ -689,14 +690,14 @@ export const renderSceneDetail = (
         <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h2 class="card-title text-2xl">${escapeHtml(sceneTitle)}</h2>
-            <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.editScene)} · ${escapeHtml(scene.id)}</p>
+            <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.sceneModeLabel)} · ${escapeHtml(scene.sceneMode === "3d" ? messages.builder.sceneMode3d : messages.builder.sceneMode2d)}</p>
           </div>
           <div class="flex flex-wrap gap-2">
             ${renderSceneModeBadge(messages, scene.sceneMode)}
             <span class="badge badge-soft">${scene.nodes?.length ?? 0} ${escapeHtml(messages.builder.sceneNodes)}</span>
             <form hx-delete="${escapeHtml(deleteAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#scene-delete-spinner" hx-disabled-elt="button">
               <span class="flex items-center gap-2">
-              <button type="submit" class="btn btn-error btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(scene.id)}">${escapeHtml(messages.builder.delete)}</button>
+              <button type="submit" class="btn btn-error btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.delete)}: ${escapeHtml(sceneTitle)}">${escapeHtml(messages.builder.delete)}</button>
                 <span id="scene-delete-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
               </span>
             </form>
@@ -868,7 +869,7 @@ export const renderSceneDetail = (
           </div>
 
           <div class="lg:col-span-2 flex items-center justify-end gap-2">
-            <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.save)}: ${escapeHtml(scene.id)}">${escapeHtml(messages.builder.save)}</button>
+            <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.save)}: ${escapeHtml(sceneTitle)}">${escapeHtml(messages.builder.save)}</button>
             <span id="scene-detail-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>
