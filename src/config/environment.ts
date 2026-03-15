@@ -23,6 +23,48 @@ export type { LocaleCode } from "../shared/types/locale.ts";
 export const supportedLocales: readonly LocaleCode[] = supportedLocaleCodes;
 
 /**
+ * Named API-compatible vendor presets supported by the AI runtime.
+ */
+export type AiApiCompatibleVendor =
+  | "custom"
+  | "ramalama"
+  | "openai"
+  | "claude"
+  | "deepseek"
+  | "gemini"
+  | "copilot";
+
+/**
+ * Endpoint contract for one API-compatible provider lane.
+ */
+export interface AiApiCompatibleEndpoints {
+  /** Optional path used for health checks and model discovery. */
+  readonly modelsPath: string | null;
+  /** Path for chat completion requests. */
+  readonly chatCompletionsPath: string;
+  /** Optional path for embedding requests. */
+  readonly embeddingsPath: string | null;
+  /** Optional path for speech-to-text requests. */
+  readonly transcriptionsPath: string | null;
+  /** Optional path for text-to-speech requests. */
+  readonly speechPath: string | null;
+  /** Optional path for moderation/classification requests. */
+  readonly moderationsPath: string | null;
+}
+
+/**
+ * Authentication and static header contract for one API-compatible provider lane.
+ */
+export interface AiApiCompatibleAuthConfig {
+  /** Header name used to transmit the API key. */
+  readonly apiKeyHeaderName: string;
+  /** Prefix prepended to the API key value, such as `Bearer `. */
+  readonly apiKeyPrefix: string;
+  /** Additional static headers required by the upstream vendor. */
+  readonly extraHeaders: Readonly<Record<string, string>>;
+}
+
+/**
  * Top-level application configuration.
  */
 export interface AppConfig {
@@ -154,7 +196,9 @@ export interface AppConfig {
       | "ollama"
       | "transformers"
       | "openai-compatible-local"
-      | "openai-compatible-cloud";
+      | "openai-compatible-cloud"
+      | "huggingface-inference"
+      | "huggingface-endpoints";
     readonly capabilityRefreshIntervalMs: number;
     readonly ollamaAvailabilityTimeoutMs: number;
     readonly requestTimeoutMs: number;
@@ -171,6 +215,15 @@ export interface AppConfig {
     readonly localEmbeddingModel: string;
     readonly localSpeechToTextModel: string;
     readonly localTextToSpeechModel: string;
+    readonly localImageGenerationModel: string;
+    readonly localImageGenerationEnabled: boolean;
+    readonly imageGenerationSquareSizePx: number;
+    readonly imageGenerationLandscapeWidthPx: number;
+    readonly imageGenerationLandscapeHeightPx: number;
+    readonly imageGenerationPortraitWidthPx: number;
+    readonly imageGenerationPortraitHeightPx: number;
+    readonly imageGenerationSteps: number;
+    readonly imageGenerationGuidanceScale: number;
     readonly localSpeechToTextEnabled: boolean;
     readonly localTextToSpeechEnabled: boolean;
     readonly localEmbeddingsEnabled: boolean;
@@ -180,6 +233,8 @@ export interface AppConfig {
     readonly openAiCompatible: {
       readonly local: {
         readonly enabled: boolean;
+        readonly vendor: AiApiCompatibleVendor;
+        readonly supportedVendors: readonly AiApiCompatibleVendor[];
         readonly providerLabel: string;
         readonly baseUrl: string;
         readonly apiKey: string;
@@ -191,9 +246,13 @@ export interface AppConfig {
         readonly speechModel?: string;
         readonly moderationModel?: string;
         readonly speechVoice?: string;
+        readonly endpoints: AiApiCompatibleEndpoints;
+        readonly auth: AiApiCompatibleAuthConfig;
       };
       readonly cloud: {
         readonly enabled: boolean;
+        readonly vendor: AiApiCompatibleVendor;
+        readonly supportedVendors: readonly AiApiCompatibleVendor[];
         readonly providerLabel: string;
         readonly baseUrl: string;
         readonly apiKey: string;
@@ -205,6 +264,8 @@ export interface AppConfig {
         readonly speechModel?: string;
         readonly moderationModel?: string;
         readonly speechVoice?: string;
+        readonly endpoints: AiApiCompatibleEndpoints;
+        readonly auth: AiApiCompatibleAuthConfig;
       };
     };
     readonly routing: {
@@ -220,6 +281,21 @@ export interface AppConfig {
     readonly audioInputSampleRateHz: number;
     readonly audioUploadMaxBytes: number;
     readonly textToSpeechSpeakerEmbeddings: string;
+    readonly huggingfaceInference: {
+      readonly enabled: boolean;
+      readonly apiKey: string;
+      readonly baseUrl: string;
+      readonly chatModel: string;
+      readonly imageModel: string;
+      readonly availabilityTimeoutMs: number;
+    };
+    readonly huggingfaceEndpoints: {
+      readonly enabled: boolean;
+      readonly chatUrl: string | null;
+      readonly imageUrl: string | null;
+      readonly apiKey: string;
+      readonly availabilityTimeoutMs: number;
+    };
   };
   readonly controls: {
     readonly allowUnsafeAutomationActions: boolean;
@@ -287,10 +363,8 @@ const DEFAULT_OLLAMA_TIMEOUT_MS = 30_000;
 const DEFAULT_OLLAMA_KEEP_ALIVE_MS = 300_000;
 const DEFAULT_AI_PREFERRED_PROVIDER = "auto";
 const DEFAULT_AI_CAPABILITY_REFRESH_INTERVAL_MS = 60_000;
-const DEFAULT_AI_LOCAL_API_COMPATIBLE_PROVIDER_LABEL = "ramalama";
-const DEFAULT_AI_LOCAL_API_COMPATIBLE_BASE_URL = "http://127.0.0.1:8080/v1";
-const DEFAULT_AI_CLOUD_API_COMPATIBLE_PROVIDER_LABEL = "openai-compatible-cloud";
-const DEFAULT_AI_CLOUD_API_COMPATIBLE_BASE_URL = "https://api.openai.com/v1";
+const DEFAULT_AI_LOCAL_API_COMPATIBLE_VENDOR: AiApiCompatibleVendor = "ramalama";
+const DEFAULT_AI_CLOUD_API_COMPATIBLE_VENDOR: AiApiCompatibleVendor = "openai";
 const DEFAULT_AI_API_COMPATIBLE_AVAILABILITY_TIMEOUT_MS = 3_000;
 const DEFAULT_AI_LOCAL_SENTIMENT_MODEL = "Xenova/distilbert-base-uncased-finetuned-sst-2-english";
 const DEFAULT_AI_LOCAL_TEXT_GENERATION_MODEL = "Xenova/gpt2";
@@ -298,6 +372,14 @@ const DEFAULT_AI_LOCAL_NPC_DIALOGUE_MODEL = "Xenova/gpt2";
 const DEFAULT_AI_LOCAL_EMBEDDING_MODEL = "Xenova/all-MiniLM-L6-v2";
 const DEFAULT_AI_LOCAL_SPEECH_TO_TEXT_MODEL = "onnx-community/whisper-tiny.en";
 const DEFAULT_AI_LOCAL_TEXT_TO_SPEECH_MODEL = "Xenova/speecht5_tts";
+const DEFAULT_AI_LOCAL_IMAGE_GENERATION_MODEL = "";
+const DEFAULT_AI_IMAGE_GENERATION_SQUARE_SIZE_PX = 1024;
+const DEFAULT_AI_IMAGE_GENERATION_LANDSCAPE_WIDTH_PX = 1344;
+const DEFAULT_AI_IMAGE_GENERATION_LANDSCAPE_HEIGHT_PX = 768;
+const DEFAULT_AI_IMAGE_GENERATION_PORTRAIT_WIDTH_PX = 768;
+const DEFAULT_AI_IMAGE_GENERATION_PORTRAIT_HEIGHT_PX = 1344;
+const DEFAULT_AI_IMAGE_GENERATION_STEPS = 25;
+const DEFAULT_AI_IMAGE_GENERATION_GUIDANCE_SCALE = 7.5;
 const DEFAULT_AI_RAG_CHUNK_SIZE = 800;
 const DEFAULT_AI_RAG_CHUNK_OVERLAP = 120;
 const DEFAULT_AI_RAG_SEARCH_LIMIT = 5;
@@ -335,6 +417,168 @@ const DEFAULT_LOCALE: LocaleCode = "en-US";
 const DEFAULT_SUPPORTED_BUN_RANGE = "1.3.x";
 const DEFAULT_INSTALL_BUN_VERSION = "1.3.10";
 const DEFAULT_BUILDER_UPLOADS_DIRECTORY = "uploads/builder";
+
+interface ApiCompatibleVendorPreset {
+  readonly providerLabel: string;
+  readonly baseUrl: string;
+  readonly chatModel: string;
+  readonly embeddingModel?: string;
+  readonly visionModel?: string;
+  readonly transcriptionModel?: string;
+  readonly speechModel?: string;
+  readonly moderationModel?: string;
+  readonly speechVoice?: string;
+  readonly endpoints: AiApiCompatibleEndpoints;
+  readonly auth: AiApiCompatibleAuthConfig;
+}
+
+const OPENAI_STYLE_ENDPOINTS: AiApiCompatibleEndpoints = {
+  modelsPath: "/models",
+  chatCompletionsPath: "/chat/completions",
+  embeddingsPath: "/embeddings",
+  transcriptionsPath: "/audio/transcriptions",
+  speechPath: "/audio/speech",
+  moderationsPath: "/moderations",
+};
+
+const CHAT_ONLY_ENDPOINTS: AiApiCompatibleEndpoints = {
+  modelsPath: null,
+  chatCompletionsPath: "/chat/completions",
+  embeddingsPath: null,
+  transcriptionsPath: null,
+  speechPath: null,
+  moderationsPath: null,
+};
+
+const GITHUB_MODELS_ENDPOINTS: AiApiCompatibleEndpoints = {
+  modelsPath: "/catalog/models",
+  chatCompletionsPath: "/inference/chat/completions",
+  embeddingsPath: "/inference/embeddings",
+  transcriptionsPath: null,
+  speechPath: null,
+  moderationsPath: null,
+};
+
+const DEFAULT_BEARER_AUTH: AiApiCompatibleAuthConfig = {
+  apiKeyHeaderName: "authorization",
+  apiKeyPrefix: "Bearer ",
+  extraHeaders: {},
+};
+
+const GITHUB_MODELS_AUTH: AiApiCompatibleAuthConfig = {
+  apiKeyHeaderName: "authorization",
+  apiKeyPrefix: "Bearer ",
+  extraHeaders: {
+    accept: "application/vnd.github+json",
+    "x-github-api-version": "2022-11-28",
+  },
+};
+
+const LOCAL_API_COMPATIBLE_VENDOR_PRESETS: Readonly<
+  Record<AiApiCompatibleVendor, ApiCompatibleVendorPreset>
+> = {
+  ramalama: {
+    providerLabel: "ramalama",
+    baseUrl: "http://127.0.0.1:8080/v1",
+    chatModel: DEFAULT_OLLAMA_CHAT_MODEL,
+    endpoints: OPENAI_STYLE_ENDPOINTS,
+    auth: DEFAULT_BEARER_AUTH,
+  },
+  custom: {
+    providerLabel: "openai-compatible-local",
+    baseUrl: "http://127.0.0.1:8080/v1",
+    chatModel: DEFAULT_OLLAMA_CHAT_MODEL,
+    endpoints: OPENAI_STYLE_ENDPOINTS,
+    auth: DEFAULT_BEARER_AUTH,
+  },
+  openai: {
+    providerLabel: "openai",
+    baseUrl: "https://api.openai.com/v1",
+    chatModel: "gpt-4.1-mini",
+    embeddingModel: "text-embedding-3-small",
+    visionModel: "gpt-4.1-mini",
+    transcriptionModel: "gpt-4o-mini-transcribe",
+    speechModel: "gpt-4o-mini-tts",
+    moderationModel: "omni-moderation-latest",
+    speechVoice: "alloy",
+    endpoints: OPENAI_STYLE_ENDPOINTS,
+    auth: DEFAULT_BEARER_AUTH,
+  },
+  claude: {
+    providerLabel: "claude",
+    baseUrl: "https://api.anthropic.com/v1",
+    chatModel: "claude-sonnet-4-20250514",
+    visionModel: "claude-sonnet-4-20250514",
+    endpoints: CHAT_ONLY_ENDPOINTS,
+    auth: DEFAULT_BEARER_AUTH,
+  },
+  deepseek: {
+    providerLabel: "deepseek",
+    baseUrl: "https://api.deepseek.com",
+    chatModel: "deepseek-chat",
+    endpoints: {
+      ...CHAT_ONLY_ENDPOINTS,
+      modelsPath: "/models",
+    },
+    auth: DEFAULT_BEARER_AUTH,
+  },
+  gemini: {
+    providerLabel: "gemini",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+    chatModel: "gemini-2.5-flash",
+    visionModel: "gemini-2.5-flash",
+    endpoints: {
+      ...CHAT_ONLY_ENDPOINTS,
+      modelsPath: "/models",
+    },
+    auth: DEFAULT_BEARER_AUTH,
+  },
+  copilot: {
+    providerLabel: "copilot",
+    baseUrl: "https://models.github.ai",
+    chatModel: "openai/gpt-4.1-mini",
+    embeddingModel: "openai/text-embedding-3-small",
+    endpoints: GITHUB_MODELS_ENDPOINTS,
+    auth: GITHUB_MODELS_AUTH,
+  },
+};
+
+const CLOUD_API_COMPATIBLE_VENDOR_PRESETS: Readonly<
+  Record<AiApiCompatibleVendor, ApiCompatibleVendorPreset>
+> = {
+  custom: {
+    providerLabel: "openai-compatible-cloud",
+    baseUrl: "https://api.openai.com/v1",
+    chatModel: "gpt-4.1-mini",
+    embeddingModel: "text-embedding-3-small",
+    visionModel: "gpt-4.1-mini",
+    transcriptionModel: "gpt-4o-mini-transcribe",
+    speechModel: "gpt-4o-mini-tts",
+    moderationModel: "omni-moderation-latest",
+    speechVoice: "alloy",
+    endpoints: OPENAI_STYLE_ENDPOINTS,
+    auth: DEFAULT_BEARER_AUTH,
+  },
+  ramalama: LOCAL_API_COMPATIBLE_VENDOR_PRESETS.ramalama,
+  openai: LOCAL_API_COMPATIBLE_VENDOR_PRESETS.openai,
+  claude: LOCAL_API_COMPATIBLE_VENDOR_PRESETS.claude,
+  deepseek: LOCAL_API_COMPATIBLE_VENDOR_PRESETS.deepseek,
+  gemini: LOCAL_API_COMPATIBLE_VENDOR_PRESETS.gemini,
+  copilot: LOCAL_API_COMPATIBLE_VENDOR_PRESETS.copilot,
+};
+
+const LOCAL_API_COMPATIBLE_SUPPORTED_VENDORS = [
+  "ramalama",
+  "custom",
+] as const satisfies readonly AiApiCompatibleVendor[];
+const CLOUD_API_COMPATIBLE_SUPPORTED_VENDORS = [
+  "openai",
+  "claude",
+  "deepseek",
+  "gemini",
+  "copilot",
+  "custom",
+] as const satisfies readonly AiApiCompatibleVendor[];
 const resolvedPublicPrefix = Bun.env.PUBLIC_ASSET_PREFIX ?? DEFAULT_PUBLIC_PREFIX;
 const resolvedAssetsPrefix = Bun.env.IMAGES_ASSET_PREFIX ?? DEFAULT_ASSETS_PREFIX;
 const resolvedRmmzPackPrefix = Bun.env.RMMZ_PACK_PREFIX ?? DEFAULT_RMMZ_PACK_PREFIX;
@@ -433,6 +677,37 @@ export const parseInteger = (
   return parsed;
 };
 
+/**
+ * Parses a floating-point environment value and applies bounds.
+ *
+ * @param value Raw environment value.
+ * @param fallback Fallback numeric value.
+ * @param min Minimum allowed value.
+ * @param variableName Environment variable name for error reporting.
+ * @returns Parsed bounded float.
+ */
+export const parseFloatValue = (
+  value: string | undefined,
+  fallback: number,
+  min: number,
+  variableName = "unknown",
+): number => {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  const parsed = Number.parseFloat(value);
+  if (Number.isNaN(parsed)) {
+    throw formatEnvError(variableName, `expected a number but received "${value}"`);
+  }
+
+  if (parsed < min) {
+    throw formatEnvError(variableName, `expected a value >= ${min} but received ${parsed}`);
+  }
+
+  return parsed;
+};
+
 const parseRequiredString = (value: string | undefined, variableName: string): string => {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw formatEnvError(variableName, "value is required");
@@ -455,6 +730,47 @@ const parseCsvValues = (value: string | undefined, fallback: string): readonly s
     .split(",")
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0);
+
+const apiCompatibleVendorAliases: Readonly<Record<string, AiApiCompatibleVendor>> = {
+  anthropic: "claude",
+  claude: "claude",
+  copilot: "copilot",
+  custom: "custom",
+  deepseek: "deepseek",
+  gemini: "gemini",
+  github: "copilot",
+  "github-models": "copilot",
+  github_models: "copilot",
+  openai: "openai",
+  ramalama: "ramalama",
+};
+
+const parseApiCompatibleVendor = (
+  value: string | undefined,
+  fallback: AiApiCompatibleVendor,
+  variableName: string,
+  supportedVendors: readonly AiApiCompatibleVendor[],
+): AiApiCompatibleVendor => {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  const normalizedValue = value.trim().toLowerCase().replace(/\s+/gu, "-");
+  const vendor = apiCompatibleVendorAliases[normalizedValue];
+  if (!vendor || !supportedVendors.includes(vendor)) {
+    throw formatEnvError(
+      variableName,
+      `expected one of ${supportedVendors.join(", ")} but received "${value}"`,
+    );
+  }
+
+  return vendor;
+};
+
+const resolveApiCompatiblePreset = (
+  presets: Readonly<Record<AiApiCompatibleVendor, ApiCompatibleVendorPreset>>,
+  vendor: AiApiCompatibleVendor,
+): ApiCompatibleVendorPreset => presets[vendor] ?? presets.custom;
 
 const parseAbsoluteUrl = (value: string | undefined, variableName: string): string => {
   const raw = parseRequiredString(value, variableName);
@@ -516,6 +832,26 @@ const resolvedBuilderLocalAutomationOrigin = parseAbsoluteUrl(
   Bun.env.BUILDER_LOCAL_AUTOMATION_ORIGIN ?? resolvedAppOrigin,
   Bun.env.BUILDER_LOCAL_AUTOMATION_ORIGIN ? "BUILDER_LOCAL_AUTOMATION_ORIGIN" : "APP_ORIGIN",
 );
+const resolvedLocalApiCompatibleVendor = parseApiCompatibleVendor(
+  Bun.env.AI_LOCAL_API_COMPATIBLE_VENDOR,
+  DEFAULT_AI_LOCAL_API_COMPATIBLE_VENDOR,
+  "AI_LOCAL_API_COMPATIBLE_VENDOR",
+  LOCAL_API_COMPATIBLE_SUPPORTED_VENDORS,
+);
+const resolvedCloudApiCompatibleVendor = parseApiCompatibleVendor(
+  Bun.env.AI_CLOUD_API_COMPATIBLE_VENDOR,
+  DEFAULT_AI_CLOUD_API_COMPATIBLE_VENDOR,
+  "AI_CLOUD_API_COMPATIBLE_VENDOR",
+  CLOUD_API_COMPATIBLE_SUPPORTED_VENDORS,
+);
+const resolvedLocalApiCompatiblePreset = resolveApiCompatiblePreset(
+  LOCAL_API_COMPATIBLE_VENDOR_PRESETS,
+  resolvedLocalApiCompatibleVendor,
+);
+const resolvedCloudApiCompatiblePreset = resolveApiCompatiblePreset(
+  CLOUD_API_COMPATIBLE_VENDOR_PRESETS,
+  resolvedCloudApiCompatibleVendor,
+);
 
 type GameSessionStoreMode = "prisma" | "memory";
 type PreferredAiProvider =
@@ -523,7 +859,9 @@ type PreferredAiProvider =
   | "ollama"
   | "transformers"
   | "openai-compatible-local"
-  | "openai-compatible-cloud";
+  | "openai-compatible-cloud"
+  | "huggingface-inference"
+  | "huggingface-endpoints";
 type NodeEnvironment = "development" | "test" | "production";
 
 /**
@@ -602,14 +940,16 @@ const parsePreferredAiProvider = (value: string | undefined): PreferredAiProvide
     value === "transformers" ||
     value === "auto" ||
     value === "openai-compatible-local" ||
-    value === "openai-compatible-cloud"
+    value === "openai-compatible-cloud" ||
+    value === "huggingface-inference" ||
+    value === "huggingface-endpoints"
   ) {
     return value;
   }
 
   throw formatEnvError(
     "AI_PREFERRED_PROVIDER",
-    `expected "auto", "ollama", "transformers", "openai-compatible-local", or "openai-compatible-cloud" but received "${value}"`,
+    `expected "auto", "ollama", "transformers", "openai-compatible-local", "openai-compatible-cloud", "huggingface-inference", or "huggingface-endpoints" but received "${value}"`,
   );
 };
 
@@ -1085,6 +1425,55 @@ export const appConfig: AppConfig = {
       Bun.env.AI_LOCAL_SPEECH_TO_TEXT_MODEL ?? DEFAULT_AI_LOCAL_SPEECH_TO_TEXT_MODEL,
     localTextToSpeechModel:
       Bun.env.AI_LOCAL_TEXT_TO_SPEECH_MODEL ?? DEFAULT_AI_LOCAL_TEXT_TO_SPEECH_MODEL,
+    localImageGenerationModel:
+      Bun.env.AI_LOCAL_IMAGE_GENERATION_MODEL ?? DEFAULT_AI_LOCAL_IMAGE_GENERATION_MODEL,
+    localImageGenerationEnabled: parseBoolean(
+      Bun.env.AI_LOCAL_IMAGE_GENERATION_ENABLED,
+      false,
+      "AI_LOCAL_IMAGE_GENERATION_ENABLED",
+    ),
+    imageGenerationSquareSizePx: parseInteger(
+      Bun.env.AI_IMAGE_GENERATION_SQUARE_SIZE_PX,
+      DEFAULT_AI_IMAGE_GENERATION_SQUARE_SIZE_PX,
+      64,
+      "AI_IMAGE_GENERATION_SQUARE_SIZE_PX",
+    ),
+    imageGenerationLandscapeWidthPx: parseInteger(
+      Bun.env.AI_IMAGE_GENERATION_LANDSCAPE_WIDTH_PX,
+      DEFAULT_AI_IMAGE_GENERATION_LANDSCAPE_WIDTH_PX,
+      64,
+      "AI_IMAGE_GENERATION_LANDSCAPE_WIDTH_PX",
+    ),
+    imageGenerationLandscapeHeightPx: parseInteger(
+      Bun.env.AI_IMAGE_GENERATION_LANDSCAPE_HEIGHT_PX,
+      DEFAULT_AI_IMAGE_GENERATION_LANDSCAPE_HEIGHT_PX,
+      64,
+      "AI_IMAGE_GENERATION_LANDSCAPE_HEIGHT_PX",
+    ),
+    imageGenerationPortraitWidthPx: parseInteger(
+      Bun.env.AI_IMAGE_GENERATION_PORTRAIT_WIDTH_PX,
+      DEFAULT_AI_IMAGE_GENERATION_PORTRAIT_WIDTH_PX,
+      64,
+      "AI_IMAGE_GENERATION_PORTRAIT_WIDTH_PX",
+    ),
+    imageGenerationPortraitHeightPx: parseInteger(
+      Bun.env.AI_IMAGE_GENERATION_PORTRAIT_HEIGHT_PX,
+      DEFAULT_AI_IMAGE_GENERATION_PORTRAIT_HEIGHT_PX,
+      64,
+      "AI_IMAGE_GENERATION_PORTRAIT_HEIGHT_PX",
+    ),
+    imageGenerationSteps: parseInteger(
+      Bun.env.AI_IMAGE_GENERATION_STEPS,
+      DEFAULT_AI_IMAGE_GENERATION_STEPS,
+      1,
+      "AI_IMAGE_GENERATION_STEPS",
+    ),
+    imageGenerationGuidanceScale: parseFloatValue(
+      Bun.env.AI_IMAGE_GENERATION_GUIDANCE_SCALE,
+      DEFAULT_AI_IMAGE_GENERATION_GUIDANCE_SCALE,
+      0,
+      "AI_IMAGE_GENERATION_GUIDANCE_SCALE",
+    ),
     localSpeechToTextEnabled: parseBoolean(
       Bun.env.AI_LOCAL_STT_ENABLED,
       true,
@@ -1107,12 +1496,14 @@ export const appConfig: AppConfig = {
           false,
           "AI_LOCAL_API_COMPATIBLE_ENABLED",
         ),
+        vendor: resolvedLocalApiCompatibleVendor,
+        supportedVendors: [...LOCAL_API_COMPATIBLE_SUPPORTED_VENDORS],
         providerLabel:
           parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_PROVIDER_LABEL) ??
-          DEFAULT_AI_LOCAL_API_COMPATIBLE_PROVIDER_LABEL,
+          resolvedLocalApiCompatiblePreset.providerLabel,
         baseUrl: parseConfiguredAbsoluteUrl(
           Bun.env.AI_LOCAL_API_COMPATIBLE_BASE_URL,
-          DEFAULT_AI_LOCAL_API_COMPATIBLE_BASE_URL,
+          resolvedLocalApiCompatiblePreset.baseUrl,
           "AI_LOCAL_API_COMPATIBLE_BASE_URL",
         ),
         apiKey: parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_API_KEY) ?? "",
@@ -1124,15 +1515,27 @@ export const appConfig: AppConfig = {
         ),
         chatModel:
           parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_CHAT_MODEL) ??
-          DEFAULT_OLLAMA_CHAT_MODEL,
-        embeddingModel: parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_EMBEDDING_MODEL),
-        visionModel: parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_VISION_MODEL),
-        transcriptionModel: parseOptionalString(
-          Bun.env.AI_LOCAL_API_COMPATIBLE_TRANSCRIPTION_MODEL,
-        ),
-        speechModel: parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_SPEECH_MODEL),
-        moderationModel: parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_MODERATION_MODEL),
-        speechVoice: parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_SPEECH_VOICE),
+          resolvedLocalApiCompatiblePreset.chatModel,
+        embeddingModel:
+          parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_EMBEDDING_MODEL) ??
+          resolvedLocalApiCompatiblePreset.embeddingModel,
+        visionModel:
+          parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_VISION_MODEL) ??
+          resolvedLocalApiCompatiblePreset.visionModel,
+        transcriptionModel:
+          parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_TRANSCRIPTION_MODEL) ??
+          resolvedLocalApiCompatiblePreset.transcriptionModel,
+        speechModel:
+          parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_SPEECH_MODEL) ??
+          resolvedLocalApiCompatiblePreset.speechModel,
+        moderationModel:
+          parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_MODERATION_MODEL) ??
+          resolvedLocalApiCompatiblePreset.moderationModel,
+        speechVoice:
+          parseOptionalString(Bun.env.AI_LOCAL_API_COMPATIBLE_SPEECH_VOICE) ??
+          resolvedLocalApiCompatiblePreset.speechVoice,
+        endpoints: resolvedLocalApiCompatiblePreset.endpoints,
+        auth: resolvedLocalApiCompatiblePreset.auth,
       },
       cloud: {
         enabled: parseBoolean(
@@ -1140,12 +1543,14 @@ export const appConfig: AppConfig = {
           false,
           "AI_CLOUD_API_COMPATIBLE_ENABLED",
         ),
+        vendor: resolvedCloudApiCompatibleVendor,
+        supportedVendors: [...CLOUD_API_COMPATIBLE_SUPPORTED_VENDORS],
         providerLabel:
           parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_PROVIDER_LABEL) ??
-          DEFAULT_AI_CLOUD_API_COMPATIBLE_PROVIDER_LABEL,
+          resolvedCloudApiCompatiblePreset.providerLabel,
         baseUrl: parseConfiguredAbsoluteUrl(
           Bun.env.AI_CLOUD_API_COMPATIBLE_BASE_URL,
-          DEFAULT_AI_CLOUD_API_COMPATIBLE_BASE_URL,
+          resolvedCloudApiCompatiblePreset.baseUrl,
           "AI_CLOUD_API_COMPATIBLE_BASE_URL",
         ),
         apiKey: parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_API_KEY) ?? "",
@@ -1156,21 +1561,28 @@ export const appConfig: AppConfig = {
           "AI_CLOUD_API_COMPATIBLE_AVAILABILITY_TIMEOUT_MS",
         ),
         chatModel:
-          parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_CHAT_MODEL) ?? "gpt-4.1-mini",
+          parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_CHAT_MODEL) ??
+          resolvedCloudApiCompatiblePreset.chatModel,
         embeddingModel:
           parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_EMBEDDING_MODEL) ??
-          "text-embedding-3-small",
+          resolvedCloudApiCompatiblePreset.embeddingModel,
         visionModel:
-          parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_VISION_MODEL) ?? "gpt-4.1-mini",
+          parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_VISION_MODEL) ??
+          resolvedCloudApiCompatiblePreset.visionModel,
         transcriptionModel:
           parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_TRANSCRIPTION_MODEL) ??
-          "gpt-4o-mini-transcribe",
+          resolvedCloudApiCompatiblePreset.transcriptionModel,
         speechModel:
-          parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_SPEECH_MODEL) ?? "gpt-4o-mini-tts",
+          parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_SPEECH_MODEL) ??
+          resolvedCloudApiCompatiblePreset.speechModel,
         moderationModel:
           parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_MODERATION_MODEL) ??
-          "omni-moderation-latest",
-        speechVoice: parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_SPEECH_VOICE) ?? "alloy",
+          resolvedCloudApiCompatiblePreset.moderationModel,
+        speechVoice:
+          parseOptionalString(Bun.env.AI_CLOUD_API_COMPATIBLE_SPEECH_VOICE) ??
+          resolvedCloudApiCompatiblePreset.speechVoice,
+        endpoints: resolvedCloudApiCompatiblePreset.endpoints,
+        auth: resolvedCloudApiCompatiblePreset.auth,
       },
     },
     routing: {
@@ -1244,6 +1656,52 @@ export const appConfig: AppConfig = {
       1,
       "AI_CIRCUIT_BREAKER_COOLDOWN_MULTIPLIER",
     ),
+    huggingfaceInference: {
+      enabled: parseBoolean(Bun.env.AI_HF_INFERENCE_ENABLED, false, "AI_HF_INFERENCE_ENABLED"),
+      apiKey:
+        parseOptionalString(Bun.env.AI_HF_INFERENCE_API_KEY) ??
+        parseOptionalString(Bun.env.HF_TOKEN) ??
+        parseOptionalString(Bun.env.HUGGINGFACE_HUB_TOKEN) ??
+        "",
+      baseUrl: parseConfiguredAbsoluteUrl(
+        Bun.env.AI_HF_INFERENCE_BASE_URL,
+        "https://api-inference.huggingface.co",
+        "AI_HF_INFERENCE_BASE_URL",
+      ),
+      chatModel:
+        parseOptionalString(Bun.env.AI_HF_INFERENCE_CHAT_MODEL) ?? "HuggingFaceH4/zephyr-7b-beta",
+      imageModel:
+        parseOptionalString(Bun.env.AI_HF_INFERENCE_IMAGE_MODEL) ??
+        "stabilityai/stable-diffusion-xl-base-1.0",
+      availabilityTimeoutMs: parseInteger(
+        Bun.env.AI_HF_INFERENCE_AVAILABILITY_TIMEOUT_MS,
+        5_000,
+        500,
+        "AI_HF_INFERENCE_AVAILABILITY_TIMEOUT_MS",
+      ),
+    },
+    huggingfaceEndpoints: {
+      enabled: parseBoolean(Bun.env.AI_HF_ENDPOINTS_ENABLED, false, "AI_HF_ENDPOINTS_ENABLED"),
+      chatUrl: parseOptionalAbsoluteUrl(
+        Bun.env.AI_HF_ENDPOINTS_CHAT_URL,
+        "AI_HF_ENDPOINTS_CHAT_URL",
+      ),
+      imageUrl: parseOptionalAbsoluteUrl(
+        Bun.env.AI_HF_ENDPOINTS_IMAGE_URL,
+        "AI_HF_ENDPOINTS_IMAGE_URL",
+      ),
+      apiKey:
+        parseOptionalString(Bun.env.AI_HF_ENDPOINTS_API_KEY) ??
+        parseOptionalString(Bun.env.HF_TOKEN) ??
+        parseOptionalString(Bun.env.HUGGINGFACE_HUB_TOKEN) ??
+        "",
+      availabilityTimeoutMs: parseInteger(
+        Bun.env.AI_HF_ENDPOINTS_AVAILABILITY_TIMEOUT_MS,
+        5_000,
+        500,
+        "AI_HF_ENDPOINTS_AVAILABILITY_TIMEOUT_MS",
+      ),
+    },
   },
   controls: {
     allowUnsafeAutomationActions: parseBoolean(

@@ -1,12 +1,4 @@
-import {
-  type AutomaticSpeechRecognitionPipelineCallback,
-  env,
-  type FeatureExtractionPipelineCallback,
-  pipeline,
-  type TextClassificationPipelineCallback,
-  type TextGenerationPipelineCallback,
-  type TextToAudioPipelineCallback,
-} from "@huggingface/transformers";
+import { env, pipeline, type PipelineType } from "@huggingface/transformers";
 import { $ } from "bun";
 import { appConfig } from "../../config/environment.ts";
 import { settleAsync } from "../../shared/utils/async-result.ts";
@@ -24,12 +16,7 @@ import { MODEL_REGISTRY, type ModelKey } from "./model-registry.ts";
 /**
  * Runtime pipeline instance shape used by the local-model manager.
  */
-export type AnyPipeline =
-  | TextGenerationPipelineCallback
-  | TextClassificationPipelineCallback
-  | FeatureExtractionPipelineCallback
-  | AutomaticSpeechRecognitionPipelineCallback
-  | TextToAudioPipelineCallback;
+export type AnyPipeline = (...args: never[]) => Promise<unknown>;
 
 const corruptedCacheErrorFragments: readonly string[] = [
   "protobuf",
@@ -76,7 +63,7 @@ const loadPipelineOnce = async (key: ModelKey): Promise<AnyPipeline> => {
     throw new Error(`Model target "${key}" is disabled.`);
   }
 
-  const loadedPipeline = await pipeline(entry.task, entry.model, {
+  const loadedPipeline = await pipeline(entry.task as PipelineType, entry.model, {
     dtype: entry.dtype,
     device: entry.device,
   });

@@ -1,9 +1,25 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import {
   executeAutomationRun,
   executeGenerationJob,
 } from "../src/domain/builder/creator-worker.ts";
+import { ProviderRegistry } from "../src/domain/ai/providers/provider-registry.ts";
 import type { AutomationRun, GenerationJob } from "../src/shared/contracts/game.ts";
+
+const withMockedRegistry = async <T>(
+  registry: Partial<ProviderRegistry>,
+  run: () => Promise<T>,
+): Promise<T> => {
+  const spy = spyOn(ProviderRegistry, "getInstance").mockImplementation(
+    async () => registry as ProviderRegistry,
+  );
+
+  try {
+    return await run();
+  } finally {
+    spy.mockRestore();
+  }
+};
 
 describe("creator worker execution", () => {
   test("generation jobs persist reviewable builder artifacts", async () => {
@@ -19,7 +35,18 @@ describe("creator worker execution", () => {
       updatedAtMs: now,
     };
 
-    const result = await executeGenerationJob(`worker-${crypto.randomUUID()}`, job);
+    const result = await withMockedRegistry(
+      {
+        generateImage: async () => ({
+          ok: true,
+          image: new Uint8Array([137, 80, 78, 71]),
+          mimeType: "image/png",
+          model: "hf-mock",
+          durationMs: 24,
+        }),
+      },
+      () => executeGenerationJob(`worker-${crypto.randomUUID()}`, job),
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) {
@@ -29,7 +56,148 @@ describe("creator worker execution", () => {
     expect(result.data.artifacts).toHaveLength(1);
     expect(result.data.artifacts[0]?.previewSource.includes("/public/uploads/builder/")).toBe(true);
     expect(result.data.artifacts[0]?.mimeType).toBe("image/png");
+    expect(result.data.artifacts[0]?.metadata?.source).toBe("ai");
+    expect(result.data.artifacts[0]?.metadata?.reason).toBeUndefined();
     expect(result.data.statusMessage).toBe("job.draft-ready-for-review");
+  });
+
+  test("voice-line jobs persist AI-generated audio when synthesis succeeds", async () => {
+    const now = Date.now();
+    const job: GenerationJob = {
+      id: `voice-line-${crypto.randomUUID()}`,
+      kind: "voice-line",
+      status: "queued",
+      prompt: "Speak a warning about the forest",
+      artifactIds: [],
+      statusMessage: "queued",
+      createdAtMs: now,
+      updatedAtMs: now,
+    };
+
+    const result = await withMockedRegistry(
+      {
+        synthesizeSpeech: async () => ({
+          ok: true,
+          audio: new Float32Array([0, 0.25, -0.25, 0]),
+          sampleRate: 16_000,
+          model: "local-tts",
+          durationMs: 6,
+        }),
+      },
+      () => executeGenerationJob(`worker-${crypto.randomUUID()}`, job),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+
+    const artifact = result.data.artifacts[0];
+    expect(artifact).toBeDefined();
+    if (!artifact) {
+      return;
+    }
+    expect(artifact.kind).toBe("audio");
+    expect(artifact.mimeType).toBe("audio/wav");
+    expect(artifact.metadata?.source).toBe("ai");
+  });
+
+  test("image jobs fail cleanly when image generation fails", async () => {
+    const now = Date.now();
+    const job: GenerationJob = {
+      id: `portrait-fallback-${crypto.randomUUID()}`,
+      kind: "portrait",
+      status: "queued",
+      prompt: "A warrior portrait",
+      artifactIds: [],
+      statusMessage: "queued",
+      createdAtMs: now,
+      updatedAtMs: now,
+    };
+
+    const result = await withMockedRegistry(
+      {
+        generateImage: async () => ({
+          ok: false,
+          error: "image generation unavailable",
+          retryable: false,
+        }),
+      },
+      () => executeGenerationJob(`worker-${crypto.randomUUID()}`, job),
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.error).toContain("portrait generation failed");
+    expect(result.error).toContain("image generation unavailable");
+  });
+
+  test("animation-plan jobs fail cleanly when no text provider is available", async () => {
+    const now = Date.now();
+    const job: GenerationJob = {
+      id: `animation-fallback-${crypto.randomUUID()}`,
+      kind: "animation-plan",
+      status: "queued",
+      prompt: "Generate idle and walk loops",
+      targetId: "asset.hero",
+      artifactIds: [],
+      statusMessage: "queued",
+      createdAtMs: now,
+      updatedAtMs: now,
+    };
+
+    const result = await withMockedRegistry(
+      {
+        chat: async () => ({
+          ok: false,
+          error: "No provider available for chat generation",
+          retryable: true,
+        }),
+      },
+      () => executeGenerationJob(`worker-${crypto.randomUUID()}`, job),
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.error).toContain("animation-plan generation failed");
+    expect(result.error).toContain("No provider available for chat generation");
+  });
+
+  test("combat-encounter jobs fail cleanly when generation fails", async () => {
+    const now = Date.now();
+    const job: GenerationJob = {
+      id: `combat-fallback-${crypto.randomUUID()}`,
+      kind: "combat-encounter",
+      status: "queued",
+      prompt: "Generate a patrol ambush near village ruins",
+      targetId: "combat.test",
+      artifactIds: [],
+      statusMessage: "queued",
+      createdAtMs: now,
+      updatedAtMs: now,
+    };
+
+    const result = await withMockedRegistry(
+      {
+        chat: async () => ({
+          ok: false,
+          error: "No provider available for chat generation",
+          retryable: true,
+        }),
+      },
+      () => executeGenerationJob(`worker-${crypto.randomUUID()}`, job),
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.error).toContain("combat-encounter generation failed");
+    expect(result.error).toContain("No provider available for chat generation");
   });
 
   test("automation runs produce auditable completed steps and execution artifacts", async () => {

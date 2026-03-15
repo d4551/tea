@@ -881,6 +881,8 @@ model BuilderProjectArtifact {
   previewSource String
   summary       String
   mimeType      String?
+  generationSource String?
+  generationReason String?
   approved      Boolean        @default(false)
   createdAt     DateTime       @default(now())
 

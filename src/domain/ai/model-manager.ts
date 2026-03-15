@@ -19,6 +19,7 @@ import {
   type LocalEmbeddingOperationResult,
   type LocalModelFailure,
   type LocalModelResult,
+  type LocalImageGenerationOperationResult,
   type LocalSentimentOperationResult,
   type LocalSpeechSynthesisOperationResult,
   type LocalTextGenerationOperationResult,
@@ -48,6 +49,13 @@ interface TtsOutput {
   readonly sampling_rate: number;
 }
 
+type ImageGenerationRawOutput = {
+  readonly images?: readonly unknown[] | unknown;
+  readonly image?: unknown;
+  readonly data?: unknown;
+  readonly image_data?: unknown;
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
@@ -58,8 +66,184 @@ const isFloat32Array = (value: unknown): value is Float32Array => value instance
 
 const isFloat64Array = (value: unknown): value is Float64Array => value instanceof Float64Array;
 
+const isArrayBuffer = (value: unknown): value is ArrayBuffer => value instanceof ArrayBuffer;
+
+const isByteArray = (value: unknown): value is Uint8Array | Uint8ClampedArray =>
+  value instanceof Uint8Array || value instanceof Uint8ClampedArray;
+
 const isNumericArray = (value: readonly unknown[]): value is readonly number[] =>
   value.every((entry) => typeof entry === "number");
+
+const isHttpUrl = (value: string): boolean =>
+  value.startsWith("http://") || value.startsWith("https://");
+
+const isLikelyBase64 = (value: string): boolean =>
+  /^[A-Za-z0-9+/=]+$/.test(value) && value.length % 4 === 0;
+
+const decodeBase64ToBytes = (encoded: string): Uint8Array | null => {
+  const normalized = encoded.replace(/[\r\n\s]/g, "");
+  try {
+    if (typeof atob !== "undefined") {
+      const binary = atob(normalized);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes;
+    }
+  } catch {
+    return null;
+  }
+
+  try {
+    if (typeof Buffer !== "undefined") {
+      return new Uint8Array(Buffer.from(normalized, "base64"));
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+};
+
+const decodeImageDataUrl = (value: string): { bytes: Uint8Array; mimeType: string } | null => {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("data:")) {
+    return null;
+  }
+
+  const commaIndex = trimmed.indexOf(",");
+  if (commaIndex === -1) {
+    return null;
+  }
+
+  const header = trimmed.slice(5, commaIndex);
+  const payload = trimmed.slice(commaIndex + 1);
+  if (!header.includes(";base64")) {
+    return null;
+  }
+
+  const mimeType = header.split(";")[0] || "image/png";
+  const bytes = decodeBase64ToBytes(payload);
+  if (!bytes) {
+    return null;
+  }
+
+  return { bytes, mimeType };
+};
+
+const fetchImageBytes = async (url: string): Promise<Uint8Array | null> => {
+  if (!isHttpUrl(url)) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      return null;
+    }
+
+    const buffer = await response.arrayBuffer();
+    return new Uint8Array(buffer);
+  } catch {
+    return null;
+  }
+};
+
+const normalizeImageOutput = async (
+  output: unknown,
+): Promise<{ bytes: Uint8Array; mimeType: string } | null> => {
+  if (isByteArray(output)) {
+    return { bytes: new Uint8Array(output), mimeType: "image/png" };
+  }
+  if (isArrayBuffer(output)) {
+    return { bytes: new Uint8Array(output), mimeType: "image/png" };
+  }
+  if (isNonEmptyString(output)) {
+    if (output.startsWith("data:")) {
+      const parsed = decodeImageDataUrl(output);
+      return parsed ? { bytes: parsed.bytes, mimeType: parsed.mimeType } : null;
+    }
+    if (isHttpUrl(output)) {
+      const bytes = await fetchImageBytes(output);
+      return bytes ? { bytes, mimeType: "image/png" } : null;
+    }
+    if (isLikelyBase64(output)) {
+      const bytes = decodeBase64ToBytes(output);
+      return bytes ? { bytes, mimeType: "image/png" } : null;
+    }
+    return null;
+  }
+
+  if (isRecord(output)) {
+    const candidate = (output as ImageGenerationRawOutput).image;
+    const parsedImage = candidate !== undefined ? await normalizeImageOutput(candidate) : null;
+    if (parsedImage) {
+      return parsedImage;
+    }
+    if ((output as ImageGenerationRawOutput).image_data !== undefined) {
+      const parsedImageData = await normalizeImageOutput(
+        (output as ImageGenerationRawOutput).image_data,
+      );
+      if (parsedImageData) {
+        return parsedImageData;
+      }
+    }
+
+    const dataValue = (output as ImageGenerationRawOutput).data;
+    if (dataValue !== undefined) {
+      const parsedData = await normalizeImageOutput(dataValue);
+      if (parsedData) {
+        return parsedData;
+      }
+    }
+
+    const imagesValue = (output as ImageGenerationRawOutput).images;
+    if (imagesValue) {
+      const imagesArray = Array.isArray(imagesValue) ? imagesValue : [imagesValue];
+      for (const imageValue of imagesArray) {
+        const parsedImage = await normalizeImageOutput(imageValue);
+        if (parsedImage) {
+          return parsedImage;
+        }
+      }
+    }
+  }
+
+  if (Array.isArray(output)) {
+    for (const imageValue of output) {
+      const parsed = await normalizeImageOutput(imageValue);
+      if (parsed) {
+        return parsed;
+      }
+    }
+  }
+
+  return null;
+};
+
+const resolveImageGenerationDimensions = (
+  aspectRatio: "square" | "landscape" | "portrait" = "square",
+): { readonly width: number; readonly height: number } => {
+  switch (aspectRatio) {
+    case "landscape":
+      return {
+        width: appConfig.ai.imageGenerationLandscapeWidthPx,
+        height: appConfig.ai.imageGenerationLandscapeHeightPx,
+      };
+    case "portrait":
+      return {
+        width: appConfig.ai.imageGenerationPortraitWidthPx,
+        height: appConfig.ai.imageGenerationPortraitHeightPx,
+      };
+    case "square":
+    default:
+      return {
+        width: appConfig.ai.imageGenerationSquareSizePx,
+        height: appConfig.ai.imageGenerationSquareSizePx,
+      };
+  }
+};
 
 const isSentimentResult = (value: unknown): value is SentimentResult =>
   isRecord(value) &&
@@ -195,7 +379,11 @@ export class ModelManager implements LocalModelRuntime {
       operation: "sentiment.classify",
       modelKey: "sentiment",
       timeoutMs: appConfig.ai.pipelineTimeoutMs,
-      execute: () => pipe.value(text, {}),
+      execute: () =>
+        (pipe.value as (input: string, options?: Record<string, unknown>) => Promise<unknown>)(
+          text,
+          {},
+        ),
       validate: isSentimentResultArray,
       invalidMessage: "Sentiment model returned an invalid payload.",
     });
@@ -262,7 +450,11 @@ export class ModelManager implements LocalModelRuntime {
       operation: `${modelKey}.generate`,
       modelKey,
       timeoutMs: appConfig.ai.pipelineTimeoutMs,
-      execute: () => pipe.value(prompt, entry.generationConfig ?? {}),
+      execute: () =>
+        (pipe.value as (input: string, options?: Record<string, unknown>) => Promise<unknown>)(
+          prompt,
+          entry.generationConfig ?? {},
+        ),
       validate: isGenerationOutput,
       invalidMessage: `${modelKey} generation returned an invalid payload.`,
     });
@@ -335,10 +527,13 @@ export class ModelManager implements LocalModelRuntime {
       modelKey: "embeddings",
       timeoutMs: appConfig.ai.pipelineTimeoutMs,
       execute: () =>
-        pipe.value(text, {
-          pooling: "mean",
-          normalize: true,
-        }),
+        (pipe.value as (input: string, options?: Record<string, unknown>) => Promise<unknown>)(
+          text,
+          {
+            pooling: "mean",
+            normalize: true,
+          },
+        ),
       validate: (value): value is TensorLike => isTensorLike(value) && value.data.length > 0,
       invalidMessage: "Embedding model returned an invalid payload.",
     });
@@ -366,6 +561,74 @@ export class ModelManager implements LocalModelRuntime {
   async generateEmbedding(text: string): Promise<Float32Array | null> {
     const result = await this.generateEmbeddingResult(text);
     return result.ok ? result.value.embedding : null;
+  }
+
+  /**
+   * Generates an image from prompt text with a typed local result.
+   *
+   * @param prompt Image generation prompt.
+   * @returns Typed image-generation result.
+   */
+  async generateImageResult(
+    prompt: string,
+    aspectRatio: "square" | "landscape" | "portrait" = "square",
+  ): Promise<LocalImageGenerationOperationResult> {
+    if (
+      !appConfig.ai.localImageGenerationEnabled ||
+      appConfig.ai.localImageGenerationModel.trim().length === 0
+    ) {
+      return this._failOperation("model.image-generation.failed", {
+        code: "unavailable",
+        message: "Local image generation is disabled or not configured.",
+        retryable: false,
+        operation: "image-generation.generate",
+        modelKey: "imageGeneration",
+      });
+    }
+
+    const pipe = await this._getPipelineResult("imageGeneration");
+    if (!pipe.ok) {
+      return localModelFailure(pipe.failure);
+    }
+
+    const dimensions = resolveImageGenerationDimensions(aspectRatio);
+    const result = await runLocalModelOperation<unknown>({
+      operation: "image-generation.generate",
+      modelKey: "imageGeneration",
+      timeoutMs: appConfig.ai.pipelineTimeoutMs * 8,
+      execute: () =>
+        (pipe.value as (input: string, options?: Record<string, unknown>) => Promise<unknown>)(
+          prompt,
+          {
+            num_inference_steps: appConfig.ai.imageGenerationSteps,
+            guidance_scale: appConfig.ai.imageGenerationGuidanceScale,
+            width: dimensions.width,
+            height: dimensions.height,
+          },
+        ),
+      validate: (_value): _value is unknown => true,
+      invalidMessage: "Image generation model returned an invalid payload.",
+    });
+    if (!result.ok) {
+      return this._failOperation("model.image-generation.failed", result.failure);
+    }
+
+    const normalized = await normalizeImageOutput(result.value);
+    if (!normalized) {
+      return this._failOperation("model.image-generation.failed", {
+        code: "invalid-output",
+        message: "Image generation model output could not be parsed.",
+        retryable: false,
+        operation: "image-generation.generate",
+        modelKey: "imageGeneration",
+      });
+    }
+
+    this._health.markSuccess();
+    return localModelSuccess({
+      image: normalized.bytes,
+      mimeType: normalized.mimeType,
+    });
   }
 
   /**
@@ -435,9 +698,12 @@ export class ModelManager implements LocalModelRuntime {
       modelKey: "textToSpeech",
       timeoutMs: appConfig.ai.pipelineTimeoutMs * 4,
       execute: () =>
-        pipe.value(text, {
-          speaker_embeddings: appConfig.ai.textToSpeechSpeakerEmbeddings,
-        }),
+        (pipe.value as (input: string, options?: Record<string, unknown>) => Promise<unknown>)(
+          text,
+          {
+            speaker_embeddings: appConfig.ai.textToSpeechSpeakerEmbeddings,
+          },
+        ),
       validate: isTtsOutput,
       invalidMessage: "Text-to-speech model returned an invalid payload.",
     });

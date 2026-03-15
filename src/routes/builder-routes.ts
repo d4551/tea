@@ -7,8 +7,10 @@
  */
 import { Elysia } from "elysia";
 import { appConfig } from "../config/environment.ts";
+import { deriveFeatureCapability } from "../domain/ai/capability-snapshot.ts";
 import { knowledgeBaseService } from "../domain/ai/knowledge-base-service.ts";
 import { getAiRuntimeProfile } from "../domain/ai/local-runtime-profile.ts";
+import { ProviderRegistry } from "../domain/ai/providers/provider-registry.ts";
 import { builderService } from "../domain/builder/builder-service.ts";
 import {
   deriveBuilderReadinessAudit,
@@ -238,12 +240,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       builderCurrentPath,
       "",
       null,
-      renderBuilderStarterWorkspace(
-        messages,
-        builderLocale,
-        "",
-        appRoutes.builderStart,
-      ),
+      renderBuilderStarterWorkspace(messages, builderLocale, "", appRoutes.builderStart),
     );
   })
   .get(
@@ -265,6 +262,8 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         );
       }
       const features = await detectAvailableFeatures();
+      const registry = await ProviderRegistry.getInstance();
+      const registryStatus = await registry.getStatus();
       const totalScenes = project.scenes.size;
       const sceneValues = Array.from(project.scenes.values());
       const readinessAudit = deriveBuilderReadinessAudit({
@@ -303,7 +302,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         latestReleaseVersion: project.latestReleaseVersion,
         publishedReleaseVersion: project.publishedReleaseVersion,
         published: project.published,
-        creatorCapabilities: deriveCreatorCapabilities(messages, features, readiness),
+        creatorCapabilities: deriveCreatorCapabilities(messages, registryStatus, readiness),
       };
       const body = renderBuilderDashboard(
         messages,
@@ -374,7 +373,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
   )
   .get(
     "/:projectId/characters",
-    async ({ request, params, builderLocale, builderProjectId, builderCurrentPath }) => {
+    async ({ request, params, builderLocale, builderProjectId, builderCurrentPath, builderSearch }) => {
       const projectId = resolveRouteProjectId(params.projectId, builderProjectId);
       const messages = getMessages(builderLocale);
       const project = await builderService.getProject(projectId);
@@ -391,7 +390,8 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         );
       }
       const scenes = toRecord(project.scenes);
-      const body = renderNpcEditor(messages, scenes, gameSpriteManifests, builderLocale, projectId);
+      const builderPage = resolveBuilderPage(request);
+      const body = renderNpcEditor(messages, scenes, gameSpriteManifests, builderLocale, projectId, builderSearch, builderPage);
       return wrapOrPartial(
         request,
         builderLocale,
@@ -430,7 +430,8 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         );
       }
       const catalog = await builderService.getDialogues(projectId, builderLocale);
-      const body = renderDialogueEditor(messages, catalog, builderLocale, projectId, builderSearch);
+      const builderPage = resolveBuilderPage(request);
+      const body = renderDialogueEditor(messages, catalog, builderLocale, projectId, builderSearch, builderPage);
       return wrapOrPartial(
         request,
         builderLocale,
@@ -548,12 +549,14 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           chromeProject,
         );
       }
+      const builderPage = resolveBuilderPage(request);
       const body = renderAutomationPanel(
         messages,
         builderLocale,
         projectId,
         Array.from(project.automationRuns.values()),
         Array.from(project.artifacts.values()),
+        builderPage,
       );
       return wrapOrPartialConsole(
         request,
@@ -586,6 +589,8 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         );
       }
       const features = await detectAvailableFeatures();
+      const registry = await ProviderRegistry.getInstance();
+      const registryStatus = await registry.getStatus();
       const readiness = evaluateBuilderPlatformReadiness({
         sceneCount: project.scenes.size,
         spriteManifestCount: project.spriteAtlases.size,
@@ -596,6 +601,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       const body = renderAiPanel(
         messages,
         features,
+        deriveFeatureCapability(registryStatus),
         getAiRuntimeProfile(),
         builderLocale,
         projectId,

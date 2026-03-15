@@ -101,6 +101,16 @@ export interface LocalSpeechSynthesisOutput {
 }
 
 /**
+ * Normalized image-generation output.
+ */
+export interface LocalImageGenerationOutput {
+  /** Generated image bytes (typically PNG/JPEG payload). */
+  readonly image: Uint8Array;
+  /** MIME type for generated image bytes. */
+  readonly mimeType: string;
+}
+
+/**
  * Typed sentiment operation result.
  */
 export type LocalSentimentOperationResult = LocalModelResult<SentimentResult>;
@@ -124,6 +134,11 @@ export type LocalTranscriptionOperationResult = LocalModelResult<LocalTranscript
  * Typed speech-synthesis operation result.
  */
 export type LocalSpeechSynthesisOperationResult = LocalModelResult<LocalSpeechSynthesisOutput>;
+
+/**
+ * Typed image-generation operation result.
+ */
+export type LocalImageGenerationOperationResult = LocalModelResult<LocalImageGenerationOutput>;
 
 /**
  * Creates a successful local-model runtime result.

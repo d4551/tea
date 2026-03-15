@@ -4,6 +4,7 @@ import {
   toWorkflowStageStatus,
 } from "../../domain/builder/creator-capability-adapter.ts";
 import type { BuilderPlatformReadiness } from "../../domain/builder/platform-readiness.ts";
+import type { AiSystemStatus } from "../../domain/ai/providers/provider-registry.ts";
 import type { AvailableAiFeatures } from "../../domain/game/ai/game-ai-service.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
@@ -203,16 +204,16 @@ export const buildBuilderWorkflowStages = (
  * Derives creator-safe capabilities without leaking provider or model internals.
  *
  * @param messages Locale-resolved messages.
- * @param features Runtime feature snapshot.
+ * @param status Registry status snapshot.
  * @param readiness Platform readiness summary.
  * @returns Creator-safe capability state.
  */
 export const deriveCreatorCapabilities = (
   messages: Messages,
-  features: AvailableAiFeatures,
+  status: AiSystemStatus,
   readiness: BuilderPlatformReadiness,
 ): CreatorCapabilities => {
-  return toCreatorCapabilities(messages, features, readiness);
+  return toCreatorCapabilities(messages, status, readiness);
 };
 
 /**

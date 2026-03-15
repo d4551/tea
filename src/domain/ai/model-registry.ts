@@ -9,7 +9,8 @@ export type LocalModelTask =
   | "text-generation"
   | "feature-extraction"
   | "automatic-speech-recognition"
-  | "text-to-speech";
+  | "text-to-speech"
+  | "text-to-image";
 
 /**
  * Supported quantization dtype for local ONNX models.
@@ -94,7 +95,8 @@ type ModelRegistryKey =
   | "npcDialogue"
   | "embeddings"
   | "speechToText"
-  | "textToSpeech";
+  | "textToSpeech"
+  | "imageGeneration";
 
 type ModelRegistry = Readonly<Record<ModelRegistryKey, ModelEntry>>;
 
@@ -194,6 +196,21 @@ export const MODEL_REGISTRY: ModelRegistry = {
     enabled: appConfig.ai.localTextToSpeechEnabled,
     warmup: false,
     maxContextLength: 600,
+  },
+  imageGeneration: {
+    key: "imageGeneration",
+    label: "Local image generation (experimental)",
+    description:
+      "Local text-to-image generation through Transformers.js when a compatible ONNX image model is available.",
+    task: "text-to-image",
+    model: appConfig.ai.localImageGenerationModel,
+    dtype: "fp16",
+    device: appConfig.ai.onnxDevice,
+    capabilities: ["image-generation"],
+    configKey: "AI_LOCAL_IMAGE_GENERATION_MODEL",
+    enabled: appConfig.ai.localImageGenerationEnabled && appConfig.ai.localImageGenerationModel.trim().length > 0,
+    warmup: false,
+    maxContextLength: 512,
   },
 };
 

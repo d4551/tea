@@ -6,6 +6,8 @@
 import type { LocaleCode } from "../../config/environment.ts";
 import { resolveCreatorFacingText } from "../../domain/builder/builder-display.ts";
 import { resolveGameText } from "../../domain/game/data/game-text.ts";
+import { BUILDER_LIBRARY_PAGE_SIZE } from "../../shared/constants/builder-defaults.ts";
+import { BUILDER_QUERY_PARAM_PAGE } from "../../shared/constants/builder-query.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type {
@@ -23,7 +25,12 @@ import {
 } from "../shared/ui-components.ts";
 import { buildBuilderJourneyConfig } from "./builder-journey.ts";
 import { getBooleanLabel } from "./view-labels.ts";
-import { renderWorkspaceFrame, renderWorkspaceShell } from "./workspace-shell.ts";
+import {
+  paginateWorkspaceItems,
+  renderWorkspaceBrowseControls,
+  renderWorkspaceFrame,
+  renderWorkspaceShell,
+} from "./workspace-shell.ts";
 
 const resolveNpcDisplayName = (locale: LocaleCode, npc: SceneNpcDefinition): string =>
   resolveCreatorFacingText(
@@ -55,15 +62,26 @@ export const renderNpcEditor = (
   manifests: Record<string, SpriteManifest>,
   locale: LocaleCode,
   projectId: string,
+  search = "",
+  page = 1,
 ): string => {
+  const normalizedSearch = search.trim().toLowerCase();
   const allNpcs: Array<{ sceneId: string; npc: SceneNpcDefinition }> = [];
   for (const [sceneId, scene] of Object.entries(scenes)) {
     for (const npc of scene.npcs) {
+      if (
+        normalizedSearch.length > 0 &&
+        !resolveNpcDisplayName(locale, npc).toLowerCase().includes(normalizedSearch) &&
+        !npc.characterKey.toLowerCase().includes(normalizedSearch)
+      ) {
+        continue;
+      }
       allNpcs.push({ sceneId, npc });
     }
   }
 
-  const selectedNpc = allNpcs[0] ?? null;
+  const paginated = paginateWorkspaceItems(allNpcs, page, BUILDER_LIBRARY_PAGE_SIZE);
+  const selectedNpc = paginated.items[0] ?? null;
   const createAction = interpolateRoutePath(appRoutes.builderApiNpcsCreateForm, { projectId });
   const sceneCount = Object.keys(scenes).length;
   const manifestCount = Object.keys(manifests).length;
@@ -75,7 +93,45 @@ export const renderNpcEditor = (
     )
     .join("");
 
-  const rosterCards = allNpcs
+  const npcPath = interpolateRoutePath(appRoutes.builderNpcs, { projectId });
+  const searchAction = withQueryParameters(npcPath, { lang: locale });
+  const previousHref =
+    paginated.page > 1
+      ? withQueryParameters(searchAction, {
+          [BUILDER_QUERY_PARAM_PAGE]: String(paginated.page - 1),
+          ...(search ? { search } : {}),
+        })
+      : undefined;
+  const nextHref =
+    paginated.page < paginated.totalPages
+      ? withQueryParameters(searchAction, {
+          [BUILDER_QUERY_PARAM_PAGE]: String(paginated.page + 1),
+          ...(search ? { search } : {}),
+        })
+      : undefined;
+
+  const browseControls = renderWorkspaceBrowseControls({
+    action: searchAction,
+    search,
+    searchLabel: messages.builder.npcRosterTitle,
+    searchPlaceholder: messages.builder.npcCreateLabelPlaceholder,
+    submitLabel: messages.builder.filterAction,
+    resultsLabel: messages.builder.resultsLabel,
+    previousLabel: messages.builder.previousPage,
+    nextLabel: messages.builder.nextPage,
+    pageLabel: messages.builder.pageLabel,
+    page: paginated.page,
+    totalPages: paginated.totalPages,
+    totalItems: paginated.totalItems,
+    startIndex: paginated.startIndex,
+    endIndex: paginated.endIndex,
+    hiddenFields: { lang: locale, projectId },
+    htmxTarget: "#builder-content",
+    previousHref,
+    nextHref,
+  });
+
+  const rosterCards = paginated.items
     .map(({ sceneId, npc }) => {
       const manifest = manifests[npc.characterKey];
       const scene = scenes[sceneId];
@@ -179,6 +235,7 @@ export const renderNpcEditor = (
               </div>
             </form>
           </article>
+          ${browseControls}
           ${
             rosterCards.length > 0
               ? `<div class="grid gap-4">${rosterCards}</div>`

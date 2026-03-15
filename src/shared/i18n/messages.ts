@@ -47,6 +47,7 @@ export interface Messages {
     readonly dismiss: string;
     readonly statsEmptyValue: string;
     readonly noActiveJobs: string;
+    readonly requestFailed: string;
   };
   readonly pages: {
     readonly home: {
@@ -813,6 +814,7 @@ export interface Messages {
     readonly automationStatusPlanReadyForReview: string;
     readonly automationStatusCapturingFallbackEvidence: string;
     readonly automationStatusOriginUnavailable: string;
+    readonly generatedBadge: string;
     readonly assistantReviewTitle: string;
     readonly assistantReviewDescription: string;
     readonly previewChanges: string;
@@ -988,6 +990,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       dismiss: "Dismiss",
       statsEmptyValue: "0",
       noActiveJobs: "0",
+      requestFailed: "Request failed",
     },
     pages: {
       home: {
@@ -1856,6 +1859,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       automationStatusCapturingFallbackEvidence: "Capturing fallback review evidence",
       automationStatusOriginUnavailable:
         "Local builder automation origin is unavailable. Start the builder runtime and retry.",
+      generatedBadge: "Generated",
       assistantReviewTitle: "Review AI changes",
       assistantReviewDescription:
         "Generate structured operations, preview them against the active project, then apply only the valid changes.",
@@ -1973,6 +1977,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       dismiss: "关闭",
       statsEmptyValue: "0",
       noActiveJobs: "0",
+      requestFailed: "请求失败",
     },
     pages: {
       home: {
@@ -2783,6 +2788,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       automationStatusPlanReadyForReview: "自动化方案已准备好供审查",
       automationStatusCapturingFallbackEvidence: "正在采集回退审查证据",
       automationStatusOriginUnavailable: "本地构建器自动化目标不可用。请先启动构建运行时后重试。",
+      generatedBadge: "已生成",
       assistantReviewTitle: "审查 AI 修改",
       assistantReviewDescription: "先生成结构化操作，再对当前项目预览，仅在有效时应用。",
       previewChanges: "预览修改",

@@ -15,9 +15,15 @@ import type { BuilderPlatformReadiness } from "../../domain/builder/platform-rea
 import type { AvailableAiFeatures } from "../../domain/game/ai/game-ai-service.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
+import type { CapabilityState, FeatureCapability } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 import { cardClasses, renderBuilderHiddenFields, spinnerClasses } from "../shared/ui-components.ts";
+import {
+  getCapabilityStatusBadgeClass,
+  getCapabilityStatusLabel,
+  isCapabilityUsable,
+} from "./capability-state.ts";
 import { renderPlatformReadinessSection } from "./platform-readiness.ts";
 import { renderWorkspaceFrame, renderWorkspaceShell } from "./workspace-shell.ts";
 
@@ -166,6 +172,26 @@ export const renderToolPlanPreview = (
   </div>
 </article>`;
 
+const renderCapabilityNotice = (
+  messages: Messages,
+  title: string,
+  state: CapabilityState,
+  unavailableMessage: string,
+): string => {
+  if (state.status === "ready") {
+    return "";
+  }
+
+  return `<div role="alert" class="alert ${state.status === "degraded" ? "alert-warning" : "alert-info"} alert-soft">
+    <div>
+      <h3 class="font-bold">${escapeHtml(title)}</h3>
+      <div class="text-sm">${escapeHtml(
+        state.status === "degraded" ? messages.builder.creatorSafeAiDescription : unavailableMessage,
+      )}</div>
+    </div>
+  </div>`;
+};
+
 /* ------------------------------------------------------------------ */
 /*  Sub-section renderers                                              */
 /* ------------------------------------------------------------------ */
@@ -290,6 +316,41 @@ const renderAiCapabilityTable = (messages: Messages, features: AvailableAiFeatur
   </div>`;
 };
 
+const renderAiCapabilityStatusCards = (
+  messages: Messages,
+  featureCapabilities: FeatureCapability,
+): string => {
+  const cards = [
+    {
+      label: messages.builder.assistantReviewTitle,
+      state: featureCapabilities.assist,
+    },
+    {
+      label: messages.builder.testDialogue,
+      state: featureCapabilities.test,
+    },
+    {
+      label: messages.builder.toolPlanWorkspaceTitle,
+      state: featureCapabilities.toolLikeSuggestions,
+    },
+  ];
+
+  return `<div class="grid gap-4 xl:grid-cols-3">${cards
+    .map(
+      (card) => `<article class="${cardClasses.bordered}">
+        <div class="card-body gap-3">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="card-title text-base">${escapeHtml(card.label)}</h2>
+            <span class="badge ${getCapabilityStatusBadgeClass(card.state.status)} badge-soft">${escapeHtml(
+              getCapabilityStatusLabel(messages, card.state.status),
+            )}</span>
+          </div>
+        </div>
+      </article>`,
+    )
+    .join("")}</div>`;
+};
+
 /**
  * Renders the model inventory table with env-var override hints.
  *
@@ -343,33 +404,48 @@ const renderAiModelInventory = (messages: Messages, runtimeProfile: AiRuntimePro
  * @param projectId Active project id.
  * @returns HTML string for the AI assist form.
  */
-const renderAiAssistForm = (messages: Messages, locale: LocaleCode, projectId: string): string => {
+const renderAiAssistForm = (
+  messages: Messages,
+  locale: LocaleCode,
+  projectId: string,
+  state: CapabilityState,
+): string => {
   const aiAssistHref = withQueryParameters(appRoutes.aiBuilderAssist, { projectId });
 
   return `<div class="${cardClasses.bordered}">
     <div class="card-body">
       <h2 class="card-title">${escapeHtml(messages.builder.assistantReviewTitle)}</h2>
       <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.assistantReviewDescription)}</p>
-      <form
-        hx-post="${escapeHtml(aiAssistHref)}"
-        hx-target="#ai-assist-result"
-        hx-swap="innerHTML"
-        hx-indicator="#ai-assist-spinner"
-        hx-disabled-elt="button, input, select, textarea"
-        class="space-y-3"
-      >
-        ${renderBuilderHiddenFields(projectId, locale)}
-        <fieldset class="fieldset">
-          <legend class="fieldset-legend">${escapeHtml(messages.builder.promptLabel)}</legend>
-          <textarea id="ai-assist-prompt" name="prompt" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.assistPromptPlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.promptLabel)}"></textarea>
-        </fieldset>
-        <div class="flex items-center gap-2">
-          <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.designAssist)}">
-            ${escapeHtml(messages.builder.designAssist)}
-          </button>
-          <span id="ai-assist-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
-        </div>
-      </form>
+      ${renderCapabilityNotice(
+        messages,
+        messages.builder.assistantReviewTitle,
+        state,
+        messages.ai.designAssistUnavailable,
+      )}
+      ${
+        isCapabilityUsable(state)
+          ? `<form
+              hx-post="${escapeHtml(aiAssistHref)}"
+              hx-target="#ai-assist-result"
+              hx-swap="innerHTML"
+              hx-indicator="#ai-assist-spinner"
+              hx-disabled-elt="button, input, select, textarea"
+              class="space-y-3"
+            >
+              ${renderBuilderHiddenFields(projectId, locale)}
+              <fieldset class="fieldset">
+                <legend class="fieldset-legend">${escapeHtml(messages.builder.promptLabel)}</legend>
+                <textarea id="ai-assist-prompt" name="prompt" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.assistPromptPlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.promptLabel)}"></textarea>
+              </fieldset>
+              <div class="flex items-center gap-2">
+                <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.designAssist)}">
+                  ${escapeHtml(messages.builder.designAssist)}
+                </button>
+                <span id="ai-assist-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
+              </div>
+            </form>`
+          : ""
+      }
       <div id="ai-assist-result" class="mt-3" aria-live="polite"></div>
     </div>
   </div>`;
@@ -383,36 +459,51 @@ const renderAiAssistForm = (messages: Messages, locale: LocaleCode, projectId: s
  * @param projectId Active project id.
  * @returns HTML string for the test dialogue form.
  */
-const renderAiTestForm = (messages: Messages, locale: LocaleCode, projectId: string): string => {
+const renderAiTestForm = (
+  messages: Messages,
+  locale: LocaleCode,
+  projectId: string,
+  state: CapabilityState,
+): string => {
   const aiTestHref = withQueryParameters(appRoutes.aiBuilderTest, { projectId });
 
   return `<div class="${cardClasses.bordered}">
     <div class="card-body">
       <h2 class="card-title">${escapeHtml(messages.builder.testDialogue)}</h2>
-      <form
-        hx-post="${escapeHtml(aiTestHref)}"
-        hx-target="#ai-test-result"
-        hx-swap="innerHTML"
-        hx-indicator="#ai-test-spinner"
-        hx-disabled-elt="button, input, select, textarea"
-        class="space-y-3"
-      >
-        ${renderBuilderHiddenFields(projectId, locale)}
-        <fieldset class="fieldset">
-          <legend class="fieldset-legend">${escapeHtml(messages.builder.npcIdLabel)}</legend>
-          <input id="ai-test-npc" name="npcId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.testNpcPlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.npcIdLabel)}" />
-        </fieldset>
-        <fieldset class="fieldset">
-          <legend class="fieldset-legend">${escapeHtml(messages.builder.messageLabel)}</legend>
-          <textarea id="ai-test-message" name="message" class="textarea w-full" rows="2" placeholder="${escapeHtml(messages.builder.testMessagePlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.messageLabel)}"></textarea>
-        </fieldset>
-        <div class="flex items-center gap-2">
-          <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.testDialogue)}">
-            ${escapeHtml(messages.builder.testDialogue)}
-          </button>
-          <span id="ai-test-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
-        </div>
-      </form>
+      ${renderCapabilityNotice(
+        messages,
+        messages.builder.testDialogue,
+        state,
+        messages.ai.dialogueGenerationUnavailable,
+      )}
+      ${
+        isCapabilityUsable(state)
+          ? `<form
+              hx-post="${escapeHtml(aiTestHref)}"
+              hx-target="#ai-test-result"
+              hx-swap="innerHTML"
+              hx-indicator="#ai-test-spinner"
+              hx-disabled-elt="button, input, select, textarea"
+              class="space-y-3"
+            >
+              ${renderBuilderHiddenFields(projectId, locale)}
+              <fieldset class="fieldset">
+                <legend class="fieldset-legend">${escapeHtml(messages.builder.npcIdLabel)}</legend>
+                <input id="ai-test-npc" name="npcId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.testNpcPlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.npcIdLabel)}" />
+              </fieldset>
+              <fieldset class="fieldset">
+                <legend class="fieldset-legend">${escapeHtml(messages.builder.messageLabel)}</legend>
+                <textarea id="ai-test-message" name="message" class="textarea w-full" rows="2" placeholder="${escapeHtml(messages.builder.testMessagePlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.messageLabel)}"></textarea>
+              </fieldset>
+              <div class="flex items-center gap-2">
+                <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.testDialogue)}">
+                  ${escapeHtml(messages.builder.testDialogue)}
+                </button>
+                <span id="ai-test-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
+              </div>
+            </form>`
+          : ""
+      }
       <div id="ai-test-result" class="mt-3" aria-live="polite"></div>
     </div>
   </div>`;
@@ -488,6 +579,7 @@ const renderAiRetrievalAndToolPlan = (
   messages: Messages,
   locale: LocaleCode,
   projectId: string,
+  toolPlanState: CapabilityState,
 ): string => {
   const aiKnowledgeSearchHref = withQueryParameters(appRoutes.aiBuilderKnowledgeSearch, {
     projectId,
@@ -528,23 +620,33 @@ const renderAiRetrievalAndToolPlan = (
       <div class="card-body">
         <h2 class="card-title">${escapeHtml(messages.builder.toolPlanWorkspaceTitle)}</h2>
         <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.toolPlanWorkspaceDescription)}</p>
-        <form
-          hx-post="${escapeHtml(aiToolPlanHref)}"
-          hx-target="#ai-tool-plan-result"
-          hx-swap="innerHTML"
-          hx-indicator="#ai-plan-spinner"
-          hx-disabled-elt="button, input, select, textarea"
-          class="space-y-3"
-        >
-          <fieldset class="fieldset">
-            <legend class="fieldset-legend">${escapeHtml(messages.builder.automationGoalLabel)}</legend>
-            <textarea id="tool-plan-goal" name="goal" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.toolPlanGoalPlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.automationGoalLabel)}"></textarea>
-          </fieldset>
-          <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.previewToolPlan)}">
-            ${escapeHtml(messages.builder.previewToolPlan)}
-            <span id="ai-plan-spinner" class="${spinnerClasses.xs}" aria-label="${escapeHtml(messages.common.loading)}"></span>
-          </button>
-        </form>
+        ${renderCapabilityNotice(
+          messages,
+          messages.builder.toolPlanWorkspaceTitle,
+          toolPlanState,
+          messages.ai.toolPlanningUnavailable,
+        )}
+        ${
+          isCapabilityUsable(toolPlanState)
+            ? `<form
+                hx-post="${escapeHtml(aiToolPlanHref)}"
+                hx-target="#ai-tool-plan-result"
+                hx-swap="innerHTML"
+                hx-indicator="#ai-plan-spinner"
+                hx-disabled-elt="button, input, select, textarea"
+                class="space-y-3"
+              >
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">${escapeHtml(messages.builder.automationGoalLabel)}</legend>
+                  <textarea id="tool-plan-goal" name="goal" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.toolPlanGoalPlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.automationGoalLabel)}"></textarea>
+                </fieldset>
+                <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.previewToolPlan)}">
+                  ${escapeHtml(messages.builder.previewToolPlan)}
+                  <span id="ai-plan-spinner" class="${spinnerClasses.xs}" aria-label="${escapeHtml(messages.common.loading)}"></span>
+                </button>
+              </form>`
+            : ""
+        }
         <div id="ai-tool-plan-result" class="mt-4" aria-live="polite"></div>
       </div>
     </div>
@@ -625,6 +727,7 @@ const renderAiPatchAndApiSurface = (
 export const renderAiPanel = (
   messages: Messages,
   features: AvailableAiFeatures,
+  featureCapabilities: FeatureCapability,
   runtimeProfile: AiRuntimeProfile,
   locale: LocaleCode,
   projectId: string,
@@ -683,6 +786,7 @@ export const renderAiPanel = (
             <span>${escapeHtml(messages.builder.creatorSafeAiDescription)}</span>
           </div>
           ${renderAiStatusHero(messages, runtimeProfile, features)}
+          ${renderAiCapabilityStatusCards(messages, featureCapabilities)}
           <div class="grid gap-4">
             ${renderAiCapabilityTable(messages, features)}
             ${renderAiModelInventory(messages, runtimeProfile)}
@@ -705,8 +809,8 @@ export const renderAiPanel = (
             <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.assistantReviewTitle)}">${escapeHtml(messages.builder.assistantReviewTitle)}</summary>
             <div class="collapse-content">
               <div class="grid gap-4 xl:grid-cols-2">
-                ${renderAiAssistForm(messages, locale, projectId)}
-                ${renderAiTestForm(messages, locale, projectId)}
+                ${renderAiAssistForm(messages, locale, projectId, featureCapabilities.assist)}
+                ${renderAiTestForm(messages, locale, projectId, featureCapabilities.test)}
               </div>
             </div>
           </details>
@@ -716,7 +820,12 @@ export const renderAiPanel = (
             <div class="collapse-content">
               <div class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
                 ${renderAiKnowledgeWorkspace(messages, locale, projectId, documents)}
-                ${renderAiRetrievalAndToolPlan(messages, locale, projectId)}
+                ${renderAiRetrievalAndToolPlan(
+                  messages,
+                  locale,
+                  projectId,
+                  featureCapabilities.toolLikeSuggestions,
+                )}
               </div>
             </div>
           </details>

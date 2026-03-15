@@ -5,6 +5,7 @@ import { resetEmbeddingFallback } from "../src/domain/ai/knowledge-base-service.
 import { ProviderRegistry } from "../src/domain/ai/providers/provider-registry.ts";
 import { vectorStore } from "../src/domain/ai/vector-store.ts";
 import { deriveDialogueGraphIdentity } from "../src/domain/builder/builder-display.ts";
+import { createBuilderProjectStateStore } from "../src/domain/builder/builder-project-state-store.ts";
 import { builderService } from "../src/domain/builder/builder-service.ts";
 import { gameLoop } from "../src/domain/game/game-loop.ts";
 import { correlationIdHeader } from "../src/lib/correlation-id.ts";
@@ -158,6 +159,21 @@ const withMockedEmbeddingGeneration = async <T>(run: () => Promise<T>): Promise<
   return result.value;
 };
 
+const withMockedRegistry = async <T>(
+  registry: Partial<ProviderRegistry>,
+  run: () => Promise<T>,
+): Promise<T> => {
+  const spy = spyOn(ProviderRegistry, "getInstance").mockImplementation(
+    async () => registry as ProviderRegistry,
+  );
+
+  try {
+    return await run();
+  } finally {
+    spy.mockRestore();
+  }
+};
+
 const createBuilderProject = async (projectId = `contract-${Date.now()}`) => {
   const response = await app.handle(
     new Request(toUrl("/api/builder/projects"), {
@@ -270,33 +286,47 @@ describe("API contracts", () => {
     expect(setCookie?.toLowerCase().includes("httponly")).toBe(true);
   });
 
-  test("oracle endpoint returns success state", async () => {
-    const response = await app.handle(
-      new Request(toUrl(appRoutes.oracleApi), {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          question: "How should we secure river trade?",
-          mode: defaultOracleMode,
-          lang: "en-US",
+  test("oracle endpoint returns success state when a real provider succeeds", async () => {
+    await withMockedRegistry(
+      {
+        selectProvider: () =>
+          ({ name: "mock-chat" }) as ReturnType<ProviderRegistry["selectProvider"]>,
+        chat: async () => ({
+          ok: true,
+          text: "Secure the crossings, audit each cargo manifest, and rotate patrols at dusk.",
+          model: "mock-oracle",
+          durationMs: 8,
         }),
-      }),
+      },
+      async () => {
+        const response = await app.handle(
+          new Request(toUrl(appRoutes.oracleApi), {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              question: "How should we secure river trade?",
+              mode: defaultOracleMode,
+              lang: "en-US",
+            }),
+          }),
+        );
+
+        const payload = await readResponsePayload<{
+          readonly ok: boolean;
+          readonly data?: {
+            readonly state: string;
+            readonly answer: string;
+          };
+        }>(response);
+
+        expect(response.status).toBe(httpStatus.ok);
+        expect(payload.ok).toBe(true);
+        expect(payload.data?.state).toBe("success");
+        expect(payload.data?.answer).toContain("Secure the crossings");
+      },
     );
-
-    const payload = await readResponsePayload<{
-      readonly ok: boolean;
-      readonly data?: {
-        readonly state: string;
-        readonly answer: string;
-      };
-    }>(response);
-
-    expect(response.status).toBe(httpStatus.ok);
-    expect(payload.ok).toBe(true);
-    expect(payload.data?.state).toBe("success");
-    expect(payload.data?.answer.length).toBeGreaterThan(0);
   });
 
   test("oracle endpoint returns validation error envelope for blank questions", async () => {
@@ -447,7 +477,7 @@ describe("API contracts", () => {
         },
         body: JSON.stringify({
           question: "route parity check",
-          mode: defaultOracleMode,
+          mode: "force-fatal-error",
           lang: "en-US",
         }),
       }),
@@ -455,16 +485,16 @@ describe("API contracts", () => {
 
     const payload = await readResponsePayload<{
       readonly ok: boolean;
-      readonly data?: {
-        readonly state: string;
-        readonly answer: string;
+      readonly error?: {
+        readonly code: string;
+        readonly message: string;
       };
     }>(response);
 
-    expect(response.status).toBe(httpStatus.ok);
-    expect(payload.ok).toBe(true);
-    expect(payload.data?.state).toBe("success");
-    expect(/[\u3400-\u9fff]/u.test(payload.data?.answer ?? "")).toBe(false);
+    expect(response.status).toBe(httpStatus.unprocessableEntity);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("VALIDATION_ERROR");
+    expect(/[\u3400-\u9fff]/u.test(payload.error?.message ?? "")).toBe(false);
   });
 
   test("oracle endpoint falls back to request locale when body locale is invalid", async () => {
@@ -476,7 +506,7 @@ describe("API contracts", () => {
         },
         body: JSON.stringify({
           question: "route parity check",
-          mode: defaultOracleMode,
+          mode: "force-fatal-error",
           lang: "invalid-locale",
         }),
       }),
@@ -484,16 +514,16 @@ describe("API contracts", () => {
 
     const payload = await readResponsePayload<{
       readonly ok: boolean;
-      readonly data?: {
-        readonly state: string;
-        readonly answer: string;
+      readonly error?: {
+        readonly code: string;
+        readonly message: string;
       };
     }>(response);
 
-    expect(response.status).toBe(httpStatus.ok);
-    expect(payload.ok).toBe(true);
-    expect(payload.data?.state).toBe("success");
-    expect(/[\u3400-\u9fff]/u.test(payload.data?.answer ?? "")).toBe(true);
+    expect(response.status).toBe(httpStatus.unprocessableEntity);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("VALIDATION_ERROR");
+    expect(/[\u3400-\u9fff]/u.test(payload.error?.message ?? "")).toBe(true);
   });
 
   test("framework validation errors are localized from accept-language", async () => {
@@ -1887,7 +1917,20 @@ describe("API contracts", () => {
         updatedAtMs: Date.now(),
       },
     });
-    await builderService.processQueuedWork(projectId);
+    await withMockedRegistry(
+      {
+        generateImage: async () => ({
+          ok: true,
+          image: new Uint8Array([137, 80, 78, 71]),
+          mimeType: "image/png",
+          model: "mock-image",
+          durationMs: 14,
+        }),
+      },
+      async () => {
+        await builderService.processQueuedWork(projectId);
+      },
+    );
 
     const [
       projectRow,
@@ -1935,10 +1978,49 @@ describe("API contracts", () => {
     expect("automationRuns" in stateRecord).toBe(false);
     expect(jobCount).toBeGreaterThan(0);
     expect(jobArtifactCount).toBe(expectedJobArtifactCount);
-    expect(artifactCount).toBeGreaterThan(0);
+    expect(artifactCount).toBe(snapshot.artifacts.size);
     expect(automationRunCount).toBeGreaterThan(0);
     expect(automationRunStepCount).toBe(expectedAutomationRunStepCount);
     expect(automationRunArtifactCount).toBe(expectedAutomationRunArtifactCount);
+  });
+
+  test("builder worker queue scan only materializes projects with queued work", async () => {
+    const queuedProjectId = `worker-queued-${crypto.randomUUID()}`;
+    const idleProjectId = `worker-idle-${crypto.randomUUID()}`;
+    const stateStore = createBuilderProjectStateStore();
+    await createBuilderProject(queuedProjectId);
+    await createBuilderProject(idleProjectId);
+
+    await builderService.saveGenerationJob(queuedProjectId, {
+      id: "job.queued-only",
+      job: {
+        id: "job.queued-only",
+        kind: "portrait",
+        status: "queued",
+        prompt: "Generate a queued-only artifact",
+        artifactIds: [],
+        statusMessage: "queued",
+        createdAtMs: Date.now(),
+        updatedAtMs: Date.now(),
+      },
+    });
+    await builderService.saveAutomationRun(idleProjectId, {
+      id: "run.completed-only",
+      run: {
+        id: "run.completed-only",
+        status: "failed",
+        goal: "Already processed",
+        steps: [],
+        artifactIds: [],
+        statusMessage: "failed",
+        createdAtMs: Date.now(),
+        updatedAtMs: Date.now(),
+      },
+    });
+
+    const queuedIds = (await stateStore.listQueuedProjectEntries()).map((entry) => entry.row.id);
+
+    expect(queuedIds).toEqual([queuedProjectId]);
   });
 
   test("game command queue overflow maps to conflict state", async () => {
@@ -2007,24 +2089,45 @@ describe("API contracts", () => {
     expect(commandPayload?.error?.message).toBe("Command queue is full.");
   });
 
-  test("builder AI capabilities endpoint returns capability flags", async () => {
+  test("builder AI capabilities endpoint returns capability state objects", async () => {
     const response = await app.handle(new Request(toUrl(appRoutes.aiBuilderCapabilities)));
     const payload = await readResponsePayload<{
       readonly ok: boolean;
       readonly data?: {
         readonly features?: {
-          readonly assist: boolean;
-          readonly test: boolean;
-          readonly toolLikeSuggestions: boolean;
-          readonly streaming: boolean;
-          readonly offlineFallback: boolean;
+          readonly assist: {
+            readonly status: string;
+            readonly mode: string;
+            readonly reasonCode?: string;
+          };
+          readonly test: {
+            readonly status: string;
+            readonly mode: string;
+            readonly reasonCode?: string;
+          };
+          readonly toolLikeSuggestions: {
+            readonly status: string;
+            readonly mode: string;
+            readonly reasonCode?: string;
+          };
+          readonly streaming: {
+            readonly status: string;
+            readonly mode: string;
+            readonly reasonCode?: string;
+          };
+          readonly offlineFallback: {
+            readonly status: string;
+            readonly mode: string;
+            readonly reasonCode?: string;
+          };
         };
         readonly creatorCapabilities?: {
           readonly items?: ReadonlyArray<{
             readonly key: string;
             readonly label: string;
-            readonly statusLabel: string;
-            readonly available: boolean;
+            readonly status: string;
+            readonly mode: string;
+            readonly reasonCode?: string;
           }>;
         };
         readonly providerCount?: number;
@@ -2033,10 +2136,14 @@ describe("API contracts", () => {
 
     expect(response.status).toBe(httpStatus.ok);
     expect(payload.ok).toBe(true);
-    expect(typeof payload.data?.features?.assist).toBe("boolean");
-    expect(typeof payload.data?.features?.test).toBe("boolean");
+    expect(typeof payload.data?.features?.assist.status).toBe("string");
+    expect(typeof payload.data?.features?.assist.mode).toBe("string");
+    expect(payload.data?.features?.toolLikeSuggestions.status).toBe("unavailable");
+    expect(payload.data?.features?.offlineFallback.status).toBe("unavailable");
     expect(typeof payload.data?.providerCount).toBe("number");
     expect(Array.isArray(payload.data?.creatorCapabilities?.items)).toBe(true);
+    expect(typeof payload.data?.creatorCapabilities?.items?.[0]?.status).toBe("string");
+    expect(typeof payload.data?.creatorCapabilities?.items?.[0]?.mode).toBe("string");
   });
 
   test("builder platform readiness endpoint exposes partial and missing capability states", async () => {
@@ -2100,6 +2207,16 @@ describe("API contracts", () => {
           readonly onnx?: {
             readonly backend: string;
           };
+          readonly apiCompatible?: {
+            readonly local?: {
+              readonly vendor: string;
+              readonly supportedVendors: readonly string[];
+            };
+            readonly cloud?: {
+              readonly vendor: string;
+              readonly supportedVendors: readonly string[];
+            };
+          };
           catalog?: Array<{
             key: string;
           }>;
@@ -2114,6 +2231,13 @@ describe("API contracts", () => {
     expect(typeof payload.data?.features?.localInference).toBe("boolean");
     expect(payload.data?.localRuntime?.transformers?.integration).toBe("huggingface");
     expect(payload.data?.localRuntime?.onnx?.backend).toBe(appConfig.ai.onnxDevice);
+    expect(payload.data?.localRuntime?.apiCompatible?.local?.vendor).toBe("ramalama");
+    expect(payload.data?.localRuntime?.apiCompatible?.cloud?.supportedVendors).toContain("claude");
+    expect(payload.data?.localRuntime?.apiCompatible?.cloud?.supportedVendors).toContain(
+      "deepseek",
+    );
+    expect(payload.data?.localRuntime?.apiCompatible?.cloud?.supportedVendors).toContain("gemini");
+    expect(payload.data?.localRuntime?.apiCompatible?.cloud?.supportedVendors).toContain("copilot");
     expect(payload.data?.localRuntime?.catalog?.some((entry) => entry.key === "speechToText")).toBe(
       true,
     );
@@ -2405,13 +2529,16 @@ describe("HTMX partial rendering", () => {
     expect(html.includes("Knowledge workspace")).toBe(true);
     expect(html.includes(appRoutes.aiBuilderKnowledgeDocuments)).toBe(true);
     expect(html.includes(appRoutes.aiBuilderKnowledgeSearch)).toBe(true);
-    expect(html.includes(appRoutes.aiBuilderToolPlan)).toBe(true);
     expect(html.includes("Tool plan preview")).toBe(true);
+    expect(html.includes("Structured tool planning is currently unavailable")).toBe(true);
+    expect(html.includes(appRoutes.aiBuilderToolPlan)).toBe(false);
   });
 
   test("home route handles non-js oracle form fallback as full SSR page", async () => {
     const response = await app.handle(
-      new Request(toUrl(`${appRoutes.home}?lang=en-US&question=river%20trade&mode=auto`)),
+      new Request(
+        toUrl(`${appRoutes.home}?lang=en-US&question=river%20trade&mode=force-retryable-error`),
+      ),
     );
     const html = await response.text();
 
@@ -2420,7 +2547,12 @@ describe("HTMX partial rendering", () => {
     expect(html.includes('id="oracle-panel"')).toBe(true);
     expect(html.includes("AI Assistant")).toBe(true);
     expect(html.includes('value="river trade"')).toBe(true);
-    expect(html.includes('href="/?lang=zh-CN&amp;question=river+trade&amp;mode=auto"')).toBe(true);
+    expect(html.includes("AI temporarily busy")).toBe(true);
+    expect(
+      html.includes(
+        'href="/?lang=zh-CN&amp;question=river+trade&amp;mode=force-retryable-error"',
+      ),
+    ).toBe(true);
   });
 
   test("locale resolver parses Accept-Language priority list", async () => {
@@ -2485,11 +2617,16 @@ describe("HTMX partial rendering", () => {
 
   test("oracle partial returns panel markup", async () => {
     const response = await app.handle(
-      new Request(toUrl(`${appRoutes.aiPlaygroundPartial}?question=test&mode=auto&lang=en-US`), {
-        headers: {
-          "hx-request": "true",
+      new Request(
+        toUrl(
+          `${appRoutes.aiPlaygroundPartial}?question=test&mode=force-retryable-error&lang=en-US`,
+        ),
+        {
+          headers: {
+            "hx-request": "true",
+          },
         },
-      }),
+      ),
     );
 
     const html = await response.text();
@@ -2503,7 +2640,7 @@ describe("HTMX partial rendering", () => {
     const response = await app.handle(
       new Request(
         toUrl(
-          `${appRoutes.aiPlaygroundPartial}?question=%E6%B2%B3%E9%81%93%E8%B7%AF%E7%BA%BF&lang=zh-CN`,
+          `${appRoutes.aiPlaygroundPartial}?question=%E6%B2%B3%E9%81%93%E8%B7%AF%E7%BA%BF&lang=zh-CN&mode=force-retryable-error`,
         ),
       ),
     );
@@ -2511,7 +2648,8 @@ describe("HTMX partial rendering", () => {
     const html = await response.text();
 
     expect(response.status).toBe(httpStatus.ok);
-    expect(html.includes("生成内容")).toBe(true);
+    expect(html.includes("AI 暂时繁忙")).toBe(true);
+    expect(html.includes("重试")).toBe(true);
   });
 
   test("oracle partial avoids inline event handlers", async () => {
@@ -2717,6 +2855,23 @@ describe("HTMX partial rendering", () => {
     expect(html.includes("Port Market")).toBe(false);
   });
 
+  test("default project world route renders successfully", async () => {
+    await createBuilderProject("default");
+    const response = await app.handle(
+      new Request(
+        toUrl(
+          withProjectPagePath(appRoutes.builderScenes, "default", "en-US", { sceneId: "teaHouse" }),
+        ),
+      ),
+    );
+    const html = await response.text();
+
+    expect(response.status).toBe(httpStatus.ok);
+    expect(html.includes('id="scene-detail"')).toBe(true);
+    expect(html.includes("data-scene-editor")).toBe(true);
+    expect(html.includes("data-tilemap-selection")).toBe(true);
+  });
+
   test("builder assets page makes sprite and animation pipeline gaps explicit", async () => {
     const projectId = `assets-${crypto.randomUUID()}`;
     await createBuilderProject(projectId);
@@ -2838,9 +2993,8 @@ describe("HTMX partial rendering", () => {
     expect(html.includes("Generation jobs")).toBe(false);
     expect(html.includes("AI authoring")).toBe(false);
     expect(html.includes("Automation / RPA")).toBe(false);
-    expect(html.includes(">Implemented<")).toBe(false);
-    expect(html.includes(">Partial<")).toBe(false);
-    expect(html.includes(">Missing<")).toBe(false);
+    expect(html.includes("card-border")).toBe(true);
+    expect(html.includes("badge-soft")).toBe(true);
     expect(html.includes(`/projects/${projectId}/start?lang=en-US`)).toBe(true);
   });
 
@@ -3214,21 +3368,33 @@ describe("HTMX partial rendering", () => {
     expect(clipHtml.includes(assetId)).toBe(true);
     expect(clipHtml.includes("idle-down")).toBe(true);
 
-    const generationResponse = await app.handle(
-      new Request(toUrl("/api/builder/generation-jobs/create/form"), {
-        method: "POST",
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          accept: "text/html",
-        },
-        body: new URLSearchParams({
-          projectId,
-          locale: "en-US",
-          kind: "portrait",
-          prompt: "Generate a review-ready tea trader portrait.",
-          targetId: assetId,
-        }).toString(),
-      }),
+    const generationResponse = await withMockedRegistry(
+      {
+        generateImage: async () => ({
+          ok: true,
+          image: new Uint8Array([137, 80, 78, 71]),
+          mimeType: "image/png",
+          model: "mock-image",
+          durationMs: 18,
+        }),
+      },
+      () =>
+        app.handle(
+          new Request(toUrl("/api/builder/generation-jobs/create/form"), {
+            method: "POST",
+            headers: {
+              "content-type": "application/x-www-form-urlencoded",
+              accept: "text/html",
+            },
+            body: new URLSearchParams({
+              projectId,
+              locale: "en-US",
+              kind: "portrait",
+              prompt: "Generate a review-ready tea trader portrait.",
+              targetId: assetId,
+            }).toString(),
+          }),
+        ),
     );
     const generationHtml = await generationResponse.text();
     expect(generationResponse.status).toBe(httpStatus.ok);

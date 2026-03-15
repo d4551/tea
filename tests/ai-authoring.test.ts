@@ -117,12 +117,17 @@ describe("AI authoring validation", () => {
     );
 
     const encounter = await service.generateCombatEncounter({
+      prompt: "Generate an easy opening encounter for the intro scene.",
       sceneId: "intro",
       difficulty: "easy",
       playerLevel: 1,
     });
 
-    expect(encounter).toBeNull();
+    expect(encounter.ok).toBe(false);
+    if (encounter.ok) {
+      return;
+    }
+    expect(encounter.error).toContain("invalid combat encounter payload");
   });
 
   test("item and cutscene generation filter malformed entries instead of casting them through", async () => {
@@ -176,19 +181,47 @@ describe("AI authoring validation", () => {
     );
 
     const items = await itemService.generateItemSet({
+      prompt: "Generate two rare forest-themed items.",
       theme: "forest",
       count: 2,
       rarity: "rare",
     });
     const cutscene = await cutsceneService.generateCutsceneScript({
+      prompt: "Generate a tense hero introduction cutscene.",
       sceneId: "intro",
       characters: ["hero"],
       mood: "tense",
     });
 
-    expect(items).toHaveLength(1);
-    expect(items[0]?.id).toBe("item-valid");
-    expect(cutscene).toHaveLength(1);
-    expect(cutscene[0]?.id).toBe("step-valid");
+    expect(items.ok).toBe(true);
+    if (!items.ok) {
+      return;
+    }
+    expect(items.items).toHaveLength(1);
+    expect(items.items[0]?.id).toBe("item-valid");
+
+    expect(cutscene.ok).toBe(true);
+    if (!cutscene.ok) {
+      return;
+    }
+    expect(cutscene.steps).toHaveLength(1);
+    expect(cutscene.steps[0]?.id).toBe("step-valid");
+  });
+
+  test("animation plan generation returns a typed failure for malformed JSON payloads", async () => {
+    const service = new AiAuthoringService(
+      new StubAiProvider('{ "targetId": "hero", "suggestedClips": [{ "id": 42 }] }'),
+    );
+
+    const plan = await service.generateAnimationPlan({
+      prompt: "Add an idle and walk loop",
+      targetId: "asset.hero",
+    });
+
+    expect(plan.ok).toBe(false);
+    if (plan.ok) {
+      return;
+    }
+    expect(plan.error).toContain("invalid animation plan payload");
   });
 });

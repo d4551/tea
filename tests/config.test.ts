@@ -5,6 +5,7 @@ import {
   normalizeLocale,
   normalizeUiTheme,
   parseBoolean,
+  parseFloatValue,
   parseInteger,
   supportedUiThemes,
 } from "../src/config/environment.ts";
@@ -34,6 +35,17 @@ describe("environment parsing", () => {
     );
     expect(() => parseInteger("not-a-number", 10, 1, "TEST_INT")).toThrow(
       "Invalid environment variable TEST_INT",
+    );
+  });
+
+  test("float parsing rejects malformed and out-of-range values", () => {
+    expect(parseFloatValue("7.5", 1, 0, "TEST_FLOAT")).toBe(7.5);
+    expect(parseFloatValue(undefined, 1.25, 0, "TEST_FLOAT")).toBe(1.25);
+    expect(() => parseFloatValue("abc", 1, 0, "TEST_FLOAT")).toThrow(
+      "Invalid environment variable TEST_FLOAT",
+    );
+    expect(() => parseFloatValue("-1", 1, 0, "TEST_FLOAT")).toThrow(
+      "Invalid environment variable TEST_FLOAT",
     );
   });
 
@@ -113,15 +125,39 @@ describe("environment parsing", () => {
     expect(appConfig.ai.onnxWasmPath.length).toBeGreaterThan(0);
     expect(appConfig.ai.localSpeechToTextModel.length).toBeGreaterThan(0);
     expect(appConfig.ai.localTextToSpeechModel.length).toBeGreaterThan(0);
+    expect(appConfig.ai.imageGenerationSquareSizePx).toBeGreaterThanOrEqual(64);
+    expect(appConfig.ai.imageGenerationLandscapeWidthPx).toBeGreaterThanOrEqual(64);
+    expect(appConfig.ai.imageGenerationLandscapeHeightPx).toBeGreaterThanOrEqual(64);
+    expect(appConfig.ai.imageGenerationPortraitWidthPx).toBeGreaterThanOrEqual(64);
+    expect(appConfig.ai.imageGenerationPortraitHeightPx).toBeGreaterThanOrEqual(64);
+    expect(appConfig.ai.imageGenerationSteps).toBeGreaterThan(0);
+    expect(appConfig.ai.imageGenerationGuidanceScale).toBeGreaterThanOrEqual(0);
     expect(appConfig.ai.routing.defaultPolicy).toBe("local-first");
     expect(appConfig.ai.routing.cloudFallbackEnabled).toBe(true);
     expect(appConfig.ai.routing.ragPersistence).toBe("prisma");
+    expect(appConfig.ai.openAiCompatible.local.vendor).toBe("ramalama");
+    expect(appConfig.ai.openAiCompatible.local.supportedVendors).toContain("ramalama");
+    expect(appConfig.ai.openAiCompatible.cloud.vendor).toBe("openai");
+    expect(appConfig.ai.openAiCompatible.cloud.supportedVendors).toContain("claude");
+    expect(appConfig.ai.openAiCompatible.cloud.supportedVendors).toContain("deepseek");
+    expect(appConfig.ai.openAiCompatible.cloud.supportedVendors).toContain("gemini");
+    expect(appConfig.ai.openAiCompatible.cloud.supportedVendors).toContain("copilot");
     expect(appConfig.ai.openAiCompatible.local.baseUrl.length).toBeGreaterThan(0);
     expect(appConfig.ai.openAiCompatible.local.providerLabel.length).toBeGreaterThan(0);
     expect(appConfig.ai.openAiCompatible.local.chatModel.length).toBeGreaterThan(0);
+    expect(
+      appConfig.ai.openAiCompatible.local.endpoints.chatCompletionsPath.length,
+    ).toBeGreaterThan(0);
     expect(appConfig.ai.openAiCompatible.cloud.baseUrl.length).toBeGreaterThan(0);
     expect(appConfig.ai.openAiCompatible.cloud.providerLabel.length).toBeGreaterThan(0);
     expect(appConfig.ai.openAiCompatible.cloud.chatModel.length).toBeGreaterThan(0);
+    expect(
+      appConfig.ai.openAiCompatible.cloud.endpoints.chatCompletionsPath.length,
+    ).toBeGreaterThan(0);
+    expect(appConfig.ai.huggingfaceInference.baseUrl.length).toBeGreaterThan(0);
+    expect(appConfig.ai.huggingfaceInference.chatModel.length).toBeGreaterThan(0);
+    expect(appConfig.ai.huggingfaceInference.imageModel.length).toBeGreaterThan(0);
+    expect(appConfig.ai.huggingfaceInference.availabilityTimeoutMs).toBeGreaterThanOrEqual(500);
     expect(appConfig.ai.ragChunkSize).toBeGreaterThanOrEqual(100);
     expect(appConfig.ai.ragChunkOverlap).toBeGreaterThanOrEqual(0);
     expect(appConfig.ai.ragSearchLimit).toBeGreaterThan(0);

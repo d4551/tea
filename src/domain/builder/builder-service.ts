@@ -3027,7 +3027,7 @@ class PrismaBuilderService implements BuilderService {
 
   public async processQueuedWork(projectId?: string, updatedBy?: string): Promise<number> {
     const actor = this.resolveUpdatedBy(updatedBy, "builder-worker");
-    const entries = await this.stateStore.listProjectEntries(projectId);
+    const entries = await this.stateStore.listQueuedProjectEntries(projectId);
 
     let processedCount = 0;
     for (const entry of entries) {

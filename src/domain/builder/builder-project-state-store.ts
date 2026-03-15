@@ -1960,6 +1960,13 @@ const toGenerationArtifactsFromRows = (
             previewSource: row.previewSource,
             summary: row.summary,
             mimeType: row.mimeType ?? undefined,
+            metadata:
+              typeof row.generationSource === "string"
+                ? {
+                    source: row.generationSource === "placeholder" ? "placeholder" : "ai",
+                    reason: row.generationReason ?? undefined,
+                  }
+                : undefined,
             approved: row.approved,
             createdAtMs: row.createdAt.getTime(),
           } satisfies GenerationArtifact,
@@ -2532,6 +2539,14 @@ const parseGenerationArtifactRecord = (
     previewSource,
     summary,
     mimeType: toStringValue(record.mimeType) ?? undefined,
+    metadata:
+      toStringValue(asRecord(record.metadata).source) === "placeholder" ||
+      toStringValue(asRecord(record.metadata).source) === "ai"
+        ? {
+            source: toStringValue(asRecord(record.metadata).source) as "ai" | "placeholder",
+            reason: toStringValue(asRecord(record.metadata).reason) ?? undefined,
+          }
+        : undefined,
     approved,
     createdAtMs,
   };
@@ -2951,6 +2966,37 @@ export class BuilderProjectStateStore {
     );
   }
 
+  private async materializeProjectEntries(
+    rows: readonly BuilderProjectRow[],
+  ): Promise<readonly BuilderProjectStateEntry[]> {
+    const entries: BuilderProjectStateEntry[] = [];
+
+    for (const row of rows) {
+      const entry = await this.materializeProjectEntry(row);
+      if (entry) {
+        entries.push(entry);
+      }
+    }
+
+    return entries;
+  }
+
+  private async listQueuedProjectRows(projectId?: string): Promise<readonly BuilderProjectRow[]> {
+    const [queuedGenerationProjectIds, queuedAutomationProjectIds] = await Promise.all([
+      prisma.builderProjectGenerationJob.listQueuedProjectIds(projectId),
+      prisma.builderProjectAutomationRun.listQueuedProjectIds(projectId),
+    ]);
+    const queuedProjectIds = [
+      ...new Set([...queuedGenerationProjectIds, ...queuedAutomationProjectIds]),
+    ].sort((left, right) => left.localeCompare(right));
+
+    if (queuedProjectIds.length === 0) {
+      return [];
+    }
+
+    return prisma.builderProject.listStateRowsByIds(queuedProjectIds);
+  }
+
   /**
    * Creates a project from baseline state or returns the existing snapshot when already present.
    *
@@ -3025,8 +3071,21 @@ export class BuilderProjectStateStore {
   ): Promise<readonly BuilderProjectStateEntry[]> {
     await this.initPromise;
     const rows = await prisma.builderProject.listStateRows(projectId);
-    const entries = await Promise.all(rows.map((row) => this.materializeProjectEntry(row)));
-    return entries.filter((entry): entry is BuilderProjectStateEntry => entry !== null);
+    return this.materializeProjectEntries(rows);
+  }
+
+  /**
+   * Loads only projects that currently have queued generation or automation work.
+   *
+   * @param projectId Optional project filter.
+   * @returns Decoded queued project entries with normalized state.
+   */
+  public async listQueuedProjectEntries(
+    projectId?: string,
+  ): Promise<readonly BuilderProjectStateEntry[]> {
+    await this.initPromise;
+    const rows = await this.listQueuedProjectRows(projectId);
+    return this.materializeProjectEntries(rows);
   }
 
   /**

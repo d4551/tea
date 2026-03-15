@@ -1,6 +1,6 @@
 import { createLogger } from "../../lib/logger.ts";
 import { acceptUnknown, safeJsonParse } from "../../shared/utils/safe-json.ts";
-import type { AiProvider } from "../ai/providers/provider-types.ts";
+import type { AiChatParams, AiGenerationResult } from "../ai/providers/provider-types.ts";
 
 const logger = createLogger("builder.ai-authoring");
 
@@ -24,6 +24,23 @@ export interface GeneratedCombatEncounter {
 }
 
 /**
+ * Typed result envelope for combat-encounter generation.
+ */
+export type GeneratedCombatEncounterResult =
+  | {
+      readonly ok: true;
+      /** Parsed combat encounter payload. */
+      readonly encounter: GeneratedCombatEncounter;
+    }
+  | {
+      readonly ok: false;
+      /** Error description from the provider or parser. */
+      readonly error: string;
+      /** Whether the caller should retry. */
+      readonly retryable: boolean;
+    };
+
+/**
  * AI-generated inventory item output.
  */
 export interface GeneratedInventoryItem {
@@ -38,6 +55,23 @@ export interface GeneratedInventoryItem {
 }
 
 /**
+ * Typed result envelope for item-set generation.
+ */
+export type GeneratedItemSetResult =
+  | {
+      readonly ok: true;
+      /** Parsed inventory items. */
+      readonly items: readonly GeneratedInventoryItem[];
+    }
+  | {
+      readonly ok: false;
+      /** Error description from the provider or parser. */
+      readonly error: string;
+      /** Whether the caller should retry. */
+      readonly retryable: boolean;
+    };
+
+/**
  * AI-generated cutscene script step output.
  */
 export interface GeneratedCutsceneStep {
@@ -50,40 +84,114 @@ export interface GeneratedCutsceneStep {
 }
 
 /**
+ * Typed result envelope for cutscene-script generation.
+ */
+export type GeneratedCutsceneScriptResult =
+  | {
+      readonly ok: true;
+      /** Parsed cutscene steps. */
+      readonly steps: readonly GeneratedCutsceneStep[];
+    }
+  | {
+      readonly ok: false;
+      /** Error description from the provider or parser. */
+      readonly error: string;
+      /** Whether the caller should retry. */
+      readonly retryable: boolean;
+    };
+
+/**
  * Context for generating a combat encounter via AI.
  */
 export interface CombatEncounterContext {
-  /** Scene identifier for encounter placement. */
-  readonly sceneId: string;
-  /** Target difficulty tier. */
-  readonly difficulty: "easy" | "normal" | "hard" | "boss";
-  /** Expected player level. */
-  readonly playerLevel: number;
+  /** User-authored instruction describing the encounter to generate. */
+  readonly prompt: string;
+  /** Optional scene identifier for encounter placement. */
+  readonly sceneId?: string;
+  /** Optional target difficulty tier when already known. */
+  readonly difficulty?: "easy" | "normal" | "hard" | "boss";
+  /** Optional expected player level when already known. */
+  readonly playerLevel?: number;
 }
 
 /**
  * Context for generating an item set via AI.
  */
 export interface ItemSetContext {
-  /** Thematic category for generated items. */
-  readonly theme: string;
-  /** Number of items to generate. */
-  readonly count: number;
-  /** Rarity tier. */
-  readonly rarity: "common" | "uncommon" | "rare" | "legendary";
+  /** User-authored instruction describing the item set to generate. */
+  readonly prompt: string;
+  /** Optional thematic category for generated items. */
+  readonly theme?: string;
+  /** Optional number of items to generate. */
+  readonly count?: number;
+  /** Optional rarity tier. */
+  readonly rarity?: "common" | "uncommon" | "rare" | "legendary";
 }
 
 /**
  * Context for generating a cutscene script via AI.
  */
 export interface CutsceneScriptContext {
-  /** Scene where the cutscene occurs. */
-  readonly sceneId: string;
-  /** Characters involved. */
-  readonly characters: readonly string[];
-  /** Narrative mood. */
-  readonly mood: string;
+  /** User-authored instruction describing the cutscene to generate. */
+  readonly prompt: string;
+  /** Optional scene where the cutscene occurs. */
+  readonly sceneId?: string;
+  /** Optional characters involved. */
+  readonly characters?: readonly string[];
+  /** Optional narrative mood. */
+  readonly mood?: string;
 }
+
+/**
+ * Context for generating an animation plan via AI.
+ */
+export interface AnimationPlanContext {
+  /** Target asset identifier for the generated clips. */
+  readonly targetId?: string;
+  /** User-authored instruction describing the desired motion set. */
+  readonly prompt: string;
+}
+
+/**
+ * AI-generated animation clip suggestion.
+ */
+export interface GeneratedAnimationPlanClip {
+  /** Stable clip identifier. */
+  readonly id: string;
+  /** Semantic state tag such as idle or walk. */
+  readonly stateTag: string;
+  /** Frame count for the proposed clip. */
+  readonly frameCount: number;
+  /** Playback speed in frames per second. */
+  readonly playbackFps: number;
+}
+
+/**
+ * AI-generated animation plan payload.
+ */
+export interface GeneratedAnimationPlan {
+  /** Optional asset identifier the plan targets. */
+  readonly targetId?: string;
+  /** Suggested animation clips for the target asset. */
+  readonly suggestedClips: readonly GeneratedAnimationPlanClip[];
+}
+
+/**
+ * Typed result envelope for animation-plan generation.
+ */
+export type GeneratedAnimationPlanResult =
+  | {
+      readonly ok: true;
+      /** Parsed animation plan payload. */
+      readonly plan: GeneratedAnimationPlan;
+    }
+  | {
+      readonly ok: false;
+      /** Error description from the provider or parser. */
+      readonly error: string;
+      /** Whether the caller should retry. */
+      readonly retryable: boolean;
+    };
 
 /**
  * Extracts a JSON block from a raw AI response string.
@@ -92,7 +200,7 @@ export interface CutsceneScriptContext {
  * @returns Parsed JSON value or null on failure.
  */
 const extractJson = (raw: string): unknown | null => {
-  const fencedMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const fencedMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/u);
   const jsonStr = fencedMatch ? (fencedMatch[1]?.trim() ?? "") : raw.trim();
   return safeJsonParse(jsonStr, null, acceptUnknown);
 };
@@ -100,7 +208,7 @@ const extractJson = (raw: string): unknown | null => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const isStringRecord = (value: unknown): value is Record<string, number> =>
+const isNumberRecord = (value: unknown): value is Record<string, number> =>
   isRecord(value) && Object.values(value).every((entry) => typeof entry === "number");
 
 const parseGeneratedCombatEncounter = (value: unknown): GeneratedCombatEncounter | null => {
@@ -129,10 +237,11 @@ const parseGeneratedCombatEncounter = (value: unknown): GeneratedCombatEncounter
         typeof characterKey !== "string" ||
         typeof level !== "number" ||
         !Number.isFinite(level) ||
-        !isStringRecord(stats)
+        !isNumberRecord(stats)
       ) {
         return null;
       }
+
       return {
         characterKey,
         level,
@@ -184,7 +293,7 @@ const parseGeneratedInventoryItem = (value: unknown): GeneratedInventoryItem | n
     typeof stackable !== "boolean" ||
     typeof maxStack !== "number" ||
     !Number.isFinite(maxStack) ||
-    !isStringRecord(effects)
+    !isNumberRecord(effects)
   ) {
     return null;
   }
@@ -229,27 +338,91 @@ const parseGeneratedCutsceneStep = (value: unknown): GeneratedCutsceneStep | nul
   };
 };
 
+const parseGeneratedAnimationPlanClip = (value: unknown): GeneratedAnimationPlanClip | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const { id, stateTag, frameCount, playbackFps } = value;
+  if (
+    typeof id !== "string" ||
+    typeof stateTag !== "string" ||
+    typeof frameCount !== "number" ||
+    !Number.isFinite(frameCount) ||
+    typeof playbackFps !== "number" ||
+    !Number.isFinite(playbackFps)
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    stateTag,
+    frameCount: Math.max(1, Math.floor(frameCount)),
+    playbackFps: Math.max(1, Math.floor(playbackFps)),
+  };
+};
+
+const parseGeneratedAnimationPlan = (value: unknown): GeneratedAnimationPlan | null => {
+  if (!isRecord(value) || !Array.isArray(value.suggestedClips)) {
+    return null;
+  }
+
+  const suggestedClips = value.suggestedClips
+    .map((clip) => parseGeneratedAnimationPlanClip(clip))
+    .filter((clip): clip is GeneratedAnimationPlanClip => clip !== null);
+
+  if (suggestedClips.length === 0) {
+    return null;
+  }
+
+  return {
+    targetId: typeof value.targetId === "string" ? value.targetId : undefined,
+    suggestedClips,
+  };
+};
+
+interface AiAuthoringChatClient {
+  readonly chat: (params: AiChatParams) => Promise<AiGenerationResult>;
+}
+
+type AiAuthoringChatDefaults = Pick<AiChatParams, "governance" | "costTier">;
+
+const buildInstructionSegments = (
+  entries: readonly (readonly [label: string, value: string | number | undefined])[],
+): string[] =>
+  entries.flatMap(([label, value]) => {
+    if (value === undefined) {
+      return [];
+    }
+
+    const normalized =
+      typeof value === "number" ? String(value) : value.trim().length > 0 ? value.trim() : "";
+    return normalized.length > 0 ? [`${label}: ${normalized}`] : [];
+  });
+
 /**
  * AI-assisted content authoring service.
- *
- * Generates game content (encounters, items, cutscenes) by prompting an
- * AI provider with structured JSON schemas and parsing the results.
  */
 export class AiAuthoringService {
   /**
-   * @param provider AI provider to use for generation.
+   * @param chatClient AI chat client used for generation.
+   * @param defaultChatParams Optional governance defaults applied to every call.
    */
-  constructor(private readonly provider: AiProvider) {}
+  public constructor(
+    private readonly chatClient: AiAuthoringChatClient,
+    private readonly defaultChatParams: AiAuthoringChatDefaults = {},
+  ) {}
 
   /**
    * Generates a combat encounter using AI-driven content authoring.
    *
    * @param context Encounter generation context.
-   * @returns Generated combat encounter or null on failure.
+   * @returns Typed combat encounter result.
    */
-  async generateCombatEncounter(
+  public async generateCombatEncounter(
     context: CombatEncounterContext,
-  ): Promise<GeneratedCombatEncounter | null> {
+  ): Promise<GeneratedCombatEncounterResult> {
     const systemPrompt = `You generate JSON combat encounters for a 2D RPG. Respond ONLY with a valid JSON object matching this schema:
 {
   "id": string,
@@ -259,91 +432,236 @@ export class AiAuthoringService {
   "difficulty": string
 }`;
 
-    const result = await this.provider.chat({
+    const promptLines = [
+      `Primary request: ${context.prompt.trim()}`,
+      ...buildInstructionSegments([
+        ["Scene", context.sceneId],
+        ["Difficulty", context.difficulty],
+        ["Player level", context.playerLevel],
+      ]),
+    ];
+
+    const result = await this.chatClient.chat({
       messages: [
         {
           role: "user",
-          content: `Generate a ${context.difficulty} combat encounter for scene "${context.sceneId}" targeting player level ${context.playerLevel}.`,
+          content: promptLines.join("\n"),
         },
       ],
       systemPrompt,
+      ...this.defaultChatParams,
     });
 
     if (!result.ok) {
       logger.warn("ai.authoring.combat.failed", { error: result.error });
-      return null;
+      return {
+        ok: false,
+        error: result.error,
+        retryable: result.retryable,
+      };
     }
 
-    return parseGeneratedCombatEncounter(extractJson(result.text));
+    const parsed = parseGeneratedCombatEncounter(extractJson(result.text));
+    if (!parsed) {
+      return {
+        ok: false,
+        error: "AI provider returned an invalid combat encounter payload",
+        retryable: true,
+      };
+    }
+
+    return {
+      ok: true,
+      encounter: parsed,
+    };
   }
 
   /**
    * Generates a set of inventory items using AI-driven content authoring.
    *
    * @param context Item generation context.
-   * @returns Generated items or empty array on failure.
+   * @returns Typed item-set result.
    */
-  async generateItemSet(context: ItemSetContext): Promise<readonly GeneratedInventoryItem[]> {
+  public async generateItemSet(context: ItemSetContext): Promise<GeneratedItemSetResult> {
     const systemPrompt = `You generate JSON inventory items for a 2D RPG. Respond ONLY with a JSON array of objects matching this schema:
 [{ "id": string, "labelKey": string, "descriptionKey": string, "category": "weapon" | "armor" | "consumable" | "key" | "material", "rarity": string, "stackable": boolean, "maxStack": number, "effects": Record<string, number> }]`;
 
-    const result = await this.provider.chat({
+    const promptLines = [
+      `Primary request: ${context.prompt.trim()}`,
+      ...buildInstructionSegments([
+        ["Theme", context.theme],
+        ["Item count", context.count],
+        ["Rarity", context.rarity],
+      ]),
+    ];
+
+    const result = await this.chatClient.chat({
       messages: [
         {
           role: "user",
-          content: `Generate ${context.count} ${context.rarity} items with theme "${context.theme}".`,
+          content: promptLines.join("\n"),
         },
       ],
       systemPrompt,
+      ...this.defaultChatParams,
     });
 
     if (!result.ok) {
       logger.warn("ai.authoring.items.failed", { error: result.error });
-      return [];
+      return {
+        ok: false,
+        error: result.error,
+        retryable: result.retryable,
+      };
     }
 
     const parsed = extractJson(result.text);
     if (!Array.isArray(parsed)) {
-      return [];
+      return {
+        ok: false,
+        error: "AI provider returned an invalid item set payload",
+        retryable: true,
+      };
     }
-    return parsed
+
+    const items = parsed
       .map((item) => parseGeneratedInventoryItem(item))
       .filter((item): item is GeneratedInventoryItem => item !== null);
+
+    if (items.length === 0) {
+      return {
+        ok: false,
+        error: "AI provider returned an empty item set payload",
+        retryable: true,
+      };
+    }
+
+    return {
+      ok: true,
+      items,
+    };
   }
 
   /**
    * Generates a cutscene script using AI-driven content authoring.
    *
    * @param context Cutscene generation context.
-   * @returns Generated cutscene steps or empty array on failure.
+   * @returns Typed cutscene-script result.
    */
-  async generateCutsceneScript(
+  public async generateCutsceneScript(
     context: CutsceneScriptContext,
-  ): Promise<readonly GeneratedCutsceneStep[]> {
+  ): Promise<GeneratedCutsceneScriptResult> {
     const systemPrompt = `You generate JSON cutscene scripts for a 2D RPG. Respond ONLY with a JSON array of step objects matching this schema:
 [{ "id": string, "type": "dialogue" | "camera" | "animation" | "wait", "characterKey": string | null, "textKey": string | null, "durationMs": number, "data": Record<string, unknown> }]`;
 
-    const result = await this.provider.chat({
+    const promptLines = [
+      `Primary request: ${context.prompt.trim()}`,
+      ...buildInstructionSegments([
+        ["Scene", context.sceneId],
+        ["Characters", context.characters?.join(", ")],
+        ["Mood", context.mood],
+      ]),
+    ];
+
+    const result = await this.chatClient.chat({
       messages: [
         {
           role: "user",
-          content: `Generate a cutscene script for scene "${context.sceneId}" involving characters [${context.characters.join(", ")}] with a ${context.mood} mood.`,
+          content: promptLines.join("\n"),
         },
       ],
       systemPrompt,
+      ...this.defaultChatParams,
     });
 
     if (!result.ok) {
       logger.warn("ai.authoring.cutscene.failed", { error: result.error });
-      return [];
+      return {
+        ok: false,
+        error: result.error,
+        retryable: result.retryable,
+      };
     }
 
     const parsed = extractJson(result.text);
     if (!Array.isArray(parsed)) {
-      return [];
+      return {
+        ok: false,
+        error: "AI provider returned an invalid cutscene script payload",
+        retryable: true,
+      };
     }
-    return parsed
+
+    const steps = parsed
       .map((step) => parseGeneratedCutsceneStep(step))
       .filter((step): step is GeneratedCutsceneStep => step !== null);
+
+    if (steps.length === 0) {
+      return {
+        ok: false,
+        error: "AI provider returned an empty cutscene script payload",
+        retryable: true,
+      };
+    }
+
+    return {
+      ok: true,
+      steps,
+    };
+  }
+
+  /**
+   * Generates a structured animation plan for review and later clip creation.
+   *
+   * @param context Animation-plan generation context.
+   * @returns Typed animation plan result.
+   */
+  public async generateAnimationPlan(
+    context: AnimationPlanContext,
+  ): Promise<GeneratedAnimationPlanResult> {
+    const systemPrompt = `You generate JSON animation plans for a 2D RPG. Respond ONLY with a JSON object matching this schema:
+{
+  "targetId": string | undefined,
+  "suggestedClips": [
+    { "id": string, "stateTag": string, "frameCount": number, "playbackFps": number }
+  ]
+}`;
+
+    const result = await this.chatClient.chat({
+      messages: [
+        {
+          role: "user",
+          content: `Generate an animation plan for target "${context.targetId ?? "unknown"}" using this request: "${context.prompt}". Return clip suggestions for idle and movement if appropriate.`,
+        },
+      ],
+      systemPrompt,
+      ...this.defaultChatParams,
+    });
+
+    if (!result.ok) {
+      logger.warn("ai.authoring.animation-plan.failed", { error: result.error });
+      return {
+        ok: false,
+        error: result.error,
+        retryable: result.retryable,
+      };
+    }
+
+    const parsed = parseGeneratedAnimationPlan(extractJson(result.text));
+    if (!parsed) {
+      return {
+        ok: false,
+        error: "AI provider returned an invalid animation plan payload",
+        retryable: true,
+      };
+    }
+
+    return {
+      ok: true,
+      plan: {
+        ...parsed,
+        targetId: parsed.targetId ?? context.targetId,
+      },
+    };
   }
 }

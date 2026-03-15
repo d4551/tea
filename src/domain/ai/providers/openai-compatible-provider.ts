@@ -7,6 +7,11 @@
  * share one provider contract.
  */
 
+import type {
+  AiApiCompatibleAuthConfig,
+  AiApiCompatibleEndpoints,
+  AiApiCompatibleVendor,
+} from "../../../config/environment.ts";
 import { appConfig } from "../../../config/environment.ts";
 import { createLogger } from "../../../lib/logger.ts";
 import {
@@ -52,11 +57,13 @@ type ChatImagePayload = {
 export interface OpenAiCompatibleProviderConfig {
   /** Provider name used by routing and status responses. */
   readonly name: "openai-compatible-local" | "openai-compatible-cloud";
+  /** Named vendor preset resolved from configuration. */
+  readonly vendor: AiApiCompatibleVendor;
   /** Human-readable provider label. */
   readonly providerLabel: string;
-  /** Base API URL ending in `/v1`. */
+  /** Base API URL for the upstream provider. */
   readonly baseUrl: string;
-  /** Bearer token used for authenticated APIs. */
+  /** API token used for authenticated APIs. */
   readonly apiKey: string;
   /** Availability probe timeout in milliseconds. */
   readonly availabilityTimeoutMs: number;
@@ -74,6 +81,10 @@ export interface OpenAiCompatibleProviderConfig {
   readonly moderationModel?: string;
   /** Optional default speech voice. */
   readonly speechVoice?: string;
+  /** Vendor-specific endpoint paths. */
+  readonly endpoints: AiApiCompatibleEndpoints;
+  /** Vendor-specific auth/header rules. */
+  readonly auth: AiApiCompatibleAuthConfig;
   /** Whether the provider executes locally. */
   readonly local: boolean;
 }
@@ -196,11 +207,16 @@ const toChatMessagePayload = (
 };
 
 const parseModelsResponse = (value: unknown): OpenAiCompatibleModelListResponse | null => {
-  if (!isRecord(value) || !Array.isArray(value.data)) {
+  const rawEntries = Array.isArray(value)
+    ? value
+    : isRecord(value) && Array.isArray(value.data)
+      ? value.data
+      : null;
+  if (!rawEntries) {
     return null;
   }
 
-  const data = value.data
+  const data = rawEntries
     .map((entry) => (isRecord(entry) ? readString(entry.id) : null))
     .filter((entry): entry is string => entry !== null)
     .map((id) => ({ id }));
@@ -370,13 +386,29 @@ const normalizeModerationLabel = (value: string): string =>
 
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => bytes.slice().buffer;
 
-const buildAuthHeaders = (apiKey: string): HeadersInit => ({
-  ...(apiKey.length > 0 ? { authorization: `Bearer ${apiKey}` } : {}),
+const buildProviderUrl = (baseUrl: string, path: string): string =>
+  path.startsWith("http://") || path.startsWith("https://")
+    ? path
+    : `${baseUrl.replace(/\/$/u, "")}/${path.replace(/^\//u, "")}`;
+
+const buildAuthHeaders = (
+  apiKey: string,
+  auth: AiApiCompatibleAuthConfig,
+): Readonly<Record<string, string>> => ({
+  ...auth.extraHeaders,
+  ...(apiKey.length > 0
+    ? {
+        [auth.apiKeyHeaderName]: `${auth.apiKeyPrefix}${apiKey}`,
+      }
+    : {}),
 });
 
-const buildJsonHeaders = (apiKey: string): HeadersInit => ({
+const buildJsonHeaders = (
+  apiKey: string,
+  auth: AiApiCompatibleAuthConfig,
+): Readonly<Record<string, string>> => ({
   "content-type": "application/json",
-  ...buildAuthHeaders(apiKey),
+  ...buildAuthHeaders(apiKey, auth),
 });
 
 const logBoundaryFailure = (event: string, failure: ExternalFailure): void => {
@@ -534,27 +566,60 @@ export class OpenAiCompatibleProvider implements AiProvider {
     this.fetchImpl = fetchImpl;
   }
 
+  private get hasConfiguredDefaults(): boolean {
+    return (
+      this.config.chatModel.trim().length > 0 &&
+      (this.config.local || this.config.apiKey.length > 0)
+    );
+  }
+
+  private get configuredModelIds(): readonly string[] {
+    return [
+      this.config.chatModel,
+      ...(this.config.embeddingModel ? [this.config.embeddingModel] : []),
+      ...(this.config.visionModel ? [this.config.visionModel] : []),
+      ...(this.config.transcriptionModel ? [this.config.transcriptionModel] : []),
+      ...(this.config.speechModel ? [this.config.speechModel] : []),
+      ...(this.config.moderationModel ? [this.config.moderationModel] : []),
+    ];
+  }
+
+  private getModelDiscoveryUrl(): string | null {
+    return this.config.endpoints.modelsPath
+      ? buildProviderUrl(this.config.baseUrl, this.config.endpoints.modelsPath)
+      : null;
+  }
+
+  private buildEndpointUrl(path: string): string {
+    return buildProviderUrl(this.config.baseUrl, path);
+  }
+
   /**
    * Checks whether the provider is reachable.
    *
-   * @returns True when `/models` responds successfully.
+   * @returns True when the configured availability probe succeeds or static config is usable.
    */
   public async isAvailable(): Promise<boolean> {
+    const modelDiscoveryUrl = this.getModelDiscoveryUrl();
+    if (!modelDiscoveryUrl) {
+      return this.hasConfiguredDefaults;
+    }
+
     const response = await fetchProviderResponse(
       this.fetchImpl,
       this.name,
       "availability",
-      `${this.config.baseUrl}/models`,
+      modelDiscoveryUrl,
       {
         method: "GET",
-        headers: buildAuthHeaders(this.config.apiKey),
+        headers: buildAuthHeaders(this.config.apiKey, this.config.auth),
         signal: AbortSignal.timeout(this.config.availabilityTimeoutMs),
       },
     );
 
     if (!response.ok) {
       logBoundaryFailure("openai-compatible.availability.failed", response.failure);
-      return false;
+      return this.hasConfiguredDefaults;
     }
 
     return response.data.ok;
@@ -566,7 +631,12 @@ export class OpenAiCompatibleProvider implements AiProvider {
    * @returns Provider readiness.
    */
   public async readiness(): Promise<"ready" | "degraded" | "offline"> {
-    return (await this.isAvailable()) ? "ready" : "offline";
+    const available = await this.isAvailable();
+    if (!available) {
+      return "offline";
+    }
+
+    return this.config.endpoints.modelsPath ? "ready" : "degraded";
   }
 
   /**
@@ -575,21 +645,27 @@ export class OpenAiCompatibleProvider implements AiProvider {
    * @returns Capability list for available models.
    */
   public async detectCapabilities(): Promise<readonly AiModelCapabilities[]> {
+    const configuredModels = new Set<string>(this.configuredModelIds);
+    const modelDiscoveryUrl = this.getModelDiscoveryUrl();
+    if (!modelDiscoveryUrl) {
+      return [...configuredModels].map((model) => buildCapabilities(this.name, model, this.config));
+    }
+
     const response = await fetchProviderResponse(
       this.fetchImpl,
       this.name,
       "detect-capabilities",
-      `${this.config.baseUrl}/models`,
+      modelDiscoveryUrl,
       {
         method: "GET",
-        headers: buildAuthHeaders(this.config.apiKey),
+        headers: buildAuthHeaders(this.config.apiKey, this.config.auth),
         signal: AbortSignal.timeout(this.config.availabilityTimeoutMs),
       },
     );
 
     if (!response.ok) {
       logBoundaryFailure("openai-compatible.capabilities.failed", response.failure);
-      return [];
+      return [...configuredModels].map((model) => buildCapabilities(this.name, model, this.config));
     }
 
     const payload = await readParsedJsonResponse(
@@ -601,17 +677,9 @@ export class OpenAiCompatibleProvider implements AiProvider {
     );
     if (!payload.ok) {
       logBoundaryFailure("openai-compatible.capabilities.failed", payload.failure);
-      return [];
+      return [...configuredModels].map((model) => buildCapabilities(this.name, model, this.config));
     }
 
-    const configuredModels = new Set<string>([
-      this.config.chatModel,
-      ...(this.config.embeddingModel ? [this.config.embeddingModel] : []),
-      ...(this.config.visionModel ? [this.config.visionModel] : []),
-      ...(this.config.transcriptionModel ? [this.config.transcriptionModel] : []),
-      ...(this.config.speechModel ? [this.config.speechModel] : []),
-      ...(this.config.moderationModel ? [this.config.moderationModel] : []),
-    ]);
     const listedModels = new Set(payload.data.data.map((entry) => entry.id));
     const modelIds = [...new Set([...listedModels, ...configuredModels])];
     return modelIds.map((model) => buildCapabilities(this.name, model, this.config));
@@ -634,10 +702,10 @@ export class OpenAiCompatibleProvider implements AiProvider {
       this.fetchImpl,
       this.name,
       "chat",
-      `${this.config.baseUrl}/chat/completions`,
+      this.buildEndpointUrl(this.config.endpoints.chatCompletionsPath),
       {
         method: "POST",
-        headers: buildJsonHeaders(this.config.apiKey),
+        headers: buildJsonHeaders(this.config.apiKey, this.config.auth),
         body: JSON.stringify({
           model: params.model ?? this.config.chatModel,
           messages: [
@@ -690,10 +758,10 @@ export class OpenAiCompatibleProvider implements AiProvider {
       this.fetchImpl,
       this.name,
       "chat-stream",
-      `${this.config.baseUrl}/chat/completions`,
+      this.buildEndpointUrl(this.config.endpoints.chatCompletionsPath),
       {
         method: "POST",
-        headers: buildJsonHeaders(this.config.apiKey),
+        headers: buildJsonHeaders(this.config.apiKey, this.config.auth),
         body: JSON.stringify({
           model: params.model ?? this.config.chatModel,
           messages: [
@@ -774,7 +842,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
    */
   public async classify(text: string, model?: string): Promise<AiClassificationResult | null> {
     const moderationModel = model ?? this.config.moderationModel;
-    if (!moderationModel) {
+    if (!moderationModel || !this.config.endpoints.moderationsPath) {
       return null;
     }
 
@@ -782,10 +850,10 @@ export class OpenAiCompatibleProvider implements AiProvider {
       this.fetchImpl,
       this.name,
       "moderation",
-      `${this.config.baseUrl}/moderations`,
+      this.buildEndpointUrl(this.config.endpoints.moderationsPath),
       {
         method: "POST",
-        headers: buildJsonHeaders(this.config.apiKey),
+        headers: buildJsonHeaders(this.config.apiKey, this.config.auth),
         body: JSON.stringify({
           model: moderationModel,
           input: text,
@@ -842,7 +910,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
    */
   public async transcribeAudio(params: AiTranscriptionParams): Promise<AiTranscriptionResult> {
     const transcriptionModel = params.model ?? this.config.transcriptionModel;
-    if (!transcriptionModel) {
+    if (!transcriptionModel || !this.config.endpoints.transcriptionsPath) {
       return {
         ok: false,
         error: "OpenAI-compatible speech-to-text model is not configured.",
@@ -867,10 +935,10 @@ export class OpenAiCompatibleProvider implements AiProvider {
       this.fetchImpl,
       this.name,
       "transcription",
-      `${this.config.baseUrl}/audio/transcriptions`,
+      this.buildEndpointUrl(this.config.endpoints.transcriptionsPath),
       {
         method: "POST",
-        headers: buildAuthHeaders(this.config.apiKey),
+        headers: buildAuthHeaders(this.config.apiKey, this.config.auth),
         body: form,
         signal: AbortSignal.timeout(appConfig.ai.requestTimeoutMs),
       },
@@ -922,7 +990,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
   public async synthesizeSpeech(params: AiSpeechSynthesisParams): Promise<AiSpeechSynthesisResult> {
     const speechModel = params.model ?? this.config.speechModel;
     const voice = params.voice ?? this.config.speechVoice;
-    if (!speechModel) {
+    if (!speechModel || !this.config.endpoints.speechPath) {
       return {
         ok: false,
         error: "OpenAI-compatible text-to-speech model is not configured.",
@@ -942,10 +1010,10 @@ export class OpenAiCompatibleProvider implements AiProvider {
       this.fetchImpl,
       this.name,
       "speech",
-      `${this.config.baseUrl}/audio/speech`,
+      this.buildEndpointUrl(this.config.endpoints.speechPath),
       {
         method: "POST",
-        headers: buildJsonHeaders(this.config.apiKey),
+        headers: buildJsonHeaders(this.config.apiKey, this.config.auth),
         body: JSON.stringify({
           model: speechModel,
           voice,
@@ -1033,7 +1101,7 @@ export class OpenAiCompatibleProvider implements AiProvider {
    * @returns Embedding vector or null.
    */
   public async generateEmbedding(text: string): Promise<Float32Array | null> {
-    if (!this.config.embeddingModel) {
+    if (!this.config.embeddingModel || !this.config.endpoints.embeddingsPath) {
       return null;
     }
 
@@ -1041,10 +1109,10 @@ export class OpenAiCompatibleProvider implements AiProvider {
       this.fetchImpl,
       this.name,
       "embedding",
-      `${this.config.baseUrl}/embeddings`,
+      this.buildEndpointUrl(this.config.endpoints.embeddingsPath),
       {
         method: "POST",
-        headers: buildJsonHeaders(this.config.apiKey),
+        headers: buildJsonHeaders(this.config.apiKey, this.config.auth),
         body: JSON.stringify({
           model: this.config.embeddingModel,
           input: text,

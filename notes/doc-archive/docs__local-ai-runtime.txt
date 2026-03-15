@@ -92,6 +92,13 @@ sequenceDiagram
 - Health state and warmup are tracked separately from pipeline lifecycle.
 - Pipeline cache is reused in process with explicit corruption recovery boundaries.
 
+## 4.1) API-compatible vendor presets
+
+- Local API-compatible routing defaults to `ramalama` and remains overrideable with `AI_LOCAL_API_COMPATIBLE_VENDOR`.
+- Cloud API-compatible routing supports explicit presets for `openai`, `claude`, `deepseek`, `gemini`, `copilot`, and `custom` through `AI_CLOUD_API_COMPATIBLE_VENDOR`.
+- Vendor presets own base URLs, endpoint paths, and required static headers so providers that do not expose plain OpenAI `/v1/models` surfaces can still route through the shared provider contract.
+- Manual overrides still win for `AI_*_API_COMPATIBLE_BASE_URL`, `AI_*_API_COMPATIBLE_*_MODEL`, and provider labels when operators need a custom deployment.
+
 ## 5) Knowledge integration
 
 - Documents/chunks are stored in AI tables and reused across retrieval flow.

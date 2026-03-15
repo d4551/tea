@@ -5,6 +5,8 @@
  */
 import type { LocaleCode } from "../../config/environment.ts";
 import { humanizeBuilderIdentifier } from "../../domain/builder/builder-display.ts";
+import { BUILDER_LIBRARY_PAGE_SIZE } from "../../shared/constants/builder-defaults.ts";
+import { BUILDER_QUERY_PARAM_PAGE } from "../../shared/constants/builder-query.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
@@ -16,7 +18,12 @@ import {
   spinnerClasses,
 } from "../shared/ui-components.ts";
 import { buildBuilderJourneyConfig } from "./builder-journey.ts";
-import { renderWorkspaceFrame, renderWorkspaceShell } from "./workspace-shell.ts";
+import {
+  paginateWorkspaceItems,
+  renderWorkspaceBrowseControls,
+  renderWorkspaceFrame,
+  renderWorkspaceShell,
+} from "./workspace-shell.ts";
 
 const getDialogueSpeakerId = (key: string): string => {
   const segments = key.split(".");
@@ -44,6 +51,7 @@ export const renderDialogueEditor = (
   locale: LocaleCode,
   projectId: string,
   search = "",
+  page = 1,
 ): string => {
   const npcGroups = new Map<string, Array<{ key: string; text: string }>>();
   for (const key of Object.keys(catalog)) {
@@ -62,21 +70,58 @@ export const renderDialogueEditor = (
     npcGroups.set(npcId, existing);
   }
 
-  const selectedGroup = Array.from(npcGroups.entries())[0] ?? null;
-  const selectedLine = selectedGroup?.[1][0] ?? null;
-  const dialoguePath = interpolateRoutePath(appRoutes.builderDialogue, { projectId });
-  const searchAction = withQueryParameters(dialoguePath, {
-    lang: locale,
-  });
-  const createAction = appRoutes.builderApiDialogueCreateForm;
-  const generateHref = appRoutes.builderApiDialogueGenerate;
-  const creatorJourney = buildBuilderJourneyConfig(messages, locale, projectId, "story");
   const totalLines = Array.from(npcGroups.values()).reduce(
     (total, lines) => total + lines.length,
     0,
   );
 
-  const groupHtml = Array.from(npcGroups.entries())
+  const dialoguePath = interpolateRoutePath(appRoutes.builderDialogue, { projectId });
+  const searchAction = withQueryParameters(dialoguePath, { lang: locale });
+  const createAction = appRoutes.builderApiDialogueCreateForm;
+  const generateHref = appRoutes.builderApiDialogueGenerate;
+  const creatorJourney = buildBuilderJourneyConfig(messages, locale, projectId, "story");
+
+  const groupEntries = Array.from(npcGroups.entries());
+  const paginatedGroups = paginateWorkspaceItems(groupEntries, page, BUILDER_LIBRARY_PAGE_SIZE);
+  const selectedGroup = paginatedGroups.items[0] ?? null;
+  const selectedLine = selectedGroup?.[1][0] ?? null;
+
+  const previousHref =
+    paginatedGroups.page > 1
+      ? withQueryParameters(searchAction, {
+          [BUILDER_QUERY_PARAM_PAGE]: String(paginatedGroups.page - 1),
+          ...(search ? { search } : {}),
+        })
+      : undefined;
+  const nextHref =
+    paginatedGroups.page < paginatedGroups.totalPages
+      ? withQueryParameters(searchAction, {
+          [BUILDER_QUERY_PARAM_PAGE]: String(paginatedGroups.page + 1),
+          ...(search ? { search } : {}),
+        })
+      : undefined;
+  const browseControls = renderWorkspaceBrowseControls({
+    action: searchAction,
+    search,
+    searchLabel: messages.builder.dialogueSearchLabel,
+    searchPlaceholder: messages.builder.dialogueSearchPlaceholder,
+    submitLabel: messages.builder.filterAction,
+    resultsLabel: messages.builder.resultsLabel,
+    previousLabel: messages.builder.previousPage,
+    nextLabel: messages.builder.nextPage,
+    pageLabel: messages.builder.pageLabel,
+    page: paginatedGroups.page,
+    totalPages: paginatedGroups.totalPages,
+    totalItems: paginatedGroups.totalItems,
+    startIndex: paginatedGroups.startIndex,
+    endIndex: paginatedGroups.endIndex,
+    hiddenFields: { lang: locale, projectId },
+    htmxTarget: "#builder-content",
+    previousHref,
+    nextHref,
+  });
+
+  const groupHtml = paginatedGroups.items
     .map(([npcId, lines]) => {
       const npcLabel = humanizeBuilderIdentifier(npcId);
       const lineRows = lines
@@ -205,6 +250,8 @@ export const renderDialogueEditor = (
               </form>
             </div>
           </article>
+
+          ${browseControls}
 
           ${
             groupHtml.length > 0

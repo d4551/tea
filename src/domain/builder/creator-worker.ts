@@ -1,12 +1,7 @@
 import { chromium } from "playwright";
-import sharp from "sharp";
 import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
-import {
-  AUTOMATION_STEP_KIND_UNSUPPORTED_ERROR,
-  CREATOR_PLACEHOLDER_SVG_HEIGHT,
-  CREATOR_PLACEHOLDER_SVG_WIDTH,
-} from "../../shared/constants/builder-defaults.ts";
+import { AUTOMATION_STEP_KIND_UNSUPPORTED_ERROR } from "../../shared/constants/builder-defaults.ts";
 import { httpStatus } from "../../shared/constants/http.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes } from "../../shared/constants/routes.ts";
@@ -20,6 +15,7 @@ import type {
 } from "../../shared/contracts/game.ts";
 import { settleAsync } from "../../shared/utils/async-result.ts";
 import { sha256Hex } from "../../shared/utils/crypto.ts";
+import { encodeMonoWavAudio } from "../../shared/utils/wav-audio.ts";
 import { ProviderRegistry } from "../ai/providers/provider-registry.ts";
 import { AiAuthoringService } from "./ai-authoring.ts";
 import { persistBuilderFile } from "./asset-storage.ts";
@@ -64,100 +60,66 @@ export interface AutomationRunExecution {
   readonly statusMessage: string;
 }
 
-/** Theme-aligned palette for server-generated SVG (no CSS var() in Node/Sharp context). */
-const SVG_PALETTE = {
-  gradientStart: "oklch(0.32 0.08 250)",
-  gradientMid: "oklch(0.48 0.1 55)",
-  gradientEnd: "oklch(0.88 0.04 85)",
-  overlayFill: "rgba(15,23,42,0.18)",
-  overlayStroke: "rgba(255,255,255,0.26)",
-  text: "oklch(0.98 0.01 250)",
-};
-
-const buildImageSvg = (
-  title: string,
-  body: string,
-): string => `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="${CREATOR_PLACEHOLDER_SVG_WIDTH}" height="${CREATOR_PLACEHOLDER_SVG_HEIGHT}" viewBox="0 0 ${CREATOR_PLACEHOLDER_SVG_WIDTH} ${CREATOR_PLACEHOLDER_SVG_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="${SVG_PALETTE.gradientStart}"/>
-      <stop offset="50%" stop-color="${SVG_PALETTE.gradientMid}"/>
-      <stop offset="100%" stop-color="${SVG_PALETTE.gradientEnd}"/>
-    </linearGradient>
-  </defs>
-  <style><![CDATA[
-    .placeholder-copy {
-      font-family: ui-sans-serif, system-ui;
-      font-size: 24px;
-      line-height: 1.5;
-      color: ${SVG_PALETTE.text};
-      white-space: pre-wrap;
-    }
-  ]]></style>
-  <rect width="${CREATOR_PLACEHOLDER_SVG_WIDTH}" height="${CREATOR_PLACEHOLDER_SVG_HEIGHT}" rx="32" fill="url(#bg)" />
-  <rect x="28" y="28" width="${CREATOR_PLACEHOLDER_SVG_WIDTH - 56}" height="${CREATOR_PLACEHOLDER_SVG_HEIGHT - 56}" rx="24" fill="${SVG_PALETTE.overlayFill}" stroke="${SVG_PALETTE.overlayStroke}" />
-  <text x="64" y="120" font-family="ui-monospace, monospace" font-size="28" font-weight="700" fill="${SVG_PALETTE.text}">${title}</text>
-  <foreignObject x="64" y="156" width="896" height="320">
-    <div xmlns="http://www.w3.org/1999/xhtml" class="placeholder-copy">${body}</div>
-  </foreignObject>
-</svg>`;
-
-const encodeWav = (samples: Float32Array, sampleRate: number): Uint8Array => {
-  const bytesPerSample = 2;
-  const blockAlign = bytesPerSample;
-  const byteRate = sampleRate * blockAlign;
-  const dataSize = samples.length * bytesPerSample;
-  const buffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(buffer);
-
-  const writeText = (offset: number, value: string): void => {
-    for (let index = 0; index < value.length; index += 1) {
-      view.setUint8(offset + index, value.charCodeAt(index));
-    }
-  };
-
-  writeText(0, "RIFF");
-  view.setUint32(4, 36 + dataSize, true);
-  writeText(8, "WAVE");
-  writeText(12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, byteRate, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, 16, true);
-  writeText(36, "data");
-  view.setUint32(40, dataSize, true);
-
-  for (let index = 0; index < samples.length; index += 1) {
-    const sample = Math.max(-1, Math.min(1, samples[index] ?? 0));
-    view.setInt16(44 + index * 2, Math.round(sample * 0x7fff), true);
-  }
-
-  return new Uint8Array(buffer);
-};
-
-const buildVoicePreview = (prompt: string): Uint8Array => {
-  const sampleRate = 16_000;
-  const durationSeconds = Math.max(1, Math.min(3, Math.ceil(prompt.length / 60)));
-  const sampleCount = sampleRate * durationSeconds;
-  const samples = new Float32Array(sampleCount);
-
-  for (let index = 0; index < sampleCount; index += 1) {
-    const time = index / sampleRate;
-    const envelope = Math.max(0, 1 - time / durationSeconds);
-    samples[index] = Math.sin(time * Math.PI * 2 * 440) * envelope * 0.22;
-  }
-
-  return encodeWav(samples, sampleRate);
-};
-
 const toArtifactSummary = (job: GenerationJob): string =>
   job.targetId
     ? `generation.artifact.summary.target:${job.targetId}`
     : "generation.artifact.summary.prompt";
+
+const createGenerationArtifactMetadata = (
+  source: "ai" | "placeholder",
+  reason?: string,
+): GenerationArtifact["metadata"] => ({
+  source,
+  ...(reason ? { reason } : {}),
+});
+
+const inferArtifactFileName = (artifactId: string, mimeType: string): string => {
+  switch (mimeType) {
+    case "audio/wav":
+      return `${artifactId}.wav`;
+    case "application/json":
+      return `${artifactId}.json`;
+    case "image/jpeg":
+      return `${artifactId}.jpg`;
+    case "image/webp":
+      return `${artifactId}.webp`;
+    default:
+      return `${artifactId}.png`;
+  }
+};
+
+const createPersistedGenerationArtifact = async (
+  projectId: string,
+  artifactId: string,
+  job: GenerationJob,
+  content: Uint8Array,
+  mimeType: string,
+  createdAtMs: number,
+  kind: GenerationArtifact["kind"],
+  metadata?: GenerationArtifact["metadata"],
+): Promise<GenerationArtifact> => {
+  const persisted = await persistBuilderFile(
+    projectId,
+    "generated",
+    artifactId,
+    content,
+    inferArtifactFileName(artifactId, mimeType),
+    mimeType,
+  );
+
+  return {
+    id: artifactId,
+    jobId: job.id,
+    kind,
+    label: `generation.artifact.label.review:${job.kind}`,
+    previewSource: persisted.publicUrl,
+    summary: toArtifactSummary(job),
+    mimeType,
+    metadata,
+    approved: false,
+    createdAtMs,
+  };
+};
 
 const createAutomationArtifact = async (
   projectId: string,
@@ -191,6 +153,18 @@ const createAutomationArtifact = async (
     createdAtMs: Date.now(),
   };
 };
+
+const createAuthoringService = (
+  projectId: string,
+  registry: ProviderRegistry,
+): AiAuthoringService =>
+  new AiAuthoringService(registry, {
+    governance: {
+      projectId,
+      requestSource: "builder.creator-worker",
+    },
+    costTier: "standard",
+  });
 
 const toWorkerFailure = (error: unknown): WorkerFailure => ({
   ok: false,
@@ -235,140 +209,217 @@ const probeAutomationOrigin = async (targetUrl: URL): Promise<boolean> => {
 const buildGenerationArtifact = async (
   projectId: string,
   job: GenerationJob,
-): Promise<GenerationArtifact> => {
+): Promise<WorkerResult<GenerationArtifact>> => {
   const artifactId = `artifact.${job.id}`;
   const createdAtMs = Date.now();
 
-  if (job.kind === "voice-line") {
-    const wav = buildVoicePreview(job.prompt);
-    const persisted = await persistBuilderFile(
-      projectId,
-      "generated",
-      artifactId,
-      wav,
-      `${artifactId}.wav`,
-      "audio/wav",
-    );
+  switch (job.kind) {
+    case "voice-line": {
+      const speechResult = await runWorkerStep(async () => {
+        const registry = await ProviderRegistry.getInstance();
+        return registry.synthesizeSpeech({
+          text: job.prompt,
+        });
+      });
 
-    return {
-      id: artifactId,
-      jobId: job.id,
-      kind: "audio",
-      label: `generation.artifact.label.review:${job.kind}`,
-      previewSource: persisted.publicUrl,
-      summary: toArtifactSummary(job),
-      mimeType: "audio/wav",
-      approved: false,
-      createdAtMs,
-    };
-  }
+      if (speechResult.ok && speechResult.data.ok) {
+        return {
+          ok: true,
+          data: await createPersistedGenerationArtifact(
+            projectId,
+            artifactId,
+            job,
+            encodeMonoWavAudio(speechResult.data.audio, speechResult.data.sampleRate),
+            "audio/wav",
+            createdAtMs,
+            "audio",
+            createGenerationArtifactMetadata("ai"),
+          ),
+        };
+      }
 
-  if (
-    job.kind === "animation-plan" ||
-    job.kind === "combat-encounter" ||
-    job.kind === "item-set" ||
-    job.kind === "cutscene-script"
-  ) {
-    let payloadStr = "";
+      const reason = speechResult.ok
+        ? speechResult.data.ok
+          ? "Speech synthesis returned no audio payload"
+          : speechResult.data.error
+        : speechResult.error;
+      workerLogger.warn("creator-worker.voice.failed", {
+        jobId: job.id,
+        error: reason,
+      });
+      return {
+        ok: false,
+        error: `voice-line generation failed: ${reason}`,
+      };
+    }
+    case "portrait":
+    case "sprite-sheet":
+    case "tiles": {
+      const imageResult = await runWorkerStep(async () => {
+        const registry = await ProviderRegistry.getInstance();
+        return registry.generateImage({
+          prompt: job.prompt,
+          aspectRatio: job.kind === "portrait" ? "portrait" : "square",
+          targetId: job.targetId,
+          governance: {
+            projectId,
+            requestSource: "builder.creator-worker",
+          },
+          costTier: "high",
+        });
+      });
 
-    if (job.kind === "animation-plan") {
-      payloadStr = JSON.stringify(
-        {
+      if (imageResult.ok && imageResult.data.ok) {
+        return {
+          ok: true,
+          data: await createPersistedGenerationArtifact(
+            projectId,
+            artifactId,
+            job,
+            imageResult.data.image,
+            imageResult.data.mimeType,
+            createdAtMs,
+            job.kind,
+            createGenerationArtifactMetadata("ai"),
+          ),
+        };
+      }
+
+      const reason = imageResult.ok
+        ? imageResult.data.ok
+          ? "Image generation returned no image payload"
+          : imageResult.data.error
+        : imageResult.error;
+      workerLogger.warn("creator-worker.image.failed", {
+        jobId: job.id,
+        error: reason,
+      });
+      return {
+        ok: false,
+        error: `${job.kind} generation failed: ${reason}`,
+      };
+    }
+    case "animation-plan": {
+      const animationPlanResult = await runWorkerStep(async () => {
+        const registry = await ProviderRegistry.getInstance();
+        const authoring = createAuthoringService(projectId, registry);
+        return authoring.generateAnimationPlan({
           prompt: job.prompt,
           targetId: job.targetId,
-          suggestedClips: [
-            { id: `${job.id}.idle`, stateTag: "idle", frameCount: 4, playbackFps: 8 },
-            { id: `${job.id}.walk`, stateTag: "walk", frameCount: 6, playbackFps: 10 },
-          ],
-        },
-        null,
-        2,
-      );
-    } else {
-      const registry = await ProviderRegistry.getInstance();
-      const provider = registry.selectProvider("text-generation");
-      if (!provider) {
-        throw new Error(`ai-provider-unavailable-for-generation`);
-      }
-      const authoring = new AiAuthoringService(provider);
+        });
+      });
 
-      if (job.kind === "combat-encounter") {
-        const result = await authoring.generateCombatEncounter({
-          sceneId: job.targetId ?? "unknown",
-          difficulty: "normal",
-          playerLevel: 1,
-        });
-        payloadStr = JSON.stringify(result ?? {}, null, 2);
-      } else if (job.kind === "item-set") {
-        const result = await authoring.generateItemSet({
-          theme: job.prompt,
-          count: 3,
-          rarity: "common",
-        });
-        payloadStr = JSON.stringify(result ?? [], null, 2);
-      } else if (job.kind === "cutscene-script") {
-        const result = await authoring.generateCutsceneScript({
-          sceneId: job.targetId ?? "unknown",
-          characters: [],
-          mood: "neutral",
-        });
-        payloadStr = JSON.stringify(result ?? [], null, 2);
+      if (animationPlanResult.ok && animationPlanResult.data.ok) {
+        return {
+          ok: true,
+          data: await createPersistedGenerationArtifact(
+            projectId,
+            artifactId,
+            job,
+            new TextEncoder().encode(JSON.stringify(animationPlanResult.data.plan, null, 2)),
+            "application/json",
+            createdAtMs,
+            job.kind,
+            createGenerationArtifactMetadata("ai"),
+          ),
+        };
       }
+
+      const reason = animationPlanResult.ok
+        ? animationPlanResult.data.ok
+          ? "Animation plan generation returned no plan payload"
+          : animationPlanResult.data.error
+        : animationPlanResult.error;
+      workerLogger.warn("creator-worker.animation-plan.failed", {
+        jobId: job.id,
+        error: reason,
+      });
+      return {
+        ok: false,
+        error: `animation-plan generation failed: ${reason}`,
+      };
     }
+    case "combat-encounter":
+    case "item-set":
+    case "cutscene-script": {
+      const payloadResult = await runWorkerStep(async () => {
+        const registry = await ProviderRegistry.getInstance();
+        const authoring = createAuthoringService(projectId, registry);
+        if (job.kind === "combat-encounter") {
+          const encounter = await authoring.generateCombatEncounter({
+            prompt: job.prompt,
+            sceneId: job.targetId,
+          });
+          if (!encounter.ok) {
+            return {
+              ok: false,
+              reason: encounter.error,
+            };
+          }
+          return {
+            ok: true,
+            payload: JSON.stringify(encounter.encounter, null, 2),
+          };
+        }
+        if (job.kind === "item-set") {
+          const items = await authoring.generateItemSet({
+            prompt: job.prompt,
+          });
+          if (!items.ok) {
+            return {
+              ok: false,
+              reason: items.error,
+            };
+          }
+          return {
+            ok: true,
+            payload: JSON.stringify(items.items, null, 2),
+          };
+        }
 
-    const persisted = await persistBuilderFile(
-      projectId,
-      "generated",
-      artifactId,
-      new TextEncoder().encode(payloadStr),
-      `${artifactId}.json`,
-      "application/json",
-    );
+        const cutscene = await authoring.generateCutsceneScript({
+          prompt: job.prompt,
+          sceneId: job.targetId,
+        });
+        if (!cutscene.ok) {
+          return {
+            ok: false,
+            reason: cutscene.error,
+          };
+        }
+        return {
+          ok: true,
+          payload: JSON.stringify(cutscene.steps, null, 2),
+        };
+      });
+      if (!payloadResult.ok) {
+        return {
+          ok: false,
+          error: `${job.kind} generation failed: ${payloadResult.error}`,
+        };
+      }
+      if (!payloadResult.data.ok) {
+        return {
+          ok: false,
+          error: `${job.kind} generation failed: ${payloadResult.data.reason ?? "AI text generation unavailable"}`,
+        };
+      }
 
-    return {
-      id: artifactId,
-      jobId: job.id,
-      kind: job.kind,
-      label: `generation.artifact.label.review:${job.kind}`,
-      previewSource: persisted.publicUrl,
-      summary: toArtifactSummary(job),
-      mimeType: "application/json",
-      approved: false,
-      createdAtMs,
-    };
+      return {
+        ok: true,
+        data: await createPersistedGenerationArtifact(
+          projectId,
+          artifactId,
+          job,
+          new TextEncoder().encode(payloadResult.data.payload),
+          "application/json",
+          createdAtMs,
+          job.kind,
+          createGenerationArtifactMetadata("ai"),
+        ),
+      };
+    }
   }
-
-  const png = await sharp(
-    Buffer.from(
-      buildImageSvg(
-        `${job.kind.toUpperCase()} DRAFT`,
-        `${job.prompt}\n\nTarget: ${job.targetId ?? "none"}\nProvider: ${appConfig.ai.preferredProvider}`,
-      ),
-    ),
-  )
-    .png()
-    .toBuffer();
-
-  const persisted = await persistBuilderFile(
-    projectId,
-    "generated",
-    artifactId,
-    png,
-    `${artifactId}.png`,
-    "image/png",
-  );
-
-  return {
-    id: artifactId,
-    jobId: job.id,
-    kind: job.kind,
-    label: `generation.artifact.label.review:${job.kind}`,
-    previewSource: persisted.publicUrl,
-    summary: toArtifactSummary(job),
-    mimeType: "image/png",
-    approved: false,
-    createdAtMs,
-  };
 };
 
 interface AutomationExecutionContext {
@@ -816,7 +867,7 @@ export const executeGenerationJob = async (
       error: "ai-generation-kill-switch-enabled",
     };
   }
-  const artifactResult = await runWorkerStep(() => buildGenerationArtifact(projectId, job));
+  const artifactResult = await buildGenerationArtifact(projectId, job);
   if (!artifactResult.ok) {
     return artifactResult;
   }

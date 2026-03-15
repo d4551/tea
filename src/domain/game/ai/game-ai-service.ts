@@ -161,14 +161,6 @@ export const generateNpcDialogue = async (
       npcId: context.npcId,
       error: result.error,
     });
-
-    const fallbackLine = resolveGameText(locale, toNpcCatalogKey(context.npcId, "greet"));
-    return {
-      ok: true,
-      text: fallbackLine,
-      model: "fallback",
-      durationMs: 0,
-    };
   }
 
   return result;

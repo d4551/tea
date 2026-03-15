@@ -14,6 +14,8 @@ import { MODEL_REGISTRY, type ModelKey } from "../model-registry.ts";
 import type {
   AiCapability,
   AiChatParams,
+  AiImageGenerationParams,
+  AiImageGenerationResult,
   AiClassificationResult,
   AiGenerationResult,
   AiModelCapabilities,
@@ -44,6 +46,8 @@ const taskToCapabilities = (task: string): ReadonlySet<AiCapability> => {
       return new Set<AiCapability>(["speech-to-text"]);
     case "text-to-speech":
       return new Set<AiCapability>(["text-to-speech"]);
+    case "text-to-image":
+      return new Set<AiCapability>(["image-generation"]);
     default:
       return new Set<AiCapability>(["text-generation"]);
   }
@@ -309,6 +313,45 @@ export class TransformersProvider implements AiProvider {
     const manager = await this.resolveManager();
     const result = await manager.generateEmbeddingResult(text);
     return result.ok ? result.value.embedding : null;
+  }
+
+  /**
+   * Generates an image using local ONNX pipelines.
+   *
+   * @param params Image generation parameters.
+   * @returns Local image-generation result.
+   */
+  async generateImage(params: AiImageGenerationParams): Promise<AiImageGenerationResult> {
+    const startMs = Date.now();
+
+    if (
+      !appConfig.ai.localImageGenerationEnabled ||
+      !appConfig.ai.localImageGenerationModel.trim()
+    ) {
+      return {
+        ok: false,
+        error: "Local image generation is disabled.",
+        retryable: false,
+      };
+    }
+
+    const manager = await this.resolveManager();
+    const result = await manager.generateImageResult(params.prompt, params.aspectRatio);
+    if (!result.ok) {
+      return {
+        ok: false,
+        error: result.failure.message,
+        retryable: result.failure.retryable,
+      };
+    }
+
+    return {
+      ok: true,
+      image: result.value.image,
+      mimeType: result.value.mimeType,
+      model: MODEL_REGISTRY.imageGeneration.model,
+      durationMs: Date.now() - startMs,
+    };
   }
 
   /**

@@ -162,6 +162,7 @@ export const renderAssetsEditor = (
             <span class="badge badge-outline badge-sm">${escapeHtml(getAssetKindLabel(messages, asset.kind))}</span>
             <span class="badge badge-soft badge-sm">${escapeHtml(getSceneModeLabel(messages, asset.sceneMode))}</span>
             <span class="badge ${asset.approved ? "badge-success" : "badge-warning"} badge-soft badge-sm">${asset.approved ? escapeHtml(messages.builder.assetStatusApproved) : escapeHtml(messages.builder.assetStatusDraft)}</span>
+            ${asset.label.startsWith("generation.asset.label.generated:") ? `<span class="badge badge-accent badge-soft badge-sm">${escapeHtml(messages.builder.generatedBadge)}</span>` : ""}
           </div>
           <p class="break-all text-xs text-base-content/70 line-clamp-2">${escapeHtml(asset.source)}</p>
           <div class="card-actions justify-start">

@@ -2,7 +2,9 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { USDLoader } from "three/addons/loaders/USDLoader.js";
 import { WebGPURenderer } from "three/webgpu";
+import { createLogger } from "../lib/logger.ts";
 import type { GameSceneState, SceneNode3D } from "../shared/contracts/game.ts";
+import { settleAsync } from "../shared/utils/async-result.ts";
 
 const LEAF_COUNT = 80;
 const LEAF_SPREAD_X = 8;
@@ -14,6 +16,7 @@ const LOD_THRESHOLD_LOW = 16;
 const LEAF_FALL_SPEED_MIN = 0.002;
 const LEAF_FALL_SPEED_MAX = 0.008;
 const LEAF_DRIFT_AMPLITUDE = 0.003;
+const logger = createLogger("playable.three-layer");
 
 /**
  * Shared Three.js environment layer rendered beneath the Pixi sprite scene.
@@ -281,15 +284,35 @@ export class ThreeLayer {
       return cached;
     }
 
-    const pending =
-      runtimeAsset.format === "glb" || runtimeAsset.format === "gltf"
-        ? this._gltfLoader
-            .loadAsync(runtimeAsset.source)
-            .then((gltf) => gltf.scene)
-            .catch(() => null)
-        : runtimeAsset.format === "usdz"
-          ? this._usdLoader.loadAsync(runtimeAsset.source).catch(() => null)
-          : Promise.resolve(null);
+    const pending = (async (): Promise<THREE.Object3D | null> => {
+      if (runtimeAsset.format === "glb" || runtimeAsset.format === "gltf") {
+        const gltfResult = await settleAsync(this._gltfLoader.loadAsync(runtimeAsset.source));
+        if (!gltfResult.ok) {
+          logger.warn("three-layer.model.load-failed", {
+            source: runtimeAsset.source,
+            format: runtimeAsset.format,
+            error: gltfResult.error.message,
+          });
+          return null;
+        }
+        return gltfResult.value.scene;
+      }
+
+      if (runtimeAsset.format === "usdz") {
+        const usdResult = await settleAsync(this._usdLoader.loadAsync(runtimeAsset.source));
+        if (!usdResult.ok) {
+          logger.warn("three-layer.model.load-failed", {
+            source: runtimeAsset.source,
+            format: runtimeAsset.format,
+            error: usdResult.error.message,
+          });
+          return null;
+        }
+        return usdResult.value;
+      }
+
+      return null;
+    })();
     this._authoredModelCache.set(cacheKey, pending);
     return pending;
   }

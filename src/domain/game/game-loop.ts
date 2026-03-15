@@ -30,6 +30,7 @@ import type {
   TriggerEventType,
 } from "../../shared/contracts/game.ts";
 import { validateGameCommandInput } from "../../shared/contracts/game.ts";
+import { getMessages } from "../../shared/i18n/translator.ts";
 import { settleAsync } from "../../shared/utils/async-result.ts";
 import { safeJsonParse } from "../../shared/utils/safe-json.ts";
 import { builderService } from "../builder/builder-service.ts";
@@ -1605,15 +1606,21 @@ export class GameLoopService {
               },
               session.locale,
             );
-            const reply = response.ok ? response.text : response.error;
+            const reply = response.ok
+              ? response.text
+              : getMessages(session.locale).ai.dialogueGenerationUnavailable;
 
             state.dialogue = {
               npcId: interactable.id,
               npcLabel: interactable.label,
               line: reply,
-              lineKey: "ai-response",
+              lineKey: response.ok ? "ai-response" : "ai-unavailable",
             };
-            nextActionState = "dialogueOpen";
+            nextActionState = response.ok
+              ? "dialogueOpen"
+              : response.retryable
+                ? "error.retryable"
+                : "error.nonRetryable";
             this.applyMatchingTriggers(state, session.triggerDefinitions ?? [], "chat", {
               sceneId: state.sceneId,
               npcCharacterKey: interactable.characterKey,

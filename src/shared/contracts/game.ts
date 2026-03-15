@@ -558,6 +558,16 @@ export type GenerationJobStatus =
   | "canceled";
 
 /**
+ * Optional provenance attached to a generated artifact.
+ */
+export interface GenerationArtifactMetadata {
+  /** Whether the artifact came from a real model or a placeholder fallback. */
+  readonly source: "ai" | "placeholder";
+  /** Optional reason describing why a placeholder was produced. */
+  readonly reason?: string;
+}
+
+/**
  * Generated artifact metadata attached to a job.
  */
 export interface GenerationArtifact {
@@ -581,6 +591,8 @@ export interface GenerationArtifact {
   readonly summary: string;
   /** Optional machine-readable MIME type for preview/rendering. */
   readonly mimeType?: string;
+  /** Optional generation provenance used by review UIs. */
+  readonly metadata?: GenerationArtifactMetadata;
   /** Whether the artifact has been approved. */
   readonly approved: boolean;
   /** Creation timestamp in ms since epoch. */
@@ -2477,19 +2489,41 @@ export interface GameApiResult<TData> {
 export type ProviderReadiness = "ready" | "degraded" | "offline";
 
 /**
- * Feature-level capability flags exposed to the builder AI UI.
+ * Tri-state capability status exposed to public AI surfaces.
+ */
+export type CapabilityStatus = "ready" | "degraded" | "unavailable";
+
+/**
+ * Source mode used to explain how a capability is currently satisfied.
+ */
+export type CapabilityMode = "provider" | "fallback" | "surface" | "none";
+
+/**
+ * Structured capability state used by builder and AI APIs.
+ */
+export interface CapabilityState {
+  /** Current availability of the capability. */
+  readonly status: CapabilityStatus;
+  /** Source used to satisfy the capability. */
+  readonly mode: CapabilityMode;
+  /** Optional nonlocalized reason code for degraded/unavailable states. */
+  readonly reasonCode?: string;
+}
+
+/**
+ * Feature-level capability states exposed to the builder AI UI.
  */
 export interface FeatureCapability {
   /** Optional request/response intent assistant. */
-  readonly assist: boolean;
+  readonly assist: CapabilityState;
   /** Runtime test invocation support. */
-  readonly test: boolean;
+  readonly test: CapabilityState;
   /** Structured patch suggestions and plan generation support. */
-  readonly toolLikeSuggestions: boolean;
+  readonly toolLikeSuggestions: CapabilityState;
   /** Provider supports token streaming. */
-  readonly streaming: boolean;
+  readonly streaming: CapabilityState;
   /** Non-network fallback mode remains available. */
-  readonly offlineFallback: boolean;
+  readonly offlineFallback: CapabilityState;
 }
 
 /**
@@ -2788,10 +2822,12 @@ export interface CreatorCapability {
   readonly key: CreatorCapabilityKey;
   /** Localized capability label. */
   readonly label: string;
-  /** Localized status label (ready / unavailable). */
-  readonly statusLabel: string;
-  /** Whether capability is available for the current project. */
-  readonly available: boolean;
+  /** Current capability state. */
+  readonly status: CapabilityStatus;
+  /** Source used to satisfy the capability. */
+  readonly mode: CapabilityMode;
+  /** Optional nonlocalized reason code for degraded/unavailable states. */
+  readonly reasonCode?: string;
 }
 
 /**

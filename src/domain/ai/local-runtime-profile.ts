@@ -1,4 +1,8 @@
-import { appConfig, type OnnxDevicePreference } from "../../config/environment.ts";
+import {
+  appConfig,
+  type AiApiCompatibleVendor,
+  type OnnxDevicePreference,
+} from "../../config/environment.ts";
 import { getLocalModelCatalog, type LocalModelCatalogEntry } from "./model-registry.ts";
 
 /**
@@ -32,6 +36,8 @@ export interface AiRuntimeProfile {
   readonly apiCompatible: {
     readonly local: {
       readonly enabled: boolean;
+      readonly vendor: AiApiCompatibleVendor;
+      readonly supportedVendors: readonly AiApiCompatibleVendor[];
       readonly providerLabel: string;
       readonly baseUrl: string;
       readonly chatModel: string;
@@ -44,6 +50,8 @@ export interface AiRuntimeProfile {
     };
     readonly cloud: {
       readonly enabled: boolean;
+      readonly vendor: AiApiCompatibleVendor;
+      readonly supportedVendors: readonly AiApiCompatibleVendor[];
       readonly providerLabel: string;
       readonly baseUrl: string;
       readonly chatModel: string;
@@ -90,6 +98,8 @@ export const getAiRuntimeProfile = (): AiRuntimeProfile => ({
   apiCompatible: {
     local: {
       enabled: appConfig.ai.openAiCompatible.local.enabled,
+      vendor: appConfig.ai.openAiCompatible.local.vendor,
+      supportedVendors: appConfig.ai.openAiCompatible.local.supportedVendors,
       providerLabel: appConfig.ai.openAiCompatible.local.providerLabel,
       baseUrl: appConfig.ai.openAiCompatible.local.baseUrl,
       chatModel: appConfig.ai.openAiCompatible.local.chatModel,
@@ -102,6 +112,8 @@ export const getAiRuntimeProfile = (): AiRuntimeProfile => ({
     },
     cloud: {
       enabled: appConfig.ai.openAiCompatible.cloud.enabled,
+      vendor: appConfig.ai.openAiCompatible.cloud.vendor,
+      supportedVendors: appConfig.ai.openAiCompatible.cloud.supportedVendors,
       providerLabel: appConfig.ai.openAiCompatible.cloud.providerLabel,
       baseUrl: appConfig.ai.openAiCompatible.cloud.baseUrl,
       chatModel: appConfig.ai.openAiCompatible.cloud.chatModel,

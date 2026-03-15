@@ -48,6 +48,16 @@ describe("transformers provider adapter", () => {
           operation: "embeddings.generate",
         },
       }),
+      generateImageResult: async () => ({
+        ok: false,
+        failure: {
+          code: "unexpected",
+          message: "unused",
+          retryable: false,
+          operation: "image-generation.generate",
+          modelKey: "imageGeneration",
+        },
+      }),
       dispose: async () => {},
     }));
 
@@ -109,6 +119,16 @@ describe("transformers provider adapter", () => {
           message: "unused",
           retryable: false,
           operation: "embeddings.generate",
+        },
+      }),
+      generateImageResult: async () => ({
+        ok: false,
+        failure: {
+          code: "unexpected",
+          message: "unused",
+          retryable: false,
+          operation: "image-generation.generate",
+          modelKey: "imageGeneration",
         },
       }),
       dispose: async () => {},
@@ -175,6 +195,16 @@ describe("transformers provider adapter", () => {
         ok: true,
         value: {
           embedding: new Float32Array([0.25, 0.5, 0.75]),
+        },
+      }),
+      generateImageResult: async () => ({
+        ok: false,
+        failure: {
+          code: "unexpected",
+          message: "unused",
+          retryable: false,
+          operation: "image-generation.generate",
+          modelKey: "imageGeneration",
         },
       }),
       dispose: async () => {},

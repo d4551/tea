@@ -67,18 +67,14 @@ export const createGameClientAudioService = (
     }
 
     if (activeSource) {
-      // SAFETY: AudioBufferSourceNode.stop() throws InvalidStateError when
-      // the node has already been stopped. We suppress via void Promise.
-      void Promise.resolve()
-        .then(() => {
-          activeSource?.stop();
-          activeSource?.disconnect();
-          activeSource = null;
-        })
-        .catch(() => {
-          activeSource?.disconnect();
-          activeSource = null;
-        });
+      const sourceToStop = activeSource;
+      activeSource = null;
+      sourceToStop.disconnect();
+      void settleAsync(Promise.resolve().then(() => sourceToStop.stop())).then((stopResult) => {
+        if (!stopResult.ok) {
+          warningLogger?.("audio-stop-failed", { error: stopResult.error.message });
+        }
+      });
     }
 
     if (activeFallbackAudio) {

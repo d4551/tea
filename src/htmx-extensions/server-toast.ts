@@ -89,9 +89,11 @@ document.body.addEventListener("showToast", (evt: Event) => {
 document.body.addEventListener("htmx:responseError", (evt: Event) => {
   if (!(evt instanceof CustomEvent)) return;
   const detail = evt.detail as { xhr?: XMLHttpRequest; message?: string };
+  const localizedFallback =
+    document.getElementById(CONTAINER_ID)?.getAttribute("data-fallback-error-message") ?? "";
   const message =
     typeof detail?.message === "string" && detail.message.length > 0
       ? detail.message
-      : (detail?.xhr?.statusText ?? "Request failed");
+      : (detail?.xhr?.statusText ?? localizedFallback);
   showToast({ message, type: "error" });
 });

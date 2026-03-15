@@ -15,6 +15,8 @@ import { OpenAiCompatibleProvider } from "./openai-compatible-provider.ts";
 import type {
   AiCapability,
   AiChatParams,
+  AiImageGenerationParams,
+  AiImageGenerationResult,
   AiClassificationResult,
   AiGenerationResult,
   AiGovernanceContext,
@@ -25,10 +27,10 @@ import type {
   AiSpeechSynthesisResult,
   AiToolPlanParams,
   AiToolPlanResult,
-  AiToolPlanStep,
   AiTranscriptionParams,
   AiTranscriptionResult,
 } from "./provider-types.ts";
+import { HuggingFaceInferenceProvider } from "./huggingface-inference-provider.ts";
 import { TransformersProvider } from "./transformers-provider.ts";
 
 const logger = createLogger("ai.provider-registry");
@@ -57,19 +59,12 @@ const providerOrdering: Readonly<Record<AiProvider["name"], number>> = {
   "openai-compatible-local": 0,
   ollama: 1,
   transformers: 2,
-  "openai-compatible-cloud": 3,
+  "huggingface-inference": 3,
+  "huggingface-endpoints": 4,
+  "openai-compatible-cloud": 5,
 };
 
-const mapFallbackPlanSteps = (text: string): readonly AiToolPlanStep[] =>
-  text
-    .split(/\r?\n/gu)
-    .map((entry) => entry.replace(/^\s*(?:[-*]|\d+[.)])\s*/u, "").trim())
-    .filter((entry) => entry.length > 0)
-    .map((title, index) => ({
-      id: `step-${index + 1}`,
-      title,
-      kind: index === 0 ? "analysis" : "builder",
-    }));
+const MAX_IMAGE_PROMPT_LENGTH = 1000;
 
 /**
  * Manages AI provider lifecycle, capability detection, and request routing.
@@ -109,6 +104,7 @@ export class ProviderRegistry {
       providers.push(
         new OpenAiCompatibleProvider({
           name: "openai-compatible-local",
+          vendor: appConfig.ai.openAiCompatible.local.vendor,
           providerLabel: appConfig.ai.openAiCompatible.local.providerLabel,
           baseUrl: appConfig.ai.openAiCompatible.local.baseUrl,
           apiKey: appConfig.ai.openAiCompatible.local.apiKey,
@@ -120,6 +116,8 @@ export class ProviderRegistry {
           speechModel: appConfig.ai.openAiCompatible.local.speechModel,
           moderationModel: appConfig.ai.openAiCompatible.local.moderationModel,
           speechVoice: appConfig.ai.openAiCompatible.local.speechVoice,
+          endpoints: appConfig.ai.openAiCompatible.local.endpoints,
+          auth: appConfig.ai.openAiCompatible.local.auth,
           local: true,
         }),
       );
@@ -128,6 +126,7 @@ export class ProviderRegistry {
       providers.push(
         new OpenAiCompatibleProvider({
           name: "openai-compatible-cloud",
+          vendor: appConfig.ai.openAiCompatible.cloud.vendor,
           providerLabel: appConfig.ai.openAiCompatible.cloud.providerLabel,
           baseUrl: appConfig.ai.openAiCompatible.cloud.baseUrl,
           apiKey: appConfig.ai.openAiCompatible.cloud.apiKey,
@@ -139,9 +138,21 @@ export class ProviderRegistry {
           speechModel: appConfig.ai.openAiCompatible.cloud.speechModel,
           moderationModel: appConfig.ai.openAiCompatible.cloud.moderationModel,
           speechVoice: appConfig.ai.openAiCompatible.cloud.speechVoice,
+          endpoints: appConfig.ai.openAiCompatible.cloud.endpoints,
+          auth: appConfig.ai.openAiCompatible.cloud.auth,
           local: false,
         }),
       );
+    }
+    if (appConfig.ai.huggingfaceInference.enabled) {
+      providers.push(new HuggingFaceInferenceProvider());
+    }
+    if (
+      appConfig.ai.huggingfaceEndpoints.enabled &&
+      (appConfig.ai.huggingfaceEndpoints.chatUrl !== null ||
+        appConfig.ai.huggingfaceEndpoints.imageUrl !== null)
+    ) {
+      providers.push(new HuggingFaceInferenceProvider("huggingface-endpoints"));
     }
 
     const registry = new ProviderRegistry(providers);
@@ -232,17 +243,18 @@ export class ProviderRegistry {
         if (!(this._providerAvailability.get(provider.name) ?? false)) {
           return false;
         }
-        if (options?.localOnly && provider.name === "openai-compatible-cloud") {
+        const capabilityRecord = this.findCapabilityRecord(provider.name, capability);
+        if (!capabilityRecord) {
+          return false;
+        }
+        if (options?.localOnly && capabilityRecord.local !== true) {
           return false;
         }
         return provider.name === preferred;
       });
 
       if (match) {
-        const hasCapability = this._allCapabilities.some(
-          (entry) => entry.provider === match.name && entry.capabilities.has(capability),
-        );
-        if (hasCapability) {
+        if (this.findCapabilityRecord(match.name, capability)) {
           return this.applyAllowlist(match, capability, options);
         }
       }
@@ -254,9 +266,7 @@ export class ProviderRegistry {
           return false;
         }
 
-        const capabilityRecord = this._allCapabilities.find(
-          (entry) => entry.provider === provider.name && entry.capabilities.has(capability),
-        );
+        const capabilityRecord = this.findCapabilityRecord(provider.name, capability);
         return capabilityRecord?.local === true;
       })
       .sort(
@@ -277,13 +287,14 @@ export class ProviderRegistry {
           if (!(this._providerAvailability.get(provider.name) ?? false)) {
             return false;
           }
-          if (options?.localOnly && provider.name === "openai-compatible-cloud") {
+          const capabilityRecord = this.findCapabilityRecord(provider.name, capability);
+          if (!capabilityRecord) {
             return false;
           }
-
-          return this._allCapabilities.some(
-            (entry) => entry.provider === provider.name && entry.capabilities.has(capability),
-          );
+          if (options?.localOnly && capabilityRecord.local !== true) {
+            return false;
+          }
+          return true;
         })
         .sort(
           (left, right) =>
@@ -337,7 +348,7 @@ export class ProviderRegistry {
     logger.info("registry.chat.routing", { provider: provider.name });
     const result = await provider.chat(params);
     if (!result.ok) {
-      return result;
+      return this.prefixProviderFailure(provider.name, result);
     }
     return {
       ...result,
@@ -365,6 +376,85 @@ export class ProviderRegistry {
 
     logger.info("registry.chatStream.routing", { provider: provider.name });
     yield* provider.chatStream(params);
+  }
+
+  /**
+   * High-level image generation routing.
+   *
+   * @param params Image generation parameters.
+   * @returns Image artifact from best available provider.
+   */
+  async generateImage(params: AiImageGenerationParams): Promise<AiImageGenerationResult> {
+    await this._ensureCapabilitiesReady();
+    const prompt = params.prompt.trim();
+    if (prompt.length === 0) {
+      return {
+        ok: false,
+        error: "Image generation prompt is required",
+        retryable: false,
+      };
+    }
+    if (prompt.length > MAX_IMAGE_PROMPT_LENGTH) {
+      return {
+        ok: false,
+        error: `Image generation prompt exceeds ${MAX_IMAGE_PROMPT_LENGTH} characters`,
+        retryable: false,
+      };
+    }
+    if (appConfig.ai.generationKillSwitchEnabled) {
+      return {
+        ok: false,
+        error: "AI generation is currently disabled by an incident kill switch",
+        retryable: false,
+      };
+    }
+    const costTier = params.costTier ?? "high";
+    if (!appConfig.ai.allowHighCostGeneration && costTier === "high") {
+      return {
+        ok: false,
+        error: "High-cost AI generation is disabled by policy",
+        retryable: false,
+      };
+    }
+    const quotaAllowed = this.consumeQuota(params.governance, costTier === "high" ? 3 : 1);
+    if (!quotaAllowed) {
+      return {
+        ok: false,
+        error: "AI quota exceeded for current user or project",
+        retryable: false,
+      };
+    }
+
+    const provider = this.selectProvider("image-generation", {
+      localOnly: params.governance?.sensitiveContext === true,
+    });
+    if (!provider || typeof provider.generateImage !== "function") {
+      return {
+        ok: false,
+        error: "No provider available for image generation",
+        retryable: true,
+      };
+    }
+
+    logger.info("registry.generateImage.routing", { provider: provider.name });
+    const result = await provider.generateImage({
+      ...params,
+      prompt,
+    });
+    if (!result.ok) {
+      return this.prefixProviderFailure(provider.name, result);
+    }
+
+    logger.info("registry.generateImage.completed", {
+      provider: provider.name,
+      model: result.model,
+      durationMs: result.durationMs,
+    });
+
+    return {
+      ...result,
+      provenance: this.toProvenance(provider.name, result.model, params.governance),
+    };
   }
 
   /**
@@ -402,7 +492,8 @@ export class ProviderRegistry {
     }
 
     logger.info("registry.describeImage.routing", { provider: provider.name });
-    return provider.describeImage(image, prompt);
+    const result = await provider.describeImage(image, prompt);
+    return result.ok ? result : this.prefixProviderFailure(provider.name, result);
   }
 
   /**
@@ -423,7 +514,8 @@ export class ProviderRegistry {
     }
 
     logger.info("registry.transcribe.routing", { provider: provider.name });
-    return provider.transcribeAudio(params);
+    const result = await provider.transcribeAudio(params);
+    return result.ok ? result : this.prefixProviderFailure(provider.name, result);
   }
 
   /**
@@ -444,7 +536,8 @@ export class ProviderRegistry {
     }
 
     logger.info("registry.synthesize.routing", { provider: provider.name });
-    return provider.synthesizeSpeech(params);
+    const result = await provider.synthesizeSpeech(params);
+    return result.ok ? result : this.prefixProviderFailure(provider.name, result);
   }
 
   /**
@@ -465,8 +558,7 @@ export class ProviderRegistry {
   }
 
   /**
-   * Routes structured tool planning to the best available provider and falls back to
-   * deterministic chat-based step extraction when no dedicated planner exists.
+   * Routes structured tool planning to the best available provider.
    *
    * @param params Planning parameters.
    * @returns Structured planning result.
@@ -510,7 +602,7 @@ export class ProviderRegistry {
       logger.info("registry.planTools.routing", { provider: directPlanner.name, mode: "direct" });
       const directResult = await directPlanner.planTools(params);
       if (!directResult.ok) {
-        return directResult;
+        return this.prefixProviderFailure(directPlanner.name, directResult);
       }
       return {
         ...directResult,
@@ -518,26 +610,10 @@ export class ProviderRegistry {
       };
     }
 
-    const fallback = await this.chat({
-      systemPrompt: [
-        "Produce a concise implementation plan.",
-        "Return one step per line.",
-        "Do not add numbering prefixes other than plain ordered steps.",
-      ].join("\n"),
-      messages: [{ role: "user", content: params.goal }],
-      temperature: 0.1,
-    });
-
-    if (!fallback.ok) {
-      return fallback;
-    }
-
     return {
-      ok: true,
-      steps: mapFallbackPlanSteps(fallback.text),
-      model: fallback.model,
-      durationMs: fallback.durationMs,
-      provenance: this.toProvenance("registry-fallback", fallback.model, params.governance),
+      ok: false,
+      error: "No provider available for structured tool planning",
+      retryable: false,
     };
   }
 
@@ -637,17 +713,30 @@ export class ProviderRegistry {
       if (!(this._providerAvailability.get(provider.name) ?? false)) {
         return false;
       }
-      if (options?.localOnly && provider.name === "openai-compatible-cloud") {
+      const capabilityRecord = this.findCapabilityRecord(provider.name, capability);
+      if (!capabilityRecord) {
+        return false;
+      }
+      if (options?.localOnly && capabilityRecord.local !== true) {
         return false;
       }
       if (!allowlist.has(provider.name.toLowerCase())) {
         return false;
       }
-      return this._allCapabilities.some(
-        (entry) => entry.provider === provider.name && entry.capabilities.has(capability),
-      );
+      return true;
     });
     return fallback ?? null;
+  }
+
+  private findCapabilityRecord(
+    providerName: string,
+    capability: AiCapability,
+  ): AiModelCapabilities | null {
+    return (
+      this._allCapabilities.find(
+        (entry) => entry.provider === providerName && entry.capabilities.has(capability),
+      ) ?? null
+    );
   }
 
   private currentHourKey(): string {
@@ -696,6 +785,19 @@ export class ProviderRegistry {
         : hasAllowlist
           ? "provider-allowlist"
           : undefined,
+    };
+  }
+
+  private prefixProviderFailure<
+    TResult extends { readonly ok: false; readonly error: string; readonly retryable: boolean },
+  >(providerName: string, result: TResult): TResult {
+    if (result.error.startsWith(`${providerName}: `)) {
+      return result;
+    }
+
+    return {
+      ...result,
+      error: `${providerName}: ${result.error}`,
     };
   }
 

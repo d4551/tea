@@ -1,7 +1,6 @@
 import { appConfig, type LocaleCode } from "../config/environment.ts";
 
 import { assetRelativePaths, joinUrlPath } from "../shared/constants/assets.ts";
-import { interpolateRoutePath } from "../shared/constants/route-patterns.ts";
 import { appRoutes, withLocaleQuery } from "../shared/constants/routes.ts";
 import { supportedUiThemes, type UiTheme } from "../shared/constants/ui-theme.ts";
 import type { Messages } from "../shared/i18n/messages.ts";
@@ -315,7 +314,7 @@ export const renderLayout = (input: LayoutInput): string => {
       </div>
     </div>
     
-    <div id="toast-container" class="toast toast-end toast-bottom z-[100]" aria-live="polite"></div>
+    <div id="toast-container" class="toast toast-end toast-bottom z-[100]" aria-live="polite" data-fallback-error-message="${escapeHtml(messages.common.requestFailed)}"></div>
     ${globalEnhancementScripts}
     ${pageScripts}
   </body>
@@ -442,10 +441,7 @@ const renderFooter = (messages: Messages, locale: LocaleCode): string => {
     },
     {
       label: messages.navigation.game,
-      href: withLocaleQuery(
-        appRoutes.builder,
-        locale,
-      ),
+      href: withLocaleQuery(appRoutes.builder, locale),
     },
     {
       label: messages.pages.home.docsCta,

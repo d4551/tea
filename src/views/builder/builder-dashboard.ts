@@ -11,6 +11,10 @@ import { escapeHtml } from "../layout.ts";
 import { type ColorToken, renderStats } from "../shared/ui-components.ts";
 import { buildBuilderWorkflowStages } from "./builder-flow.ts";
 import { buildBuilderJourneyConfig } from "./builder-journey.ts";
+import {
+  getCapabilityStatusBadgeClass,
+  getCapabilityStatusLabel,
+} from "./capability-state.ts";
 
 import { renderWorkspaceFrame, renderWorkspaceShell } from "./workspace-shell.ts";
 
@@ -106,12 +110,15 @@ const renderWorkflowStageCard = (stage: BuilderWorkflowStage, messages: Messages
 };
 
 const renderCreatorCapabilityCard = (
+  messages: Messages,
   capability: CreatorCapability,
-): string => `<article class="card border border-base-300 bg-base-100 shadow-sm">
+): string => `<article class="card card-border border-base-300 bg-base-100 shadow-sm">
   <div class="card-body gap-3">
     <div class="flex items-center justify-between gap-3">
       <h3 class="card-title text-base">${escapeHtml(capability.label)}</h3>
-      <span class="badge ${capability.available ? "badge-success" : "badge-ghost"} badge-soft">${escapeHtml(capability.statusLabel)}</span>
+      <span class="badge ${getCapabilityStatusBadgeClass(capability.status)} badge-soft">${escapeHtml(
+        getCapabilityStatusLabel(messages, capability.status),
+      )}</span>
     </div>
   </div>
 </article>`;
@@ -214,7 +221,7 @@ export const renderBuilderDashboard = (
     )
     .join("");
   const creatorCapabilityCards = context.creatorCapabilities.items
-    .map((capability) => renderCreatorCapabilityCard(capability))
+    .map((capability) => renderCreatorCapabilityCard(messages, capability))
     .join("");
 
   const quickStartCards = [

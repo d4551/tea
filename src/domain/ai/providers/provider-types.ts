@@ -40,9 +40,20 @@ export interface AiModelCapabilities {
   /** Whether the model supports streaming responses. */
   readonly supportsStreaming: boolean;
   /** Runtime backend used to execute the model. */
-  readonly runtime: "onnx-wasm" | "onnx-cpu" | "onnx-webgpu" | "ollama-http" | "openai-http";
+  readonly runtime:
+    | "onnx-wasm"
+    | "onnx-cpu"
+    | "onnx-webgpu"
+    | "ollama-http"
+    | "openai-http"
+    | "hf-inference-http";
   /** Model integration source. */
-  readonly integration: "huggingface" | "ollama" | "openai-compatible";
+  readonly integration:
+    | "huggingface"
+    | "huggingface-inference"
+    | "huggingface-endpoints"
+    | "ollama"
+    | "openai-compatible";
   /** Whether the model is executed locally on this machine. */
   readonly local: boolean;
   /** Whether the target can be replaced through configuration. */
@@ -214,6 +225,10 @@ export interface AiImageGenerationParams {
   readonly targetId?: string;
   /** Optional model override. */
   readonly model?: string;
+  /** Optional policy context used for quota/routing decisions. */
+  readonly governance?: AiGovernanceContext;
+  /** Optional relative cost tier for policy enforcement. */
+  readonly costTier?: "standard" | "high";
 }
 
 /**

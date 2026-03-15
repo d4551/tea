@@ -26,14 +26,19 @@ export interface OracleService {
 }
 
 interface OracleAnswer {
+  readonly ok: true;
   readonly text: string;
-  readonly source: "ai" | "fallback";
+}
+
+interface OracleAnswerFailure {
+  readonly ok: false;
+  readonly retryable: boolean;
+  readonly message: string;
 }
 
 /**
  * Creates the oracle service.
  * Uses the shared AI provider registry for generation and sentiment routing.
- * Falls back to deterministic hash-based answers if providers are unavailable.
  */
 export const createOracleService = (): OracleService => ({
   evaluate: async (request) => {
@@ -70,13 +75,16 @@ export const createOracleService = (): OracleService => ({
     }
 
     const answer = await buildAnswer(trimmedQuestion, messages);
+    if (!answer.ok) {
+      return {
+        state: "error",
+        retryable: answer.retryable,
+        message: answer.message,
+      } satisfies OracleRetryableErrorState | OracleFatalErrorState;
+    }
 
     const persistence = await settleAsync(
-      persistInteraction(
-        trimmedQuestion,
-        answer.text,
-        answer.source === "fallback" ? "UNKNOWN" : undefined,
-      ),
+      persistInteraction(trimmedQuestion, answer.text),
     );
     if (!persistence.ok) {
       const failure = toPrismaExternalFailure(persistence.error, "record oracle interaction");
@@ -97,26 +105,28 @@ export const createOracleService = (): OracleService => ({
 // ── Answer generation ────────────────────────────────────────────────────────
 
 /**
- * Attempts provider-routed AI generation; falls back to deterministic hash if generation is
- * unavailable.
+ * Attempts provider-routed AI generation and reports explicit unavailable/error states when it
+ * cannot complete.
  */
 const buildAnswer = async (
   question: string,
   messages: ReturnType<typeof getMessages>,
-): Promise<OracleAnswer> => {
+): Promise<OracleAnswer | OracleAnswerFailure> => {
   const registry = await settleAsync(ProviderRegistry.getInstance());
   if (!registry.ok) {
     return {
-      text: buildDeterministicAnswer(question, messages),
-      source: "fallback",
+      ok: false,
+      retryable: true,
+      message: messages.aiPlayground.networkErrorDescription,
     };
   }
 
   const provider = registry.value.selectProvider("chat");
-  if (!provider || provider.name === "transformers") {
+  if (!provider) {
     return {
-      text: buildDeterministicAnswer(question, messages),
-      source: "fallback",
+      ok: false,
+      retryable: false,
+      message: messages.ai.noProviderAvailable,
     };
   }
 
@@ -133,14 +143,19 @@ const buildAnswer = async (
 
   if (generation.ok && generation.text.trim().length > 0) {
     return {
+      ok: true,
       text: generation.text.trim(),
-      source: "ai",
     };
   }
 
   return {
-    text: buildDeterministicAnswer(question, messages),
-    source: "fallback",
+    ok: false,
+    retryable: generation.ok ? false : generation.retryable,
+    message: generation.ok
+      ? messages.aiPlayground.nonRetryableErrorDescription
+      : generation.retryable
+        ? messages.aiPlayground.retryableErrorDescription
+        : messages.aiPlayground.nonRetryableErrorDescription,
   };
 };
 
@@ -193,13 +208,4 @@ const resolveForcedMode = (
     } satisfies OracleUnauthorizedState;
   }
   return null;
-};
-
-// ── Deterministic fallback ────────────────────────────────────────────────────
-
-const buildDeterministicAnswer = (
-  _question: string,
-  messages: ReturnType<typeof getMessages>,
-): string => {
-  return messages.ai.fallbackDialogue;
 };

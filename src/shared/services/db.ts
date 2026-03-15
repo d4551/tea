@@ -718,6 +718,8 @@ export const builderProjectArtifactRowSelect = {
   previewSource: true,
   summary: true,
   mimeType: true,
+  generationSource: true,
+  generationReason: true,
   approved: true,
   createdAt: true,
 } satisfies Prisma.BuilderProjectArtifactSelect;
@@ -1292,6 +1294,8 @@ const toArtifactCreateManyInput = (
     previewSource: artifact.previewSource,
     summary: artifact.summary,
     mimeType: artifact.mimeType,
+    generationSource: artifact.metadata?.source,
+    generationReason: artifact.metadata?.reason,
     approved: artifact.approved,
     createdAt: new Date(artifact.createdAtMs),
   }));
@@ -1383,6 +1387,25 @@ const withBuilderCoreExtensions = (base: PrismaClient) =>
         async findStateRow(id: string): Promise<BuilderProjectRow | null> {
           return base.builderProject.findUnique({
             where: { id },
+            select: builderProjectRowSelect,
+          });
+        },
+
+        /** Lists builder projects by id using the canonical selected row shape. */
+        async listStateRowsByIds(
+          projectIds: readonly string[],
+        ): Promise<readonly BuilderProjectRow[]> {
+          if (projectIds.length === 0) {
+            return [];
+          }
+
+          return base.builderProject.findMany({
+            where: {
+              id: {
+                in: [...projectIds],
+              },
+            },
+            orderBy: { id: "asc" },
             select: builderProjectRowSelect,
           });
         },
@@ -1881,6 +1904,7 @@ const withBuilderCoreExtensions = (base: PrismaClient) =>
           }
 
           return base.builderProject.findMany({
+            orderBy: { id: "asc" },
             select: builderProjectRowSelect,
           });
         },
@@ -2314,6 +2338,20 @@ const withBuilderRowExtensions = (base: ReturnType<typeof withBuilderCoreExtensi
             select: builderProjectGenerationJobRowSelect,
           });
         },
+
+        /** Lists project ids that currently have queued generation jobs. */
+        async listQueuedProjectIds(projectId?: string): Promise<readonly string[]> {
+          const rows = await base.builderProjectGenerationJob.findMany({
+            where: {
+              status: "queued",
+              ...(projectId ? { projectId } : {}),
+            },
+            orderBy: [{ projectId: "asc" }, { id: "asc" }],
+            select: { projectId: true },
+          });
+
+          return [...new Set(rows.map((row) => row.projectId))];
+        },
       },
 
       /**
@@ -2357,6 +2395,20 @@ const withBuilderRowExtensions = (base: ReturnType<typeof withBuilderCoreExtensi
             where: { projectId },
             select: builderProjectAutomationRunRowSelect,
           });
+        },
+
+        /** Lists project ids that currently have queued automation runs. */
+        async listQueuedProjectIds(projectId?: string): Promise<readonly string[]> {
+          const rows = await base.builderProjectAutomationRun.findMany({
+            where: {
+              status: "queued",
+              ...(projectId ? { projectId } : {}),
+            },
+            orderBy: [{ projectId: "asc" }, { id: "asc" }],
+            select: { projectId: true },
+          });
+
+          return [...new Set(rows.map((row) => row.projectId))];
         },
       },
 

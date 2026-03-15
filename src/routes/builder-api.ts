@@ -5,6 +5,7 @@
  */
 import { Elysia, t } from "elysia";
 import { appConfig, type LocaleCode, normalizeLocale } from "../config/environment.ts";
+import { deriveFeatureCapability } from "../domain/ai/capability-snapshot.ts";
 import { knowledgeBaseService } from "../domain/ai/knowledge-base-service.ts";
 import { ProviderRegistry } from "../domain/ai/providers/provider-registry.ts";
 import { auditService } from "../domain/audit/audit-service.ts";
@@ -304,11 +305,56 @@ const builderMutationResultSchema = t.Object({
 });
 
 const builderFeatureCapabilitySchema = t.Object({
-  assist: t.Boolean(),
-  test: t.Boolean(),
-  toolLikeSuggestions: t.Boolean(),
-  streaming: t.Boolean(),
-  offlineFallback: t.Boolean(),
+  assist: t.Object({
+    status: t.Union([t.Literal("ready"), t.Literal("degraded"), t.Literal("unavailable")]),
+    mode: t.Union([
+      t.Literal("provider"),
+      t.Literal("fallback"),
+      t.Literal("surface"),
+      t.Literal("none"),
+    ]),
+    reasonCode: t.Optional(t.String()),
+  }),
+  test: t.Object({
+    status: t.Union([t.Literal("ready"), t.Literal("degraded"), t.Literal("unavailable")]),
+    mode: t.Union([
+      t.Literal("provider"),
+      t.Literal("fallback"),
+      t.Literal("surface"),
+      t.Literal("none"),
+    ]),
+    reasonCode: t.Optional(t.String()),
+  }),
+  toolLikeSuggestions: t.Object({
+    status: t.Union([t.Literal("ready"), t.Literal("degraded"), t.Literal("unavailable")]),
+    mode: t.Union([
+      t.Literal("provider"),
+      t.Literal("fallback"),
+      t.Literal("surface"),
+      t.Literal("none"),
+    ]),
+    reasonCode: t.Optional(t.String()),
+  }),
+  streaming: t.Object({
+    status: t.Union([t.Literal("ready"), t.Literal("degraded"), t.Literal("unavailable")]),
+    mode: t.Union([
+      t.Literal("provider"),
+      t.Literal("fallback"),
+      t.Literal("surface"),
+      t.Literal("none"),
+    ]),
+    reasonCode: t.Optional(t.String()),
+  }),
+  offlineFallback: t.Object({
+    status: t.Union([t.Literal("ready"), t.Literal("degraded"), t.Literal("unavailable")]),
+    mode: t.Union([
+      t.Literal("provider"),
+      t.Literal("fallback"),
+      t.Literal("surface"),
+      t.Literal("none"),
+    ]),
+    reasonCode: t.Optional(t.String()),
+  }),
 });
 
 const builderProviderCapabilitySchema = t.Object({
@@ -1262,16 +1308,8 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         onnxDevice: appConfig.ai.onnxDevice,
         audit: readinessAudit,
       });
-      const creatorCapabilities = toCreatorCapabilities(messages, aiFeatures, readiness);
-      const features: FeatureCapability = {
-        assist: registryStatus.providers.length > 0,
-        test: registryStatus.providers.some((provider) => provider.available),
-        toolLikeSuggestions: true,
-        streaming: registryStatus.providers.some(
-          (provider) => provider.modelCount > 0 && provider.readiness !== "offline",
-        ),
-        offlineFallback: registryStatus.providers.some((provider) => provider.available),
-      };
+      const creatorCapabilities = toCreatorCapabilities(messages, registryStatus, readiness);
+      const features: FeatureCapability = deriveFeatureCapability(registryStatus);
 
       return status(
         httpStatus.ok,
@@ -1289,20 +1327,24 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         [httpStatus.ok]: t.Object({
           ok: t.Literal(true),
           data: t.Object({
-            features: t.Object({
-              assist: t.Boolean(),
-              test: t.Boolean(),
-              toolLikeSuggestions: t.Boolean(),
-              streaming: t.Boolean(),
-              offlineFallback: t.Boolean(),
-            }),
+            features: builderFeatureCapabilitySchema,
             creatorCapabilities: t.Object({
               items: t.Array(
                 t.Object({
                   key: t.String(),
                   label: t.String(),
-                  statusLabel: t.String(),
-                  available: t.Boolean(),
+                  status: t.Union([
+                    t.Literal("ready"),
+                    t.Literal("degraded"),
+                    t.Literal("unavailable"),
+                  ]),
+                  mode: t.Union([
+                    t.Literal("provider"),
+                    t.Literal("fallback"),
+                    t.Literal("surface"),
+                    t.Literal("none"),
+                  ]),
+                  reasonCode: t.Optional(t.String()),
                 }),
               ),
             }),
@@ -4824,9 +4866,13 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         },
         locale,
       );
+      if (!generated.ok) {
+        return `<div role="alert" class="alert ${generated.retryable ? "alert-warning" : "alert-info"} alert-soft"><span>${escapeHtml(
+          messages.ai.dialogueGenerationUnavailable,
+        )}</span></div>`;
+      }
       const lineKey = `${body.npcId}.generated.lastMessage`;
-      const text = generated.ok ? generated.text : generated.error;
-      return renderDialogueDetail(messages, lineKey, text, locale, projectId);
+      return renderDialogueDetail(messages, lineKey, generated.text, locale, projectId);
     },
     {
       body: t.Object({

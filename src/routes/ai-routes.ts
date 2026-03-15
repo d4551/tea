@@ -7,6 +7,7 @@
 
 import { Elysia, t } from "elysia";
 import { appConfig, normalizeLocale } from "../config/environment.ts";
+import { deriveFeatureCapability } from "../domain/ai/capability-snapshot.ts";
 import {
   type KnowledgeSearchMatch,
   knowledgeBaseService,
@@ -74,6 +75,25 @@ const providerReadinessSchema = t.Union([
   t.Literal("offline"),
 ]);
 
+const capabilityStatusSchema = t.Union([
+  t.Literal("ready"),
+  t.Literal("degraded"),
+  t.Literal("unavailable"),
+]);
+
+const capabilityModeSchema = t.Union([
+  t.Literal("provider"),
+  t.Literal("fallback"),
+  t.Literal("surface"),
+  t.Literal("none"),
+]);
+
+const capabilityStateSchema = t.Object({
+  status: capabilityStatusSchema,
+  mode: capabilityModeSchema,
+  reasonCode: t.Optional(t.String()),
+});
+
 const capabilityModelSchema = t.Object({
   key: t.Optional(t.String()),
   provider: t.String(),
@@ -123,6 +143,8 @@ const localRuntimeSchema = t.Object({
   apiCompatible: t.Object({
     local: t.Object({
       enabled: t.Boolean(),
+      vendor: t.String(),
+      supportedVendors: t.Array(t.String()),
       providerLabel: t.String(),
       baseUrl: t.String(),
       chatModel: t.String(),
@@ -135,6 +157,8 @@ const localRuntimeSchema = t.Object({
     }),
     cloud: t.Object({
       enabled: t.Boolean(),
+      vendor: t.String(),
+      supportedVendors: t.Array(t.String()),
       providerLabel: t.String(),
       baseUrl: t.String(),
       chatModel: t.String(),
@@ -201,11 +225,11 @@ const aiCapabilitiesResponseSchema = t.Object({
   ok: t.Literal(true),
   data: t.Object({
     features: t.Object({
-      assist: t.Boolean(),
-      test: t.Boolean(),
-      toolLikeSuggestions: t.Boolean(),
-      streaming: t.Boolean(),
-      offlineFallback: t.Boolean(),
+      assist: capabilityStateSchema,
+      test: capabilityStateSchema,
+      toolLikeSuggestions: capabilityStateSchema,
+      streaming: capabilityStateSchema,
+      offlineFallback: capabilityStateSchema,
     }),
     models: t.Array(capabilityModelSchema),
     localRuntime: localRuntimeSchema,
@@ -334,15 +358,8 @@ const asKnowledgeSearchMatchRecord = (match: KnowledgeSearchMatch) => ({
   score: Number(match.score.toFixed(6)),
 });
 
-const createFeatureCapability = (providers: RegistryProviders): FeatureCapability => ({
-  assist: providers.length > 0,
-  test: providers.some((provider) => provider.available),
-  toolLikeSuggestions: true,
-  streaming: providers.some(
-    (provider) => provider.modelCount > 0 && provider.readiness !== "offline",
-  ),
-  offlineFallback: providers.some((provider) => provider.available),
-});
+const createFeatureCapability = (status: RegistryStatus): FeatureCapability =>
+  deriveFeatureCapability(status);
 
 const createAiFailureEnvelope = (
   correlationId: string,
@@ -418,6 +435,8 @@ const toAiRuntimeRecord = () => {
     apiCompatible: {
       local: {
         enabled: runtimeProfile.apiCompatible.local.enabled,
+        vendor: runtimeProfile.apiCompatible.local.vendor,
+        supportedVendors: [...runtimeProfile.apiCompatible.local.supportedVendors],
         providerLabel: runtimeProfile.apiCompatible.local.providerLabel,
         baseUrl: runtimeProfile.apiCompatible.local.baseUrl,
         chatModel: runtimeProfile.apiCompatible.local.chatModel,
@@ -426,6 +445,8 @@ const toAiRuntimeRecord = () => {
       },
       cloud: {
         enabled: runtimeProfile.apiCompatible.cloud.enabled,
+        vendor: runtimeProfile.apiCompatible.cloud.vendor,
+        supportedVendors: [...runtimeProfile.apiCompatible.cloud.supportedVendors],
         providerLabel: runtimeProfile.apiCompatible.cloud.providerLabel,
         baseUrl: runtimeProfile.apiCompatible.cloud.baseUrl,
         chatModel: runtimeProfile.apiCompatible.cloud.chatModel,
@@ -621,7 +642,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
       const status = await registry.getStatus();
 
       return successEnvelope({
-        features: createFeatureCapability(status.providers),
+        features: createFeatureCapability(status),
         models: status.capabilities.map(asCapabilityRecord),
         localRuntime: toAiRuntimeRecord(),
       });

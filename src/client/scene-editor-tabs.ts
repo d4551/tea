@@ -217,9 +217,9 @@ const updateSelectionStatus = (panel: HTMLElement, selectedTile: number): void =
   const selectedTileLabel = resolveLabelValue(
     panel,
     "data-tilemap-selected-label",
-    "Selected tile",
+    "",
   );
-  const emptyTileLabel = resolveLabelValue(panel, "data-tilemap-empty-label", "Empty tile");
+  const emptyTileLabel = resolveLabelValue(panel, "data-tilemap-empty-label", "");
   const tileLabel =
     selectedTile === DEFAULT_TILEMAP_EMPTY_VALUE ? emptyTileLabel : `#${selectedTile + 1}`;
   status.textContent = `${selectedTileLabel}: ${tileLabel}`;

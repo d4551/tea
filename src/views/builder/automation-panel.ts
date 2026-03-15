@@ -1,4 +1,6 @@
 import type { LocaleCode } from "../../config/environment.ts";
+import { BUILDER_LIBRARY_PAGE_SIZE } from "../../shared/constants/builder-defaults.ts";
+import { BUILDER_QUERY_PARAM_PAGE } from "../../shared/constants/builder-query.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { AutomationRun, GenerationArtifact } from "../../shared/contracts/game.ts";
@@ -13,7 +15,12 @@ import {
   getAutomationStepSummaryLabel,
   getLongRunningStatusLabel,
 } from "./view-labels.ts";
-import { renderWorkspaceFrame, renderWorkspaceShell } from "./workspace-shell.ts";
+import {
+  paginateWorkspaceItems,
+  renderWorkspaceBrowseControls,
+  renderWorkspaceFrame,
+  renderWorkspaceShell,
+} from "./workspace-shell.ts";
 
 /**
  * Renders the automation review and orchestration workspace.
@@ -31,6 +38,7 @@ export const renderAutomationPanel = (
   projectId: string,
   runs: readonly AutomationRun[],
   artifacts: readonly GenerationArtifact[],
+  page = 1,
 ): string => {
   const createRunAction = interpolateRoutePath(appRoutes.builderApiAutomationRunsCreateForm, {
     projectId,
@@ -134,6 +142,42 @@ export const renderAutomationPanel = (
 
   const emptyRunAlert = `<div role="status" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noAutomationRuns)}</span></div>`;
 
+  const operationsPath = interpolateRoutePath(appRoutes.builderAutomation, { projectId });
+  const operationsAction = withQueryParameters(operationsPath, { lang: locale });
+  const paginatedRuns = paginateWorkspaceItems(Array.from(runs), page, BUILDER_LIBRARY_PAGE_SIZE);
+  const previousHref =
+    paginatedRuns.page > 1
+      ? withQueryParameters(operationsAction, {
+          [BUILDER_QUERY_PARAM_PAGE]: String(paginatedRuns.page - 1),
+        })
+      : undefined;
+  const nextHref =
+    paginatedRuns.page < paginatedRuns.totalPages
+      ? withQueryParameters(operationsAction, {
+          [BUILDER_QUERY_PARAM_PAGE]: String(paginatedRuns.page + 1),
+        })
+      : undefined;
+  const browseControls = renderWorkspaceBrowseControls({
+    action: operationsAction,
+    search: "",
+    searchLabel: messages.builder.operations,
+    searchPlaceholder: messages.builder.automationGoalPlaceholder,
+    submitLabel: messages.builder.filterAction,
+    resultsLabel: messages.builder.resultsLabel,
+    previousLabel: messages.builder.previousPage,
+    nextLabel: messages.builder.nextPage,
+    pageLabel: messages.builder.pageLabel,
+    page: paginatedRuns.page,
+    totalPages: paginatedRuns.totalPages,
+    totalItems: paginatedRuns.totalItems,
+    startIndex: paginatedRuns.startIndex,
+    endIndex: paginatedRuns.endIndex,
+    hiddenFields: { lang: locale, projectId },
+    htmxTarget: "#builder-content",
+    previousHref,
+    nextHref,
+  });
+
   return `<section class="space-y-6 animate-fade-in-up">
     ${renderWorkspaceShell({
       eyebrow: messages.builder.advancedTools,
@@ -186,7 +230,44 @@ export const renderAutomationPanel = (
             <h2 class="text-2xl font-semibold">${escapeHtml(messages.builder.operations)}</h2>
             <span class="badge badge-outline">${runs.length}</span>
           </div>
-          <div class="grid gap-4 xl:grid-cols-2">${runs.length === 0 ? emptyRunAlert : runCards}</div>
+          ${browseControls}
+          <div class="grid gap-4 xl:grid-cols-2">${paginatedRuns.items.length === 0 ? emptyRunAlert : paginatedRuns.items.map((run) => {
+            const reviewAction = withQueryParameters(
+              interpolateRoutePath(appRoutes.builderApiAutomationRunApprove, {
+                projectId,
+                runId: run.id,
+              }),
+              { locale },
+            );
+            const runSpinnerId = `automation-run-${run.id.replace(/[^a-zA-Z0-9_.-]/g, "-")}-spinner`;
+            const linkedArtifacts = run.artifactIds
+              .map((artifactId) => artifactLookup.get(artifactId))
+              .filter((artifact): artifact is GenerationArtifact => Boolean(artifact));
+            const reviewActions =
+              run.status === "blocked_for_approval"
+                ? `<div class="card-actions justify-end gap-2">
+                    <form hx-post="${escapeHtml(reviewAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#${runSpinnerId}" hx-disabled-elt="button">
+                      <input type="hidden" name="approved" value="true" />
+                      <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.approveAction)}: ${escapeHtml(run.goal)}">${escapeHtml(messages.builder.approveAction)}</button>
+                    </form>
+                    <form hx-post="${escapeHtml(reviewAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#${runSpinnerId}" hx-disabled-elt="button">
+                      <input type="hidden" name="approved" value="false" />
+                      <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.cancelAction)}: ${escapeHtml(run.goal)}">${escapeHtml(messages.builder.cancelAction)}</button>
+                    </form>
+                    <span id="${runSpinnerId}" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
+                  </div>`
+                : "";
+            return `<article class="${cardClasses.bordered}">
+              <div class="card-body gap-3">
+                <div class="flex items-center justify-between gap-3">
+                  <h3 class="card-title text-base">${escapeHtml(run.goal)}</h3>
+                  <span class="badge badge-outline">${escapeHtml(getLongRunningStatusLabel(messages, run.status))}</span>
+                </div>
+                <p class="text-sm text-base-content/75">${escapeHtml(getAutomationStatusMessageLabel(messages, run.statusMessage))}</p>
+                ${reviewActions}
+              </div>
+            </article>`;
+          }).join("")}</div>
         </section>`,
       sideSections: [
         {

@@ -1,6 +1,7 @@
 import type {
   LocalEmbeddingOperationResult,
   LocalSentimentOperationResult,
+  LocalImageGenerationOperationResult,
   LocalSpeechSynthesisOperationResult,
   LocalTextGenerationOperationResult,
   LocalTranscriptionOperationResult,
@@ -67,6 +68,18 @@ export interface LocalModelRuntime {
    * @returns Typed embedding result.
    */
   generateEmbeddingResult(text: string): Promise<LocalEmbeddingOperationResult>;
+
+  /**
+   * Runs local image generation.
+   *
+   * @param prompt Image generation prompt.
+   * @param aspectRatio Optional output aspect-ratio hint.
+   * @returns Typed image-generation result.
+   */
+  generateImageResult(
+    prompt: string,
+    aspectRatio?: "square" | "landscape" | "portrait",
+  ): Promise<LocalImageGenerationOperationResult>;
 
   /**
    * Releases JS ownership of runtime resources.

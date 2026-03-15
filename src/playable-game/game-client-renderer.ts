@@ -10,6 +10,7 @@ import {
   Texture,
 } from "pixi.js";
 import { gameSpriteManifests } from "../domain/game/data/sprite-data.ts";
+import { createLogger } from "../lib/logger.ts";
 import { PIXI_CANVAS_MISSING_ERROR } from "../shared/constants/errors.ts";
 import type {
   EntityState,
@@ -31,6 +32,7 @@ type LoadedSceneAssets = {
   readonly backgroundTexture: Texture;
 };
 
+const logger = createLogger("playable.renderer");
 const MAX_TEXTURE_CACHE_SIZE = 256;
 
 const evictLruEntry = (cache: Map<string, Texture>): void => {
@@ -225,7 +227,14 @@ const createRendererRuntime = async ({
       return cached;
     }
 
-    const loadedTexture = await Assets.load(assetUrl).catch(() => Texture.EMPTY);
+    const textureResult = await settleAsync(Assets.load(assetUrl));
+    if (!textureResult.ok) {
+      logger.warn("renderer.texture.load-failed", {
+        assetUrl,
+        error: textureResult.error.message,
+      });
+    }
+    const loadedTexture = textureResult.ok ? textureResult.value : Texture.EMPTY;
     const texture = loadedTexture instanceof Texture ? loadedTexture : Texture.EMPTY;
     loadedTextures.set(assetUrl, texture);
     if (loadedTextures.size > MAX_TEXTURE_CACHE_SIZE) {

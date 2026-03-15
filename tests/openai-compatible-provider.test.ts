@@ -14,6 +14,7 @@ const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => new Uint8Array(bytes).
 
 const baseConfig: OpenAiCompatibleProviderConfig = {
   name: "openai-compatible-local",
+  vendor: "ramalama",
   providerLabel: "ramalama",
   baseUrl: "http://127.0.0.1:8080/v1",
   apiKey: "",
@@ -25,6 +26,19 @@ const baseConfig: OpenAiCompatibleProviderConfig = {
   speechModel: "local-speech",
   moderationModel: "local-moderation",
   speechVoice: "alloy",
+  endpoints: {
+    modelsPath: "/models",
+    chatCompletionsPath: "/chat/completions",
+    embeddingsPath: "/embeddings",
+    transcriptionsPath: "/audio/transcriptions",
+    speechPath: "/audio/speech",
+    moderationsPath: "/moderations",
+  },
+  auth: {
+    apiKeyHeaderName: "authorization",
+    apiKeyPrefix: "Bearer ",
+    extraHeaders: {},
+  },
   local: true,
 };
 
@@ -68,6 +82,84 @@ describe("openai-compatible provider response decoding", () => {
     expect(modelIds).toContain(transcriptionModel);
     expect(modelIds).toContain(speechModel);
     expect(modelIds).toContain(moderationModel);
+  });
+
+  test("detectCapabilities falls back to configured models when discovery is unavailable", async () => {
+    const provider = new OpenAiCompatibleProvider({
+      ...baseConfig,
+      vendor: "claude",
+      endpoints: {
+        ...baseConfig.endpoints,
+        modelsPath: null,
+        embeddingsPath: null,
+        transcriptionsPath: null,
+        speechPath: null,
+        moderationsPath: null,
+      },
+      embeddingModel: undefined,
+      transcriptionModel: undefined,
+      speechModel: undefined,
+      moderationModel: undefined,
+    });
+
+    const capabilities = await provider.detectCapabilities();
+    const visionModel = baseConfig.visionModel;
+    expect(visionModel).toBeDefined();
+    if (!visionModel) {
+      return;
+    }
+    expect(capabilities.map((entry) => entry.model)).toEqual([baseConfig.chatModel, visionModel]);
+  });
+
+  test("detectCapabilities accepts GitHub catalog responses and vendor headers", async () => {
+    let receivedUrl = "";
+    let receivedHeaders: Headers | null = null;
+    const provider = new OpenAiCompatibleProvider(
+      {
+        ...baseConfig,
+        vendor: "copilot",
+        apiKey: "github-token",
+        baseUrl: "https://models.github.ai",
+        endpoints: {
+          ...baseConfig.endpoints,
+          modelsPath: "/catalog/models",
+          chatCompletionsPath: "/inference/chat/completions",
+          embeddingsPath: "/inference/embeddings",
+          transcriptionsPath: null,
+          speechPath: null,
+          moderationsPath: null,
+        },
+        auth: {
+          apiKeyHeaderName: "authorization",
+          apiKeyPrefix: "Bearer ",
+          extraHeaders: {
+            accept: "application/vnd.github+json",
+            "x-github-api-version": "2022-11-28",
+          },
+        },
+        chatModel: "openai/gpt-4.1-mini",
+        embeddingModel: "openai/text-embedding-3-small",
+        visionModel: undefined,
+        transcriptionModel: undefined,
+        speechModel: undefined,
+        moderationModel: undefined,
+      },
+      createFetchStub(async (input, init) => {
+        receivedUrl = typeof input === "string" ? input : input.toString();
+        receivedHeaders = new Headers(init?.headers);
+        return new Response(JSON.stringify([{ id: "openai/gpt-4.1-mini" }]));
+      }),
+    );
+
+    const capabilities = await provider.detectCapabilities();
+    expect(receivedHeaders).not.toBeNull();
+    const headers = new Headers(receivedHeaders ?? undefined);
+
+    expect(receivedUrl).toBe("https://models.github.ai/catalog/models");
+    expect(headers.get("authorization")).toBe("Bearer github-token");
+    expect(headers.get("accept")).toBe("application/vnd.github+json");
+    expect(headers.get("x-github-api-version")).toBe("2022-11-28");
+    expect(capabilities.map((entry) => entry.model)).toContain("openai/gpt-4.1-mini");
   });
 
   test("chat returns a retryable failure for malformed payloads", async () => {
