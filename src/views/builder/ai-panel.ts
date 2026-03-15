@@ -56,7 +56,9 @@ export const renderKnowledgeDocumentList = (
   return `<ul class="space-y-3">${documents
     .map((document) => {
       const deleteHref = withQueryParameters(
-        `${appRoutes.aiBuilderKnowledgeDocuments}/${encodeURIComponent(document.id)}`,
+        interpolateRoutePath(appRoutes.aiBuilderKnowledgeDocumentDetail, {
+          documentId: document.id,
+        }),
         {
           projectId,
           locale,

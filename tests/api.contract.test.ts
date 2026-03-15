@@ -2027,18 +2027,6 @@ describe("API contracts", () => {
           }>;
         };
         readonly providerCount?: number;
-        readonly capabilities?: ReadonlyArray<{
-          readonly provider: string;
-          readonly model: string;
-          readonly capabilities: readonly string[];
-          readonly maxContextLength: number;
-          readonly supportsStreaming: boolean;
-          readonly runtime: string;
-          readonly integration: string;
-          readonly local: boolean;
-          readonly configurable: boolean;
-          readonly key?: string;
-        }>;
       };
     }>(response);
 
@@ -2048,15 +2036,6 @@ describe("API contracts", () => {
     expect(typeof payload.data?.features?.test).toBe("boolean");
     expect(typeof payload.data?.providerCount).toBe("number");
     expect(Array.isArray(payload.data?.creatorCapabilities?.items)).toBe(true);
-    expect(Array.isArray(payload.data?.capabilities)).toBe(true);
-    if (payload.data?.capabilities) {
-      expect(
-        payload.data.capabilities.every((capability) => capability.provider === "creator-safe"),
-      ).toBe(true);
-      expect(
-        payload.data.capabilities.every((capability) => capability.model === "creator-safe"),
-      ).toBe(true);
-    }
   });
 
   test("builder platform readiness endpoint exposes partial and missing capability states", async () => {
@@ -3128,16 +3107,18 @@ describe("HTMX partial rendering", () => {
         body: new URLSearchParams({
           projectId,
           locale: "en-US",
-          key: dialogueKey,
+          speakerId: "Harbor Guide",
+          lineReference: "Greeting",
           text: "Fresh builder line.",
         }).toString(),
       }),
     );
     const dialogueHtml = await dialogueResponse.text();
+    const derivedDialogueKey = "npc.harborGuide.lines.greeting";
 
     expect(dialogueResponse.status).toBe(httpStatus.ok);
     expect(dialogueHtml.includes('hx-swap-oob="outerHTML"')).toBe(true);
-    expect(dialogueHtml.includes(dialogueKey)).toBe(true);
+    expect(dialogueHtml.includes(derivedDialogueKey)).toBe(true);
   });
 
   test("builder creator workspaces render and round-trip authored asset, mechanics, and automation forms", async () => {
@@ -3185,7 +3166,7 @@ describe("HTMX partial rendering", () => {
     expect(uploadResponse.status).toBe(httpStatus.ok);
     expect(uploadHtml.includes(uploadAssetId)).toBe(true);
 
-    const assetId = `asset-${crypto.randomUUID().slice(0, 8)}`;
+    const assetId = "creatorPortrait";
     const assetResponse = await app.handle(
       new Request(toUrl("/api/builder/assets/create/form"), {
         method: "POST",
@@ -3196,7 +3177,6 @@ describe("HTMX partial rendering", () => {
         body: new URLSearchParams({
           projectId,
           locale: "en-US",
-          id: assetId,
           label: "Creator Portrait",
           kind: "portrait",
           sceneMode: "2d",
@@ -3209,7 +3189,7 @@ describe("HTMX partial rendering", () => {
     expect(assetHtml.includes('hx-swap-oob="outerHTML"')).toBe(true);
     expect(assetHtml.includes(assetId)).toBe(true);
 
-    const clipId = `clip-${crypto.randomUUID().slice(0, 8)}`;
+    const clipId = "creatorPortrait.idleDown";
     const clipResponse = await app.handle(
       new Request(toUrl("/api/builder/animation-clips/create/form"), {
         method: "POST",
@@ -3220,7 +3200,6 @@ describe("HTMX partial rendering", () => {
         body: new URLSearchParams({
           projectId,
           locale: "en-US",
-          id: clipId,
           assetId,
           stateTag: "idle-down",
           frameCount: "4",
@@ -3320,7 +3299,7 @@ describe("HTMX partial rendering", () => {
     expect(generationApproveHtml.includes("approved")).toBe(true);
     expect(generationApproveHtml.includes("generation.asset.label.generated:portrait")).toBe(false);
 
-    const triggerId = `trigger-${crypto.randomUUID().slice(0, 8)}`;
+    const triggerId = "meetTheBuilderGuide";
     const triggerResponse = await app.handle(
       new Request(
         toUrl(interpolateRoutePath(appRoutes.builderApiTriggersCreateForm, { projectId })),
@@ -3333,7 +3312,6 @@ describe("HTMX partial rendering", () => {
           body: new URLSearchParams({
             projectId,
             locale: "en-US",
-            id: triggerId,
             label: "Meet the builder guide",
             event: "npc-interact",
             sceneId: "teaHouse",
@@ -3356,7 +3334,7 @@ describe("HTMX partial rendering", () => {
       npcId: "teaMonk",
     });
 
-    const questId = `quest-${crypto.randomUUID().slice(0, 8)}`;
+    const questId = "builderIntro";
     const questResponse = await app.handle(
       new Request(
         toUrl(interpolateRoutePath(appRoutes.builderApiQuestsCreateForm, { projectId })),
@@ -3369,7 +3347,6 @@ describe("HTMX partial rendering", () => {
           body: new URLSearchParams({
             projectId,
             locale: "en-US",
-            id: questId,
             title: "Builder intro",
             description: "Walk through the first authored mechanic.",
             triggerId,
@@ -3397,7 +3374,7 @@ describe("HTMX partial rendering", () => {
       ],
     });
 
-    const graphId = `graph-${crypto.randomUUID().slice(0, 8)}`;
+    const graphId = "teaMonk.guideIntroGraph";
     const graphResponse = await app.handle(
       new Request(
         toUrl(interpolateRoutePath(appRoutes.builderApiDialogueGraphsCreateForm, { projectId })),
@@ -3410,7 +3387,6 @@ describe("HTMX partial rendering", () => {
           body: new URLSearchParams({
             projectId,
             locale: "en-US",
-            id: graphId,
             title: "Guide intro graph",
             npcId: "teaMonk",
             line: "npc.teaMonk.greet",

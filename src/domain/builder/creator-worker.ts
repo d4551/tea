@@ -636,14 +636,18 @@ const executeBuilderAutomationStep = async (
 
   switch (spec.kind) {
     case "create-scene":
-      path = `${appRoutes.builderApiScenes}/create/form`;
+      path = interpolateRoutePath(appRoutes.builderApiScenesCreateForm, {
+        projectId: context.projectId,
+      });
       baseForm.set("id", spec.id);
       baseForm.set("titleKey", spec.titleKey);
       baseForm.set("background", spec.background);
       baseForm.set("sceneMode", spec.sceneMode);
       break;
     case "create-trigger":
-      path = `${appRoutes.builderApiTriggers}/create/form`;
+      path = interpolateRoutePath(appRoutes.builderApiTriggersCreateForm, {
+        projectId: context.projectId,
+      });
       baseForm.set("id", spec.id);
       baseForm.set("label", spec.label);
       baseForm.set("event", spec.event);
@@ -655,14 +659,18 @@ const executeBuilderAutomationStep = async (
       }
       break;
     case "create-quest":
-      path = `${appRoutes.builderApiQuests}/create/form`;
+      path = interpolateRoutePath(appRoutes.builderApiQuestsCreateForm, {
+        projectId: context.projectId,
+      });
       baseForm.set("id", spec.id);
       baseForm.set("title", spec.title);
       baseForm.set("description", spec.description);
       baseForm.set("triggerId", spec.triggerId);
       break;
     case "create-dialogue-graph":
-      path = `${appRoutes.builderApiDialogueGraphs}/create/form`;
+      path = interpolateRoutePath(appRoutes.builderApiDialogueGraphsCreateForm, {
+        projectId: context.projectId,
+      });
       baseForm.set("id", spec.id);
       baseForm.set("title", spec.title);
       baseForm.set("line", spec.line);
@@ -671,7 +679,7 @@ const executeBuilderAutomationStep = async (
       }
       break;
     case "create-asset":
-      path = `${appRoutes.builderApiAssets}/create/form`;
+      path = appRoutes.builderApiAssetsCreateForm;
       baseForm.set("id", spec.id);
       baseForm.set("label", spec.label);
       baseForm.set("kind", spec.assetKind);
@@ -679,7 +687,7 @@ const executeBuilderAutomationStep = async (
       baseForm.set("source", spec.source);
       break;
     case "create-animation-clip":
-      path = `${appRoutes.builderApiAnimationClips}/create/form`;
+      path = appRoutes.builderApiAnimationClipsCreateForm;
       baseForm.set("id", spec.id);
       baseForm.set("assetId", spec.assetId);
       baseForm.set("stateTag", spec.stateTag);
@@ -691,7 +699,7 @@ const executeBuilderAutomationStep = async (
       }
       break;
     case "queue-generation-job":
-      path = `${appRoutes.builderApiGenerationJobs}/create/form`;
+      path = appRoutes.builderApiGenerationJobsCreateForm;
       baseForm.set("kind", spec.jobKind);
       baseForm.set("prompt", spec.prompt);
       if (spec.targetId) {

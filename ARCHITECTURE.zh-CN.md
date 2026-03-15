@@ -2,6 +2,27 @@
 
 本文件是 Markdown 退役后的主架构参考。
 
+## 先看这里
+
+如果你想先用最短路径理解平台全貌，再进入完整架构文档，请先阅读 [docs/platform-explainer.md](docs/platform-explainer.md)。
+该文档包含英文、中文以及“五岁也能懂”版本，并附带简化 Mermaid 图表。
+
+## 产品视角
+
+```mermaid
+flowchart LR
+  Creator["创作者"] --> Builder["Builder SSR + HTMX"]
+  Player["玩家"] --> Runtime["Game SSR + 可游玩客户端"]
+  Operator["运维 / 开发"] --> Ops["运行手册 + 验证流程"]
+  Builder --> Publish["发布校验 + 不可变版本"]
+  Publish --> Runtime
+  Runtime --> Transport["HTTP + SSE + WebSocket"]
+  Runtime --> Loop["game-loop"]
+  Builder --> Services["Builder + AI 服务"]
+  Services --> Store["Prisma + SQLite + 资源"]
+  Loop --> Store
+```
+
 ## 1) 设计不变式
 
 1. **作者态可变，运行态不可变**：Builder 是草稿态，运行态会话只来自已发布快照。

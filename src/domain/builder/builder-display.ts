@@ -46,6 +46,16 @@ export const buildNpcGreetingResourceKey = (characterKey: string): string =>
   `npc.${sanitizeStableBuilderIdentifier(characterKey)}.greet`;
 
 /**
+ * Builds the canonical internal resource key for an authored dialogue line.
+ *
+ * @param characterKey Stable speaker identifier.
+ * @param lineReference Stable line reference.
+ * @returns Dialogue line resource key.
+ */
+export const buildDialogueLineResourceKey = (characterKey: string, lineReference: string): string =>
+  `npc.${sanitizeStableBuilderIdentifier(characterKey)}.lines.${sanitizeStableBuilderIdentifier(lineReference)}`;
+
+/**
  * Converts a builder id or compact key into a readable label.
  *
  * @param value Raw builder id, key, or label candidate.
@@ -166,5 +176,176 @@ export const deriveNpcIdentity = (input: {
     characterKey,
     labelKey,
     greetLineKey: buildNpcGreetingResourceKey(characterKey),
+  };
+};
+
+/**
+ * Derives a canonical dialogue key from creator-facing speaker and line inputs.
+ *
+ * @param input Creator-facing create input.
+ * @returns Stable dialogue key plus the derived speaker and line references.
+ */
+export const deriveDialogueIdentity = (input: {
+  readonly key?: string;
+  readonly speakerId?: string;
+  readonly lineReference?: string;
+  readonly text?: string;
+}): {
+  readonly key: string;
+  readonly speakerId: string;
+  readonly lineReference: string;
+} => {
+  const explicitKey = normalizeWhitespace(input.key ?? "");
+  if (explicitKey.length > 0) {
+    const segments = explicitKey.split(".");
+    return {
+      key: explicitKey,
+      speakerId: segments[1] ?? "speaker",
+      lineReference: segments.at(-1) ?? "line",
+    };
+  }
+
+  const speakerId = normalizeBuilderIdentifier(input.speakerId ?? "");
+  const lineReferenceSource =
+    normalizeWhitespace(input.lineReference ?? "") || normalizeWhitespace(input.text ?? "");
+  const lineReference = normalizeBuilderIdentifier(lineReferenceSource);
+
+  return {
+    key: buildDialogueLineResourceKey(
+      speakerId.length > 0 ? speakerId : "speaker",
+      lineReference.length > 0 ? lineReference : "line",
+    ),
+    speakerId: speakerId.length > 0 ? speakerId : "speaker",
+    lineReference: lineReference.length > 0 ? lineReference : "line",
+  };
+};
+
+/**
+ * Derives a stable asset identifier from creator-facing asset inputs.
+ *
+ * @param input Creator-facing asset create input.
+ * @returns Stable asset id.
+ */
+export const deriveAssetIdentity = (input: {
+  readonly id?: string;
+  readonly label?: string;
+  readonly source?: string;
+  readonly sourceName?: string;
+}): {
+  readonly id: string;
+} => {
+  const explicitId = sanitizeStableBuilderIdentifier(input.id ?? "");
+  if (explicitId.length > 0) {
+    return { id: explicitId };
+  }
+
+  const preferredLabel = normalizeBuilderIdentifier(input.label ?? "");
+  if (preferredLabel.length > 0) {
+    return { id: preferredLabel };
+  }
+
+  const sourceStem = normalizeBuilderIdentifier(
+    (input.sourceName ?? input.source ?? "").replace(/\.[^.]+$/, ""),
+  );
+  return { id: sourceStem.length > 0 ? sourceStem : "asset" };
+};
+
+/**
+ * Derives a stable animation clip identifier from creator-facing inputs.
+ *
+ * @param input Creator-facing animation clip create input.
+ * @returns Stable clip id.
+ */
+export const deriveAnimationClipIdentity = (input: {
+  readonly id?: string;
+  readonly assetId?: string;
+  readonly stateTag?: string;
+}): {
+  readonly id: string;
+} => {
+  const explicitId = sanitizeStableBuilderIdentifier(input.id ?? "");
+  if (explicitId.length > 0) {
+    return { id: explicitId };
+  }
+
+  const assetId = normalizeBuilderIdentifier(input.assetId ?? "");
+  const stateTag = normalizeBuilderIdentifier(input.stateTag ?? "");
+  const derivedId = [assetId, stateTag].filter((segment) => segment.length > 0).join(".");
+
+  return {
+    id: derivedId.length > 0 ? derivedId : "animationClip",
+  };
+};
+
+/**
+ * Derives a stable quest identifier from creator-facing quest inputs.
+ *
+ * @param input Creator-facing quest create input.
+ * @returns Stable quest id.
+ */
+export const deriveQuestIdentity = (input: {
+  readonly id?: string;
+  readonly title?: string;
+}): {
+  readonly id: string;
+} => {
+  const explicitId = sanitizeStableBuilderIdentifier(input.id ?? "");
+  if (explicitId.length > 0) {
+    return { id: explicitId };
+  }
+
+  const derivedId = normalizeBuilderIdentifier(input.title ?? "");
+  return {
+    id: derivedId.length > 0 ? derivedId : "quest",
+  };
+};
+
+/**
+ * Derives a stable trigger identifier from creator-facing trigger inputs.
+ *
+ * @param input Creator-facing trigger create input.
+ * @returns Stable trigger id.
+ */
+export const deriveTriggerIdentity = (input: {
+  readonly id?: string;
+  readonly label?: string;
+}): {
+  readonly id: string;
+} => {
+  const explicitId = sanitizeStableBuilderIdentifier(input.id ?? "");
+  if (explicitId.length > 0) {
+    return { id: explicitId };
+  }
+
+  const derivedId = normalizeBuilderIdentifier(input.label ?? "");
+  return {
+    id: derivedId.length > 0 ? derivedId : "trigger",
+  };
+};
+
+/**
+ * Derives a stable dialogue graph identifier from creator-facing graph inputs.
+ *
+ * @param input Creator-facing dialogue graph create input.
+ * @returns Stable graph id.
+ */
+export const deriveDialogueGraphIdentity = (input: {
+  readonly id?: string;
+  readonly title?: string;
+  readonly npcId?: string;
+}): {
+  readonly id: string;
+} => {
+  const explicitId = sanitizeStableBuilderIdentifier(input.id ?? "");
+  if (explicitId.length > 0) {
+    return { id: explicitId };
+  }
+
+  const titleId = normalizeBuilderIdentifier(input.title ?? "");
+  const npcId = normalizeBuilderIdentifier(input.npcId ?? "");
+  const derivedId = [npcId, titleId].filter((segment) => segment.length > 0).join(".");
+
+  return {
+    id: derivedId.length > 0 ? derivedId : "dialogueGraph",
   };
 };

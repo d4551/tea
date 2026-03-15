@@ -30,6 +30,7 @@ type AppRouteMap = {
   readonly aiCapabilities: string;
   readonly aiCatalog: string;
   readonly aiKnowledgeDocuments: string;
+  readonly aiKnowledgeDocumentDetail: string;
   readonly aiKnowledgeSearch: string;
   readonly aiAssistRetrieval: string;
   readonly aiPlanTools: string;
@@ -47,6 +48,7 @@ type AppRouteMap = {
   readonly aiBuilderCompose: string;
   readonly aiBuilderKnowledgeList: string;
   readonly aiBuilderKnowledgeDocuments: string;
+  readonly aiBuilderKnowledgeDocumentDetail: string;
   readonly aiBuilderKnowledgeSearch: string;
   readonly aiBuilderToolPlan: string;
   readonly aiBuilderPatchPreview: string;
@@ -142,6 +144,7 @@ export const appRoutes: AppRouteMap = {
   aiCapabilities: "/api/ai/capabilities",
   aiCatalog: "/api/ai/catalog",
   aiKnowledgeDocuments: "/api/ai/knowledge/documents",
+  aiKnowledgeDocumentDetail: "/api/ai/knowledge/documents/:documentId",
   aiKnowledgeSearch: "/api/ai/knowledge/search",
   aiAssistRetrieval: "/api/ai/assist/retrieval",
   aiPlanTools: "/api/ai/plan/tools",
@@ -159,6 +162,7 @@ export const appRoutes: AppRouteMap = {
   aiBuilderCompose: "/api/builder/ai/compose",
   aiBuilderKnowledgeList: "/api/builder/ai/knowledge/list",
   aiBuilderKnowledgeDocuments: "/api/builder/ai/knowledge/documents",
+  aiBuilderKnowledgeDocumentDetail: "/api/builder/ai/knowledge/documents/:documentId",
   aiBuilderKnowledgeSearch: "/api/builder/ai/knowledge/search",
   aiBuilderToolPlan: "/api/builder/ai/plan/tools",
   aiBuilderPatchPreview: "/api/builder/ai/patch/preview",

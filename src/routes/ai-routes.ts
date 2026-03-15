@@ -709,7 +709,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
     },
   )
   .delete(
-    `${appRoutes.aiKnowledgeDocuments}/:documentId`,
+    appRoutes.aiKnowledgeDocumentDetail,
     async ({ params, query }) => {
       const deleted = await knowledgeBaseService.deleteDocument(params.documentId, query.projectId);
       return successEnvelope({ deleted });

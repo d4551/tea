@@ -703,6 +703,10 @@ export interface Messages {
     readonly assetSearchPlaceholder: string;
     readonly dialogueWorkspaceTitle: string;
     readonly dialogueCreateDescription: string;
+    readonly dialogueSpeakerLabel: string;
+    readonly dialogueSpeakerPlaceholder: string;
+    readonly dialogueMomentLabel: string;
+    readonly dialogueMomentPlaceholder: string;
     readonly dialogueKeyPlaceholder: string;
     readonly addLinePlaceholder: string;
     readonly mechanicsWorkspaceTitle: string;
@@ -1718,7 +1722,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       advancedAutomationDescription:
         "Review Queue is the advanced surface for evidence capture, review bundles, and gated automation apply flows.",
       dialogueSearchLabel: "Filter dialogue",
-      dialogueSearchPlaceholder: "Search by NPC or dialogue key",
+      dialogueSearchPlaceholder: "Search by speaker or line",
       sceneSearchLabel: "Filter scenes",
       sceneSearchPlaceholder: "Search by title or scene reference",
       assetSearchLabel: "Filter assets",
@@ -1726,7 +1730,11 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       dialogueWorkspaceTitle: "Dialogue workspace",
       dialogueCreateDescription:
         "Keep dialogue grouped by NPC and use AI to draft new lines before saving.",
-      dialogueKeyPlaceholder: "riverPilot.greeting",
+      dialogueSpeakerLabel: "Speaker",
+      dialogueSpeakerPlaceholder: "Harbor Guide",
+      dialogueMomentLabel: "Moment",
+      dialogueMomentPlaceholder: "Greeting",
+      dialogueKeyPlaceholder: "npc.harborGuide.lines.greeting",
       addLinePlaceholder: "Welcome, traveler. The leaves have been expecting you.",
       mechanicsWorkspaceTitle: "Mechanics workspace",
       questsTitle: "Quests",
@@ -1748,16 +1756,16 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       graphIdLabel: "Graph ID",
       graphTitlePlaceholder: "Guide intro graph",
       assetLabelPlaceholder: "Harbor Backdrop",
-      assetIdPlaceholder: "moonlit-harbor-backdrop",
-      clipIdPlaceholder: "clip.harbor-guide.idle",
-      questIdPlaceholder: "harbor-introduction",
-      triggerIdPlaceholder: "talk-to-harbor-guide",
-      graphIdPlaceholder: "guide-introduction",
+      assetIdPlaceholder: "Optional stable asset reference",
+      clipIdPlaceholder: "Optional stable animation reference",
+      questIdPlaceholder: "Optional stable quest reference",
+      triggerIdPlaceholder: "Optional stable trigger reference",
+      graphIdPlaceholder: "Optional stable graph reference",
       nodeIdPlaceholder: "hero-spawn-point",
       layerPlaceholder: "foreground",
       stateTagPlaceholder: "idle-down",
       sourcePathPlaceholder: "/assets/images/custom.png",
-      dialogueNpcIdPlaceholder: "forestGuide",
+      dialogueNpcIdPlaceholder: "Harbor Guide",
       operationsJsonPlaceholder:
         '[{"op":"replace","path":"/dialogues/en-US/npc.guide.greet","value":"..."}]',
       assetStatusApproved: "approved",
@@ -2634,14 +2642,18 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       advancedAutomationDescription:
         "审核队列用于证据采集、审查包与受控自动化应用，属于高级工作区。",
       dialogueSearchLabel: "筛选对话",
-      dialogueSearchPlaceholder: "按 NPC 或对话键搜索",
+      dialogueSearchPlaceholder: "按说话角色或台词搜索",
       sceneSearchLabel: "筛选场景",
       sceneSearchPlaceholder: "按标题或场景引用搜索",
       assetSearchLabel: "筛选资源",
       assetSearchPlaceholder: "按名称、类型或场景模式搜索",
       dialogueWorkspaceTitle: "对话工作区",
       dialogueCreateDescription: "按 NPC 管理对话，并先用 AI 起草再保存。",
-      dialogueKeyPlaceholder: "riverPilot.greeting",
+      dialogueSpeakerLabel: "说话角色",
+      dialogueSpeakerPlaceholder: "港湾向导",
+      dialogueMomentLabel: "情境",
+      dialogueMomentPlaceholder: "问候",
+      dialogueKeyPlaceholder: "npc.harborGuide.lines.greeting",
       addLinePlaceholder: "旅人，欢迎你。茶叶早已预见你的到来。",
       mechanicsWorkspaceTitle: "机制工作区",
       questsTitle: "任务",
@@ -2663,16 +2675,16 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       graphIdLabel: "对话图 ID",
       graphTitlePlaceholder: "向导介绍对话图",
       assetLabelPlaceholder: "港湾背景",
-      assetIdPlaceholder: "moonlit-harbor-backdrop",
-      clipIdPlaceholder: "clip.harbor-guide.idle",
-      questIdPlaceholder: "harbor-introduction",
-      triggerIdPlaceholder: "talk-to-harbor-guide",
-      graphIdPlaceholder: "guide-introduction",
+      assetIdPlaceholder: "可选的稳定资源引用",
+      clipIdPlaceholder: "可选的稳定动画引用",
+      questIdPlaceholder: "可选的稳定任务引用",
+      triggerIdPlaceholder: "可选的稳定触发器引用",
+      graphIdPlaceholder: "可选的稳定图引用",
       nodeIdPlaceholder: "hero-spawn-point",
       layerPlaceholder: "foreground",
       stateTagPlaceholder: "idle-down",
       sourcePathPlaceholder: "/assets/images/custom.png",
-      dialogueNpcIdPlaceholder: "forestGuide",
+      dialogueNpcIdPlaceholder: "港湾向导",
       operationsJsonPlaceholder:
         '[{"op":"replace","path":"/dialogues/zh-CN/npc.guide.greet","value":"..."}]',
       assetStatusApproved: "已批准",

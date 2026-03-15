@@ -7,6 +7,7 @@ English and Chinese versions are available for all canonical documents.
 
 | Document | Purpose |
 | --- | --- |
+| [Platform explainer](./platform-explainer.md) | Guided overview in English, Chinese, and Explain Like I'm 5 language with Mermaid charts |
 | [README](notes/doc-archive/README.txt) | Top-level product, stack, workflow, and contributor rules |
 | [README (Chinese)](notes/doc-archive/README.zh-CN.txt) | 顶层产品、技术栈、工作流与贡献规则 |
 | [Architecture](notes/doc-archive/ARCHITECTURE.txt) | Runtime topology, ownership boundaries, state models, and transport surfaces |
@@ -47,8 +48,9 @@ English and Chinese versions are available for all canonical documents.
 
 ## Reading order
 
-1. Start with [README](notes/doc-archive/README.txt) or [README (Chinese)](notes/doc-archive/README.zh-CN.txt).
-2. Read [Architecture](notes/doc-archive/ARCHITECTURE.txt) or [Architecture (Chinese)](notes/doc-archive/ARCHITECTURE.zh-CN.txt) for system boundaries.
-3. Review [API and transport contracts](notes/doc-archive/docs__api-contracts.txt) and [Builder domain](notes/doc-archive/docs__builder-domain.txt) before touching route or publish behavior.
-4. Use runbook docs before routine operations and troubleshooting.
-5. Use runtime-specific docs when changing HTMX, playable, AI, or companion pack behavior.
+1. Start with the [Platform explainer](./platform-explainer.md) if you want the shortest guided overview first.
+2. Continue with [README](notes/doc-archive/README.txt) or [README (Chinese)](notes/doc-archive/README.zh-CN.txt).
+3. Read [Architecture](notes/doc-archive/ARCHITECTURE.txt) or [Architecture (Chinese)](notes/doc-archive/ARCHITECTURE.zh-CN.txt) for system boundaries.
+4. Review [API and transport contracts](notes/doc-archive/docs__api-contracts.txt) and [Builder domain](notes/doc-archive/docs__builder-domain.txt) before touching route or publish behavior.
+5. Use runbook docs before routine operations and troubleshooting.
+6. Use runtime-specific docs when changing HTMX, playable, AI, or companion pack behavior.

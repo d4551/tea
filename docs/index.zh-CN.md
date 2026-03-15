@@ -1,11 +1,12 @@
 # TEA 文档索引（中文）
 
-本文是当前文档合集的入口（无 `.md` 依赖）。
+本文是当前文档合集的入口。
 
 ## 核心文档
 
 | 文档 | 用途 |
 | --- | --- |
+| [平台白话说明](./platform-explainer.md) | 英文、中文和“五岁也能懂”版本的平台导览，附 Mermaid 图表 |
 | [README（英文）](notes/doc-archive/README.txt) | 项目总览、栈边界和核心工作流 |
 | [README（中文）](notes/doc-archive/README.zh-CN.txt) | 本文档的中文版本 |
 | [架构说明（英文）](notes/doc-archive/ARCHITECTURE.txt) | 拓扑、边界与数据流 |
@@ -50,8 +51,9 @@
 
 ## 阅读顺序
 
-1. 先读 [README（中文）](notes/doc-archive/README.zh-CN.txt) 或 [README（英文）](notes/doc-archive/README.txt)。
-2. 阅读 [架构说明（中文）](notes/doc-archive/ARCHITECTURE.zh-CN.txt) 或 [英文版](notes/doc-archive/ARCHITECTURE.txt)。
-3. 阅读 API 与领域契约（`docs__api-contracts`, `docs__builder-domain`）后修改 API 或发布流程。
-4. 阅读 `Builder` 运行时文档后修改创建/发布行为。
-5. 阅读 playable + AI + HTMX 文档以覆盖前端与会话链路。
+1. 如果你想先快速理解平台全局，先读 [平台白话说明](./platform-explainer.md)。
+2. 再读 [README（中文）](notes/doc-archive/README.zh-CN.txt) 或 [README（英文）](notes/doc-archive/README.txt)。
+3. 阅读 [架构说明（中文）](notes/doc-archive/ARCHITECTURE.zh-CN.txt) 或 [英文版](notes/doc-archive/ARCHITECTURE.txt)。
+4. 阅读 API 与领域契约（`docs__api-contracts`, `docs__builder-domain`）后修改 API 或发布流程。
+5. 阅读 `Builder` 运行时文档后修改创建/发布行为。
+6. 阅读 playable + AI + HTMX 文档以覆盖前端与会话链路。

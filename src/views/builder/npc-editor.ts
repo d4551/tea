@@ -219,7 +219,6 @@ export const renderNpcEditor = (
                 }
                   <div class="flex flex-wrap gap-2">
                     <span class="badge badge-outline">${escapeHtml(selectedNpcScene ? resolveSceneDisplayName(locale, selectedNpcScene) : selectedNpc.sceneId)}</span>
-                    <span class="badge badge-soft">${escapeHtml(selectedNpc.npc.characterKey)}</span>
                     <span class="badge badge-soft">${escapeHtml(getBooleanLabel(messages, selectedNpc.npc.ai.greetOnApproach))}</span>
                   </div>`,
               },

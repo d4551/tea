@@ -312,12 +312,8 @@ export const renderAssetsEditor = (
               <form class="space-y-3" hx-post="${escapeHtml(uploadAssetAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-encoding="multipart/form-data" hx-indicator="#asset-upload-spinner" hx-disabled-elt="button, input, select, textarea">
                 ${renderBuilderHiddenFields(projectId, locale)}
                 <fieldset class="fieldset">
-                  <legend class="fieldset-legend">${escapeHtml(messages.builder.assetIdFieldLabel)}</legend>
-                  <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.assetIdFieldLabel)}" />
-                </fieldset>
-                <fieldset class="fieldset">
                   <legend class="fieldset-legend">${escapeHtml(messages.builder.labelField)}</legend>
-                  <input name="label" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.assetLabelPlaceholder)}" aria-label="${escapeHtml(messages.builder.labelField)}" />
+                  <input name="label" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.assetLabelPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.labelField)}" />
                 </fieldset>
                 <fieldset class="fieldset">
                   <legend class="fieldset-legend">${escapeHtml(messages.builder.assetKindLabel)}</legend>
@@ -334,6 +330,15 @@ export const renderAssetsEditor = (
                   <legend class="fieldset-legend">${escapeHtml(messages.builder.uploadAsset)}</legend>
                   <input name="file" type="file" class="file-input file-input-sm w-full" accept="image/*,audio/*,.glb,.gltf,.usd,.usda,.usdc,.usdz,.json" aria-required="true" required aria-label="${escapeHtml(messages.builder.assetSourceLabel)}" />
                 </fieldset>
+                <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
+                  <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
+                  <div class="collapse-content pt-2">
+                    <fieldset class="fieldset">
+                      <legend class="fieldset-legend">${escapeHtml(messages.builder.assetIdFieldLabel)}</legend>
+                      <input name="id" type="text" class="input w-full builder-mono" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.assetIdFieldLabel)}" />
+                    </fieldset>
+                  </div>
+                </details>
                 <div class="flex items-center gap-2">
                   <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.addAssetFile)}">${escapeHtml(messages.builder.addAssetFile)}</button>
                   <span id="asset-upload-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
@@ -346,10 +351,6 @@ export const renderAssetsEditor = (
             <div class="collapse-content pt-2">
               <form class="space-y-3" hx-post="${escapeHtml(createAssetAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#asset-create-spinner" hx-disabled-elt="button, input, select, textarea">
                 ${renderBuilderHiddenFields(projectId, locale)}
-                <fieldset class="fieldset">
-                  <legend class="fieldset-legend">${escapeHtml(messages.builder.assetIdFieldLabel)}</legend>
-                  <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.assetIdFieldLabel)}" />
-                </fieldset>
                 <fieldset class="fieldset">
                   <legend class="fieldset-legend">${escapeHtml(messages.builder.labelField)}</legend>
                   <input name="label" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.assetLabelPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.labelField)}" />
@@ -369,6 +370,15 @@ export const renderAssetsEditor = (
                   <legend class="fieldset-legend">${escapeHtml(messages.builder.assetSourceLabel)}</legend>
                   <input name="source" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.sourcePathPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.assetSourceLabel)}" />
                 </fieldset>
+                <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
+                  <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
+                  <div class="collapse-content pt-2">
+                    <fieldset class="fieldset">
+                      <legend class="fieldset-legend">${escapeHtml(messages.builder.assetIdFieldLabel)}</legend>
+                      <input name="id" type="text" class="input w-full builder-mono" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.assetIdFieldLabel)}" />
+                    </fieldset>
+                  </div>
+                </details>
                 <div class="flex items-center gap-2">
                   <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.addAssetPath)}">${escapeHtml(messages.builder.addAssetPath)}</button>
                   <span id="asset-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
@@ -415,12 +425,8 @@ export const renderAssetsEditor = (
           <h2 class="card-title">${escapeHtml(messages.builder.animationAuthoringTitle)}</h2>
           <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.animationAuthoringDescription)}</p>
           <fieldset class="fieldset">
-            <legend class="fieldset-legend">${escapeHtml(messages.builder.clipIdLabel)}</legend>
-            <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.clipIdPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.animationClipIdFieldLabel)}" />
-          </fieldset>
-          <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.clipAssetLabel)}</legend>
-            <input name="assetId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.clipAssetLabel)}" />
+            <input name="assetId" type="text" class="input w-full" value="${escapeHtml(selectedAsset?.id ?? "")}" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.clipAssetLabel)}" />
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.clipStateTagLabel)}</legend>
@@ -434,6 +440,15 @@ export const renderAssetsEditor = (
             <legend class="fieldset-legend">${escapeHtml(messages.builder.clipPlaybackLabel)}</legend>
             <input name="playbackFps" type="number" class="input w-full" value="${DEFAULT_ANIMATION_PLAYBACK_FPS}" min="1" aria-label="${escapeHtml(messages.builder.clipPlaybackLabel)}" />
           </fieldset>
+          <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
+            <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
+            <div class="collapse-content pt-2">
+              <fieldset class="fieldset">
+                <legend class="fieldset-legend">${escapeHtml(messages.builder.clipIdLabel)}</legend>
+                <input name="id" type="text" class="input w-full builder-mono" placeholder="${escapeHtml(messages.builder.clipIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.animationClipIdFieldLabel)}" />
+              </fieldset>
+            </div>
+          </details>
           <div class="flex items-center gap-2">
             <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.createAnimationClip)}">${escapeHtml(messages.builder.createAnimationClip)}</button>
             <span id="clip-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>

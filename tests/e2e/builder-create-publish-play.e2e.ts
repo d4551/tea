@@ -7,7 +7,7 @@ test("create project, publish, play in en-US locale", async ({ page, request }) 
     form: {
       projectId,
       locale: "en-US",
-      starterTemplateId: "blank",
+      starterTemplateId: "tea-house-story",
       redirectPath: `/projects/${projectId}/start?lang=en-US`,
     },
     headers: { accept: "text/html" },
@@ -36,7 +36,7 @@ test("create project, publish, play in zh-CN locale", async ({ page, request }) 
     form: {
       projectId,
       locale: "zh-CN",
-      starterTemplateId: "blank",
+      starterTemplateId: "tea-house-story",
       redirectPath: `/projects/${projectId}/start?lang=zh-CN`,
     },
     headers: { accept: "text/html" },

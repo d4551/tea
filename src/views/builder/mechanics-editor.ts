@@ -359,10 +359,6 @@ export const renderMechanicsEditor = (
             <form class="space-y-3" hx-post="${escapeHtml(createQuestAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#quest-create-spinner" hx-disabled-elt="button, input, select, textarea">
               ${renderBuilderHiddenFields(projectId, locale)}
               <fieldset class="fieldset">
-                <legend class="fieldset-legend">${escapeHtml(messages.builder.questIdLabel)}</legend>
-                <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.questIdPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.questIdLabel)}" />
-              </fieldset>
-              <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.titleLabel)}</legend>
                 <input name="title" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.questTitlePlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.titleLabel)}" />
               </fieldset>
@@ -374,6 +370,15 @@ export const renderMechanicsEditor = (
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.triggerIdLabel)}</legend>
                 <input name="triggerId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.triggerIdPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.triggerIdLabel)}" />
               </fieldset>
+              <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
+                <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
+                <div class="collapse-content pt-2">
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.questIdLabel)}</legend>
+                    <input name="id" type="text" class="input w-full builder-mono" placeholder="${escapeHtml(messages.builder.questIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.questIdLabel)}" />
+                  </fieldset>
+                </div>
+              </details>
               <div class="flex items-center gap-2">
                 <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.createQuest)}">${escapeHtml(messages.builder.createQuest)}</button>
                 <span id="quest-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
@@ -386,10 +391,6 @@ export const renderMechanicsEditor = (
           <div class="collapse-content pt-2">
             <form class="space-y-3" hx-post="${escapeHtml(createTriggerAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#trigger-create-spinner" hx-disabled-elt="button, input, select, textarea">
               ${renderBuilderHiddenFields(projectId, locale)}
-              <fieldset class="fieldset">
-                <legend class="fieldset-legend">${escapeHtml(messages.builder.triggerIdLabel)}</legend>
-                <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.triggerIdPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.triggerIdLabel)}" />
-              </fieldset>
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.labelField)}</legend>
                 <input name="label" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.triggerLabelPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.labelField)}" />
@@ -406,6 +407,15 @@ export const renderMechanicsEditor = (
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.npcIdLabel)}</legend>
                 <input name="npcId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.dialogueNpcIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.npcIdLabel)}" />
               </fieldset>
+              <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
+                <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
+                <div class="collapse-content pt-2">
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.triggerIdLabel)}</legend>
+                    <input name="id" type="text" class="input w-full builder-mono" placeholder="${escapeHtml(messages.builder.triggerIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.triggerIdLabel)}" />
+                  </fieldset>
+                </div>
+              </details>
               <div class="flex items-center gap-2">
                 <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.createTrigger)}">${escapeHtml(messages.builder.createTrigger)}</button>
                 <span id="trigger-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
@@ -419,10 +429,6 @@ export const renderMechanicsEditor = (
             <form class="space-y-3" hx-post="${escapeHtml(createGraphAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#graph-create-spinner" hx-disabled-elt="button, input, select, textarea">
               ${renderBuilderHiddenFields(projectId, locale)}
               <fieldset class="fieldset">
-                <legend class="fieldset-legend">${escapeHtml(messages.builder.graphIdLabel)}</legend>
-                <input name="id" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.graphIdPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.graphIdLabel)}" />
-              </fieldset>
-              <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.titleLabel)}</legend>
                 <input name="title" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.graphTitlePlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.titleLabel)}" />
               </fieldset>
@@ -434,6 +440,15 @@ export const renderMechanicsEditor = (
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueLine)}</legend>
                 <textarea name="line" class="textarea w-full" rows="3" placeholder="${escapeHtml(messages.builder.addLinePlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.dialogueLine)}"></textarea>
               </fieldset>
+              <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
+                <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
+                <div class="collapse-content pt-2">
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.graphIdLabel)}</legend>
+                    <input name="id" type="text" class="input w-full builder-mono" placeholder="${escapeHtml(messages.builder.graphIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.graphIdLabel)}" />
+                  </fieldset>
+                </div>
+              </details>
               <div class="flex items-center gap-2">
                 <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.createDialogueGraph)}">${escapeHtml(messages.builder.createDialogueGraph)}</button>
                 <span id="graph-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>

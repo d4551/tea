@@ -4,6 +4,7 @@
  * NPC-first dialogue workspace with filtering and AI generation hooks.
  */
 import type { LocaleCode } from "../../config/environment.ts";
+import { humanizeBuilderIdentifier } from "../../domain/builder/builder-display.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
@@ -16,6 +17,16 @@ import {
 } from "../shared/ui-components.ts";
 import { buildBuilderJourneyConfig } from "./builder-journey.ts";
 import { renderWorkspaceFrame, renderWorkspaceShell } from "./workspace-shell.ts";
+
+const getDialogueSpeakerId = (key: string): string => {
+  const segments = key.split(".");
+  if (segments[0] === "npc" && segments.length >= 4) {
+    return segments[1] ?? key;
+  }
+  return segments[1] ?? key;
+};
+
+const getDialogueReference = (key: string): string => key.split(".").at(-1) ?? key;
 
 /**
  * Renders the dialogue editor panel.
@@ -45,7 +56,7 @@ export const renderDialogueEditor = (
     ) {
       continue;
     }
-    const npcId = key.split(".").slice(0, 2).join(".");
+    const npcId = getDialogueSpeakerId(key);
     const existing = npcGroups.get(npcId) ?? [];
     existing.push({ key, text: lineText });
     npcGroups.set(npcId, existing);
@@ -67,7 +78,7 @@ export const renderDialogueEditor = (
 
   const groupHtml = Array.from(npcGroups.entries())
     .map(([npcId, lines]) => {
-      const npcName = npcId.split(".")[1] ?? npcId;
+      const npcLabel = humanizeBuilderIdentifier(npcId);
       const lineRows = lines
         .map((line) => {
           const detailPath = interpolateRoutePath(appRoutes.builderApiDialogueEntry, {
@@ -78,7 +89,10 @@ export const renderDialogueEditor = (
           return `<div class="rounded-box bg-base-200/60 p-3">
             <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div class="min-w-0 flex-1">
-                <div class="font-mono text-xs text-base-content/70">${escapeHtml(line.key)}</div>
+                <div class="text-xs font-medium uppercase tracking-wide text-base-content/60">${escapeHtml(
+                  humanizeBuilderIdentifier(getDialogueReference(line.key)),
+                )}</div>
+                <div class="font-mono text-[11px] text-base-content/50">${escapeHtml(line.key)}</div>
                 <p class="mt-2 text-sm">${escapeHtml(line.text)}</p>
               </div>
               <button
@@ -97,14 +111,14 @@ export const renderDialogueEditor = (
         <div class="card-body gap-4">
           <div class="flex items-center justify-between gap-3">
             <div>
-              <h2 class="card-title text-lg">${escapeHtml(npcId)}</h2>
+              <h2 class="card-title text-lg">${escapeHtml(npcLabel)}</h2>
               <p class="text-sm text-base-content/70">${lines.length} ${escapeHtml(messages.builder.dialogue)}</p>
             </div>
             <span class="flex items-center gap-2">
               <button
                 class="btn btn-secondary btn-sm"
                 hx-post="${escapeHtml(generateHref)}"
-                hx-vals='{"npcId": "${escapeHtml(npcName)}", "locale": "${escapeHtml(locale)}", "projectId": "${escapeHtml(projectId)}"}'
+                hx-vals='{"npcId": "${escapeHtml(npcId)}", "locale": "${escapeHtml(locale)}", "projectId": "${escapeHtml(projectId)}"}'
                 hx-target="#dialogue-detail"
                 hx-swap="innerHTML"
                 hx-indicator="#dialogue-generate-${npcId.replace(/[^a-zA-Z0-9_.-]/g, "-")}-spinner"
@@ -164,13 +178,26 @@ export const renderDialogueEditor = (
               >
                 ${renderBuilderHiddenFields(projectId, locale)}
                 <fieldset class="fieldset">
-                  <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueKey)}</legend>
-                  <input name="key" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.dialogueKeyPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.dialogueKey)}" />
+                  <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueSpeakerLabel)}</legend>
+                  <input name="speakerId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.dialogueSpeakerPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.dialogueSpeakerLabel)}" />
+                </fieldset>
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueMomentLabel)}</legend>
+                  <input name="lineReference" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.dialogueMomentPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.dialogueMomentLabel)}" />
                 </fieldset>
                 <fieldset class="fieldset">
                   <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueLine)}</legend>
                   <textarea name="text" class="textarea w-full" rows="3" placeholder="${escapeHtml(messages.builder.addLinePlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.dialogueLine)}"></textarea>
                 </fieldset>
+                <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
+                  <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
+                  <div class="collapse-content pt-2">
+                    <fieldset class="fieldset">
+                      <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueKey)}</legend>
+                      <input name="key" type="text" class="input w-full builder-mono" placeholder="${escapeHtml(messages.builder.dialogueKeyPlaceholder)}" aria-label="${escapeHtml(messages.builder.dialogueKey)}" />
+                    </fieldset>
+                  </div>
+                </details>
                 <div class="flex items-center gap-2">
                   <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.addDialogue)}">${escapeHtml(messages.builder.addDialogue)}</button>
                   <span id="dialogue-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
@@ -206,7 +233,9 @@ export const renderDialogueEditor = (
         sideSections: [
           {
             title: messages.builder.preview,
-            description: selectedLine?.key ?? messages.builder.dialogueCreateDescription,
+            description: selectedLine
+              ? humanizeBuilderIdentifier(getDialogueReference(selectedLine.key))
+              : messages.builder.dialogueCreateDescription,
             body: `<div class="rounded-box border border-base-300 bg-base-200/55 p-4 text-sm leading-6 text-base-content/72">${
               selectedLine
                 ? escapeHtml(selectedLine.text)
@@ -269,7 +298,10 @@ export const renderDialogueDetail = (
         hx-disabled-elt="button, input, select, textarea"
       >
         <div class="flex items-center justify-between gap-3">
-          <h3 class="card-title text-sm">${escapeHtml(messages.builder.dialogueKey)}: <code>${escapeHtml(key)}</code></h3>
+          <div class="space-y-1">
+            <h3 class="card-title text-sm">${escapeHtml(humanizeBuilderIdentifier(getDialogueReference(key)))}</h3>
+            <div class="font-mono text-xs text-base-content/60">${escapeHtml(key)}</div>
+          </div>
           <button
             type="button"
             class="btn btn-error btn-outline btn-xs"

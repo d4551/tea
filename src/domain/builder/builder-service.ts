@@ -45,7 +45,15 @@ import type {
 } from "../../shared/contracts/game.ts";
 import { sha256Hex } from "../../shared/utils/crypto.ts";
 import { acceptUnknown, safeJsonParse } from "../../shared/utils/safe-json.ts";
-import { deriveSceneIdentity, resolveCreatorFacingText } from "./builder-display.ts";
+import {
+  deriveAnimationClipIdentity,
+  deriveDialogueGraphIdentity,
+  deriveQuestIdentity,
+  deriveSceneIdentity,
+  deriveTriggerIdentity,
+  humanizeBuilderIdentifier,
+  resolveCreatorFacingText,
+} from "./builder-display.ts";
 import {
   type BuilderProjectSnapshot,
   type BuilderProjectState,
@@ -300,7 +308,7 @@ export interface BuilderAssetCreatePayload {
  */
 export interface BuilderAnimationClipCreatePayload {
   /** Stable clip identifier. */
-  readonly id: string;
+  readonly id?: string;
   /** Target asset identifier. */
   readonly assetId: string;
   /** State-tag or animation label. */
@@ -344,7 +352,7 @@ export interface BuilderAutomationRunCreatePayload {
  */
 export interface BuilderQuestCreatePayload {
   /** Stable quest identifier. */
-  readonly id: string;
+  readonly id?: string;
   /** Initial authored quest title. */
   readonly title: string;
   /** Initial authored quest description. */
@@ -358,7 +366,7 @@ export interface BuilderQuestCreatePayload {
  */
 export interface BuilderTriggerCreatePayload {
   /** Stable trigger identifier. */
-  readonly id: string;
+  readonly id?: string;
   /** Human-readable trigger label. */
   readonly label: string;
   /** Trigger event type. */
@@ -374,7 +382,7 @@ export interface BuilderTriggerCreatePayload {
  */
 export interface BuilderDialogueGraphCreatePayload {
   /** Stable dialogue graph identifier. */
-  readonly id: string;
+  readonly id?: string;
   /** Human-readable graph title. */
   readonly title: string;
   /** Optional owning NPC identifier. */
@@ -2215,7 +2223,7 @@ class PrismaBuilderService implements BuilderService {
       return null;
     }
 
-    const clipId = payload.id.trim();
+    const clipId = deriveAnimationClipIdentity(payload).id;
     const assetId = payload.assetId.trim();
     const stateTag = payload.stateTag.trim();
     const asset = entry.state.assets[assetId];
@@ -2228,7 +2236,7 @@ class PrismaBuilderService implements BuilderService {
         clip: {
           id: clipId,
           assetId,
-          label: clipId,
+          label: humanizeBuilderIdentifier(clipId),
           sceneMode: asset?.sceneMode ?? "2d",
           stateTag,
           playbackFps: Math.max(
@@ -2328,7 +2336,7 @@ class PrismaBuilderService implements BuilderService {
     payload: BuilderDialogueGraphCreatePayload,
     updatedBy?: string,
   ): Promise<BuilderMutation<DialogueGraph> | null> {
-    const graphId = payload.id.trim();
+    const graphId = deriveDialogueGraphIdentity(payload).id;
     const title = payload.title.trim();
     const line = payload.line.trim();
     const npcId = trimOptionalField(payload.npcId);
@@ -2433,7 +2441,7 @@ class PrismaBuilderService implements BuilderService {
     payload: BuilderQuestCreatePayload,
     updatedBy?: string,
   ): Promise<BuilderMutation<QuestDefinition> | null> {
-    const questId = payload.id.trim();
+    const questId = deriveQuestIdentity(payload).id;
     const title = payload.title.trim();
     const description = payload.description.trim();
     const triggerId = payload.triggerId.trim();
@@ -2591,7 +2599,7 @@ class PrismaBuilderService implements BuilderService {
     payload: BuilderTriggerCreatePayload,
     updatedBy?: string,
   ): Promise<BuilderMutation<TriggerDefinition> | null> {
-    const triggerId = payload.id.trim();
+    const triggerId = deriveTriggerIdentity(payload).id;
 
     return this.saveTrigger(
       projectId,
