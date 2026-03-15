@@ -5,8 +5,16 @@
  * Provides persistent project chrome plus sidebar navigation.
  */
 import type { LocaleCode } from "../../config/environment.ts";
+import {
+  createStarterProjectBranding,
+  type ProjectBranding,
+} from "../../shared/branding/project-branding.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
-import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
+import {
+  appRoutes,
+  withLocaleQuery,
+  withQueryParameters,
+} from "../../shared/constants/routes.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml, renderDrawerToggleControl } from "../layout.ts";
 import {
@@ -39,6 +47,8 @@ import { renderStarterProjectPicker } from "./starter-project-picker.ts";
 export interface BuilderChromeProject {
   /** Stable project identifier. */
   readonly id: string;
+  /** Project-owned brand profile. */
+  readonly branding: ProjectBranding;
   /** Current mutable draft version. */
   readonly version: number;
   /** Latest immutable release version. */
@@ -86,6 +96,15 @@ interface BuilderNavItem {
   readonly icon: () => string;
   readonly group: "overview" | "authoring" | "runtime";
 }
+
+const defaultBuilderBranding = createStarterProjectBranding("blank");
+
+const renderProjectBrandMark = (branding: ProjectBranding): string =>
+  branding.logoImagePath.length > 0
+    ? `<span class="inline-flex size-10 items-center justify-center overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm" aria-hidden="true">
+        <img src="${escapeHtml(branding.logoImagePath)}" alt="${escapeHtml(branding.appName)}" class="size-full object-cover" />
+      </span>`
+    : `<span class="inline-flex size-10 items-center justify-center rounded-2xl bg-primary text-primary-content text-sm font-semibold shadow-sm" aria-hidden="true">${escapeHtml(branding.logoMark)}</span>`;
 
 /**
  * Builds the ordered list of sidebar navigation items.
@@ -146,16 +165,14 @@ const builderNavItems = (messages: Messages): readonly BuilderNavItem[] => [
 ];
 
 const withBuilderQuery = (path: string, locale: LocaleCode, projectId: string): string =>
-  withQueryParameters(interpolateRoutePath(path, { projectId }), {
-    lang: locale,
-  });
+  withLocaleQuery(interpolateRoutePath(path, { projectId }), locale);
 
 const withBuilderSection = (
   path: string,
   locale: LocaleCode,
   projectId: string,
   sectionId: string,
-): string => withBuilderQuery(`${path}#${sectionId}`, locale, projectId);
+): string => `${withBuilderQuery(path, locale, projectId)}#${sectionId}`;
 
 const buildProjectConsoleNavigationGroups = (
   messages: Messages,
@@ -175,31 +192,63 @@ const buildProjectConsoleNavigationGroups = (
         active: activeTab === "ai" || activeTab === "settings",
       },
       {
+        key: "branding",
+        label: messages.builder.brandControlPlaneTitle,
+        shortLabel: messages.builder.brandControlPlaneTitle,
+        href: withBuilderSection(
+          appRoutes.builderAi,
+          locale,
+          projectId,
+          "builder-brand-control-plane",
+        ),
+        icon: iconDashboard(),
+      },
+      {
         key: "knowledge",
         label: messages.builder.knowledgeWorkspaceTitle,
         shortLabel: messages.builder.knowledgeWorkspaceTitle,
-        href: withBuilderSection(appRoutes.builderAi, locale, projectId, "builder-knowledge-workspace"),
+        href: withBuilderSection(
+          appRoutes.builderAi,
+          locale,
+          projectId,
+          "builder-knowledge-workspace",
+        ),
         icon: iconDocs(),
       },
       {
         key: "providers",
         label: messages.builder.providerStatus,
         shortLabel: messages.builder.providerStatus,
-        href: withBuilderSection(appRoutes.builderAi, locale, projectId, "builder-provider-workbench"),
+        href: withBuilderSection(
+          appRoutes.builderAi,
+          locale,
+          projectId,
+          "builder-provider-workbench",
+        ),
         icon: iconAi(),
       },
       {
         key: "models",
         label: messages.builder.aiModelCatalogWorkspaceTitle,
         shortLabel: messages.builder.aiModelCatalogWorkspaceTitle,
-        href: withBuilderSection(appRoutes.builderAi, locale, projectId, "builder-model-catalog"),
+        href: withBuilderSection(
+          appRoutes.builderAi,
+          locale,
+          projectId,
+          "builder-model-catalog",
+        ),
         icon: iconAi(),
       },
       {
         key: "preview",
         label: messages.builder.previewChanges,
         shortLabel: messages.builder.previewChanges,
-        href: withBuilderSection(appRoutes.builderAi, locale, projectId, "builder-patch-preview"),
+        href: withBuilderSection(
+          appRoutes.builderAi,
+          locale,
+          projectId,
+          "builder-patch-preview",
+        ),
         icon: iconAutomation(),
       },
     ],
@@ -429,11 +478,14 @@ export const renderBuilderProjectShell = (
   project: BuilderChromeProject | null,
   activeTab: string,
 ): string => {
-  const switchAction = withQueryParameters(currentPath, { lang: locale });
+  const switchAction = currentPath;
   const playHref =
     project && project.publishedReleaseVersion !== null
       ? withBuilderQuery(appRoutes.game, locale, project.id)
       : null;
+  const controlPlaneHref = withQueryParameters(withLocaleQuery(appRoutes.platformGames, locale), {
+    projectId: project?.id ?? projectId,
+  });
   const publishAction =
     project !== null
       ? interpolateRoutePath(appRoutes.builderApiProjectPublish, { projectId: project.id })
@@ -453,7 +505,11 @@ export const renderBuilderProjectShell = (
           <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
           <input type="hidden" name="currentPath" value="${escapeHtml(currentPath)}" />
           <input type="hidden" name="published" value="${project.publishedReleaseVersion === null ? "true" : "false"}" />
-          <button type="submit" class="btn ${project.publishedReleaseVersion === null ? "btn-primary" : "btn-warning"} btn-xs" aria-label="${escapeHtml(project.publishedReleaseVersion === null ? messages.builder.publishProject : messages.builder.unpublishProject)}">
+          <button
+            type="submit"
+            class="btn ${project.publishedReleaseVersion === null ? "btn-primary" : "btn-warning"} btn-xs transition hover:-translate-y-0.5 hover:shadow-sm"
+            aria-label="${escapeHtml(project.publishedReleaseVersion === null ? messages.builder.publishProject : messages.builder.unpublishProject)}"
+          >
             ${escapeHtml(project.publishedReleaseVersion === null ? messages.builder.publishProject : messages.builder.unpublishProject)}
           </button>
           <span id="publish-spinner" class="${spinnerClasses.xs}" aria-label="${escapeHtml(messages.common.loading)}"></span>
@@ -462,7 +518,8 @@ export const renderBuilderProjectShell = (
   const playBtn =
     playHref === null
       ? ""
-      : `<a href="${escapeHtml(playHref)}" class="btn btn-secondary btn-xs" aria-label="${escapeHtml(messages.builder.playPublishedBuild)}">${escapeHtml(messages.builder.playPublishedBuild)}</a>`;
+      : `<a href="${escapeHtml(playHref)}" class="btn btn-secondary btn-xs transition hover:-translate-y-0.5 hover:shadow-sm" aria-label="${escapeHtml(messages.builder.playPublishedBuild)}">${escapeHtml(messages.builder.playPublishedBuild)}</a>`;
+  const controlPlaneBtn = `<a href="${escapeHtml(controlPlaneHref)}" class="btn btn-outline btn-xs transition hover:-translate-y-0.5 hover:shadow-sm" aria-label="${escapeHtml(messages.navigation.controlPlane)}">${escapeHtml(messages.navigation.controlPlane)}</a>`;
 
   const projectMenuItems: readonly MenuActionItem[] = [
     {
@@ -472,8 +529,7 @@ export const renderBuilderProjectShell = (
         <fieldset class="fieldset">
           <legend class="fieldset-legend text-xs">${escapeHtml(messages.builder.switchProject)}</legend>
           <input name="projectId" type="text" value="${escapeHtml(project?.id ?? projectId)}" class="input input-sm w-full" placeholder="${escapeHtml(messages.builder.projectIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.projectIdLabel)}" />
-          <input type="hidden" name="lang" value="${escapeHtml(locale)}" />
-          <button type="submit" class="btn btn-outline btn-xs w-full">${escapeHtml(messages.builder.switchProject)}</button>
+          <button type="submit" class="btn btn-outline btn-xs w-full transition hover:-translate-y-0.5 hover:shadow-sm" aria-label="${escapeHtml(messages.builder.switchProject)}">${escapeHtml(messages.builder.switchProject)}</button>
         </fieldset>
       </form>`,
     },
@@ -498,9 +554,11 @@ export const renderBuilderProjectShell = (
   return `<section id="builder-project-shell" class="border-b border-base-300/80 bg-base-100/80 backdrop-blur">
     <div class="flex flex-col gap-4 px-4 py-3 lg:px-6">
       <div class="flex flex-wrap items-center gap-3">
-        <div class="space-y-1">
+        <div class="flex min-w-0 items-center gap-3">
+          ${renderProjectBrandMark(project?.branding ?? defaultBuilderBranding)}
+          <div class="min-w-0 space-y-1">
           <div class="flex flex-wrap items-center gap-2">
-            <span class="font-semibold text-sm">${escapeHtml(project?.id ?? projectId)}</span>
+            <span class="truncate font-semibold text-sm">${escapeHtml(project?.branding.appName ?? project?.id ?? projectId)}</span>
             <span class="badge ${statusTone} badge-soft badge-xs">${escapeHtml(statusLabel)}</span>
             ${
               project !== null && project.publishedReleaseVersion !== null
@@ -508,10 +566,12 @@ export const renderBuilderProjectShell = (
                 : ""
             }
           </div>
-          <p class="text-xs text-base-content/60">${escapeHtml(project !== null && project.publishedReleaseVersion !== null ? messages.builder.projectStatusPublished : messages.builder.workspaceJumpBack)}</p>
+          <p class="truncate text-xs text-base-content/60">${escapeHtml(project?.branding.appSubtitle ?? (project !== null && project.publishedReleaseVersion !== null ? messages.builder.projectStatusPublished : messages.builder.workspaceJumpBack))}</p>
+          </div>
         </div>
         <div class="flex-1"></div>
         <div class="flex flex-wrap items-center gap-2">
+          ${controlPlaneBtn}
           ${publishForm}
           ${playBtn}
           ${renderActionDropdown(
@@ -626,12 +686,12 @@ const renderSidebarShell = (
   shellDescription: string,
 ): string =>
   renderCollapsibleSidebarMenu(navGroups, {
-    ariaLabel: shellLabel,
-    brandHtml: `<a href="${escapeHtml(withQueryParameters(appRoutes.home, { lang: locale }))}" class="group flex items-center gap-3" aria-label="${escapeHtml(messages.metadata.appName)}">
-      <span class="inline-flex size-10 items-center justify-center rounded-2xl bg-primary text-primary-content text-lg shadow-sm" aria-hidden="true">🍵</span>
+    ariaLabel: project?.branding.builderShellName ?? shellLabel,
+    brandHtml: `<a href="${escapeHtml(withQueryParameters(appRoutes.home, { lang: locale }))}" class="group flex items-center gap-3" aria-label="${escapeHtml(project?.branding.appName ?? messages.metadata.appName)}">
+      ${renderProjectBrandMark(project?.branding ?? defaultBuilderBranding)}
       <span class="min-w-0">
-        <span class="block truncate text-lg font-bold">${escapeHtml(messages.metadata.appName)}</span>
-        <span class="block text-xs uppercase tracking-[0.22em] text-primary/80">${escapeHtml(shellLabel)}</span>
+        <span class="block truncate text-lg font-bold">${escapeHtml(project?.branding.appName ?? messages.metadata.appName)}</span>
+        <span class="block text-xs uppercase tracking-[0.22em] text-primary/80">${escapeHtml(project?.branding.builderShellName ?? shellLabel)}</span>
       </span>
     </a>`,
     mastheadHtml: `<div class="space-y-3 rounded-[1.25rem] border border-base-300 bg-base-100 p-3">
@@ -639,7 +699,7 @@ const renderSidebarShell = (
         <span class="status ${project === null ? "status-warning" : "status-success"} status-xs"></span>
         <span class="truncate text-sm font-medium">${escapeHtml(project === null ? messages.common.noProjectBound : messages.common.projectConfigured)}</span>
       </div>
-      <p class="text-xs leading-5 text-base-content/60">${escapeHtml(shellDescription)}</p>
+      <p class="text-xs leading-5 text-base-content/60">${escapeHtml(project?.branding.builderShellDescription ?? shellDescription)}</p>
       ${
         project
           ? `<div class="grid grid-cols-2 gap-2 text-xs">
@@ -655,7 +715,7 @@ const renderSidebarShell = (
           : ""
       }
     </div>`,
-    footerHtml: `<a href="${escapeHtml(withQueryParameters(appRoutes.home, { lang: locale }))}" class="btn btn-outline btn-block btn-sm gap-2" aria-label="${escapeHtml(messages.builder.exitBuilder)}">
+    footerHtml: `<a href="${escapeHtml(withQueryParameters(appRoutes.home, { lang: locale }))}" class="btn btn-outline btn-block btn-sm gap-2 transition hover:-translate-y-0.5 hover:shadow-sm" aria-label="${escapeHtml(messages.builder.exitBuilder)}">
       <svg xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
       <span>${escapeHtml(messages.builder.exitBuilder)}</span>
     </a>`,
@@ -710,7 +770,7 @@ export const renderBuilderLayout = (props: BuilderLayoutProps): string => {
         .map(
           (
             item,
-          ) => `<a href="${escapeHtml(item.href)}" class="dock-item min-h-16 ${item.active ? "dock-active" : ""}" aria-label="${escapeHtml(item.label)}">
+          ) => `<a href="${escapeHtml(item.href)}" class="dock-item min-h-16 ${item.active ? "dock-active" : ""}" aria-label="${escapeHtml(item.label)}"${item.active ? ' aria-current="page"' : ""}>
         ${item.icon ?? ""}
         <span class="dock-label">${escapeHtml(item.label)}</span>
       </a>`,
@@ -810,7 +870,11 @@ const renderShellFrame = (config: ShellFrameConfig): string => {
             </div>
           </div>
           <div class="flex-none">
-            <a href="${escapeHtml(playHref)}" class="btn btn-ghost btn-sm" aria-label="${escapeHtml(messages.navigation.game)}">
+            <a
+              href="${escapeHtml(playHref)}"
+              class="btn btn-ghost btn-sm transition hover:-translate-y-0.5 hover:shadow-sm"
+              aria-label="${escapeHtml(messages.navigation.game)}"
+            >
               ${iconPlay()} <span class="hidden sm:inline">${escapeHtml(messages.navigation.game)}</span>
             </a>
           </div>

@@ -36,7 +36,6 @@ import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 import {
   cardClasses,
-  renderBuilderHiddenFields,
   renderEmptyStateCompact,
   spinnerClasses,
 } from "../shared/ui-components.ts";
@@ -200,24 +199,20 @@ const renderNodeForm = (
   sceneId: string,
   node: SceneNodeDefinition,
 ): string => {
-  const formAction = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderApiSceneNodes, { projectId, sceneId }),
-    { locale },
-  );
-  const deleteAction = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderApiSceneNodeDelete, {
-      projectId,
-      sceneId,
-      nodeId: node.id,
-    }),
-    { locale },
-  );
+  const formAction = interpolateRoutePath(appRoutes.builderApiSceneNodes, {
+    projectId,
+    sceneId,
+  });
+  const deleteAction = interpolateRoutePath(appRoutes.builderApiSceneNodeDelete, {
+    projectId,
+    sceneId,
+    nodeId: node.id,
+  });
 
   const nodeSpinnerId = `scene-node-${node.id.replace(/[^a-zA-Z0-9_.-]/g, "-")}-spinner`;
   if ("size" in node) {
     return `<article class="${cardClasses.bordered}">
       <form class="card-body gap-3" data-scene-node-form data-scene-node-id="${escapeHtml(node.id)}" data-scene-node-kind="2d" hx-post="${escapeHtml(formAction)}" hx-target="#scene-detail" hx-swap="innerHTML" hx-indicator="#${nodeSpinnerId}" hx-disabled-elt="button, input, select, textarea">
-        ${renderBuilderHiddenFields(projectId, locale)}
         <input type="hidden" name="id" value="${escapeHtml(node.id)}" />
         <input type="hidden" name="nodeKind" value="2d" />
         <div class="flex items-center justify-between gap-3">
@@ -278,8 +273,6 @@ const renderNodeForm = (
 
   return `<article class="${cardClasses.bordered}">
     <form class="card-body gap-3" data-scene-node-form data-scene-node-id="${escapeHtml(node.id)}" data-scene-node-kind="3d" hx-post="${escapeHtml(formAction)}" hx-target="#scene-detail" hx-swap="innerHTML" hx-indicator="#${nodeSpinnerId}" hx-disabled-elt="button, input, select, textarea">
-      <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
-      <input type="hidden" name="locale" value="${escapeHtml(locale)}" />
       <input type="hidden" name="id" value="${escapeHtml(node.id)}" />
       <input type="hidden" name="nodeKind" value="3d" />
       <div class="flex items-center justify-between gap-3">
@@ -373,7 +366,6 @@ export const renderSceneEditor = (
       }
       const sceneTitle = resolveSceneTitle(locale, scene).toLowerCase();
       return (
-        scene.id.toLowerCase().includes(normalizedSearch) ||
         sceneTitle.includes(normalizedSearch) ||
         (scene.sceneMode ?? "2d").toLowerCase().includes(normalizedSearch)
       );
@@ -401,13 +393,10 @@ export const renderSceneEditor = (
       : null;
   const creatorJourney = buildBuilderJourneyConfig(messages, locale, projectId, "world");
   const scenesPath = interpolateRoutePath(appRoutes.builderScenes, { projectId });
-  const searchAction = withQueryParameters(scenesPath, {
-    lang: locale,
-  });
+  const searchAction = scenesPath;
   const previousPageHref =
     paginatedScenes.page > 1
       ? withQueryParameters(scenesPath, {
-          lang: locale,
           search,
           [BUILDER_QUERY_PARAM_PAGE]: String(paginatedScenes.page - 1),
           ...(activeScene ? { [BUILDER_QUERY_PARAM_SCENE_ID]: activeScene.id } : {}),
@@ -416,7 +405,6 @@ export const renderSceneEditor = (
   const nextPageHref =
     paginatedScenes.page < paginatedScenes.totalPages
       ? withQueryParameters(scenesPath, {
-          lang: locale,
           search,
           [BUILDER_QUERY_PARAM_PAGE]: String(paginatedScenes.page + 1),
           ...(activeScene ? { [BUILDER_QUERY_PARAM_SCENE_ID]: activeScene.id } : {}),
@@ -426,8 +414,7 @@ export const renderSceneEditor = (
     .map((scene) => {
       const isSelected = scene.id === activeScene?.id;
       const sceneTitle = resolveSceneTitle(locale, scene);
-      const detailHref = withQueryParameters(scenesPath, {
-        lang: locale,
+  const detailHref = withQueryParameters(scenesPath, {
         search,
         [BUILDER_QUERY_PARAM_PAGE]: String(paginatedScenes.page),
         [BUILDER_QUERY_PARAM_SCENE_ID]: scene.id,
@@ -526,8 +513,6 @@ export const renderSceneEditor = (
           startIndex: paginatedScenes.startIndex,
           endIndex: paginatedScenes.endIndex,
           hiddenFields: {
-            lang: locale,
-            projectId,
             ...(activeScene ? { [BUILDER_QUERY_PARAM_SCENE_ID]: activeScene.id } : {}),
           },
           htmxTarget: "#builder-content",
@@ -558,20 +543,10 @@ export const renderSceneEditor = (
                 <div class="rounded-box border border-base-300 bg-base-200/50 p-3 text-sm leading-6 text-base-content/72">
                   ${escapeHtml(messages.builder.sceneCreationHelp)}
                 </div>
-                ${renderBuilderHiddenFields(projectId, locale)}
                 <fieldset class="fieldset">
                   <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneTitle)}</legend>
                   <input name="displayTitle" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.sceneCreateTitlePlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.sceneTitle)}" />
                 </fieldset>
-                <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
-                  <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
-                  <div class="collapse-content pt-2">
-                    <fieldset class="fieldset">
-                      <legend class="fieldset-legend">${escapeHtml(messages.builder.stableIdLabel)}</legend>
-                      <input name="id" type="text" class="input w-full builder-mono" placeholder="${escapeHtml(messages.builder.sceneIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.stableIdLabel)}" />
-                    </fieldset>
-                  </div>
-                </details>
                 <fieldset class="fieldset">
                   <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneBackgroundLabel)}</legend>
                   <input name="background" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.sceneBackgroundPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.sceneBackgroundLabel)}" />
@@ -668,14 +643,14 @@ export const renderSceneDetail = (
   projectId: string,
   assets: readonly BuilderAsset[] = [],
 ): string => {
-  const formAction = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderApiSceneForm, { projectId, sceneId: scene.id }),
-    { locale },
-  );
-  const deleteAction = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderApiSceneDetail, { projectId, sceneId: scene.id }),
-    { locale },
-  );
+  const formAction = interpolateRoutePath(appRoutes.builderApiSceneForm, {
+    projectId,
+    sceneId: scene.id,
+  });
+  const deleteAction = interpolateRoutePath(appRoutes.builderApiSceneDetail, {
+    projectId,
+    sceneId: scene.id,
+  });
   const npcBadges = scene.npcs
     .map(
       (npc) =>
@@ -688,10 +663,10 @@ export const renderSceneDetail = (
         `<span class="badge badge-ghost text-xs">${collision.x},${collision.y} ${collision.width}×${collision.height}</span>`,
     )
     .join("");
-  const createNodeAction = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderApiSceneNodes, { projectId, sceneId: scene.id }),
-    { locale },
-  );
+  const createNodeAction = interpolateRoutePath(appRoutes.builderApiSceneNodes, {
+    projectId,
+    sceneId: scene.id,
+  });
   const nodeCards = (scene.nodes ?? [])
     .map((node) => renderNodeForm(messages, locale, projectId, scene.id, node))
     .join("");
@@ -770,7 +745,6 @@ export const renderSceneDetail = (
           </article>
           <article class="${cardClasses.bordered}">
             <form class="card-body gap-3" hx-post="${escapeHtml(createNodeAction)}" hx-target="#scene-detail" hx-swap="innerHTML" hx-indicator="#scene-node-create-spinner" hx-disabled-elt="button, input, select, textarea">
-              ${renderBuilderHiddenFields(projectId, locale)}
               <h3 class="card-title text-base">${escapeHtml(messages.builder.sceneNodes)}</h3>
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.nodeIdLabel)}</legend>
@@ -838,21 +812,6 @@ export const renderSceneDetail = (
               <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneTitle)}</legend>
               <input id="scene-display-title" name="displayTitle" type="text" class="input w-full" value="${escapeHtml(sceneTitle)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.sceneTitle)}" />
             </fieldset>
-
-            <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
-              <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
-              <div class="collapse-content pt-2">
-                <input type="hidden" name="titleKey" value="${escapeHtml(scene.titleKey)}" />
-                <fieldset class="fieldset">
-                  <legend class="fieldset-legend">${escapeHtml(messages.builder.stableIdLabel)}</legend>
-                  <input id="scene-stable-id" type="text" class="input w-full builder-mono" value="${escapeHtml(scene.id)}" readonly aria-label="${escapeHtml(messages.builder.stableIdLabel)}" />
-                </fieldset>
-                <fieldset class="fieldset">
-                  <legend class="fieldset-legend">${escapeHtml(messages.builder.configKeyLabel)}</legend>
-                  <input id="scene-title-key" type="text" class="input w-full builder-mono" value="${escapeHtml(scene.titleKey)}" readonly aria-label="${escapeHtml(messages.builder.configKeyLabel)}" />
-                </fieldset>
-              </div>
-            </details>
 
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.sceneBackgroundLabel)}</legend>
@@ -968,7 +927,7 @@ export const renderSceneDetail = (
                       return `<button type="button" class="${cellClasses}" data-tile-row="${row}" data-tile-col="${col}" data-tile-value="${tileValue}" aria-label="${escapeHtml(messages.builder.tileCellLabel)} ${row + 1}, ${col + 1}"></button>`;
                     }).join("");
                     const selectedTileLabel = `${messages.builder.tilemapSelectedTileLabel}: ${messages.builder.tilemapEmptyTileLabel}`;
-                    return `<div data-scene-tab-panel="tilemap" class="hidden space-y-4" data-tilemap-assets="${assetsPayload}" data-tilemap-layer="${layerPayload}" data-tilemap-cols="${gridCols}" data-tilemap-rows="${gridRows}" data-tilemap-form-action="${escapeHtml(formAction)}" data-tilemap-selected-label="${escapeHtml(messages.builder.tilemapSelectedTileLabel)}" data-tilemap-empty-label="${escapeHtml(messages.builder.tilemapEmptyTileLabel)}" data-tilemap-eraser-label="${escapeHtml(messages.builder.tilemapEraserLabel)}">
+                    return `<div data-scene-tab-panel="tilemap" class="hidden space-y-4" data-tilemap-assets="${assetsPayload}" data-tilemap-layer="${layerPayload}" data-tilemap-cols="${gridCols}" data-tilemap-rows="${gridRows}" data-tilemap-form-action="${escapeHtml(formAction)}" data-tilemap-selected-label="${escapeHtml(messages.builder.tilemapSelectedTileLabel)}" data-tilemap-empty-label="${escapeHtml(messages.builder.tilemapEmptyTileLabel)}" data-tilemap-eraser-label="${escapeHtml(messages.builder.tilemapEraserLabel)}" data-tilemap-palette-label="${escapeHtml(messages.builder.tilePaletteLabel)}">
                    <div class="join" role="toolbar" aria-label="${escapeHtml(messages.builder.tilemapToolsLabel)}">
                      <button type="button" class="btn btn-sm btn-primary join-item" data-tilemap-mode="brush" aria-pressed="true" aria-label="${escapeHtml(messages.builder.tilemapBrushLabel)}">${escapeHtml(messages.builder.tilemapBrushLabel)}</button>
                      <button type="button" class="btn btn-sm btn-soft join-item" data-tilemap-mode="fill" aria-pressed="false" aria-label="${escapeHtml(messages.builder.tilemapFillLabel)}">${escapeHtml(messages.builder.tilemapFillLabel)}</button>
@@ -988,8 +947,7 @@ export const renderSceneDetail = (
                    <div class="aspect-video overflow-hidden rounded-box border border-base-300 bg-base-200/50 grid grid-cols-12 grid-rows-8 gap-px p-2 min-h-32" data-tilemap-grid aria-label="${escapeHtml(messages.builder.tilemapTabLabel)}">
                      ${gridCells}
                    </div>
-                   <form class="hidden" data-tilemap-persist-form hx-post="${escapeHtml(formAction)}" hx-target="#scene-detail" hx-swap="innerHTML" hx-indicator="#scene-detail-spinner" hx-disabled-elt="button, input">
-                     ${renderBuilderHiddenFields(projectId, locale)}
+            <form class="hidden" data-tilemap-persist-form hx-post="${escapeHtml(formAction)}" hx-target="#scene-detail" hx-swap="innerHTML" hx-indicator="#scene-detail-spinner" hx-disabled-elt="button, input">
                      <input type="hidden" name="tilemap" data-tilemap-json value="" />
                    </form>
                    <p class="text-sm text-base-content/60">${escapeHtml(messages.builder.tilemapInstructions)}</p>

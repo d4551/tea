@@ -10,6 +10,7 @@ export interface Messages {
   };
   readonly navigation: {
     readonly home: string;
+    readonly controlPlane: string;
     readonly game: string;
     readonly builder: string;
     readonly localeLabel: string;
@@ -91,6 +92,75 @@ export interface Messages {
       readonly progressiveEnhancementTitle: string;
       readonly progressiveEnhancementDescription: string;
       readonly docsCta: string;
+    };
+    readonly controlPlane: {
+      readonly title: string;
+      readonly workspaceLabel: string;
+      readonly workspaceDescription: string;
+      readonly gamesTitle: string;
+      readonly gamesDescription: string;
+      readonly librariesTitle: string;
+      readonly librariesDescription: string;
+      readonly templatesTitle: string;
+      readonly templatesDescription: string;
+      readonly capabilitiesTitle: string;
+      readonly capabilitiesDescription: string;
+      readonly releasesTitle: string;
+      readonly releasesDescription: string;
+      readonly reviewTitle: string;
+      readonly reviewDescription: string;
+      readonly gamesMetric: string;
+      readonly librariesMetric: string;
+      readonly templatesMetric: string;
+      readonly reviewMetric: string;
+      readonly globalKnowledgeLabel: string;
+      readonly focusedProjectLabel: string;
+      readonly allProjectsLabel: string;
+      readonly scopeContractLabel: string;
+      readonly ownershipModelTitle: string;
+      readonly ownershipModelDescription: string;
+      readonly focusedProjectTitle: string;
+      readonly focusedProjectDescription: string;
+      readonly createProject: string;
+      readonly openBuilder: string;
+      readonly openBrandControl: string;
+      readonly openReviewQueue: string;
+      readonly focusProject: string;
+      readonly sharedAssetsTitle: string;
+      readonly createFromTemplate: string;
+      readonly recommendedLabel: string;
+      readonly publishedLabel: string;
+      readonly draftLabel: string;
+      readonly releaseLabel: string;
+      readonly releaseVersionPrefix: string;
+      readonly activeReleaseLabel: string;
+      readonly archivedReleaseLabel: string;
+      readonly lastUpdatedLabel: string;
+      readonly sceneCountLabel: string;
+      readonly assetCountLabel: string;
+      readonly reviewCountLabel: string;
+      readonly libraryAssetsLabel: string;
+      readonly libraryProjectsLabel: string;
+      readonly capabilitySettingsLabel: string;
+      readonly capabilityReadyLabel: string;
+      readonly capabilityIssuesLabel: string;
+      readonly approvedLabel: string;
+      readonly pendingReviewLabel: string;
+      readonly scopeGlobal: string;
+      readonly scopeOrganization: string;
+      readonly scopeProject: string;
+      readonly scopeRelease: string;
+      readonly scopeSession: string;
+      readonly emptyGamesTitle: string;
+      readonly emptyGamesDescription: string;
+      readonly emptyLibrariesTitle: string;
+      readonly emptyLibrariesDescription: string;
+      readonly emptyCapabilitiesTitle: string;
+      readonly emptyCapabilitiesDescription: string;
+      readonly emptyReleasesTitle: string;
+      readonly emptyReleasesDescription: string;
+      readonly emptyReviewTitle: string;
+      readonly emptyReviewDescription: string;
     };
   };
   readonly aiPlayground: {
@@ -496,6 +566,34 @@ export interface Messages {
     readonly starterProjectTemplate3dLabel: string;
     readonly starterProjectTemplate3dDescription: string;
     readonly projectSettings: string;
+    readonly brandControlPlaneTitle: string;
+    readonly brandControlPlaneDescription: string;
+    readonly brandIdentityTitle: string;
+    readonly brandIdentityDescription: string;
+    readonly brandVisualSystemTitle: string;
+    readonly brandVisualSystemDescription: string;
+    readonly brandExperienceCopyTitle: string;
+    readonly brandExperienceCopyDescription: string;
+    readonly brandPreviewTitle: string;
+    readonly brandPreviewDescription: string;
+    readonly brandAppNameLabel: string;
+    readonly brandAppSubtitleLabel: string;
+    readonly brandLogoMarkLabel: string;
+    readonly brandLogoImagePathLabel: string;
+    readonly brandBuilderShellNameLabel: string;
+    readonly brandBuilderShellDescriptionLabel: string;
+    readonly brandPlayerShellNameLabel: string;
+    readonly brandSurfaceThemeLabel: string;
+    readonly brandHeadingFontLabel: string;
+    readonly brandBodyFontLabel: string;
+    readonly brandMonoFontLabel: string;
+    readonly brandPrimaryColorLabel: string;
+    readonly brandSecondaryColorLabel: string;
+    readonly brandAccentColorLabel: string;
+    readonly brandNeutralColorLabel: string;
+    readonly brandBaseColorLabel: string;
+    readonly brandBaseContentColorLabel: string;
+    readonly saveBrandControlPlane: string;
     readonly operations: string;
     readonly projectPlayHint: string;
     readonly capabilityHeader: string;
@@ -992,6 +1090,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
     },
     navigation: {
       home: "Studio",
+      controlPlane: "Control Plane",
       game: "Play",
       builder: "Craft",
       localeLabel: "Language",
@@ -1084,6 +1183,88 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         progressiveEnhancementDescription:
           "Use local models for generation, critique, and automation while keeping the product surface deterministic.",
         docsCta: "Read platform docs",
+      },
+      controlPlane: {
+        title: "Control Plane",
+        workspaceLabel: "Control-plane workspaces",
+        workspaceDescription:
+          "Separate portfolio, library, capability, release, and review concerns from in-project authoring.",
+        gamesTitle: "Games",
+        gamesDescription:
+          "Portfolio-wide visibility into every game, its authored scope, brand state, and current release posture.",
+        librariesTitle: "Libraries",
+        librariesDescription:
+          "Browse approved runtime assets and review-stage media as reusable packs instead of burying everything inside one project.",
+        templatesTitle: "Templates",
+        templatesDescription:
+          "Promote starter kits and reusable scene foundations into a top-level template catalog.",
+        capabilitiesTitle: "Capabilities",
+        capabilitiesDescription:
+          "Manage provider policy, model routing, and runtime settings as platform capabilities rather than project-only toggles.",
+        releasesTitle: "Releases",
+        releasesDescription:
+          "Track immutable published versions separately from mutable draft projects.",
+        reviewTitle: "Review Queue",
+        reviewDescription:
+          "Unify generation jobs, automation approvals, and pending artifacts into one cross-project review lane.",
+        gamesMetric: "Games",
+        librariesMetric: "Libraries",
+        templatesMetric: "Templates",
+        reviewMetric: "Review items",
+        globalKnowledgeLabel: "Global knowledge",
+        focusedProjectLabel: "Focused project",
+        allProjectsLabel: "All projects",
+        scopeContractLabel: "Ownership scope",
+        ownershipModelTitle: "Ownership Model",
+        ownershipModelDescription:
+          "Every surface now maps to an explicit scope so platform concerns do not collapse into project ids.",
+        focusedProjectTitle: "Project Context",
+        focusedProjectDescription:
+          "Pick a project from the portfolio to jump straight into builder, branding, review, or playtest work.",
+        createProject: "Create project",
+        openBuilder: "Open builder",
+        openBrandControl: "Open brand control",
+        openReviewQueue: "Open review queue",
+        focusProject: "Focus project",
+        sharedAssetsTitle: "Shared Assets",
+        createFromTemplate: "Create from template",
+        recommendedLabel: "Recommended",
+        publishedLabel: "Published",
+        draftLabel: "Draft",
+        releaseLabel: "Release",
+        releaseVersionPrefix: "Release version",
+        activeReleaseLabel: "Active release",
+        archivedReleaseLabel: "Archived release",
+        lastUpdatedLabel: "Last updated",
+        sceneCountLabel: "Scenes",
+        assetCountLabel: "Assets",
+        reviewCountLabel: "Review",
+        libraryAssetsLabel: "Assets",
+        libraryProjectsLabel: "Projects",
+        capabilitySettingsLabel: "Settings",
+        capabilityReadyLabel: "Ready",
+        capabilityIssuesLabel: "Issues",
+        approvedLabel: "Approved",
+        pendingReviewLabel: "Pending review",
+        scopeGlobal: "Global: provider catalog, shared knowledge, starter templates",
+        scopeOrganization: "Organization: shared libraries, team policy, reusable packs",
+        scopeProject: "Project: scenes, NPCs, dialogue, assets, branding",
+        scopeRelease: "Release: immutable publish snapshots and channel state",
+        scopeSession: "Session: runtime player state and live playtest context",
+        emptyGamesTitle: "No games yet",
+        emptyGamesDescription: "Create the first project to populate the portfolio workspace.",
+        emptyLibrariesTitle: "No reusable assets yet",
+        emptyLibrariesDescription:
+          "Approved assets and review-stage media will appear here once projects start producing them.",
+        emptyCapabilitiesTitle: "No capability profiles available",
+        emptyCapabilitiesDescription:
+          "Provider settings and runtime lanes will appear here once the AI runtime is initialized.",
+        emptyReleasesTitle: "No releases published yet",
+        emptyReleasesDescription:
+          "Publish a project to create the first immutable release record.",
+        emptyReviewTitle: "Review queue clear",
+        emptyReviewDescription:
+          "Queued generation, pending artifacts, and automation approvals will appear here.",
       },
     },
     aiPlayground: {
@@ -1537,6 +1718,39 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       starterProjectTemplate3dDescription:
         "A 3D environment with models and lighting. Explore 3D scene setup and runtime.",
       projectSettings: "Project Settings",
+      brandControlPlaneTitle: "Brand Control Plane",
+      brandControlPlaneDescription:
+        "Own the name, logo, palette, and typography of this project from one project-scoped brand kit.",
+      brandIdentityTitle: "Identity",
+      brandIdentityDescription:
+        "Set the public name, subtitle, and logo system used across builder and play surfaces.",
+      brandVisualSystemTitle: "Visual System",
+      brandVisualSystemDescription:
+        "Tune the underlying theme, fonts, and accent colors that power every branded shell.",
+      brandExperienceCopyTitle: "Shell Copy",
+      brandExperienceCopyDescription:
+        "Rename the builder and player surfaces so the control plane matches the world you are shipping.",
+      brandPreviewTitle: "Live Brand Preview",
+      brandPreviewDescription:
+        "Preview the branded shell before opening builder or playtest surfaces.",
+      brandAppNameLabel: "Brand name",
+      brandAppSubtitleLabel: "Brand subtitle",
+      brandLogoMarkLabel: "Logo mark",
+      brandLogoImagePathLabel: "Logo image path",
+      brandBuilderShellNameLabel: "Builder shell name",
+      brandBuilderShellDescriptionLabel: "Builder shell description",
+      brandPlayerShellNameLabel: "Player shell name",
+      brandSurfaceThemeLabel: "Surface theme",
+      brandHeadingFontLabel: "Heading font",
+      brandBodyFontLabel: "Body font",
+      brandMonoFontLabel: "Mono font",
+      brandPrimaryColorLabel: "Primary color",
+      brandSecondaryColorLabel: "Secondary color",
+      brandAccentColorLabel: "Accent color",
+      brandNeutralColorLabel: "Neutral color",
+      brandBaseColorLabel: "Base surface color",
+      brandBaseContentColorLabel: "Base content color",
+      saveBrandControlPlane: "Save brand control plane",
       operations: "Operations",
       projectPlayHint: "Only published releases can be launched in the player.",
       capabilityHeader: "Capability",
@@ -2023,6 +2237,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
     },
     navigation: {
       home: "工作室",
+      controlPlane: "控制平面",
       game: "游玩",
       builder: "创作室",
       localeLabel: "语言",
@@ -2111,6 +2326,75 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
         progressiveEnhancementDescription:
           "使用本地模型完成生成、审阅与自动化，同时保持产品界面与行为可预测。",
         docsCta: "阅读平台文档",
+      },
+      controlPlane: {
+        title: "控制平面",
+        workspaceLabel: "控制平面工作区",
+        workspaceDescription: "把作品集、素材库、能力、发布与审查从项目内创作中拆分出来。",
+        gamesTitle: "游戏",
+        gamesDescription: "在组合视图中查看每个游戏的品牌、创作范围与发布状态。",
+        librariesTitle: "素材库",
+        librariesDescription: "把已批准素材与待审素材作为可复用资产包来浏览，而不是深埋在单个项目里。",
+        templatesTitle: "模板",
+        templatesDescription: "把起始模板与可复用的场景基础提升为顶层模板目录。",
+        capabilitiesTitle: "能力",
+        capabilitiesDescription: "把提供商策略、模型路由与运行时设置作为平台能力来管理，而不是项目私有开关。",
+        releasesTitle: "发布",
+        releasesDescription: "把不可变发布版本与可变草稿项目清晰分离。",
+        reviewTitle: "审查队列",
+        reviewDescription: "把生成任务、自动化审批与待审产物整合为跨项目审查通道。",
+        gamesMetric: "游戏",
+        librariesMetric: "素材库",
+        templatesMetric: "模板",
+        reviewMetric: "审查项",
+        globalKnowledgeLabel: "全局知识",
+        focusedProjectLabel: "当前聚焦项目",
+        allProjectsLabel: "全部项目",
+        scopeContractLabel: "归属范围",
+        ownershipModelTitle: "归属模型",
+        ownershipModelDescription: "每个界面都映射到明确范围，不再把平台问题全部折叠进 projectId。",
+        focusedProjectTitle: "项目上下文",
+        focusedProjectDescription: "从作品集中聚焦一个项目，直接跳转到构建、品牌、审查或试玩界面。",
+        createProject: "创建项目",
+        openBuilder: "打开构建器",
+        openBrandControl: "打开品牌控制",
+        openReviewQueue: "打开审查队列",
+        focusProject: "聚焦项目",
+        sharedAssetsTitle: "共享资产",
+        createFromTemplate: "从模板创建",
+        recommendedLabel: "推荐",
+        publishedLabel: "已发布",
+        draftLabel: "草稿",
+        releaseLabel: "发布",
+        releaseVersionPrefix: "发布版本",
+        activeReleaseLabel: "当前发布",
+        archivedReleaseLabel: "历史发布",
+        lastUpdatedLabel: "最近更新",
+        sceneCountLabel: "场景",
+        assetCountLabel: "资产",
+        reviewCountLabel: "审查",
+        libraryAssetsLabel: "资产",
+        libraryProjectsLabel: "项目",
+        capabilitySettingsLabel: "设置",
+        capabilityReadyLabel: "就绪",
+        capabilityIssuesLabel: "问题",
+        approvedLabel: "已批准",
+        pendingReviewLabel: "待审查",
+        scopeGlobal: "全局：提供商目录、共享知识、起始模板",
+        scopeOrganization: "组织：共享素材库、团队策略、可复用资源包",
+        scopeProject: "项目：场景、NPC、对话、资产、品牌",
+        scopeRelease: "发布：不可变快照与渠道状态",
+        scopeSession: "会话：运行时玩家状态与即时试玩上下文",
+        emptyGamesTitle: "还没有游戏",
+        emptyGamesDescription: "先创建首个项目，作品集工作区就会出现内容。",
+        emptyLibrariesTitle: "还没有可复用资产",
+        emptyLibrariesDescription: "当项目开始产出并批准资产后，这里会显示共享与待审素材。",
+        emptyCapabilitiesTitle: "暂无能力配置",
+        emptyCapabilitiesDescription: "AI 运行时初始化后，这里会显示提供商设置与运行时能力通道。",
+        emptyReleasesTitle: "还没有发布版本",
+        emptyReleasesDescription: "发布任意项目后，就会出现第一条不可变发布记录。",
+        emptyReviewTitle: "审查队列为空",
+        emptyReviewDescription: "排队中的生成任务、待审产物与自动化审批都会显示在这里。",
       },
     },
     aiPlayground: {
@@ -2533,6 +2817,38 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       starterProjectTemplate3dLabel: "轨道站 (3D)",
       starterProjectTemplate3dDescription: "带模型与光照的 3D 环境，探索 3D 场景设置与运行。",
       projectSettings: "项目设置",
+      brandControlPlaneTitle: "品牌控制平面",
+      brandControlPlaneDescription:
+        "在单一项目级品牌套件中掌控名称、Logo、色彩与排版，统一 Builder 与玩家界面。",
+      brandIdentityTitle: "品牌身份",
+      brandIdentityDescription:
+        "设置将在构建器与玩家界面中使用的对外名称、副标题与 Logo 体系。",
+      brandVisualSystemTitle: "视觉系统",
+      brandVisualSystemDescription:
+        "调整支撑所有品牌化界面的主题、字体与强调色。",
+      brandExperienceCopyTitle: "界面命名",
+      brandExperienceCopyDescription:
+        "重命名 Builder 与玩家界面，让控制平面语言与你的世界设定保持一致。",
+      brandPreviewTitle: "实时品牌预览",
+      brandPreviewDescription: "在打开 Builder 或试玩界面前，先预览品牌化后的外观。",
+      brandAppNameLabel: "品牌名称",
+      brandAppSubtitleLabel: "品牌副标题",
+      brandLogoMarkLabel: "Logo 标记",
+      brandLogoImagePathLabel: "Logo 图片路径",
+      brandBuilderShellNameLabel: "Builder 界面名称",
+      brandBuilderShellDescriptionLabel: "Builder 界面说明",
+      brandPlayerShellNameLabel: "玩家界面名称",
+      brandSurfaceThemeLabel: "表面主题",
+      brandHeadingFontLabel: "标题字体",
+      brandBodyFontLabel: "正文字体",
+      brandMonoFontLabel: "等宽字体",
+      brandPrimaryColorLabel: "主色",
+      brandSecondaryColorLabel: "辅助色",
+      brandAccentColorLabel: "强调色",
+      brandNeutralColorLabel: "中性色",
+      brandBaseColorLabel: "基础表面色",
+      brandBaseContentColorLabel: "基础文字色",
+      saveBrandControlPlane: "保存品牌控制平面",
       operations: "操作中心",
       projectPlayHint: "只有已发布版本才能在玩家视图中启动。",
       capabilityHeader: "能力",

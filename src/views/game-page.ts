@@ -1,5 +1,6 @@
 import { appConfig, type LocaleCode } from "../config/environment.ts";
 import { joinUrlPath } from "../shared/constants/assets.ts";
+import type { ProjectBranding } from "../shared/branding/project-branding.ts";
 
 type PageScript = {
   readonly src: string;
@@ -53,6 +54,8 @@ interface PlayableGamePageProps {
   readonly clientRuntimeConfig: GameClientBootstrapData["runtime"];
   /** Request origin for absolute SSE/WS URLs; uses appConfig.appOrigin when omitted. */
   readonly appOrigin?: string;
+  /** Optional project-owned brand profile. */
+  readonly brand?: ProjectBranding;
   readonly oraclePanelState?: OraclePanelState;
 }
 
@@ -67,6 +70,7 @@ interface InactiveGamePageProps {
     | "session-unavailable";
   readonly locale: LocaleCode;
   readonly projectId?: string;
+  readonly brand?: ProjectBranding;
   readonly oraclePanelState?: OraclePanelState;
 }
 
@@ -94,6 +98,7 @@ const renderInactiveState = (
   messages: Messages,
   locale: LocaleCode,
   projectId: string | undefined,
+  brand: ProjectBranding | undefined,
   state: InactiveGamePageProps["state"],
 ): string => {
   const builderHref = projectId
@@ -128,9 +133,9 @@ const renderInactiveState = (
           <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4m0 4h.01"/><circle cx="12" cy="12" r="10"/></svg>
           <span>${escapeHtml(messages.pages.home.activityEmptyTitle)}</span>
         </div>
-        <span class="badge badge-warning badge-soft mb-3">${escapeHtml(messages.game.publishedProjectLabel)}</span>
+        <span class="badge badge-warning badge-soft mb-3">${escapeHtml(brand?.playerShellName ?? messages.game.publishedProjectLabel)}</span>
         <h1 class="text-3xl font-bold tracking-tight">${escapeHtml(title)}</h1>
-        <p class="text-base-content/75 py-4">${escapeHtml(description)}</p>
+        <p class="text-base-content/75 py-4">${escapeHtml(brand?.appSubtitle ?? description)}</p>
         ${
           projectId
             ? `<div class="rounded-box bg-base-300/50 p-4 font-mono text-sm mb-4">${escapeHtml(projectId)}</div>`
@@ -162,13 +167,14 @@ export function GamePage(props: GamePageProps) {
       activeRoute: "game",
       currentPathWithQuery,
       persistentProjectId: props.projectId,
-    oraclePanelState: props.oraclePanelState,
+      brand: props.brand,
+      oraclePanelState: props.oraclePanelState,
     };
 
     return renderDocument(
       layout,
-      messages.navigation.game,
-      renderInactiveState(messages, props.locale, props.projectId, props.state),
+      props.brand?.playerShellName ?? messages.navigation.game,
+      renderInactiveState(messages, props.locale, props.projectId, props.brand, props.state),
     );
   }
 
@@ -201,6 +207,7 @@ export function GamePage(props: GamePageProps) {
     activeRoute: "game",
     currentPathWithQuery,
     persistentProjectId: projectId,
+    brand: props.brand,
     hideTopBar: true,
     hideFooter: true,
     oraclePanelState: props.oraclePanelState,
@@ -315,10 +322,15 @@ export function GamePage(props: GamePageProps) {
       <header class="bg-base-200 card shadow">
         <div class="card-body p-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div class="flex items-center gap-3 min-w-0 shrink" role="group" aria-label="${escapeHtml(messages.game.sceneLabel)}">
-            <div class="rounded-lg w-10 h-10 flex items-center justify-center bg-primary/15 text-primary shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
-            </div>
+            ${
+              props.brand?.logoImagePath
+                ? `<div class="inline-flex size-10 items-center justify-center overflow-hidden rounded-xl border border-base-300 bg-base-100 shadow-sm shrink-0">
+                    <img src="${escapeHtml(props.brand.logoImagePath)}" alt="${escapeHtml(props.brand.appName)}" class="size-full object-cover" />
+                  </div>`
+                : `<div class="rounded-lg w-10 h-10 flex items-center justify-center bg-primary/15 text-primary shrink-0 font-semibold">${escapeHtml(props.brand?.logoMark ?? "▶")}</div>`
+            }
             <div class="min-w-0">
+              <p class="text-xs uppercase tracking-[0.22em] text-base-content/55">${escapeHtml(props.brand?.playerShellName ?? messages.game.publishedProjectLabel)}</p>
               <h1
                 id="game-scene-title-heading"
                 sse-swap="scene-title-heading"
@@ -785,5 +797,5 @@ export function GamePage(props: GamePageProps) {
     </div>
   `;
 
-  return renderDocument(layout, messages.navigation.game, content, pageScripts);
+  return renderDocument(layout, props.brand?.playerShellName ?? messages.navigation.game, content, pageScripts);
 }

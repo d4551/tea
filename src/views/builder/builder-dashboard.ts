@@ -1,6 +1,6 @@
 import type { LocaleCode } from "../../config/environment.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
-import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
+import { appRoutes, withLocaleQuery } from "../../shared/constants/routes.ts";
 import type {
   BuilderWorkflowStage,
   CreatorCapability,
@@ -8,7 +8,7 @@ import type {
 } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
-import { type ColorToken, renderStats } from "../shared/ui-components.ts";
+import { cardClasses, type ColorToken, renderStats } from "../shared/ui-components.ts";
 import { buildBuilderWorkflowStages } from "./builder-flow.ts";
 import { buildBuilderJourneyConfig } from "./builder-journey.ts";
 import {
@@ -59,14 +59,16 @@ const renderGuidedWorkflowCard = (
   href: string,
   actionLabel: string,
   toneClassName: string,
-): string => `<article class="card border border-base-300 bg-base-100 shadow-sm">
+): string => `<article class="${cardClasses.bordered} transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
   <div class="card-body gap-4">
     <div class="space-y-2">
       <h3 class="card-title text-lg ${toneClassName}">${escapeHtml(title)}</h3>
       <p class="text-sm leading-6 text-base-content/72">${escapeHtml(description)}</p>
     </div>
     <div class="card-actions justify-start">
-      <a class="btn btn-outline btn-sm" href="${escapeHtml(href)}">${escapeHtml(actionLabel)}</a>
+      <a class="btn btn-outline btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
+        href,
+      )}" aria-label="${escapeHtml(actionLabel)}">${escapeHtml(actionLabel)}</a>
     </div>
   </div>
 </article>`;
@@ -85,7 +87,7 @@ const renderWorkflowStageCard = (stage: BuilderWorkflowStage, messages: Messages
         ? messages.builder.workflowStatusInProgress
         : messages.builder.workflowStatusStart;
 
-  return `<article class="card border border-base-300 bg-base-100 shadow-sm">
+  return `<article class="${cardClasses.bordered} transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
     <div class="card-body gap-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="space-y-2">
@@ -98,10 +100,14 @@ const renderWorkflowStageCard = (stage: BuilderWorkflowStage, messages: Messages
         ${escapeHtml(stage.completionLabel)}
       </div>
       <div class="card-actions justify-start gap-2">
-        <a class="btn btn-primary btn-sm" href="${escapeHtml(stage.primaryAction.href)}">${escapeHtml(stage.primaryAction.label)}</a>
+        <a class="btn btn-primary btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
+          stage.primaryAction.href,
+        )}" aria-label="${escapeHtml(stage.primaryAction.label)}">${escapeHtml(stage.primaryAction.label)}</a>
         ${
           stage.secondaryAction
-            ? `<a class="btn btn-ghost btn-sm" href="${escapeHtml(stage.secondaryAction.href)}">${escapeHtml(stage.secondaryAction.label)}</a>`
+            ? `<a class="btn btn-ghost btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
+                stage.secondaryAction.href,
+              )}" aria-label="${escapeHtml(stage.secondaryAction.label)}">${escapeHtml(stage.secondaryAction.label)}</a>`
             : ""
         }
       </div>
@@ -112,7 +118,7 @@ const renderWorkflowStageCard = (stage: BuilderWorkflowStage, messages: Messages
 const renderCreatorCapabilityCard = (
   messages: Messages,
   capability: CreatorCapability,
-): string => `<article class="card card-border border-base-300 bg-base-100 shadow-sm">
+): string => `<article class="${cardClasses.bordered} transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
   <div class="card-body gap-3">
     <div class="flex items-center justify-between gap-3">
       <h3 class="card-title text-base">${escapeHtml(capability.label)}</h3>
@@ -159,7 +165,7 @@ const renderWorkbenchSurfaceCard = (
   description: string,
   badge: string,
   actions: ReadonlyArray<{ label: string; href: string; tone?: "primary" | "ghost" | "outline" }>,
-): string => `<article class="card border border-base-300 bg-base-100 shadow-sm">
+): string => `<article class="${cardClasses.bordered} transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
   <div class="card-body gap-4">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="space-y-2">
@@ -172,7 +178,9 @@ const renderWorkbenchSurfaceCard = (
       ${actions
         .map(
           (action) =>
-            `<a class="btn btn-${escapeHtml(action.tone ?? "ghost")} btn-sm" href="${escapeHtml(action.href)}">${escapeHtml(action.label)}</a>`,
+            `<a class="btn btn-${escapeHtml(action.tone ?? "ghost")} btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
+              action.href,
+            )}" aria-label="${escapeHtml(action.label)}">${escapeHtml(action.label)}</a>`,
         )
         .join("")}
     </div>
@@ -196,66 +204,26 @@ export const renderBuilderDashboard = (
   projectId: string,
   published: boolean,
 ): string => {
-  const worldHref = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderScenes, { projectId }),
-    {
-      lang: locale,
-    },
+  const withProjectLocale = (path: string): string =>
+    withLocaleQuery(interpolateRoutePath(path, { projectId }), locale);
+  const withProjectSection = (path: string, sectionId: string): string =>
+    `${withProjectLocale(path)}#${sectionId}`;
+
+  const worldHref = withProjectLocale(appRoutes.builderScenes);
+  const npcHref = withProjectLocale(appRoutes.builderNpcs);
+  const dialogueHref = withProjectLocale(appRoutes.builderDialogue);
+  const assetsHref = withProjectLocale(appRoutes.builderAssets);
+  const systemsHref = withProjectLocale(appRoutes.builderMechanics);
+  const settingsHref = withProjectLocale(appRoutes.builderAi);
+  const brandingHref = withProjectSection(appRoutes.builderAi, "builder-brand-control-plane");
+  const knowledgeHref = withProjectSection(appRoutes.builderAi, "builder-knowledge-workspace");
+  const providerHref = withProjectSection(appRoutes.builderAi, "builder-provider-workbench");
+  const operationsHref = withProjectLocale(appRoutes.builderAutomation);
+  const reviewQueueHref = withProjectSection(
+    appRoutes.builderAutomation,
+    "builder-review-queue",
   );
-  const npcHref = withQueryParameters(interpolateRoutePath(appRoutes.builderNpcs, { projectId }), {
-    lang: locale,
-  });
-  const dialogueHref = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderDialogue, { projectId }),
-    {
-      lang: locale,
-    },
-  );
-  const assetsHref = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderAssets, { projectId }),
-    {
-      lang: locale,
-    },
-  );
-  const systemsHref = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderMechanics, { projectId }),
-    {
-      lang: locale,
-    },
-  );
-  const settingsHref = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderAi, { projectId }),
-    {
-      lang: locale,
-    },
-  );
-  const knowledgeHref = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderAi, { projectId }) + "#builder-knowledge-workspace",
-    {
-      lang: locale,
-    },
-  );
-  const providerHref = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderAi, { projectId }) + "#builder-provider-workbench",
-    {
-      lang: locale,
-    },
-  );
-  const operationsHref = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderAutomation, { projectId }),
-    {
-      lang: locale,
-    },
-  );
-  const reviewQueueHref = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderAutomation, { projectId }) + "#builder-review-queue",
-    {
-      lang: locale,
-    },
-  );
-  const gameHref = withQueryParameters(interpolateRoutePath(appRoutes.game, { projectId }), {
-    lang: locale,
-  });
+  const gameHref = withProjectLocale(appRoutes.game);
   const workflowStages = buildBuilderWorkflowStages(messages, locale, projectId, {
     scenes: context.totalScenes,
     assets: context.assetCount + context.animationClipCount,
@@ -351,9 +319,10 @@ export const renderBuilderDashboard = (
     renderWorkbenchSurfaceCard(
       messages.builder.projectSettings,
       messages.builder.advancedSettingsDescription,
-      messages.builder.knowledgeWorkspaceTitle,
+      messages.builder.brandControlPlaneTitle,
       [
         { label: messages.builder.projectSettings, href: settingsHref, tone: "primary" },
+        { label: messages.builder.brandControlPlaneTitle, href: brandingHref, tone: "ghost" },
         { label: messages.builder.knowledgeWorkspaceTitle, href: knowledgeHref, tone: "ghost" },
         { label: messages.builder.providerStatus, href: providerHref, tone: "ghost" },
       ],
@@ -411,13 +380,15 @@ export const renderBuilderDashboard = (
           },
         ],
         actions: `
-          <a class="btn btn-primary btn-sm" href="${escapeHtml(published ? gameHref : (workflowStages[0]?.primaryAction.href ?? worldHref))}" aria-label="${escapeHtml(published ? messages.builder.playPublishedBuild : messages.builder.continueAuthoring)}">
+        <a class="btn btn-primary btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
+          published ? gameHref : (workflowStages[0]?.primaryAction.href ?? worldHref),
+        )}" aria-label="${escapeHtml(published ? messages.builder.playPublishedBuild : messages.builder.continueAuthoring)}">
             ${escapeHtml(published ? messages.builder.playPublishedBuild : messages.builder.continueAuthoring)}
           </a>
-          <a class="btn btn-ghost btn-sm" href="${escapeHtml(settingsHref)}" aria-label="${escapeHtml(messages.builder.projectSettings)}">
+          <a class="btn btn-ghost btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(settingsHref)}" aria-label="${escapeHtml(messages.builder.projectSettings)}">
             ${escapeHtml(messages.builder.projectSettings)}
           </a>
-          <a class="btn btn-ghost btn-sm" href="${escapeHtml(operationsHref)}" aria-label="${escapeHtml(messages.builder.operations)}">
+          <a class="btn btn-ghost btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(operationsHref)}" aria-label="${escapeHtml(messages.builder.operations)}">
             ${escapeHtml(messages.builder.operations)}
           </a>
         `,
@@ -473,9 +444,17 @@ export const renderBuilderDashboard = (
             body: `<div class="space-y-3">
               ${projectSnapshot}
               <div class="flex flex-wrap gap-2 pt-1">
-                <a class="btn btn-primary btn-sm" href="${escapeHtml(published ? gameHref : (workflowStages[0]?.primaryAction.href ?? worldHref))}">${escapeHtml(published ? messages.builder.playPublishedBuild : messages.builder.continueAuthoring)}</a>
-                <a class="btn btn-outline btn-sm" href="${escapeHtml(settingsHref)}">${escapeHtml(messages.builder.projectSettings)}</a>
-                <a class="btn btn-ghost btn-sm" href="${escapeHtml(operationsHref)}">${escapeHtml(messages.builder.operations)}</a>
+                <a class="btn btn-primary btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
+                  published ? gameHref : (workflowStages[0]?.primaryAction.href ?? worldHref),
+                )}" aria-label="${escapeHtml(
+                  published ? messages.builder.playPublishedBuild : messages.builder.continueAuthoring,
+                )}">${escapeHtml(published ? messages.builder.playPublishedBuild : messages.builder.continueAuthoring)}</a>
+                <a class="btn btn-outline btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
+                  settingsHref,
+                )}" aria-label="${escapeHtml(messages.builder.projectSettings)}">${escapeHtml(messages.builder.projectSettings)}</a>
+                <a class="btn btn-ghost btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
+                  operationsHref,
+                )}" aria-label="${escapeHtml(messages.builder.operations)}">${escapeHtml(messages.builder.operations)}</a>
               </div>
             </div>`,
           },
@@ -489,8 +468,12 @@ export const renderBuilderDashboard = (
                   <h3 class="text-base font-semibold tracking-tight">${escapeHtml(messages.builder.operations)}</h3>
                   <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.advancedAutomationDescription)}</p>
                   <div class="flex flex-wrap gap-2 pt-1">
-                    <a class="btn btn-primary btn-sm" href="${escapeHtml(settingsHref)}">${escapeHtml(messages.builder.projectSettings)}</a>
-                    <a class="btn btn-outline btn-sm" href="${escapeHtml(operationsHref)}">${escapeHtml(messages.builder.operations)}</a>
+                    <a class="btn btn-primary btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
+                      settingsHref,
+                    )}" aria-label="${escapeHtml(messages.builder.projectSettings)}">${escapeHtml(messages.builder.projectSettings)}</a>
+                    <a class="btn btn-outline btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
+                      operationsHref,
+                    )}" aria-label="${escapeHtml(messages.builder.operations)}">${escapeHtml(messages.builder.operations)}</a>
                   </div>
                 </div>
               </div>

@@ -727,7 +727,11 @@ describe("game engine HTTP contracts", () => {
 
     expect(response.status).toBe(httpStatus.ok);
     expect(body.includes('id="builder-project-shell"')).toBe(true);
-    expect(body.includes('hx-post="/api/builder/assets/create/form"')).toBe(true);
+    expect(
+      body.includes(
+        `hx-post="${interpolateRoutePath(appRoutes.builderApiAssetsCreateForm, { projectId })}"`,
+      ),
+    ).toBe(true);
     expect(body.includes("Animation clips")).toBe(true);
     expect(body.includes("AI actions for the selected item")).toBe(true);
     expect(body.includes('id="creator-ai-actions"')).toBe(true);

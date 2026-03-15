@@ -1,5 +1,10 @@
 import type { Prisma } from "@prisma/client";
 import { appConfig, type LocaleCode } from "../../config/environment.ts";
+import {
+  createStarterProjectBranding,
+  normalizeProjectBranding,
+  type ProjectBranding,
+} from "../../shared/branding/project-branding.ts";
 import { builderGeometryPlaceholderPaths, joinUrlPath } from "../../shared/constants/assets.ts";
 import { DEFAULT_NPC_IDLE_PAUSE_MS } from "../../shared/constants/builder-defaults.ts";
 import type {
@@ -69,6 +74,8 @@ const baselineCreatedAtMs = 0;
  * merged here.
  */
 export interface BuilderProjectState {
+  /** Project-owned brand profile used by builder and playable shells. */
+  readonly brand: ProjectBranding;
   /** Scene definitions keyed by scene id. */
   readonly scenes: Record<string, SceneDefinition>;
   /** Dialogue catalogs keyed by locale and dialogue key. */
@@ -104,6 +111,8 @@ export interface BuilderProjectSnapshot {
   readonly id: string;
   /** Starter template provenance for this project. */
   readonly starterTemplateId: StarterProjectTemplateId;
+  /** Project-owned brand profile. */
+  readonly brand: ProjectBranding;
   /** Scene registry by stable scene id. */
   readonly scenes: Map<string, SceneDefinition>;
   /** Dialogue registry by locale -> key -> value. */
@@ -580,6 +589,7 @@ const createBaselineState = (): BuilderProjectState => {
   };
 
   return {
+    brand: createStarterProjectBranding("tea-house-story"),
     scenes,
     dialogues,
     assets: buildBaselineAssets(),
@@ -597,6 +607,7 @@ const createBaselineState = (): BuilderProjectState => {
 };
 
 const createBlankStarterState = (): BuilderProjectState => ({
+  brand: createStarterProjectBranding("blank"),
   scenes: {},
   dialogues: {
     "en-US": {},
@@ -839,6 +850,7 @@ const createBaselineState2d = (): BuilderProjectState => {
   };
 
   return {
+    brand: createStarterProjectBranding("2d-game"),
     scenes,
     dialogues,
     assets: buildBaselineAssets2d(),
@@ -957,6 +969,7 @@ const createBaselineState3d = (): BuilderProjectState => {
   };
 
   return {
+    brand: createStarterProjectBranding("3d-game"),
     scenes,
     dialogues,
     assets: buildBaselineAssets3d(),
@@ -2614,6 +2627,7 @@ const parseAutomationRunRecord = (runId: string, value: unknown): AutomationRun 
 const parseProjectState = (state: Prisma.JsonValue): BuilderProjectState => {
   const parsed = safeJsonParse<unknown>(JSON.stringify(state), {}, acceptUnknown);
   const record = asRecord(parsed);
+  const brandRecord = asRecord(record.brand);
   const scenesRecord = asRecord(record.scenes);
   const dialoguesRecord = asRecord(record.dialogues);
   const assetsRecord = asRecord(record.assets);
@@ -2650,6 +2664,28 @@ const parseProjectState = (state: Prisma.JsonValue): BuilderProjectState => {
   }
 
   return {
+    brand: normalizeProjectBranding(
+      {
+        appName: toStringValue(brandRecord.appName) ?? undefined,
+        appSubtitle: toStringValue(brandRecord.appSubtitle) ?? undefined,
+        logoMark: toStringValue(brandRecord.logoMark) ?? undefined,
+        logoImagePath: toStringValue(brandRecord.logoImagePath) ?? undefined,
+        builderShellName: toStringValue(brandRecord.builderShellName) ?? undefined,
+        builderShellDescription: toStringValue(brandRecord.builderShellDescription) ?? undefined,
+        playerShellName: toStringValue(brandRecord.playerShellName) ?? undefined,
+        surfaceTheme: toStringValue(brandRecord.surfaceTheme) ?? undefined,
+        headingFont: toStringValue(brandRecord.headingFont) ?? undefined,
+        bodyFont: toStringValue(brandRecord.bodyFont) ?? undefined,
+        monoFont: toStringValue(brandRecord.monoFont) ?? undefined,
+        primaryColor: toStringValue(brandRecord.primaryColor) ?? undefined,
+        secondaryColor: toStringValue(brandRecord.secondaryColor) ?? undefined,
+        accentColor: toStringValue(brandRecord.accentColor) ?? undefined,
+        neutralColor: toStringValue(brandRecord.neutralColor) ?? undefined,
+        base100Color: toStringValue(brandRecord.base100Color) ?? undefined,
+        baseContentColor: toStringValue(brandRecord.baseContentColor) ?? undefined,
+      },
+      createStarterProjectBranding("blank"),
+    ),
     scenes,
     dialogues,
     assets: toRecordFromEntries(
@@ -2745,6 +2781,7 @@ const toProjectSnapshot = (
 ): BuilderProjectSnapshot => ({
   id: row.id,
   starterTemplateId: resolveStarterProjectTemplateId(row.source),
+  brand: structuredClone(state.brand),
   scenes: new Map(
     Object.entries(state.scenes).map(([sceneId, scene]) => [sceneId, structuredClone(scene)]),
   ),

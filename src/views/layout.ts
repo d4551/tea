@@ -1,4 +1,9 @@
 import { appConfig, type LocaleCode } from "../config/environment.ts";
+import {
+  PROJECT_BRAND_FONTS_STYLESHEET_HREF,
+  resolveProjectBrandingStyleVariables,
+  type ProjectBranding,
+} from "../shared/branding/project-branding.ts";
 
 import { assetRelativePaths, joinUrlPath } from "../shared/constants/assets.ts";
 import { appRoutes, withLocaleQuery } from "../shared/constants/routes.ts";
@@ -106,10 +111,12 @@ export interface LayoutContext {
   readonly activeRoute: keyof typeof appRoutes;
   readonly currentPathWithQuery: string;
   readonly persistentProjectId?: string;
+  readonly brand?: ProjectBranding;
   readonly breadcrumbs?: readonly BreadcrumbItem[];
   readonly customSidebarHtml?: string;
   readonly hideFooter?: boolean;
   readonly hideTopBar?: boolean;
+  readonly isHtmxRequest?: boolean;
   readonly oraclePanelState?: OraclePanelState;
 }
 
@@ -136,13 +143,24 @@ export const renderDocument = (
   title: string,
   body: string,
   scripts: readonly LayoutScript[] = [],
-): string =>
-  renderLayout({
+): string => {
+  if (context.isHtmxRequest) {
+    const baseContainer =
+      "mx-auto flex w-full max-w-[1600px] flex-col gap-8 px-4 lg:px-8 py-6 lg:py-8";
+    const layoutModifier =
+      context.activeRoute === "game" ? "game-page-layout items-start" : "layout-asymmetric gap-8 lg:gap-12";
+    const containerClass = `${baseContainer} vt-main flex-1 ${layoutModifier}`;
+
+    return `<title>${escapeHtml(title)} · ${escapeHtml(context.brand?.appName ?? context.messages.metadata.appName)}</title><main id="main-content" tabindex="-1" class="${escapeHtml(containerClass)}">${body}</main>`;
+  }
+
+  return renderLayout({
     ...context,
     title,
     body,
     scripts,
   });
+};
 
 /**
  * Renders the shared application layout.
@@ -159,6 +177,7 @@ export const renderLayout = (input: LayoutInput): string => {
     activeRoute,
     currentPathWithQuery,
     persistentProjectId,
+    brand,
     breadcrumbs,
     scripts = [],
     customSidebarHtml,
@@ -201,11 +220,13 @@ export const renderLayout = (input: LayoutInput): string => {
     activeRoute,
     {
       home: messages.navigation.home,
+      controlPlane: messages.navigation.controlPlane,
       builder: messages.navigation.builder,
       game: messages.navigation.game,
     },
     {
       home: iconHome(),
+      controlPlane: iconControlPlane(),
       builder: iconBuilder(),
       game: iconGame(),
     },
@@ -218,30 +239,37 @@ export const renderLayout = (input: LayoutInput): string => {
     },
   ];
   const drawerClassName = customSidebarHtml ? "drawer lg:drawer-open flex-1" : "drawer flex-1";
+  const appName = brand?.appName ?? messages.metadata.appName;
+  const appSubtitle = brand?.appSubtitle ?? messages.metadata.appSubtitle;
+  const documentTheme = brand?.surfaceTheme ?? appConfig.ui.defaultTheme;
+  const bodyStyleAttribute = brand
+    ? ` style="${escapeHtml(resolveProjectBrandingStyleVariables(brand))}"`
+    : "";
+  const themeLockAttribute = brand ? ' data-theme-lock="project"' : "";
   const breadcrumbItems: readonly NavigationBreadcrumbItem[] =
     breadcrumbs && breadcrumbs.length > 0
       ? breadcrumbs.map((item) => ({ label: item.label, href: item.href }))
-      : [{ label: messages.metadata.appName }];
+      : [{ label: appName }];
 
   return `<!doctype html>
-<html lang="${escapeHtml(locale)}" data-theme="${escapeHtml(appConfig.ui.defaultTheme)}">
+<html lang="${escapeHtml(locale)}" data-theme="${escapeHtml(documentTheme)}"${themeLockAttribute}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="view-transition" content="same-origin" />
-    <title>${escapeHtml(title)} · ${escapeHtml(messages.metadata.appName)}</title>
-    <meta name="description" content="${escapeHtml(messages.metadata.appSubtitle)}" />
+    <title>${escapeHtml(title)} · ${escapeHtml(appName)}</title>
+    <meta name="description" content="${escapeHtml(appSubtitle)}" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&display=swap" media="print" onload="this.media='all'" />
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&display=swap" /></noscript>
+    <link rel="stylesheet" href="${escapeHtml(PROJECT_BRAND_FONTS_STYLESHEET_HREF)}" media="print" onload="this.media='all'" />
+    <noscript><link rel="stylesheet" href="${escapeHtml(PROJECT_BRAND_FONTS_STYLESHEET_HREF)}" /></noscript>
     <link rel="stylesheet" href="${escapeHtml(appConfig.stylesheetPath)}" />
     <script src="${escapeHtml(appConfig.htmxScriptPath)}" defer></script>
     <script src="${escapeHtml(joinUrlPath(appConfig.staticAssets.publicPrefix, assetRelativePaths.htmxExtensionSseFile))}" defer></script>
     <script src="${escapeHtml(joinUrlPath(appConfig.staticAssets.publicPrefix, assetRelativePaths.htmxExtensionOracleIndicatorFile))}" type="module"></script>
     <script src="${escapeHtml(joinUrlPath(appConfig.staticAssets.publicPrefix, assetRelativePaths.htmxExtensionFocusPanelFile))}" type="module"></script>
   </head>
-  <body class="min-h-screen bg-base-100 text-base-content antialiased" hx-boost="${boostEnabled}" hx-ext="layout-controls,focus-panel">
+  <body class="min-h-screen bg-base-100 text-base-content antialiased" hx-boost="${boostEnabled}" hx-target="#main-content" hx-select="#main-content" hx-ext="layout-controls,focus-panel"${bodyStyleAttribute}>
     <a
       href="#main-content"
       class="sr-only z-[100] m-2 inline-flex items-center gap-2 rounded-lg border-2 border-primary bg-base-100 px-4 py-3 text-sm font-semibold text-primary shadow-lg transition-all duration-200 focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:ring-2 focus:ring-primary focus:ring-offset-2 hover:bg-primary hover:text-primary-content"
@@ -270,7 +298,7 @@ export const renderLayout = (input: LayoutInput): string => {
             ${
               hideTopBar
                 ? ""
-                : `${renderTopBar(messages, locale, languageSwitch, currentPathWithQuery, publicPrimaryItems, isOracleDrawerOpen)}${renderBreadcrumbRow(messages.common.breadcrumbLabel, breadcrumbItems)}`
+                : `${renderTopBar(messages, locale, languageSwitch, currentPathWithQuery, publicPrimaryItems, isOracleDrawerOpen, brand)}${renderBreadcrumbRow(messages.common.breadcrumbLabel, breadcrumbItems)}`
             }
 
             <main id="main-content" tabindex="-1" class="${escapeHtml(containerClass)}">
@@ -288,7 +316,7 @@ export const renderLayout = (input: LayoutInput): string => {
                 ? customSidebarHtml
                 : renderMobileDrawerMenu(publicNavigationGroups, {
                     ariaLabel: messages.common.mobileNavigation,
-                    brandHtml: renderBrand(messages, locale),
+                    brandHtml: renderBrand(messages, locale, brand),
                   })
             }
           </div>
@@ -354,6 +382,7 @@ const renderTopBar = (
   currentPathWithQuery: string,
   navigationItems: readonly NavigationItem[],
   isOracleDrawerOpen: boolean,
+  brand?: ProjectBranding,
 ): string => {
   const localeSwitchButtonText =
     languageSwitch === "en-US"
@@ -392,7 +421,7 @@ const renderTopBar = (
   ];
 
   return `<div class="sticky top-0 z-30">
-    ${renderHeaderNavbar(renderBrand(messages, locale), navigationItems, headerActions, {
+    ${renderHeaderNavbar(renderBrand(messages, locale, brand), navigationItems, headerActions, {
       ariaLabel: messages.common.primaryNavigation,
       className:
         "navbar w-full border-b border-base-300/80 bg-base-100/90 px-4 backdrop-blur lg:px-8",
@@ -440,10 +469,18 @@ const renderThemeDropdown = (messages: Messages): string => {
   );
 };
 
-const renderBrand = (messages: Messages, locale: LocaleCode): string =>
+const renderBrand = (
+  messages: Messages,
+  locale: LocaleCode,
+  brand?: ProjectBranding,
+): string =>
   `<a href="${withLocaleQuery(appRoutes.home, locale)}" class="btn btn-ghost px-2 text-base font-bold tracking-tight gap-2 normal-case">
-    <span class="rounded-lg bg-gradient-to-br from-violet-400 to-cyan-300 px-2 py-1 text-lg leading-none" aria-hidden="true">🍵</span>
-    <span>${escapeHtml(messages.metadata.appName)}</span>
+    ${
+      brand?.logoImagePath
+        ? `<span class="inline-flex size-9 items-center justify-center overflow-hidden rounded-xl border border-base-300 bg-base-100 shadow-sm"><img src="${escapeHtml(brand.logoImagePath)}" alt="${escapeHtml(brand.appName)}" class="size-full object-cover" /></span>`
+        : `<span class="rounded-lg bg-gradient-to-br from-primary to-secondary px-2 py-1 text-lg leading-none text-primary-content" aria-hidden="true">${escapeHtml(brand?.logoMark ?? "🍵")}</span>`
+    }
+    <span>${escapeHtml(brand?.appName ?? messages.metadata.appName)}</span>
   </a>`;
 
 const iconMenu = (): string =>
@@ -455,6 +492,9 @@ const iconHome = (): string =>
 const iconBuilder = (): string =>
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg>';
 
+const iconControlPlane = (): string =>
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><path d="M4 7h16"></path><path d="M4 12h10"></path><path d="M4 17h16"></path><circle cx="17" cy="12" r="3"></circle></svg>';
+
 const iconGame = (): string =>
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor" class="my-1.5 inline-block size-4" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>';
 
@@ -463,6 +503,10 @@ const iconAiSpark = (): string =>
 
 const renderFooter = (messages: Messages, locale: LocaleCode): string => {
   const resourceLinks = [
+    {
+      label: messages.navigation.controlPlane,
+      href: withLocaleQuery(appRoutes.platformGames, locale),
+    },
     {
       label: messages.navigation.builder,
       href: withLocaleQuery(appRoutes.builder, locale),

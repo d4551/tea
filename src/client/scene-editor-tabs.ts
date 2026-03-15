@@ -345,7 +345,7 @@ const wireTilemapEditor = (panel: HTMLElement): void => {
   const grid = panel.querySelector<HTMLElement>("[data-tilemap-grid]");
   const paletteLabel =
     palette?.getAttribute("aria-label") ??
-    resolveLabelValue(panel, "data-tilemap-palette-label", "Tile palette");
+    resolveLabelValue(panel, "data-tilemap-palette-label", "");
 
   const getAssetSource = (id: string): string => {
     for (const asset of assets) {
@@ -489,7 +489,7 @@ const wireTilemapEditor = (panel: HTMLElement): void => {
       return;
     }
 
-    const eraserLabel = resolveLabelValue(panel, "data-tilemap-eraser-label", "Eraser");
+    const eraserLabel = resolveLabelValue(panel, "data-tilemap-eraser-label", "");
     palette.innerHTML = "";
     const eraserButton = createPaletteButton(
       DEFAULT_TILEMAP_EMPTY_VALUE,

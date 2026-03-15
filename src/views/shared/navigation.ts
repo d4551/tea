@@ -527,11 +527,13 @@ export const buildPublicPrimaryNavigation = (
   activeRoute: AppRouteKey,
   labels: {
     readonly home: string;
+    readonly controlPlane: string;
     readonly builder: string;
     readonly game: string;
   },
   icons: {
     readonly home: string;
+    readonly controlPlane: string;
     readonly builder: string;
     readonly game: string;
   },
@@ -544,6 +546,22 @@ export const buildPublicPrimaryNavigation = (
       href: buildNavigationHref(appRoutes.home, locale),
       icon: icons.home,
       active: activeRoute === "home",
+    },
+    {
+      key: "controlPlane",
+      label: labels.controlPlane,
+      href: buildNavigationHref(appRoutes.platformGames, locale, {
+        projectId,
+        includeProjectId: true,
+      }),
+      icon: icons.controlPlane,
+      active:
+        activeRoute === "platformGames" ||
+        activeRoute === "platformLibraries" ||
+        activeRoute === "platformTemplates" ||
+        activeRoute === "platformCapabilities" ||
+        activeRoute === "platformReleases" ||
+        activeRoute === "platformReview",
     },
     {
       key: "builder",

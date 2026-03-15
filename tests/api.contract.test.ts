@@ -2816,21 +2816,26 @@ describe("HTMX partial rendering", () => {
   });
 
   test("builder AI page renders knowledge and tool-planning workspaces", async () => {
-    await createBuilderProject("default");
+    const projectId = "default";
+    await createBuilderProject(projectId);
     const response = await app.handle(
-      new Request(toUrl(`${interpolateRoutePath(appRoutes.builderAi, { projectId: "default" })}`)),
+      new Request(toUrl(`${interpolateRoutePath(appRoutes.builderAi, { projectId })}`)),
     );
     const html = await response.text();
 
     expect(response.status).toBe(httpStatus.ok);
     expect(html.includes("Project Settings")).toBe(true);
     expect(html.includes("Knowledge workspace")).toBe(true);
-    expect(html.includes(appRoutes.aiBuilderKnowledgeDocuments)).toBe(true);
-    expect(html.includes(appRoutes.aiBuilderKnowledgeSearch)).toBe(true);
+    expect(html.includes(interpolateRoutePath(appRoutes.aiBuilderKnowledgeDocuments, { projectId }))).toBe(
+      true,
+    );
+    expect(
+      html.includes(interpolateRoutePath(appRoutes.aiBuilderKnowledgeSearch, { projectId })),
+    ).toBe(true);
     expect(html.includes("Tool plan preview")).toBe(true);
     expect(html.includes("Structured tool planning is currently unavailable")).toBe(true);
-    expect(html.includes(appRoutes.aiBuilderToolPlan)).toBe(false);
-    expect(html.includes(appRoutes.aiBuilderHfTraining)).toBe(true);
+    expect(html.includes(interpolateRoutePath(appRoutes.aiBuilderToolPlan, { projectId }))).toBe(false);
+    expect(html.includes(interpolateRoutePath(appRoutes.aiBuilderHfTraining, { projectId }))).toBe(true);
   });
 
   test("builder AI HF training endpoint queues a reviewable run", async () => {
@@ -2847,7 +2852,13 @@ describe("HTMX partial rendering", () => {
       learningRate: "0.00002",
     };
     const response = await app.handle(
-      new Request(toUrl(appRoutes.aiBuilderHfTraining), {
+      new Request(
+        toUrl(
+          interpolateRoutePath(appRoutes.aiBuilderHfTraining, {
+            projectId: "default",
+          }),
+        ),
+        {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -3179,10 +3190,14 @@ describe("HTMX partial rendering", () => {
       ),
     );
     const html = await response.text();
+    const sceneEditorIndex = html.indexOf("data-scene-editor");
+    const sceneEditorMarkup = sceneEditorIndex >= 0 ? html.slice(sceneEditorIndex) : "";
 
     expect(response.status).toBe(httpStatus.ok);
     expect(html.includes("<svg")).toBe(true);
-    expect(html.includes("style=")).toBe(false);
+    expect((html.match(/\sstyle="/gu) ?? []).length).toBe(1);
+    expect(sceneEditorIndex >= 0).toBe(true);
+    expect(sceneEditorMarkup.includes("style=")).toBe(false);
     expect(html.includes("data-scene-editor")).toBe(true);
     expect(html.includes("data-scene-node-form")).toBe(true);
     expect(html.includes("data-scene-selected-node")).toBe(true);
@@ -3253,7 +3268,13 @@ describe("HTMX partial rendering", () => {
 
     const usdzAssetId = `asset-${crypto.randomUUID().slice(0, 8)}`;
     const usdzResponse = await app.handle(
-      new Request(toUrl("/api/builder/assets/create/form"), {
+      new Request(
+        toUrl(
+          interpolateRoutePath(appRoutes.builderApiAssetsCreateForm, {
+            projectId,
+          }),
+        ),
+        {
         method: "POST",
         headers: {
           "content-type": "application/x-www-form-urlencoded",
@@ -3273,7 +3294,13 @@ describe("HTMX partial rendering", () => {
 
     const usdAssetId = `asset-${crypto.randomUUID().slice(0, 8)}`;
     const usdResponse = await app.handle(
-      new Request(toUrl("/api/builder/assets/create/form"), {
+      new Request(
+        toUrl(
+          interpolateRoutePath(appRoutes.builderApiAssetsCreateForm, {
+            projectId,
+          }),
+        ),
+        {
         method: "POST",
         headers: {
           "content-type": "application/x-www-form-urlencoded",
@@ -3665,21 +3692,28 @@ describe("HTMX partial rendering", () => {
 
     const assetId = "creatorPortrait";
     const assetResponse = await app.handle(
-      new Request(toUrl("/api/builder/assets/create/form"), {
-        method: "POST",
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          accept: "text/html",
+      new Request(
+        toUrl(
+          interpolateRoutePath(appRoutes.builderApiAssetsCreateForm, {
+            projectId,
+          }),
+        ),
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            accept: "text/html",
+          },
+          body: new URLSearchParams({
+            projectId,
+            locale: "en-US",
+            label: "Creator Portrait",
+            kind: "portrait",
+            sceneMode: "2d",
+            source: "/assets/images/custom/creator-portrait.png",
+          }).toString(),
         },
-        body: new URLSearchParams({
-          projectId,
-          locale: "en-US",
-          label: "Creator Portrait",
-          kind: "portrait",
-          sceneMode: "2d",
-          source: "/assets/images/custom/creator-portrait.png",
-        }).toString(),
-      }),
+      ),
     );
     const assetHtml = await assetResponse.text();
     expect(assetResponse.status).toBe(httpStatus.ok);
@@ -3687,21 +3721,28 @@ describe("HTMX partial rendering", () => {
     expect(assetHtml.includes(assetId)).toBe(true);
 
     const clipResponse = await app.handle(
-      new Request(toUrl("/api/builder/animation-clips/create/form"), {
-        method: "POST",
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          accept: "text/html",
+      new Request(
+        toUrl(
+          interpolateRoutePath(appRoutes.builderApiAnimationClipsCreateForm, {
+            projectId,
+          }),
+        ),
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            accept: "text/html",
+          },
+          body: new URLSearchParams({
+            projectId,
+            locale: "en-US",
+            assetId,
+            stateTag: "idle-down",
+            frameCount: "4",
+            playbackFps: "8",
+          }).toString(),
         },
-        body: new URLSearchParams({
-          projectId,
-          locale: "en-US",
-          assetId,
-          stateTag: "idle-down",
-          frameCount: "4",
-          playbackFps: "8",
-        }).toString(),
-      }),
+      ),
     );
     const clipHtml = await clipResponse.text();
     expect(clipResponse.status).toBe(httpStatus.ok);
@@ -3720,20 +3761,27 @@ describe("HTMX partial rendering", () => {
       },
       () =>
         app.handle(
-          new Request(toUrl("/api/builder/generation-jobs/create/form"), {
-            method: "POST",
-            headers: {
-              "content-type": "application/x-www-form-urlencoded",
-              accept: "text/html",
+          new Request(
+            toUrl(
+              interpolateRoutePath(appRoutes.builderApiGenerationJobsCreateForm, {
+                projectId,
+              }),
+            ),
+            {
+              method: "POST",
+              headers: {
+                "content-type": "application/x-www-form-urlencoded",
+                accept: "text/html",
+              },
+              body: new URLSearchParams({
+                projectId,
+                locale: "en-US",
+                kind: "portrait",
+                prompt: "Generate a review-ready tea trader portrait.",
+                targetId: assetId,
+              }).toString(),
             },
-            body: new URLSearchParams({
-              projectId,
-              locale: "en-US",
-              kind: "portrait",
-              prompt: "Generate a review-ready tea trader portrait.",
-              targetId: assetId,
-            }).toString(),
-          }),
+          ),
         ),
     );
     const generationHtml = await generationResponse.text();
@@ -3763,9 +3811,11 @@ describe("HTMX partial rendering", () => {
       new Request(
         toUrl(
           withQueryParameters(
-            appRoutes.builderApiGenerationJobStream.replace(":jobId", generationJobId),
-            {
+            interpolateRoutePath(appRoutes.builderApiGenerationJobStream, {
               projectId,
+              jobId: generationJobId,
+            }),
+            {
               locale: "en-US",
             },
           ),
@@ -3787,18 +3837,26 @@ describe("HTMX partial rendering", () => {
     expect(generationStreamText.includes(generationJobId)).toBe(true);
 
     const generationApproveResponse = await app.handle(
-      new Request(toUrl(`/api/builder/generation-jobs/${generationJobId}/approve`), {
-        method: "POST",
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          accept: "text/html",
+      new Request(
+        toUrl(
+          interpolateRoutePath(appRoutes.builderApiGenerationJobApprove, {
+            projectId,
+            jobId: generationJobId,
+          }),
+        ),
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            accept: "text/html",
+          },
+          body: new URLSearchParams({
+            projectId,
+            locale: "en-US",
+            approved: "true",
+          }).toString(),
         },
-        body: new URLSearchParams({
-          projectId,
-          locale: "en-US",
-          approved: "true",
-        }).toString(),
-      }),
+      ),
     );
     const generationApproveHtml = await generationApproveResponse.text();
     expect(generationApproveResponse.status).toBe(httpStatus.ok);
@@ -4164,17 +4222,20 @@ describe("HTMX partial rendering", () => {
   test("transcribe route returns typed validation errors for invalid wav payloads", async () => {
     const incomingCorrelationId = "ai-transcribe-correlation-id";
     const response = await app.handle(
-      new Request(toUrl(appRoutes.aiTranscribe), {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          accept: "application/json",
-          [correlationIdHeader]: incomingCorrelationId,
+      new Request(
+        toUrl(interpolateRoutePath(appRoutes.aiTranscribe, { projectId: "default" })),
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            accept: "application/json",
+            [correlationIdHeader]: incomingCorrelationId,
+          },
+          body: JSON.stringify({
+            audioBase64: Buffer.from("not-a-valid-wav").toString("base64"),
+          }),
         },
-        body: JSON.stringify({
-          audioBase64: Buffer.from("not-a-valid-wav").toString("base64"),
-        }),
-      }),
+      ),
     );
     const payload = await readResponsePayload<{
       readonly ok: false;

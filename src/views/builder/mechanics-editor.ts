@@ -1,7 +1,7 @@
 import type { LocaleCode } from "../../config/environment.ts";
 import { humanizeBuilderIdentifier } from "../../domain/builder/builder-display.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
-import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
+import { appRoutes } from "../../shared/constants/routes.ts";
 import type {
   DialogueGraph,
   GameFlagDefinition,
@@ -10,7 +10,7 @@ import type {
 } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
-import { cardClasses, renderBuilderHiddenFields, spinnerClasses } from "../shared/ui-components.ts";
+import { cardClasses, spinnerClasses } from "../shared/ui-components.ts";
 import { buildBuilderJourneyConfig } from "./builder-journey.ts";
 import { getTriggerEventLabel } from "./view-labels.ts";
 import { renderWorkspaceFrame, renderWorkspaceShell } from "./workspace-shell.ts";
@@ -42,18 +42,14 @@ export const renderQuestEditForm = (
   projectId: string,
   quest: QuestDefinition,
 ): string => {
-  const formAction = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderApiQuestForm, { projectId, questId: quest.id }),
-    {
-      locale,
-    },
-  );
-  const deleteAction = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderApiQuestDetail, { projectId, questId: quest.id }),
-    {
-      locale,
-    },
-  );
+  const formAction = interpolateRoutePath(appRoutes.builderApiQuestForm, {
+    projectId,
+    questId: quest.id,
+  });
+  const deleteAction = interpolateRoutePath(appRoutes.builderApiQuestDetail, {
+    projectId,
+    questId: quest.id,
+  });
   const firstStep = quest.steps[0];
   return `<div class="${cardClasses.bordered}">
     <div class="card-body gap-3">
@@ -64,7 +60,6 @@ export const renderQuestEditForm = (
         </form>
       </div>
       <form hx-post="${escapeHtml(formAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#quest-edit-spinner" hx-disabled-elt="button, input, select, textarea">
-        ${renderBuilderHiddenFields(projectId, locale)}
         <input type="hidden" name="id" value="${escapeHtml(quest.id)}" />
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.titleLabel)}</legend>
@@ -75,8 +70,8 @@ export const renderQuestEditForm = (
           <textarea name="description" class="textarea w-full" rows="3" aria-required="true" required aria-label="${escapeHtml(messages.builder.descriptionLabel)}">${escapeHtml(quest.description)}</textarea>
         </fieldset>
         <fieldset class="fieldset">
-          <legend class="fieldset-legend">${escapeHtml(messages.builder.triggerIdLabel)}</legend>
-          <input name="triggerId" type="text" class="input w-full" value="${escapeHtml(firstStep?.triggerId ?? "")}" aria-required="true" required aria-label="${escapeHtml(messages.builder.triggerIdLabel)}" />
+          <legend class="fieldset-legend">${escapeHtml(messages.builder.idLabel)}</legend>
+          <input name="triggerId" type="text" class="input w-full" value="${escapeHtml(firstStep?.triggerId ?? "")}" aria-required="true" required aria-label="${escapeHtml(messages.builder.idLabel)}" />
         </fieldset>
         <div class="flex items-center gap-2">
           <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.save)}">${escapeHtml(messages.builder.save)}</button>
@@ -96,18 +91,14 @@ export const renderTriggerEditForm = (
   projectId: string,
   trigger: TriggerDefinition,
 ): string => {
-  const formAction = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderApiTriggerForm, { projectId, triggerId: trigger.id }),
-    {
-      locale,
-    },
-  );
-  const deleteAction = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderApiTriggerDetail, { projectId, triggerId: trigger.id }),
-    {
-      locale,
-    },
-  );
+  const formAction = interpolateRoutePath(appRoutes.builderApiTriggerForm, {
+    projectId,
+    triggerId: trigger.id,
+  });
+  const deleteAction = interpolateRoutePath(appRoutes.builderApiTriggerDetail, {
+    projectId,
+    triggerId: trigger.id,
+  });
   return `<div class="${cardClasses.bordered}">
     <div class="card-body gap-3">
       <div class="flex items-center justify-between gap-3">
@@ -117,7 +108,6 @@ export const renderTriggerEditForm = (
         </form>
       </div>
       <form hx-post="${escapeHtml(formAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#trigger-edit-spinner" hx-disabled-elt="button, input, select, textarea">
-        ${renderBuilderHiddenFields(projectId, locale)}
         <input type="hidden" name="id" value="${escapeHtml(trigger.id)}" />
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.labelField)}</legend>
@@ -153,18 +143,14 @@ export const renderDialogueGraphEditForm = (
   projectId: string,
   graph: DialogueGraph,
 ): string => {
-  const formAction = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderApiDialogueGraphForm, { projectId, graphId: graph.id }),
-    {
-      locale,
-    },
-  );
-  const deleteAction = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderApiDialogueGraphDetail, { projectId, graphId: graph.id }),
-    {
-      locale,
-    },
-  );
+  const formAction = interpolateRoutePath(appRoutes.builderApiDialogueGraphForm, {
+    projectId,
+    graphId: graph.id,
+  });
+  const deleteAction = interpolateRoutePath(appRoutes.builderApiDialogueGraphDetail, {
+    projectId,
+    graphId: graph.id,
+  });
   const rootNode =
     graph.nodes.find((n) => n.id === "root" || n.id === graph.rootNodeId) ?? graph.nodes[0];
   const line = rootNode?.line ?? "";
@@ -177,7 +163,6 @@ export const renderDialogueGraphEditForm = (
         </form>
       </div>
       <form hx-post="${escapeHtml(formAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#graph-edit-spinner" hx-disabled-elt="button, input, select, textarea">
-        ${renderBuilderHiddenFields(projectId, locale)}
         <input type="hidden" name="id" value="${escapeHtml(graph.id)}" />
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.titleLabel)}</legend>
@@ -232,17 +217,14 @@ export const renderMechanicsEditor = (
     projectId,
   });
   const questEditHref = (id: string) =>
-    withQueryParameters(
-      interpolateRoutePath(appRoutes.builderApiQuestDetail, { projectId, questId: id }),
-      { locale },
-    );
+    interpolateRoutePath(appRoutes.builderApiQuestDetail, { projectId, questId: id });
   const questCards = quests
     .map(
       (quest) => `<article class="${cardClasses.bordered}">
         <div class="card-body gap-2">
           <div>
             <h3 class="card-title text-base">${escapeHtml(quest.title)}</h3>
-            <p class="text-xs text-base-content/60">${escapeHtml(messages.builder.triggerIdLabel)} · ${escapeHtml(quest.steps[0]?.triggerId ?? messages.common.notApplicable)}</p>
+            <p class="text-xs text-base-content/60">${escapeHtml(messages.builder.mechanicsDetailHint)}</p>
           </div>
           <p class="text-sm text-base-content/75">${escapeHtml(quest.description)}</p>
           <div class="flex flex-wrap gap-2">
@@ -263,10 +245,7 @@ export const renderMechanicsEditor = (
     .join("");
 
   const triggerEditHref = (id: string) =>
-    withQueryParameters(
-      interpolateRoutePath(appRoutes.builderApiTriggerDetail, { projectId, triggerId: id }),
-      { locale },
-    );
+    interpolateRoutePath(appRoutes.builderApiTriggerDetail, { projectId, triggerId: id });
   const triggerCards = triggers
     .map(
       (trigger) => `<article class="${cardClasses.bordered}">
@@ -292,10 +271,7 @@ export const renderMechanicsEditor = (
     .join("");
 
   const graphEditHref = (id: string) =>
-    withQueryParameters(
-      interpolateRoutePath(appRoutes.builderApiDialogueGraphDetail, { projectId, graphId: id }),
-      { locale },
-    );
+    interpolateRoutePath(appRoutes.builderApiDialogueGraphDetail, { projectId, graphId: id });
   const graphCards = dialogueGraphs
     .map(
       (graph) => `<article class="${cardClasses.bordered}">
@@ -358,7 +334,6 @@ export const renderMechanicsEditor = (
           <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.questsTitle)}</summary>
           <div class="collapse-content pt-2">
             <form class="space-y-3" hx-post="${escapeHtml(createQuestAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#quest-create-spinner" hx-disabled-elt="button, input, select, textarea">
-              ${renderBuilderHiddenFields(projectId, locale)}
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.titleLabel)}</legend>
                 <input name="title" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.questTitlePlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.titleLabel)}" />
@@ -368,15 +343,15 @@ export const renderMechanicsEditor = (
                 <textarea name="description" class="textarea w-full" rows="3" placeholder="${escapeHtml(messages.builder.questDescriptionPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.descriptionLabel)}"></textarea>
               </fieldset>
               <fieldset class="fieldset">
-                <legend class="fieldset-legend">${escapeHtml(messages.builder.triggerIdLabel)}</legend>
-                <input name="triggerId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.triggerIdPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.triggerIdLabel)}" />
+                <legend class="fieldset-legend">${escapeHtml(messages.builder.idLabel)}</legend>
+                <input name="triggerId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.triggerIdPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.idLabel)}" />
               </fieldset>
               <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
                 <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
                 <div class="collapse-content pt-2">
                   <fieldset class="fieldset">
-                    <legend class="fieldset-legend">${escapeHtml(messages.builder.questIdLabel)}</legend>
-                    <input name="id" type="text" class="input w-full builder-mono" placeholder="${escapeHtml(messages.builder.questIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.questIdLabel)}" />
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.idLabel)}</legend>
+                    <input name="id" type="text" class="input w-full builder-mono" placeholder="${escapeHtml(messages.builder.questIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.idLabel)}" />
                   </fieldset>
                 </div>
               </details>
@@ -391,7 +366,6 @@ export const renderMechanicsEditor = (
           <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.triggersTitle)}</summary>
           <div class="collapse-content pt-2">
             <form class="space-y-3" hx-post="${escapeHtml(createTriggerAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#trigger-create-spinner" hx-disabled-elt="button, input, select, textarea">
-              ${renderBuilderHiddenFields(projectId, locale)}
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.labelField)}</legend>
                 <input name="label" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.triggerLabelPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.labelField)}" />
@@ -412,8 +386,8 @@ export const renderMechanicsEditor = (
                 <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
                 <div class="collapse-content pt-2">
                   <fieldset class="fieldset">
-                    <legend class="fieldset-legend">${escapeHtml(messages.builder.triggerIdLabel)}</legend>
-                    <input name="id" type="text" class="input w-full builder-mono" placeholder="${escapeHtml(messages.builder.triggerIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.triggerIdLabel)}" />
+                  <legend class="fieldset-legend">${escapeHtml(messages.builder.idLabel)}</legend>
+                    <input name="id" type="text" class="input w-full builder-mono" placeholder="${escapeHtml(messages.builder.triggerIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.idLabel)}" />
                   </fieldset>
                 </div>
               </details>
@@ -428,7 +402,6 @@ export const renderMechanicsEditor = (
           <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.dialogueGraphsTitle)}</summary>
           <div class="collapse-content pt-2">
             <form class="space-y-3" hx-post="${escapeHtml(createGraphAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#graph-create-spinner" hx-disabled-elt="button, input, select, textarea">
-              ${renderBuilderHiddenFields(projectId, locale)}
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.titleLabel)}</legend>
                 <input name="title" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.graphTitlePlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.titleLabel)}" />
@@ -445,8 +418,8 @@ export const renderMechanicsEditor = (
                 <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
                 <div class="collapse-content pt-2">
                   <fieldset class="fieldset">
-                    <legend class="fieldset-legend">${escapeHtml(messages.builder.graphIdLabel)}</legend>
-                    <input name="id" type="text" class="input w-full builder-mono" placeholder="${escapeHtml(messages.builder.graphIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.graphIdLabel)}" />
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.idLabel)}</legend>
+                    <input name="id" type="text" class="input w-full builder-mono" placeholder="${escapeHtml(messages.builder.graphIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.idLabel)}" />
                   </fieldset>
                 </div>
               </details>

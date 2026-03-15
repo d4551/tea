@@ -1,6 +1,6 @@
 import type { LocaleCode } from "../../config/environment.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
-import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
+import { appRoutes, withLocaleQuery } from "../../shared/constants/routes.ts";
 import type { BuilderWorkflowStageIdAny } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { buildBuilderWorkflowStages } from "./builder-flow.ts";
@@ -35,43 +35,22 @@ const resolveJourneyStageHref = (
   locale: LocaleCode,
   projectId: string,
 ): string => {
-  if (stageId === "start") {
-    return withQueryParameters(interpolateRoutePath(appRoutes.builderStart, { projectId }), {
-      lang: locale,
-    });
-  }
+  const path =
+    stageId === "start"
+      ? appRoutes.builderStart
+      : stageId === "world"
+        ? appRoutes.builderScenes
+        : stageId === "visuals"
+          ? appRoutes.builderAssets
+          : stageId === "characters"
+            ? appRoutes.builderNpcs
+            : stageId === "story"
+              ? appRoutes.builderDialogue
+              : stageId === "rules"
+                ? appRoutes.builderMechanics
+                : appRoutes.game;
 
-  if (stageId === "world") {
-    return withQueryParameters(interpolateRoutePath(appRoutes.builderScenes, { projectId }), {
-      lang: locale,
-    });
-  }
-
-  if (stageId === "visuals") {
-    return withQueryParameters(interpolateRoutePath(appRoutes.builderAssets, { projectId }), {
-      lang: locale,
-    });
-  }
-
-  if (stageId === "characters") {
-    return withQueryParameters(interpolateRoutePath(appRoutes.builderNpcs, { projectId }), {
-      lang: locale,
-    });
-  }
-
-  if (stageId === "story") {
-    return withQueryParameters(interpolateRoutePath(appRoutes.builderDialogue, { projectId }), {
-      lang: locale,
-    });
-  }
-
-  if (stageId === "rules") {
-    return withQueryParameters(interpolateRoutePath(appRoutes.builderMechanics, { projectId }), {
-      lang: locale,
-    });
-  }
-
-  return withQueryParameters(interpolateRoutePath(appRoutes.game, { projectId }), { lang: locale });
+  return withLocaleQuery(interpolateRoutePath(path, { projectId }), locale);
 };
 
 const buildJourneyHtmx = (href: string) =>
@@ -119,9 +98,7 @@ export const buildBuilderJourneyConfig = (
     breadcrumbs: [
       {
         label: messages.builder.title,
-        href: withQueryParameters(interpolateRoutePath(appRoutes.builderStart, { projectId }), {
-          lang: locale,
-        }),
+        href: withLocaleQuery(interpolateRoutePath(appRoutes.builderStart, { projectId }), locale),
       },
       {
         label: currentStage?.label ?? messages.builder.title,

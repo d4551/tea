@@ -3,6 +3,12 @@ import { GAME_SESSION_ROUTE_PATTERNS, interpolateRoutePath } from "./route-patte
 
 type AppRouteMap = {
   readonly home: string;
+  readonly platformGames: string;
+  readonly platformLibraries: string;
+  readonly platformTemplates: string;
+  readonly platformCapabilities: string;
+  readonly platformReleases: string;
+  readonly platformReview: string;
   readonly builderStart: string;
   readonly game: string;
   readonly gameAssets: string;
@@ -69,6 +75,7 @@ type AppRouteMap = {
   readonly builderApiProjects: string;
   readonly builderApiProjectDetail: string;
   readonly builderApiProjectPublish: string;
+  readonly builderApiProjectBranding: string;
   readonly builderApiScenes: string;
   readonly builderApiScenesCreateForm: string;
   readonly builderApiSceneDetail: string;
@@ -119,6 +126,12 @@ type AppRouteMap = {
  */
 export const appRoutes: AppRouteMap = {
   home: "/",
+  platformGames: "/games",
+  platformLibraries: "/libraries",
+  platformTemplates: "/templates",
+  platformCapabilities: "/capabilities",
+  platformReleases: "/releases",
+  platformReview: "/review",
   builderStart: "/projects/:projectId/start",
   game: "/projects/:projectId/playtest",
   gameAssets: appConfig.playableGame.assetPrefix,
@@ -154,26 +167,26 @@ export const appRoutes: AppRouteMap = {
   aiGenerateDialogue: "/api/ai/generate/dialogue",
   aiGenerateScene: "/api/ai/generate/scene",
   aiAssist: "/api/ai/assist",
-  aiTranscribe: "/api/ai/audio/transcribe",
-  aiSynthesize: "/api/ai/audio/synthesize",
+  aiTranscribe: "/api/builder/:projectId/audio/transcribe",
+  aiSynthesize: "/api/builder/:projectId/audio/synthesize",
   aiHealthStream: "/api/ai/health/stream",
   aiProviderModels: "/api/ai/providers/models",
   aiProviderOllamaPull: "/api/ai/providers/ollama/pull",
-  aiBuilderCapabilities: "/api/builder/ai/capabilities",
-  aiBuilderTest: "/api/builder/ai/test",
-  aiBuilderAssist: "/api/builder/ai/assist",
-  aiBuilderCompose: "/api/builder/ai/compose",
-  aiBuilderKnowledgeList: "/api/builder/ai/knowledge/list",
-  aiBuilderKnowledgeDocuments: "/api/builder/ai/knowledge/documents",
-  aiBuilderKnowledgeDocumentDetail: "/api/builder/ai/knowledge/documents/:documentId",
-  aiBuilderKnowledgeSearch: "/api/builder/ai/knowledge/search",
-  aiBuilderToolPlan: "/api/builder/ai/plan/tools",
-  aiBuilderHfTraining: "/api/builder/ai/training/hf-jobs",
-  aiBuilderPatchPreview: "/api/builder/ai/patch/preview",
-  aiBuilderPatchApply: "/api/builder/ai/patch/apply",
-  aiBuilderPatchPreviewForm: "/api/builder/ai/patch/preview/form",
-  aiBuilderPatchApplyForm: "/api/builder/ai/patch/apply/form",
-  builderPlatformReadiness: "/api/builder/platform-readiness",
+  aiBuilderCapabilities: "/api/builder/:projectId/ai/capabilities",
+  aiBuilderTest: "/api/builder/:projectId/ai/test",
+  aiBuilderAssist: "/api/builder/:projectId/ai/assist",
+  aiBuilderCompose: "/api/builder/:projectId/ai/compose",
+  aiBuilderKnowledgeList: "/api/builder/:projectId/ai/knowledge/list",
+  aiBuilderKnowledgeDocuments: "/api/builder/:projectId/ai/knowledge/documents",
+  aiBuilderKnowledgeDocumentDetail: "/api/builder/:projectId/ai/knowledge/documents/:documentId",
+  aiBuilderKnowledgeSearch: "/api/builder/:projectId/ai/knowledge/search",
+  aiBuilderToolPlan: "/api/builder/:projectId/ai/plan/tools",
+  aiBuilderHfTraining: "/api/builder/:projectId/ai/training/hf-jobs",
+  aiBuilderPatchPreview: "/api/builder/:projectId/ai/patch/preview",
+  aiBuilderPatchApply: "/api/builder/:projectId/ai/patch/apply",
+  aiBuilderPatchPreviewForm: "/api/builder/:projectId/ai/patch/preview/form",
+  aiBuilderPatchApplyForm: "/api/builder/:projectId/ai/patch/apply/form",
+  builderPlatformReadiness: "/api/builder/:projectId/platform-readiness",
   builder: "/projects/new",
   builderScenes: "/projects/:projectId/world",
   builderNpcs: "/projects/:projectId/characters",
@@ -185,6 +198,7 @@ export const appRoutes: AppRouteMap = {
   builderApiProjects: "/api/builder/projects",
   builderApiProjectDetail: "/api/builder/projects/:projectId",
   builderApiProjectPublish: "/api/builder/projects/:projectId/publish",
+  builderApiProjectBranding: "/api/builder/projects/:projectId/branding",
   builderApiScenes: "/api/builder/:projectId/scenes",
   builderApiScenesCreateForm: "/api/builder/:projectId/scenes/create/form",
   builderApiSceneDetail: "/api/builder/:projectId/scenes/:sceneId",
@@ -196,16 +210,16 @@ export const appRoutes: AppRouteMap = {
   builderApiNpcsCreateForm: "/api/builder/:projectId/npcs/create/form",
   builderApiNpcDetail: "/api/builder/:projectId/npcs/:npcId",
   builderApiNpcForm: "/api/builder/:projectId/npcs/:npcId/form",
-  builderApiDialogue: "/api/builder/dialogue",
-  builderApiDialogueCreateForm: "/api/builder/dialogue/create/form",
+  builderApiDialogue: "/api/builder/:projectId/dialogue",
+  builderApiDialogueCreateForm: "/api/builder/:projectId/dialogue/create/form",
   builderApiDialogueEntry: "/api/builder/:projectId/dialogue/:key",
   builderApiDialogueEntryForm: "/api/builder/:projectId/dialogue/:key/form",
-  builderApiDialogueGenerate: "/api/builder/dialogue/generate",
-  builderApiAssets: "/api/builder/assets",
-  builderApiAssetsUpload: "/api/builder/assets/upload",
-  builderApiAssetsCreateForm: "/api/builder/assets/create/form",
-  builderApiAnimationClips: "/api/builder/animation-clips",
-  builderApiAnimationClipsCreateForm: "/api/builder/animation-clips/create/form",
+  builderApiDialogueGenerate: "/api/builder/:projectId/dialogue/generate",
+  builderApiAssets: "/api/builder/:projectId/assets",
+  builderApiAssetsUpload: "/api/builder/:projectId/assets/upload",
+  builderApiAssetsCreateForm: "/api/builder/:projectId/assets/create/form",
+  builderApiAnimationClips: "/api/builder/:projectId/animation-clips",
+  builderApiAnimationClipsCreateForm: "/api/builder/:projectId/animation-clips/create/form",
   builderApiDialogueGraphs: "/api/builder/:projectId/dialogue-graphs",
   builderApiDialogueGraphsCreateForm: "/api/builder/:projectId/dialogue-graphs/create/form",
   builderApiDialogueGraphDetail: "/api/builder/:projectId/dialogue-graphs/:graphId",
@@ -218,15 +232,15 @@ export const appRoutes: AppRouteMap = {
   builderApiTriggersCreateForm: "/api/builder/:projectId/triggers/create/form",
   builderApiTriggerDetail: "/api/builder/:projectId/triggers/:triggerId",
   builderApiTriggerForm: "/api/builder/:projectId/triggers/:triggerId/form",
-  builderApiGenerationJobs: "/api/builder/generation-jobs",
-  builderApiGenerationJobsCreateForm: "/api/builder/generation-jobs/create/form",
-  builderApiGenerationJobApprove: "/api/builder/generation-jobs/:jobId/approve",
-  builderApiGenerationJobStream: "/api/builder/generation-jobs/:jobId/stream",
+  builderApiGenerationJobs: "/api/builder/:projectId/generation-jobs",
+  builderApiGenerationJobsCreateForm: "/api/builder/:projectId/generation-jobs/create/form",
+  builderApiGenerationJobApprove: "/api/builder/:projectId/generation-jobs/:jobId/approve",
+  builderApiGenerationJobStream: "/api/builder/:projectId/generation-jobs/:jobId/stream",
   builderApiAutomationRuns: "/api/builder/:projectId/automation-runs",
   builderApiAutomationRunsCreateForm: "/api/builder/:projectId/automation-runs/create/form",
   builderApiAutomationRunApprove: "/api/builder/:projectId/automation-runs/:runId/approve",
   builderApiAutomationRunStream: "/api/builder/:projectId/automation-runs/:runId/stream",
-  builderApiStatus: "/api/builder/status",
+  builderApiStatus: "/api/builder/:projectId/status",
 };
 
 /**

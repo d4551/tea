@@ -19,7 +19,6 @@ import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 import {
   cardClasses,
-  renderBuilderHiddenFields,
   renderEmptyStateCompact,
   spinnerClasses,
 } from "../shared/ui-components.ts";
@@ -94,7 +93,7 @@ export const renderNpcEditor = (
     .join("");
 
   const npcPath = interpolateRoutePath(appRoutes.builderNpcs, { projectId });
-  const searchAction = withQueryParameters(npcPath, { lang: locale });
+  const searchAction = npcPath;
   const previousHref =
     paginated.page > 1
       ? withQueryParameters(searchAction, {
@@ -125,7 +124,7 @@ export const renderNpcEditor = (
     totalItems: paginated.totalItems,
     startIndex: paginated.startIndex,
     endIndex: paginated.endIndex,
-    hiddenFields: { lang: locale, projectId },
+    hiddenFields: {},
     htmxTarget: "#builder-content",
     previousHref,
     nextHref,
@@ -137,13 +136,10 @@ export const renderNpcEditor = (
       const scene = scenes[sceneId];
       const sceneDisplayName = scene ? resolveSceneDisplayName(locale, scene) : sceneId;
       const npcDisplayName = resolveNpcDisplayName(locale, npc);
-      const detailHref = withQueryParameters(
-        interpolateRoutePath(appRoutes.builderApiNpcDetail, { projectId, npcId: npc.characterKey }),
-        {
-          locale,
-          sceneId,
-        },
-      );
+      const detailHref = interpolateRoutePath(appRoutes.builderApiNpcDetail, {
+        projectId,
+        npcId: npc.characterKey,
+      });
       return `<article class="${cardClasses.bordered}">
         <div class="card-body gap-3">
           <div class="flex items-start gap-3">
@@ -211,7 +207,6 @@ export const renderNpcEditor = (
               hx-indicator="#npc-create-spinner"
               hx-disabled-elt="button, input, select, textarea"
             >
-              ${renderBuilderHiddenFields(projectId, locale)}
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.npcCreateSceneLabel)}</legend>
                 <select name="sceneId" class="select w-full" aria-label="${escapeHtml(messages.builder.sceneId)}">${sceneOptions}</select>
@@ -223,10 +218,9 @@ export const renderNpcEditor = (
               <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
                 <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
                 <div class="collapse-content pt-2">
-                  <fieldset class="fieldset">
-                    <legend class="fieldset-legend">${escapeHtml(messages.builder.stableIdLabel)}</legend>
-                    <input name="characterKey" type="text" class="input w-full builder-mono" placeholder="${escapeHtml(messages.builder.npcCreateKeyPlaceholder)}" aria-label="${escapeHtml(messages.builder.stableIdLabel)}" />
-                  </fieldset>
+                  <div class="rounded-box border border-dashed border-base-300 bg-base-200/45 p-3 text-sm text-base-content/70">
+                    ${escapeHtml(messages.builder.advancedTools)}
+                  </div>
                 </div>
               </details>
               <div class="flex items-center gap-2">
@@ -319,19 +313,8 @@ export const renderNpcDetail = (
   sceneId: string,
   manifest: SpriteManifest | null,
 ): string => {
-  const formAction = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderApiNpcForm, { projectId, npcId: npc.characterKey }),
-    {
-      locale,
-      sceneId,
-    },
-  );
-  const deleteAction = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderApiNpcDetail, { projectId, npcId: npc.characterKey }),
-    {
-      locale,
-    },
-  );
+  const formAction = interpolateRoutePath(appRoutes.builderApiNpcForm, { projectId, npcId: npc.characterKey });
+  const deleteAction = interpolateRoutePath(appRoutes.builderApiNpcDetail, { projectId, npcId: npc.characterKey });
   const dialogueKeys = npc.dialogueKeys.join(", ");
   const npcDisplayName = resolveNpcDisplayName(locale, npc);
 
@@ -370,7 +353,6 @@ export const renderNpcDetail = (
           hx-indicator="#npc-detail-spinner"
           hx-disabled-elt="button, input, select, textarea"
         >
-          ${renderBuilderHiddenFields(projectId, locale)}
           <input type="hidden" name="sceneId" value="${escapeHtml(sceneId)}" />
           <div class="form-control">
             <label class="label" for="npc-display-name"><span class="label-text">${escapeHtml(messages.builder.npcName)}</span></label>
@@ -382,12 +364,12 @@ export const renderNpcDetail = (
             <div class="collapse-content grid gap-4 pt-2 lg:grid-cols-2">
               <input type="hidden" name="labelKey" value="${escapeHtml(npc.labelKey)}" />
               <div class="form-control">
-                <label class="label" for="npc-stable-id"><span class="label-text">${escapeHtml(messages.builder.stableIdLabel)}</span></label>
-                <input id="npc-stable-id" type="text" class="input input-bordered w-full builder-mono" value="${escapeHtml(npc.characterKey)}" readonly aria-label="${escapeHtml(messages.builder.stableIdLabel)}" />
+                <label class="label" for="npc-stable-id"><span class="label-text">${escapeHtml(messages.builder.idLabel)}</span></label>
+                <input id="npc-stable-id" type="text" class="input input-bordered w-full builder-mono" value="${escapeHtml(npc.characterKey)}" readonly aria-label="${escapeHtml(messages.builder.idLabel)}" />
               </div>
               <div class="form-control">
-                <label class="label" for="npc-label-key"><span class="label-text">${escapeHtml(messages.builder.configKeyLabel)}</span></label>
-                <input id="npc-label-key" type="text" class="input input-bordered w-full builder-mono" value="${escapeHtml(npc.labelKey)}" readonly aria-label="${escapeHtml(messages.builder.configKeyLabel)}" />
+                <label class="label" for="npc-label-key"><span class="label-text">${escapeHtml(messages.builder.idLabel)}</span></label>
+                <input id="npc-label-key" type="text" class="input input-bordered w-full builder-mono" value="${escapeHtml(npc.labelKey)}" readonly aria-label="${escapeHtml(messages.builder.idLabel)}" />
               </div>
             </div>
           </details>

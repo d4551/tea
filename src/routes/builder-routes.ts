@@ -26,9 +26,12 @@ import {
   BUILDER_QUERY_PARAM_ASSET_ID,
   BUILDER_QUERY_PARAM_PAGE,
   BUILDER_QUERY_PARAM_SCENE_ID,
+  BUILDER_QUERY_PARAM_TEMPLATE_ID,
 } from "../shared/constants/builder-query.ts";
 import { appRoutes, resolveRequestPathWithQuery } from "../shared/constants/routes.ts";
 import { getMessages } from "../shared/i18n/translator.ts";
+import { starterProjectTemplateIds } from "../domain/builder/starter-projects.ts";
+import { type StarterProjectTemplateId } from "../shared/contracts/game.ts";
 import { renderAiPanel } from "../views/builder/ai-panel.ts";
 import { renderAssetsEditor } from "../views/builder/assets-editor.ts";
 import { renderAutomationPanel } from "../views/builder/automation-panel.ts";
@@ -46,7 +49,7 @@ import { renderDialogueEditor } from "../views/builder/dialogue-editor.ts";
 import { renderMechanicsEditor } from "../views/builder/mechanics-editor.ts";
 import { renderNpcEditor } from "../views/builder/npc-editor.ts";
 import { renderSceneEditor } from "../views/builder/scene-editor.ts";
-import { type LayoutContext, type LayoutScript, type OraclePanelState, renderDocument } from "../views/layout.ts";
+import { type LayoutContext, type LayoutScript, type OraclePanelState, renderDocument, escapeHtml } from "../views/layout.ts";
 import { parseOracleMode } from "./oracle-input.ts";
 
 /**
@@ -76,7 +79,12 @@ const wrapOrPartial = (
     body,
   });
 
-  if (isHtmx) return builderBody;
+  if (isHtmx) {
+    const baseContainer = "mx-auto flex w-full max-w-[1600px] flex-col gap-8 px-4 lg:px-8 py-6 lg:py-8";
+    const layoutModifier = "layout-asymmetric gap-8 lg:gap-12";
+    const containerClass = `${baseContainer} vt-main flex-1 ${layoutModifier}`;
+    return `<title>${escapeHtml(messages.builder.title)} · ${escapeHtml(project?.branding?.appName ?? messages.metadata.appName)}</title><main id="main-content" tabindex="-1" class="${escapeHtml(containerClass)}">${builderBody}</main>`;
+  }
 
   const currentPathWithQuery = resolveRequestPathWithQuery(request);
   const baseScripts: readonly LayoutScript[] = [
@@ -122,10 +130,12 @@ const wrapOrPartial = (
     activeRoute: "builder",
     currentPathWithQuery,
     persistentProjectId: projectId,
+    brand: project?.branding,
     customSidebarHtml,
     oraclePanelState,
     hideTopBar: true,
     hideFooter: true,
+    isHtmxRequest: isHtmx,
   };
   return renderDocument(layout, messages.builder.title, builderBody, mergedScripts);
 };
@@ -156,7 +166,12 @@ const wrapOrPartialConsole = (
     body,
   });
 
-  if (isHtmx) return consoleBody;
+  if (isHtmx) {
+    const baseContainer = "mx-auto flex w-full max-w-[1600px] flex-col gap-8 px-4 lg:px-8 py-6 lg:py-8";
+    const layoutModifier = "layout-asymmetric gap-8 lg:gap-12";
+    const containerClass = `${baseContainer} vt-main flex-1 ${layoutModifier}`;
+    return `<title>${escapeHtml(messages.builder.advancedTools)} · ${escapeHtml(project?.branding?.appName ?? messages.metadata.appName)}</title><main id="main-content" tabindex="-1" class="${escapeHtml(containerClass)}">${consoleBody}</main>`;
+  }
 
   const currentPathWithQuery = resolveRequestPathWithQuery(request);
   const customSidebarHtml = renderConsoleSidebar({
@@ -175,10 +190,12 @@ const wrapOrPartialConsole = (
     activeRoute: "builder",
     currentPathWithQuery,
     persistentProjectId: projectId,
+    brand: project?.branding,
     customSidebarHtml,
     oraclePanelState,
     hideTopBar: true,
     hideFooter: true,
+    isHtmxRequest: isHtmx,
   };
   return renderDocument(layout, messages.builder.advancedTools, consoleBody, []);
 };
@@ -214,6 +231,7 @@ const wrapMissingProject = (
   currentPath: string,
   projectId: string,
   project: BuilderChromeProject | null,
+  starterTemplateId?: StarterProjectTemplateId,
   oraclePanelState?: OraclePanelState,
 ): string =>
   wrapOrPartial(
@@ -224,7 +242,7 @@ const wrapMissingProject = (
     currentPath,
     projectId,
     project,
-    renderBuilderStarterWorkspace(messages, locale, projectId, currentPath),
+    renderBuilderStarterWorkspace(messages, locale, projectId, currentPath, starterTemplateId),
     oraclePanelState,
   );
 
@@ -234,6 +252,7 @@ const toChromeProject = (
   project
     ? {
         id: project.id,
+        branding: project.brand,
         version: project.version,
         latestReleaseVersion: project.latestReleaseVersion,
         publishedReleaseVersion: project.publishedReleaseVersion,
@@ -256,10 +275,18 @@ const resolveRouteProjectId = (
   return normalized.length > 0 ? normalized : fallbackProjectId;
 };
 
+const parseStarterTemplateFromRequest = (request: Request): StarterProjectTemplateId | undefined => {
+  const candidate = new URL(request.url).searchParams.get(BUILDER_QUERY_PARAM_TEMPLATE_ID);
+  return candidate && starterProjectTemplateIds.includes(candidate as StarterProjectTemplateId)
+    ? (candidate as StarterProjectTemplateId)
+    : undefined;
+};
+
 export const builderRoutes = new Elysia({ prefix: "/projects" })
   .use(builderRequestContextPlugin)
   .get("/new", async ({ request, builderLocale, builderCurrentPath }) => {
     const messages = getMessages(builderLocale);
+    const starterTemplateId = parseStarterTemplateFromRequest(request);
     const oraclePanelState = resolveOraclePanelState(request);
     return wrapOrPartial(
       request,
@@ -269,7 +296,13 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       builderCurrentPath,
       "",
       null,
-      renderBuilderStarterWorkspace(messages, builderLocale, "", appRoutes.builderStart),
+      renderBuilderStarterWorkspace(
+        messages,
+        builderLocale,
+        "",
+        appRoutes.builderStart,
+        starterTemplateId,
+      ),
       oraclePanelState,
     );
   })
@@ -282,6 +315,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       const oraclePanelState = resolveOraclePanelState(request);
       const chromeProject = toChromeProject(project);
       if (!project) {
+        const starterTemplateId = parseStarterTemplateFromRequest(request);
         return wrapMissingProject(
           request,
           builderLocale,
@@ -290,6 +324,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           builderCurrentPath,
           projectId,
           chromeProject,
+          starterTemplateId,
           oraclePanelState,
         );
       }
@@ -380,6 +415,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           builderCurrentPath,
           projectId,
           chromeProject,
+          undefined,
           oraclePanelState,
         );
       }
@@ -424,6 +460,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           builderCurrentPath,
           projectId,
           chromeProject,
+          undefined,
           oraclePanelState,
         );
       }
@@ -467,6 +504,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           builderCurrentPath,
           projectId,
           chromeProject,
+          undefined,
           oraclePanelState,
         );
       }
@@ -510,6 +548,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           builderCurrentPath,
           projectId,
           chromeProject,
+          undefined,
           oraclePanelState,
         );
       }
@@ -554,6 +593,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           builderCurrentPath,
           projectId,
           chromeProject,
+          undefined,
           oraclePanelState,
         );
       }
@@ -596,6 +636,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           builderCurrentPath,
           projectId,
           chromeProject,
+          undefined,
           oraclePanelState,
         );
       }
@@ -638,6 +679,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
           builderCurrentPath,
           projectId,
           chromeProject,
+          undefined,
           oraclePanelState,
         );
       }
@@ -658,6 +700,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         await getAiRuntimeProfile(),
         builderLocale,
         projectId,
+        project.brand,
         readiness,
         await knowledgeBaseService.listDocuments(projectId),
       );

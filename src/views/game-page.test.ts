@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { appConfig } from "../config/environment.ts";
+import { createStarterProjectBranding } from "../shared/branding/project-branding.ts";
 import { GamePage } from "./game-page.ts";
 
 describe("GamePage", () => {
@@ -28,6 +29,7 @@ describe("GamePage", () => {
         rendererPreference: "webgl",
       },
       appOrigin: "http://localhost:3088",
+      brand: createStarterProjectBranding("3d-game"),
     });
 
     expect(html).toContain('aria-label="Create playable slice"');
@@ -36,5 +38,7 @@ describe("GamePage", () => {
     expect(html).toContain("/projects/default/playtest?lang=en-US");
     expect(html).toContain('aria-current="page">Playtest<');
     expect(html).toContain("breadcrumbs");
+    expect(html).toContain("Station Runtime");
+    expect(html).toContain("Orbital Foundry");
   });
 });

@@ -135,6 +135,9 @@ const parseThemeValue = (themeInput: unknown): string | null => {
   return value.length > 0 ? value : null;
 };
 
+const isThemeLocked = (): boolean =>
+  document.documentElement.getAttribute("data-theme-lock") === "project";
+
 const applyDocumentTheme = (theme: string): void => {
   const normalized = matchUiTheme(theme);
   if (normalized === null) {
@@ -173,6 +176,10 @@ const applyThemeFromStorage = (theme: string): void => {
 
 /** Restores persisted theme preference from localStorage into matching radios. */
 const restoreThemeSelection = (): void => {
+  if (isThemeLocked()) {
+    return;
+  }
+
   const stored = readLocalStorageResult(UI_THEME_STORAGE_KEY);
   if (!stored.ok) {
     logger.warn("layout.theme.storage.read_failed", { key: UI_THEME_STORAGE_KEY });
@@ -191,6 +198,10 @@ const restoreThemeSelection = (): void => {
 };
 
 const persistThemeSelection = (event: Event): void => {
+  if (isThemeLocked()) {
+    return;
+  }
+
   if (
     !(event.target instanceof HTMLInputElement) ||
     !event.target.classList.contains("theme-controller")

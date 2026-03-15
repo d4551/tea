@@ -366,20 +366,22 @@ export const renderWorkspaceBrowseControls = (config: WorkspaceBrowseControlsCon
               )}" hx-push-url="true" hx-indicator="#${escapeHtml(indicatorId)}"`
             : ""
         } aria-label="${escapeHtml(ariaLabel)}">${escapeHtml(label)}</a>`
-      : `<span class="${escapeHtml(`${className} btn-disabled`)}" aria-disabled="true">${escapeHtml(label)}</span>`;
+      : `<span class="${escapeHtml(`${className} btn-disabled`)}" aria-disabled="true" aria-label="${escapeHtml(
+          ariaLabel,
+        )}" role="link">${escapeHtml(label)}</span>`;
 
   return `<section class="space-y-3 rounded-[1.25rem] border border-base-300 bg-base-200/40 p-4">
-    <form method="get" action="${escapeHtml(config.action)}" class="space-y-3" ${htmxAttributes}>
+    <form method="get" action="${escapeHtml(config.action)}" class="space-y-3" aria-label="${escapeHtml(config.searchLabel)}" ${htmxAttributes}>
       ${hiddenFields}
       <input type="hidden" name="page" value="1" />
       <fieldset class="fieldset">
         <legend class="fieldset-legend">${escapeHtml(config.searchLabel)}</legend>
         <div class="join join-vertical w-full gap-2 sm:join-horizontal">
           <input name="search" type="search" class="input join-item w-full" value="${escapeHtml(config.search)}" placeholder="${escapeHtml(config.searchPlaceholder)}" aria-label="${escapeHtml(config.searchLabel)}" />
-          <button type="submit" class="btn btn-outline btn-sm join-item">${escapeHtml(config.submitLabel)}</button>
+          <button type="submit" class="btn btn-outline btn-sm join-item" aria-label="${escapeHtml(config.submitLabel)}">${escapeHtml(config.submitLabel)}</button>
         </div>
       </fieldset>
-      <div class="flex items-center gap-2 text-xs text-base-content/60">
+      <div class="flex items-center gap-2 text-xs text-base-content/60" role="status" aria-live="polite" aria-label="${escapeHtml(config.resultsLabel)}">
         <span>${escapeHtml(config.resultsLabel)}: ${escapeHtml(pagerSummary)}</span>
         ${renderSpinner("xs", { id: indicatorId, ariaLabel: config.submitLabel })}
       </div>

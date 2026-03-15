@@ -6,6 +6,7 @@ import { gameLoop } from "../domain/game/game-loop.ts";
 import { authSessionGuard } from "../plugins/auth-session.ts";
 import { gameRequestContextPlugin } from "../plugins/game-request-context.ts";
 import { defaultOracleMode } from "../shared/constants/oracle.ts";
+import type { ProjectBranding } from "../shared/branding/project-branding.ts";
 import { defaultGameConfig } from "../shared/config/game-config.ts";
 import type { GameSessionState } from "../shared/contracts/game.ts";
 import { GamePage, type GamePageProps } from "../views/game-page.ts";
@@ -23,6 +24,7 @@ const buildPlayablePageProps = (
   session: GameSessionState,
   locale: LocaleCode,
   requestOrigin?: string,
+  brand?: ProjectBranding,
 ): GamePageProps => ({
   state: "playable",
   locale,
@@ -51,6 +53,7 @@ const buildPlayablePageProps = (
     rendererPreference: appConfig.playableGame.rendererPreference,
   },
   appOrigin: requestOrigin,
+  brand,
 });
 
 const resolveOraclePanelState = (request: Request): OraclePanelState => {
@@ -150,9 +153,32 @@ export const gameRoutes = new Elysia({ prefix: "/projects" })
               locale,
               state: "unpublished-project",
               projectId,
+              brand: draftProject.brand,
               oraclePanelState,
             });
           }
+
+          const session = await hydrateGameSession(
+            sessionId,
+            locale,
+            projectId,
+            ownerSessionId,
+            gameRequestedSceneId,
+          );
+          if (!session) {
+            return GamePage({
+              locale,
+              state: "session-unavailable",
+              projectId: projectId ?? undefined,
+              brand: publishedProject.brand,
+              oraclePanelState,
+            });
+          }
+
+          return GamePage({
+            ...buildPlayablePageProps(session, locale, requestOrigin, publishedProject.brand),
+            oraclePanelState,
+          });
         }
         const session = await hydrateGameSession(
           sessionId,

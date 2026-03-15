@@ -68,16 +68,8 @@ const toSearchParamSource = (request: Request | undefined): ContextSource => {
 const readStringField = (source: ContextSource, key: string): string | undefined =>
   typeof source[key] === "string" ? source[key] : undefined;
 
-const resolveBuilderProjectId = (
-  querySource: ContextSource,
-  bodySource: ContextSource,
-  paramSource: ContextSource,
-): string => {
-  const candidate =
-    readStringField(paramSource, "projectId") ??
-    readStringField(bodySource, "projectId") ??
-    readStringField(querySource, "projectId") ??
-    "";
+const resolveBuilderProjectId = (_querySource: ContextSource, _bodySource: ContextSource, paramSource: ContextSource): string => {
+  const candidate = readStringField(paramSource, "projectId") ?? "";
   const normalized = candidate.trim();
   return normalized.length > 0 ? normalized : "";
 };
@@ -179,9 +171,7 @@ export const mergeBuilderRequestContext = (
         ? resolveBuilderLocale(undefined, querySource, bodySource)
         : base.builderLocale,
     builderProjectId:
-      (readStringField(paramSource, "projectId") ??
-      readStringField(bodySource, "projectId") ??
-      readStringField(querySource, "projectId"))
+      readStringField(paramSource, "projectId")
         ? resolveBuilderProjectId(querySource, bodySource, paramSource)
         : base.builderProjectId,
     builderCurrentPath:

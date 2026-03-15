@@ -10,14 +10,16 @@ import {
   BUILDER_QUERY_PARAM_PAGE,
 } from "../../shared/constants/builder-query.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
-import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
+import {
+  appRoutes,
+  withQueryParameters,
+} from "../../shared/constants/routes.ts";
 import type { AnimationClip, BuilderAsset, BuilderAssetKind } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 import { renderActionDropdown } from "../shared/navigation.ts";
 import {
   cardClasses,
-  renderBuilderHiddenFields,
   renderEmptyStateCompact,
   spinnerClasses,
 } from "../shared/ui-components.ts";
@@ -55,9 +57,13 @@ export const renderAssetsEditor = (
   page = 1,
   selectedAssetId = "",
 ): string => {
-  const createAssetAction = appRoutes.builderApiAssetsCreateForm;
-  const uploadAssetAction = appRoutes.builderApiAssetsUpload;
-  const createClipAction = appRoutes.builderApiAnimationClipsCreateForm;
+  const createAssetAction = interpolateRoutePath(appRoutes.builderApiAssetsCreateForm, {
+    projectId,
+  });
+  const uploadAssetAction = interpolateRoutePath(appRoutes.builderApiAssetsUpload, { projectId });
+  const createClipAction = interpolateRoutePath(appRoutes.builderApiAnimationClipsCreateForm, {
+    projectId,
+  });
   const assetKindOptions: readonly BuilderAssetKind[] = [
     "portrait",
     "sprite-sheet",
@@ -95,13 +101,10 @@ export const renderAssetsEditor = (
     filteredAssets[0] ??
     null;
   const assetsPath = interpolateRoutePath(appRoutes.builderAssets, { projectId });
-  const searchAction = withQueryParameters(assetsPath, {
-    lang: locale,
-  });
+  const searchAction = assetsPath;
   const previousPageHref =
     paginatedAssets.page > 1
       ? withQueryParameters(assetsPath, {
-          lang: locale,
           search,
           [BUILDER_QUERY_PARAM_PAGE]: String(paginatedAssets.page - 1),
           ...(selectedAsset ? { [BUILDER_QUERY_PARAM_ASSET_ID]: selectedAsset.id } : {}),
@@ -110,7 +113,6 @@ export const renderAssetsEditor = (
   const nextPageHref =
     paginatedAssets.page < paginatedAssets.totalPages
       ? withQueryParameters(assetsPath, {
-          lang: locale,
           search,
           [BUILDER_QUERY_PARAM_PAGE]: String(paginatedAssets.page + 1),
           ...(selectedAsset ? { [BUILDER_QUERY_PARAM_ASSET_ID]: selectedAsset.id } : {}),
@@ -123,7 +125,6 @@ export const renderAssetsEditor = (
         /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(asset.source) ||
         ["portrait", "sprite-sheet", "background"].includes(asset.kind);
       const detailHref = withQueryParameters(assetsPath, {
-        lang: locale,
         search,
         [BUILDER_QUERY_PARAM_PAGE]: String(paginatedAssets.page),
         [BUILDER_QUERY_PARAM_ASSET_ID]: asset.id,
@@ -297,8 +298,6 @@ export const renderAssetsEditor = (
         startIndex: paginatedAssets.startIndex,
         endIndex: paginatedAssets.endIndex,
         hiddenFields: {
-          lang: locale,
-          projectId,
           ...(selectedAsset ? { [BUILDER_QUERY_PARAM_ASSET_ID]: selectedAsset.id } : {}),
         },
         htmxTarget: "#builder-content",
@@ -312,7 +311,6 @@ export const renderAssetsEditor = (
             <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.addAssetFile)}</summary>
             <div class="collapse-content pt-2">
               <form class="space-y-3" hx-post="${escapeHtml(uploadAssetAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-encoding="multipart/form-data" hx-indicator="#asset-upload-spinner" hx-disabled-elt="button, input, select, textarea">
-                ${renderBuilderHiddenFields(projectId, locale)}
                 <fieldset class="fieldset">
                   <legend class="fieldset-legend">${escapeHtml(messages.builder.labelField)}</legend>
                   <input name="label" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.assetLabelPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.labelField)}" />
@@ -335,10 +333,9 @@ export const renderAssetsEditor = (
                 <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
                   <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
                   <div class="collapse-content pt-2">
-                    <fieldset class="fieldset">
-                      <legend class="fieldset-legend">${escapeHtml(messages.builder.assetIdFieldLabel)}</legend>
-                      <input name="id" type="text" class="input w-full builder-mono" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.assetIdFieldLabel)}" />
-                    </fieldset>
+                  <div class="rounded-box border border-base-300 bg-base-200/45 p-3 text-sm text-base-content/70">
+                    ${escapeHtml(messages.builder.advancedTools)}
+                  </div>
                   </div>
                 </details>
                 <div class="flex items-center gap-2">
@@ -352,7 +349,6 @@ export const renderAssetsEditor = (
             <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.addAssetPath)}</summary>
             <div class="collapse-content pt-2">
               <form class="space-y-3" hx-post="${escapeHtml(createAssetAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#asset-create-spinner" hx-disabled-elt="button, input, select, textarea">
-                ${renderBuilderHiddenFields(projectId, locale)}
                 <fieldset class="fieldset">
                   <legend class="fieldset-legend">${escapeHtml(messages.builder.labelField)}</legend>
                   <input name="label" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.assetLabelPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.labelField)}" />
@@ -375,10 +371,9 @@ export const renderAssetsEditor = (
                 <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
                   <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
                   <div class="collapse-content pt-2">
-                    <fieldset class="fieldset">
-                      <legend class="fieldset-legend">${escapeHtml(messages.builder.assetIdFieldLabel)}</legend>
-                      <input name="id" type="text" class="input w-full builder-mono" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.assetIdFieldLabel)}" />
-                    </fieldset>
+                    <div class="rounded-box border border-base-300 bg-base-200/45 p-3 text-sm text-base-content/70">
+                      ${escapeHtml(messages.builder.advancedTools)}
+                    </div>
                   </div>
                 </details>
                 <div class="flex items-center gap-2">
@@ -423,12 +418,12 @@ export const renderAssetsEditor = (
         }
         <article class="${cardClasses.bordered}">
           <form class="card-body gap-3" hx-post="${escapeHtml(createClipAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#clip-create-spinner" hx-disabled-elt="button, input, select, textarea">
-          ${renderBuilderHiddenFields(projectId, locale)}
           <h2 class="card-title">${escapeHtml(messages.builder.animationAuthoringTitle)}</h2>
           <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.animationAuthoringDescription)}</p>
+            <input name="assetId" type="hidden" value="${escapeHtml(selectedAsset?.id ?? "")}" />
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.clipAssetLabel)}</legend>
-            <input name="assetId" type="text" class="input w-full" value="${escapeHtml(selectedAsset?.id ?? "")}" placeholder="${escapeHtml(messages.builder.assetIdPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.clipAssetLabel)}" />
+              <div class="px-3 py-2 rounded-box border border-base-300 bg-base-200/50 text-sm">${escapeHtml(selectedAsset?.label ?? messages.builder.assetPlaceholder)}</div>
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.clipStateTagLabel)}</legend>
@@ -442,15 +437,14 @@ export const renderAssetsEditor = (
             <legend class="fieldset-legend">${escapeHtml(messages.builder.clipPlaybackLabel)}</legend>
             <input name="playbackFps" type="number" class="input w-full" value="${DEFAULT_ANIMATION_PLAYBACK_FPS}" min="1" aria-label="${escapeHtml(messages.builder.clipPlaybackLabel)}" />
           </fieldset>
-          <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
-            <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
-            <div class="collapse-content pt-2">
-              <fieldset class="fieldset">
-                <legend class="fieldset-legend">${escapeHtml(messages.builder.clipIdLabel)}</legend>
-                <input name="id" type="text" class="input w-full builder-mono" placeholder="${escapeHtml(messages.builder.clipIdPlaceholder)}" aria-label="${escapeHtml(messages.builder.animationClipIdFieldLabel)}" />
-              </fieldset>
-            </div>
-          </details>
+                <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
+                  <summary class="collapse-title text-sm font-semibold">${escapeHtml(messages.builder.advancedTools)}</summary>
+                  <div class="collapse-content pt-2">
+                    <div class="rounded-box border border-base-300 bg-base-200/45 p-3 text-sm text-base-content/70">
+                      ${escapeHtml(messages.builder.advancedTools)}
+                    </div>
+                  </div>
+                </details>
           <div class="flex items-center gap-2">
             <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.createAnimationClip)}">${escapeHtml(messages.builder.createAnimationClip)}</button>
             <span id="clip-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>

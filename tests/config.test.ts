@@ -173,13 +173,13 @@ describe("environment parsing", () => {
     expect(appRoutes.aiKnowledgeSearch).toBe("/api/ai/knowledge/search");
     expect(appRoutes.aiAssistRetrieval).toBe("/api/ai/assist/retrieval");
     expect(appRoutes.aiPlanTools).toBe("/api/ai/plan/tools");
-    expect(appRoutes.aiTranscribe).toBe("/api/ai/audio/transcribe");
-    expect(appRoutes.aiSynthesize).toBe("/api/ai/audio/synthesize");
-    expect(appRoutes.aiBuilderKnowledgeList).toBe("/api/builder/ai/knowledge/list");
-    expect(appRoutes.aiBuilderKnowledgeDocuments).toBe("/api/builder/ai/knowledge/documents");
-    expect(appRoutes.aiBuilderKnowledgeSearch).toBe("/api/builder/ai/knowledge/search");
-    expect(appRoutes.aiBuilderToolPlan).toBe("/api/builder/ai/plan/tools");
-    expect(appRoutes.aiBuilderHfTraining).toBe("/api/builder/ai/training/hf-jobs");
+    expect(appRoutes.aiTranscribe).toBe("/api/builder/:projectId/audio/transcribe");
+    expect(appRoutes.aiSynthesize).toBe("/api/builder/:projectId/audio/synthesize");
+    expect(appRoutes.aiBuilderKnowledgeList).toBe("/api/builder/:projectId/ai/knowledge/list");
+    expect(appRoutes.aiBuilderKnowledgeDocuments).toBe("/api/builder/:projectId/ai/knowledge/documents");
+    expect(appRoutes.aiBuilderKnowledgeSearch).toBe("/api/builder/:projectId/ai/knowledge/search");
+    expect(appRoutes.aiBuilderToolPlan).toBe("/api/builder/:projectId/ai/plan/tools");
+    expect(appRoutes.aiBuilderHfTraining).toBe("/api/builder/:projectId/ai/training/hf-jobs");
   });
 
   test("asset path helpers normalize url and local paths", () => {

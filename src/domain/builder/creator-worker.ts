@@ -693,9 +693,7 @@ const executeBuilderAutomationStep = async (
     | { readonly kind: "queue-generation-job" }
   >,
 ): Promise<AutomationRunStep> => {
-  const baseForm = new URLSearchParams({
-    projectId: context.projectId,
-  });
+  const baseForm = new URLSearchParams();
 
   let path = "";
 
@@ -744,7 +742,9 @@ const executeBuilderAutomationStep = async (
       }
       break;
     case "create-asset":
-      path = appRoutes.builderApiAssetsCreateForm;
+      path = interpolateRoutePath(appRoutes.builderApiAssetsCreateForm, {
+        projectId: context.projectId,
+      });
       baseForm.set("id", spec.id);
       baseForm.set("label", spec.label);
       baseForm.set("kind", spec.assetKind);
@@ -752,7 +752,9 @@ const executeBuilderAutomationStep = async (
       baseForm.set("source", spec.source);
       break;
     case "create-animation-clip":
-      path = appRoutes.builderApiAnimationClipsCreateForm;
+      path = interpolateRoutePath(appRoutes.builderApiAnimationClipsCreateForm, {
+        projectId: context.projectId,
+      });
       baseForm.set("id", spec.id);
       baseForm.set("assetId", spec.assetId);
       baseForm.set("stateTag", spec.stateTag);
@@ -764,7 +766,9 @@ const executeBuilderAutomationStep = async (
       }
       break;
     case "queue-generation-job":
-      path = appRoutes.builderApiGenerationJobsCreateForm;
+      path = interpolateRoutePath(appRoutes.builderApiGenerationJobsCreateForm, {
+        projectId: context.projectId,
+      });
       baseForm.set("kind", spec.jobKind);
       baseForm.set("prompt", spec.prompt);
       if (spec.targetId) {

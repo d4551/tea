@@ -1,5 +1,10 @@
 import { appConfig, type LocaleCode } from "../../config/environment.ts";
 import {
+  normalizeProjectBranding,
+  type ProjectBranding,
+  type ProjectBrandingInput,
+} from "../../shared/branding/project-branding.ts";
+import {
   AUTOMATION_STEP_KIND_UNSUPPORTED_ERROR,
   DEFAULT_ANIMATION_FRAME_COUNT,
   DEFAULT_ANIMATION_PLAYBACK_FPS,
@@ -392,6 +397,11 @@ export interface BuilderDialogueGraphCreatePayload {
 }
 
 /**
+ * Form-style payload used to update the project-owned brand control plane.
+ */
+export interface BuilderProjectBrandingFormPayload extends ProjectBrandingInput {}
+
+/**
  * Service contract for builder persistence operations.
  */
 export interface BuilderService {
@@ -401,12 +411,20 @@ export interface BuilderService {
     starterTemplateId: StarterProjectTemplateId,
     updatedBy?: string,
   ): Promise<BuilderProjectSnapshot | null>;
+  /** Lists all persisted builder projects, optionally filtered to one id. */
+  listProjects(projectId?: string): Promise<readonly BuilderProjectSnapshot[]>;
   /** Returns one builder project snapshot by id. */
   getProject(projectId: string): Promise<BuilderProjectSnapshot | null>;
   /** Returns one existing project snapshot without implicitly creating it. */
   peekProject(projectId: string): Promise<BuilderProjectSnapshot | null>;
   /** Returns one published release snapshot without implicitly creating it. */
   getPublishedProject(projectId: string): Promise<BuilderProjectSnapshot | null>;
+  /** Persists project-owned branding overrides used by builder and play surfaces. */
+  saveProjectBranding(
+    projectId: string,
+    payload: BuilderProjectBrandingFormPayload,
+    updatedBy?: string,
+  ): Promise<BuilderMutation<ProjectBranding> | null>;
   /** Persists any scene changes for a specific project. */
   saveScene(
     projectId: string,
@@ -1395,6 +1413,20 @@ class PrismaBuilderService implements BuilderService {
     return this.stateStore.createProject(projectId, starterTemplateId, updatedBy);
   }
 
+  /**
+   * Returns all persisted project snapshots for portfolio-style navigation surfaces.
+   *
+   * @param projectId Optional project filter.
+   * @returns Immutable ordered project snapshots.
+   */
+  public async listProjects(projectId?: string): Promise<readonly BuilderProjectSnapshot[]> {
+    const entries = await this.stateStore.listProjectEntries(projectId);
+    const snapshots = await Promise.all(
+      entries.map(async (entry) => this.stateStore.readProjectSnapshot(entry.row.id)),
+    );
+    return snapshots.filter((snapshot): snapshot is BuilderProjectSnapshot => snapshot !== null);
+  }
+
   public async getProject(projectId: string): Promise<BuilderProjectSnapshot | null> {
     return this.stateStore.readProjectSnapshot(projectId);
   }
@@ -1405,6 +1437,39 @@ class PrismaBuilderService implements BuilderService {
 
   public async getPublishedProject(projectId: string): Promise<BuilderProjectSnapshot | null> {
     return this.stateStore.readPublishedProjectSnapshot(projectId);
+  }
+
+  public async saveProjectBranding(
+    projectId: string,
+    payload: BuilderProjectBrandingFormPayload,
+    updatedBy?: string,
+  ): Promise<BuilderMutation<ProjectBranding> | null> {
+    const mutation = await this.mutateProject(
+      projectId,
+      this.resolveUpdatedBy(updatedBy, "builder-branding"),
+      (state) => {
+        const nextBrand = normalizeProjectBranding(payload, state.brand);
+        Object.assign(state, { brand: nextBrand });
+        return {
+          ok: true,
+          payload: nextBrand,
+        };
+      },
+    );
+    if (!mutation) {
+      return null;
+    }
+
+    return {
+      result: {
+        projectId,
+        resourceType: "project",
+        resourceId: projectId,
+        action: "updated",
+      },
+      payload: mutation.payload,
+      checksum: mutation.entry.row.checksum,
+    };
   }
 
   public async saveScene(

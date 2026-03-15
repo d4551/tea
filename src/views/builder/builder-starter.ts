@@ -1,4 +1,5 @@
 import type { LocaleCode } from "../../config/environment.ts";
+import type { StarterProjectTemplateId } from "../../shared/contracts/game.ts";
 
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
@@ -19,6 +20,7 @@ export const renderBuilderStarterWorkspace = (
   locale: LocaleCode,
   projectId: string,
   currentPath: string,
+  starterTemplateId?: StarterProjectTemplateId,
 ): string =>
   `<section class="space-y-6 animate-fade-in-up">
     ${renderWorkspaceShell({
@@ -43,6 +45,7 @@ export const renderBuilderStarterWorkspace = (
           locale,
           redirectPath: currentPath,
           projectId,
+          starterTemplateId,
         })}
       </div>`,
       mainBody: `<section class="rounded-[1.5rem] border border-base-300 bg-base-100 p-5 shadow-sm">

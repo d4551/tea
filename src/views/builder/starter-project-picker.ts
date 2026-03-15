@@ -1,7 +1,7 @@
 import type { LocaleCode } from "../../config/environment.ts";
 import { recommendedStarterProjectTemplateId } from "../../domain/builder/starter-projects.ts";
 import { appRoutes } from "../../shared/constants/routes.ts";
-import type { StarterProjectTemplate } from "../../shared/contracts/game.ts";
+import type { StarterProjectTemplate, StarterProjectTemplateId } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 import { spinnerClasses } from "../shared/ui-components.ts";
@@ -18,6 +18,8 @@ export interface StarterProjectPickerProps {
   readonly redirectPath: string;
   /** Suggested project id value. */
   readonly projectId?: string;
+  /** Optional starter template seed from the query string. */
+  readonly starterTemplateId?: StarterProjectTemplateId;
   /** Whether to render the compact dropdown variant. */
   readonly compact?: boolean;
 }
@@ -64,6 +66,7 @@ export const buildStarterProjectTemplates = (
 const renderCompactTemplateOptions = (
   templates: readonly StarterProjectTemplate[],
   messages: Messages,
+  starterTemplateId?: StarterProjectTemplateId,
 ): string =>
   templates
     .map(
@@ -76,6 +79,7 @@ const renderCompactTemplateOptions = (
           required
           class="radio radio-sm radio-primary mt-1"
           value="${escapeHtml(template.id)}"
+          ${template.id === starterTemplateId ? "checked" : ""}
           aria-label="${escapeHtml(template.label)}"
         />
         <span class="space-y-1">
@@ -96,6 +100,7 @@ const renderCompactTemplateOptions = (
 const renderCardTemplateOptions = (
   templates: readonly StarterProjectTemplate[],
   messages: Messages,
+  starterTemplateId?: StarterProjectTemplateId,
 ): string =>
   templates
     .map(
@@ -121,6 +126,7 @@ const renderCardTemplateOptions = (
               required
               class="radio radio-primary"
               value="${escapeHtml(template.id)}"
+              ${template.id === starterTemplateId ? "checked" : ""}
               aria-label="${escapeHtml(template.label)}"
             />
           </div>
@@ -136,11 +142,18 @@ const renderCardTemplateOptions = (
  * @returns HTML string for the starter-project picker form.
  */
 export const renderStarterProjectPicker = (props: StarterProjectPickerProps): string => {
-  const { messages, locale, redirectPath, compact = false } = props;
+  const {
+    messages,
+    locale,
+    redirectPath,
+    compact = false,
+    projectId,
+    starterTemplateId,
+  } = props;
   const templates = buildStarterProjectTemplates(messages);
   const templateOptions = compact
-    ? renderCompactTemplateOptions(templates, messages)
-    : renderCardTemplateOptions(templates, messages);
+    ? renderCompactTemplateOptions(templates, messages, starterTemplateId)
+    : renderCardTemplateOptions(templates, messages, starterTemplateId);
 
   return `<form
     class="${compact ? "space-y-3 px-1 py-1" : "space-y-5"}"

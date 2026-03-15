@@ -2,11 +2,15 @@ import type { LocaleCode } from "../../config/environment.ts";
 import { BUILDER_LIBRARY_PAGE_SIZE } from "../../shared/constants/builder-defaults.ts";
 import { BUILDER_QUERY_PARAM_PAGE } from "../../shared/constants/builder-query.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
-import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
+import {
+  appRoutes,
+  withLocaleQuery,
+  withQueryParameters,
+} from "../../shared/constants/routes.ts";
 import type { AutomationRun, GenerationArtifact } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
-import { cardClasses, renderBuilderHiddenFields, spinnerClasses } from "../shared/ui-components.ts";
+import { cardClasses, spinnerClasses } from "../shared/ui-components.ts";
 import {
   getArtifactLabel,
   getArtifactSummaryLabel,
@@ -30,7 +34,9 @@ const renderWorkbenchJumpLinks = (
     ${links
       .map(
         (link) =>
-          `<a class="btn btn-${escapeHtml(link.tone ?? "ghost")} btn-sm" href="${escapeHtml(link.href)}">${escapeHtml(link.label)}</a>`,
+          `<a class="btn btn-${escapeHtml(link.tone ?? "ghost")} btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
+            link.href,
+          )}" aria-label="${escapeHtml(link.label)}">${escapeHtml(link.label)}</a>`,
       )
       .join("")}
   </div>
@@ -50,12 +56,98 @@ const renderWorkbenchSummaryCard = (
       ${actions
         .map(
           (action) =>
-            `<a class="btn btn-${escapeHtml(action.tone ?? "ghost")} btn-sm" href="${escapeHtml(action.href)}">${escapeHtml(action.label)}</a>`,
+            `<a class="btn btn-${escapeHtml(action.tone ?? "ghost")} btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
+              action.href,
+            )}" aria-label="${escapeHtml(action.label)}">${escapeHtml(action.label)}</a>`,
         )
         .join("")}
     </div>
   </div>
 </article>`;
+
+const renderAutomationRunCard = (
+  messages: Messages,
+  projectId: string,
+  locale: LocaleCode,
+  run: AutomationRun,
+  artifactLookup: ReadonlyMap<string, GenerationArtifact>,
+): string => {
+  const reviewAction = interpolateRoutePath(appRoutes.builderApiAutomationRunApprove, {
+    projectId,
+    runId: run.id,
+  });
+  const runSpinnerId = `automation-run-${run.id.replace(/[^a-zA-Z0-9_.-]/g, "-")}-spinner`;
+  const linkedArtifacts = run.artifactIds
+    .map((artifactId) => artifactLookup.get(artifactId))
+    .filter((artifact): artifact is GenerationArtifact => Boolean(artifact));
+  const reviewActions =
+    run.status === "blocked_for_approval"
+      ? `<div class="card-actions justify-end gap-2">
+          <form hx-post="${escapeHtml(reviewAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#${runSpinnerId}" hx-disabled-elt="button">
+            <input type="hidden" name="approved" value="true" />
+            <button
+              type="submit"
+              class="btn btn-primary btn-sm"
+              aria-label="${escapeHtml(messages.builder.approveAction)}: ${escapeHtml(run.goal)}"
+            >${escapeHtml(messages.builder.approveAction)}</button>
+          </form>
+          <form hx-post="${escapeHtml(reviewAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#${runSpinnerId}" hx-disabled-elt="button">
+            <input type="hidden" name="approved" value="false" />
+            <button
+              type="submit"
+              class="btn btn-outline btn-sm"
+              aria-label="${escapeHtml(messages.builder.cancelAction)}: ${escapeHtml(run.goal)}"
+            >${escapeHtml(messages.builder.cancelAction)}</button>
+          </form>
+          <span id="${runSpinnerId}" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
+        </div>`
+      : "";
+
+  return `<article class="${cardClasses.bordered}">
+    <div class="card-body gap-3">
+      <div class="flex items-center justify-between gap-3">
+        <h3 class="card-title text-base">${escapeHtml(run.goal)}</h3>
+        <span class="badge badge-outline">${escapeHtml(getLongRunningStatusLabel(messages, run.status))}</span>
+      </div>
+      <p class="text-sm text-base-content/75">${escapeHtml(getAutomationStatusMessageLabel(messages, run.statusMessage))}</p>
+      <div class="space-y-2">
+        ${run.steps
+          .map(
+            (step) => `<div class="rounded-box bg-base-200/70 px-3 py-2 text-sm">
+              <span class="font-medium">${escapeHtml(getAutomationStepActionLabel(messages, step.action))}</span>: ${escapeHtml(getAutomationStepSummaryLabel(messages, step.summary))}
+              ${
+                step.evidenceSource
+                  ? `<div class="mt-2">
+                      <a class="link link-primary text-xs" href="${escapeHtml(step.evidenceSource)}" target="_blank" rel="noreferrer" aria-label="${escapeHtml(messages.builder.openAutomationEvidence)}: ${escapeHtml(getAutomationStepSummaryLabel(messages, step.summary))}">${escapeHtml(messages.builder.openAutomationEvidence)}</a>
+                    </div>`
+                  : ""
+              }
+            </div>`,
+          )
+          .join("")}
+      </div>
+      ${
+        linkedArtifacts.length > 0
+          ? `<div class="space-y-2">
+              <h4 class="text-sm font-semibold">${escapeHtml(messages.builder.automationArtifactsLabel)}</h4>
+              ${linkedArtifacts
+                .map(
+                  (
+                    artifact,
+                  ) => `<div class="rounded-box bg-base-200/70 px-3 py-2 text-sm" data-summary="${escapeHtml(artifact.summary)}">
+                    <div class="font-medium">${escapeHtml(getArtifactLabel(messages, artifact))}</div>
+                    <div class="text-base-content/75">${escapeHtml(getArtifactSummaryLabel(messages, artifact.summary))}</div>
+                    <a class="link link-primary text-xs" href="${escapeHtml(artifact.previewSource)}" target="_blank" rel="noreferrer" aria-label="${escapeHtml(messages.builder.openAutomationEvidence)}: ${escapeHtml(getArtifactLabel(messages, artifact))}">${escapeHtml(messages.builder.openAutomationEvidence)}</a>
+                  </div>`,
+                )
+                .join("")}
+            </div>`
+          : ""
+      }
+      ${reviewActions}
+    </div>
+  </article>`;
+};
 
 /**
  * Renders the automation review and orchestration workspace.
@@ -78,113 +170,23 @@ export const renderAutomationPanel = (
   const createRunAction = interpolateRoutePath(appRoutes.builderApiAutomationRunsCreateForm, {
     projectId,
   });
-  const settingsHref = withQueryParameters(
+  const settingsHref = withLocaleQuery(
     interpolateRoutePath(appRoutes.builderAi, { projectId }),
-    {
-      lang: locale,
-    },
+    locale,
   );
-  const playtestHref = withQueryParameters(interpolateRoutePath(appRoutes.game, { projectId }), {
-    lang: locale,
-  });
+  const playtestHref = withLocaleQuery(interpolateRoutePath(appRoutes.game, { projectId }), locale);
   const artifactLookup = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
   const blockedRuns = runs.filter((run) => run.status === "blocked_for_approval").length;
   const completedRuns = runs.filter((run) => run.status === "succeeded").length;
-  const runCards = runs
-    .map((run) => {
-      const reviewAction = withQueryParameters(
-        interpolateRoutePath(appRoutes.builderApiAutomationRunApprove, {
-          projectId,
-          runId: run.id,
-        }),
-        {
-          locale,
-        },
-      );
-      const runSpinnerId = `automation-run-${run.id.replace(/[^a-zA-Z0-9_.-]/g, "-")}-spinner`;
-      const linkedArtifacts = run.artifactIds
-        .map((artifactId) => artifactLookup.get(artifactId))
-        .filter((artifact): artifact is GenerationArtifact => Boolean(artifact));
-      const reviewActions =
-        run.status === "blocked_for_approval"
-          ? `<div class="card-actions justify-end gap-2">
-              <form hx-post="${escapeHtml(reviewAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#${runSpinnerId}" hx-disabled-elt="button">
-                <input type="hidden" name="approved" value="true" />
-                <button
-                  type="submit"
-                  class="btn btn-primary btn-sm"
-                  aria-label="${escapeHtml(messages.builder.approveAction)}: ${escapeHtml(run.goal)}"
-                >${escapeHtml(messages.builder.approveAction)}</button>
-              </form>
-              <form hx-post="${escapeHtml(reviewAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#${runSpinnerId}" hx-disabled-elt="button">
-                <input type="hidden" name="approved" value="false" />
-                <button
-                  type="submit"
-                  class="btn btn-outline btn-sm"
-                  aria-label="${escapeHtml(messages.builder.cancelAction)}: ${escapeHtml(run.goal)}"
-                >${escapeHtml(messages.builder.cancelAction)}</button>
-              </form>
-              <span id="${runSpinnerId}" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
-            </div>`
-          : "";
 
-      return `<article class="${cardClasses.bordered}">
-        <div class="card-body gap-3">
-          <div class="flex items-center justify-between gap-3">
-            <h3 class="card-title text-base">${escapeHtml(run.goal)}</h3>
-            <span class="badge badge-outline">${escapeHtml(getLongRunningStatusLabel(messages, run.status))}</span>
-          </div>
-          <p class="text-sm text-base-content/75">${escapeHtml(getAutomationStatusMessageLabel(messages, run.statusMessage))}</p>
-          <div class="space-y-2">
-            ${run.steps
-              .map(
-                (step) => `<div class="rounded-box bg-base-200/70 px-3 py-2 text-sm">
-                  <span class="font-medium">${escapeHtml(getAutomationStepActionLabel(messages, step.action))}</span>: ${escapeHtml(getAutomationStepSummaryLabel(messages, step.summary))}
-                  ${
-                    step.evidenceSource
-                      ? `<div class="mt-2">
-                          <a class="link link-primary text-xs" href="${escapeHtml(step.evidenceSource)}" target="_blank" rel="noreferrer" aria-label="${escapeHtml(messages.builder.openAutomationEvidence)}: ${escapeHtml(getAutomationStepSummaryLabel(messages, step.summary))}">${escapeHtml(messages.builder.openAutomationEvidence)}</a>
-                        </div>`
-                      : ""
-                  }
-                </div>`,
-              )
-              .join("")}
-          </div>
-          ${
-            linkedArtifacts.length > 0
-              ? `<div class="space-y-2">
-                  <h4 class="text-sm font-semibold">${escapeHtml(messages.builder.automationArtifactsLabel)}</h4>
-                  ${linkedArtifacts
-                    .map(
-                      (
-                        artifact,
-                      ) => `<div class="rounded-box bg-base-200/70 px-3 py-2 text-sm" data-summary="${escapeHtml(artifact.summary)}">
-                        <div class="font-medium">${escapeHtml(getArtifactLabel(messages, artifact))}</div>
-                        <div class="text-base-content/75">${escapeHtml(getArtifactSummaryLabel(messages, artifact.summary))}</div>
-                        <a class="link link-primary text-xs" href="${escapeHtml(artifact.previewSource)}" target="_blank" rel="noreferrer" aria-label="${escapeHtml(messages.builder.openAutomationEvidence)}: ${escapeHtml(getArtifactLabel(messages, artifact))}">${escapeHtml(messages.builder.openAutomationEvidence)}</a>
-                      </div>`,
-                    )
-                    .join("")}
-                </div>`
-              : ""
-          }
-          ${reviewActions}
-        </div>
-      </article>`;
-    })
-    .join("");
-
-  const emptyRunAlert = `<div role="status" class="alert alert-info alert-soft"><span>${escapeHtml(messages.builder.noAutomationRuns)}</span></div>`;
+  const emptyRunAlert = `<div role="status" aria-live="polite" class="alert alert-info alert-soft" aria-label="${escapeHtml(
+    messages.builder.noAutomationRuns,
+  )}"><span>${escapeHtml(messages.builder.noAutomationRuns)}</span></div>`;
 
   const operationsPath = interpolateRoutePath(appRoutes.builderAutomation, { projectId });
-  const operationsAction = withQueryParameters(operationsPath, { lang: locale });
-  const reviewQueueHref = withQueryParameters(`${operationsPath}#builder-review-queue`, {
-    lang: locale,
-  });
-  const composerHref = withQueryParameters(`${operationsPath}#builder-automation-composer`, {
-    lang: locale,
-  });
+  const operationsAction = withLocaleQuery(operationsPath, locale);
+  const reviewQueueHrefLocalized = `${operationsAction}#builder-review-queue`;
+  const composerHref = `${operationsAction}#builder-automation-composer`;
   const paginatedRuns = paginateWorkspaceItems(Array.from(runs), page, BUILDER_LIBRARY_PAGE_SIZE);
   const previousHref =
     paginatedRuns.page > 1
@@ -213,14 +215,14 @@ export const renderAutomationPanel = (
     totalItems: paginatedRuns.totalItems,
     startIndex: paginatedRuns.startIndex,
     endIndex: paginatedRuns.endIndex,
-    hiddenFields: { lang: locale, projectId },
+    hiddenFields: {},
     htmxTarget: "#builder-content",
     previousHref,
     nextHref,
   });
   const jumpLinks = renderWorkbenchJumpLinks(messages.builder.operations, [
     { label: messages.builder.createAutomationRun, href: composerHref, tone: "primary" },
-    { label: messages.builder.automationArtifactsLabel, href: reviewQueueHref },
+        { label: messages.builder.automationArtifactsLabel, href: reviewQueueHrefLocalized },
     { label: messages.builder.projectSettings, href: settingsHref },
     { label: messages.builder.playtest, href: playtestHref, tone: "outline" },
   ]);
@@ -237,7 +239,11 @@ export const renderAutomationPanel = (
       messages.builder.automationArtifactsLabel,
       messages.builder.previewReady,
       [
-        { label: messages.builder.automationArtifactsLabel, href: reviewQueueHref, tone: "primary" },
+        {
+          label: messages.builder.automationArtifactsLabel,
+          href: reviewQueueHrefLocalized,
+          tone: "primary",
+        },
         { label: messages.builder.operations, href: operationsAction },
       ],
     ),
@@ -271,10 +277,14 @@ export const renderAutomationPanel = (
         { label: messages.builder.jobStatusSucceeded, value: completedRuns },
       ],
       actions: `
-        <a class="btn btn-outline btn-sm" href="${escapeHtml(settingsHref)}" aria-label="${escapeHtml(messages.builder.projectSettings)}">
+        <a class="btn btn-outline btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
+          settingsHref,
+        )}" aria-label="${escapeHtml(messages.builder.projectSettings)}">
           ${escapeHtml(messages.builder.projectSettings)}
         </a>
-        <a class="btn btn-primary btn-sm" href="${escapeHtml(playtestHref)}" aria-label="${escapeHtml(messages.builder.playtest)}">
+        <a class="btn btn-primary btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
+          playtestHref,
+        )}" aria-label="${escapeHtml(messages.builder.playtest)}">
           ${escapeHtml(messages.builder.playtest)}
         </a>
         `,
@@ -286,8 +296,7 @@ export const renderAutomationPanel = (
           ${jumpLinks}
         </div>
         <article id="builder-automation-composer" class="${cardClasses.bordered}">
-          <form class="card-body gap-3" hx-post="${escapeHtml(createRunAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#automation-create-spinner" hx-disabled-elt="button, input, select, textarea">
-            ${renderBuilderHiddenFields(projectId, locale)}
+          <form class="card-body gap-3" hx-post="${escapeHtml(createRunAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#automation-create-spinner" hx-disabled-elt="button, input, select, textarea" aria-label="${escapeHtml(messages.builder.createAutomationRun)}">
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.automationGoalLabel)}</legend>
               <textarea name="goal" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.automationGoalPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.automationGoalLabel)}"></textarea>
@@ -296,7 +305,9 @@ export const renderAutomationPanel = (
               ${escapeHtml(messages.builder.advancedAutomationDescription)}
             </div>
             <div class="flex items-center gap-2">
-              <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.createAutomationRun)}">${escapeHtml(messages.builder.createAutomationRun)}</button>
+              <button type="submit" class="btn btn-primary btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" aria-label="${escapeHtml(
+                messages.builder.createAutomationRun,
+              )}">${escapeHtml(messages.builder.createAutomationRun)}</button>
               <span id="automation-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
             </div>
           </form>
@@ -319,43 +330,9 @@ export const renderAutomationPanel = (
             <span class="badge badge-outline">${runs.length}</span>
           </div>
           ${browseControls}
-          <div class="grid gap-4 xl:grid-cols-2">${paginatedRuns.items.length === 0 ? emptyRunAlert : paginatedRuns.items.map((run) => {
-            const reviewAction = withQueryParameters(
-              interpolateRoutePath(appRoutes.builderApiAutomationRunApprove, {
-                projectId,
-                runId: run.id,
-              }),
-              { locale },
-            );
-            const runSpinnerId = `automation-run-${run.id.replace(/[^a-zA-Z0-9_.-]/g, "-")}-spinner`;
-            const linkedArtifacts = run.artifactIds
-              .map((artifactId) => artifactLookup.get(artifactId))
-              .filter((artifact): artifact is GenerationArtifact => Boolean(artifact));
-            const reviewActions =
-              run.status === "blocked_for_approval"
-                ? `<div class="card-actions justify-end gap-2">
-                    <form hx-post="${escapeHtml(reviewAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#${runSpinnerId}" hx-disabled-elt="button">
-                      <input type="hidden" name="approved" value="true" />
-                      <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.approveAction)}: ${escapeHtml(run.goal)}">${escapeHtml(messages.builder.approveAction)}</button>
-                    </form>
-                    <form hx-post="${escapeHtml(reviewAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-indicator="#${runSpinnerId}" hx-disabled-elt="button">
-                      <input type="hidden" name="approved" value="false" />
-                      <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.cancelAction)}: ${escapeHtml(run.goal)}">${escapeHtml(messages.builder.cancelAction)}</button>
-                    </form>
-                    <span id="${runSpinnerId}" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
-                  </div>`
-                : "";
-            return `<article class="${cardClasses.bordered}">
-              <div class="card-body gap-3">
-                <div class="flex items-center justify-between gap-3">
-                  <h3 class="card-title text-base">${escapeHtml(run.goal)}</h3>
-                  <span class="badge badge-outline">${escapeHtml(getLongRunningStatusLabel(messages, run.status))}</span>
-                </div>
-                <p class="text-sm text-base-content/75">${escapeHtml(getAutomationStatusMessageLabel(messages, run.statusMessage))}</p>
-                ${reviewActions}
-              </div>
-            </article>`;
-          }).join("")}</div>
+          <div class="grid gap-4 xl:grid-cols-2">${paginatedRuns.items.length === 0 ? emptyRunAlert : paginatedRuns.items
+            .map((run) => renderAutomationRunCard(messages, projectId, locale, run, artifactLookup))
+            .join("")}</div>
         </section>
       </div>`,
       sideSections: [

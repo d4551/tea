@@ -13,7 +13,6 @@ import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
 import {
   cardClasses,
-  renderBuilderHiddenFields,
   renderEmptyStateCompact,
   spinnerClasses,
 } from "../shared/ui-components.ts";
@@ -77,8 +76,12 @@ export const renderDialogueEditor = (
 
   const dialoguePath = interpolateRoutePath(appRoutes.builderDialogue, { projectId });
   const searchAction = withQueryParameters(dialoguePath, { lang: locale });
-  const createAction = appRoutes.builderApiDialogueCreateForm;
-  const generateHref = appRoutes.builderApiDialogueGenerate;
+  const createAction = interpolateRoutePath(appRoutes.builderApiDialogueCreateForm, {
+    projectId,
+  });
+  const generateHref = interpolateRoutePath(appRoutes.builderApiDialogueGenerate, {
+    projectId,
+  });
   const creatorJourney = buildBuilderJourneyConfig(messages, locale, projectId, "story");
 
   const groupEntries = Array.from(npcGroups.entries());
@@ -115,7 +118,7 @@ export const renderDialogueEditor = (
     totalItems: paginatedGroups.totalItems,
     startIndex: paginatedGroups.startIndex,
     endIndex: paginatedGroups.endIndex,
-    hiddenFields: { lang: locale, projectId },
+    hiddenFields: {},
     htmxTarget: "#builder-content",
     previousHref,
     nextHref,
@@ -130,14 +133,16 @@ export const renderDialogueEditor = (
             projectId,
             key: line.key,
           });
-          const detailHref = withQueryParameters(detailPath, { locale });
+          const detailHref = detailPath;
           return `<div class="rounded-box bg-base-200/60 p-3">
             <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div class="min-w-0 flex-1">
                 <div class="text-xs font-medium uppercase tracking-wide text-base-content/60">${escapeHtml(
                   humanizeBuilderIdentifier(getDialogueReference(line.key)),
                 )}</div>
-                <div class="font-mono text-[11px] text-base-content/50">${escapeHtml(line.key)}</div>
+                <div class="font-mono text-[11px] text-base-content/50">${escapeHtml(
+                  humanizeBuilderIdentifier(getDialogueReference(line.key)),
+                )}</div>
                 <p class="mt-2 text-sm">${escapeHtml(line.text)}</p>
               </div>
               <button
@@ -145,7 +150,9 @@ export const renderDialogueEditor = (
                 hx-get="${escapeHtml(detailHref)}"
                 hx-target="#dialogue-detail"
                 hx-swap="innerHTML"
-                aria-label="${escapeHtml(messages.builder.openDetails)}: ${escapeHtml(line.key)}"
+                aria-label="${escapeHtml(messages.builder.openDetails)}: ${escapeHtml(
+                  humanizeBuilderIdentifier(getDialogueReference(line.key)),
+                )}"
               >${escapeHtml(messages.builder.openDetails)}</button>
             </div>
           </div>`;
@@ -163,7 +170,7 @@ export const renderDialogueEditor = (
               <button
                 class="btn btn-secondary btn-sm"
                 hx-post="${escapeHtml(generateHref)}"
-                hx-vals='{"npcId": "${escapeHtml(npcId)}", "locale": "${escapeHtml(locale)}", "projectId": "${escapeHtml(projectId)}"}'
+                hx-vals='{"npcId": "${escapeHtml(npcId)}"}'
                 hx-target="#dialogue-detail"
                 hx-swap="innerHTML"
                 hx-indicator="#dialogue-generate-${npcId.replace(/[^a-zA-Z0-9_.-]/g, "-")}-spinner"
@@ -204,8 +211,6 @@ export const renderDialogueEditor = (
         navigatorBody: `<article class="${cardClasses.bordered}">
             <div class="card-body gap-4">
               <form method="get" action="${escapeHtml(searchAction)}" class="space-y-3" hx-get="${escapeHtml(searchAction)}" hx-target="#builder-content" hx-swap="innerHTML" hx-push-url="true">
-                <input type="hidden" name="lang" value="${escapeHtml(locale)}" />
-                <input type="hidden" name="projectId" value="${escapeHtml(projectId)}" />
                 <fieldset class="fieldset">
                   <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueSearchLabel)}</legend>
                   <input name="search" type="text" class="input w-full" value="${escapeHtml(search)}" placeholder="${escapeHtml(messages.builder.dialogueSearchPlaceholder)}" aria-label="${escapeHtml(messages.builder.dialogueSearchLabel)}" />
@@ -221,7 +226,6 @@ export const renderDialogueEditor = (
                 hx-indicator="#dialogue-create-spinner"
                 hx-disabled-elt="button, input, select, textarea"
               >
-                ${renderBuilderHiddenFields(projectId, locale)}
                 <fieldset class="fieldset">
                   <legend class="fieldset-legend">${escapeHtml(messages.builder.dialogueSpeakerLabel)}</legend>
                   <input name="speakerId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.dialogueSpeakerPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.dialogueSpeakerLabel)}" />
@@ -319,20 +323,8 @@ export const renderDialogueDetail = (
   locale: LocaleCode,
   projectId: string,
 ): string => {
-  const formAction = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderApiDialogueEntryForm, {
-      projectId,
-      key,
-    }),
-    { locale },
-  );
-  const deleteAction = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderApiDialogueEntry, {
-      projectId,
-      key,
-    }),
-    { locale },
-  );
+  const formAction = interpolateRoutePath(appRoutes.builderApiDialogueEntryForm, { projectId, key });
+  const deleteAction = interpolateRoutePath(appRoutes.builderApiDialogueEntry, { projectId, key });
 
   return `
     <div class="${cardClasses.bordered}">

@@ -35,8 +35,8 @@ export const resetEmbeddingFallback = (): void => {
  * Input payload for knowledge-document ingestion.
  */
 export interface KnowledgeDocumentInput {
-  /** Optional builder project scope for project-specific retrieval. */
-  readonly projectId?: string;
+  /** Builder project scope for project-specific retrieval. */
+  readonly projectId: string;
   /** Human-readable document title. */
   readonly title: string;
   /** Source identifier such as a file path, URL, or note label. */
@@ -389,7 +389,7 @@ export class KnowledgeBaseService {
     const contentHash = await createContentHash(`${locale}\n${title}\n${source}\n${text}`);
     const existing = await prismaBase.aiKnowledgeDocument.findFirst({
       where: {
-        projectId: input.projectId ?? null,
+        projectId: input.projectId,
         contentHash,
       },
       include: {
@@ -434,7 +434,7 @@ export class KnowledgeBaseService {
       : await prismaBase.$transaction(async (tx) => {
           const created = await tx.aiKnowledgeDocument.create({
             data: {
-              projectId: input.projectId ?? null,
+              projectId: input.projectId,
               title,
               source,
               locale,
@@ -488,15 +488,15 @@ export class KnowledgeBaseService {
   }
 
   /**
-   * Lists knowledge documents for optional project scope.
+   * Lists knowledge documents for a project scope.
    *
-   * @param projectId Optional project scope.
+   * @param projectId Project scope for listing documents.
    * @returns Persisted document summaries sorted by update time.
    */
-  async listDocuments(projectId?: string): Promise<readonly KnowledgeDocumentRecord[]> {
+  async listDocuments(projectId: string): Promise<readonly KnowledgeDocumentRecord[]> {
     const rows = await prismaBase.aiKnowledgeDocument.findMany({
       where: {
-        ...(projectId ? { projectId } : {}),
+        projectId,
       },
       include: {
         _count: {
@@ -524,22 +524,31 @@ export class KnowledgeBaseService {
   }
 
   /**
+   * Counts all persisted knowledge documents.
+   *
+   * @returns Total number of knowledge documents regardless of project scope.
+   */
+  async countDocuments(): Promise<number> {
+    return prismaBase.aiKnowledgeDocument.count();
+  }
+
+  /**
    * Deletes one persisted knowledge document and all of its chunks.
    *
    * @param documentId Stable document id.
-   * @param projectId Optional project scope guard.
+   * @param projectId Project scope guard.
    * @returns Whether a document was deleted.
    */
-  async deleteDocument(documentId: string, projectId?: string): Promise<boolean> {
+  async deleteDocument(documentId: string, projectId: string): Promise<boolean> {
     const existingChunks = await prismaBase.aiKnowledgeChunk.findMany({
-      where: { document: { id: documentId, ...(projectId ? { projectId } : {}) } },
+      where: { document: { id: documentId, projectId } },
       select: { id: true },
     });
 
     const deleted = await prismaBase.aiKnowledgeDocument.deleteMany({
       where: {
         id: documentId,
-        ...(projectId ? { projectId } : {}),
+        projectId,
       },
     });
 
@@ -553,7 +562,7 @@ export class KnowledgeBaseService {
   private async shortlistChunkIds(
     query: string,
     options: {
-      readonly projectId?: string;
+      readonly projectId: string;
       readonly locale?: string;
       readonly limit: number;
     },
@@ -563,7 +572,7 @@ export class KnowledgeBaseService {
       const rows = await prismaBase.aiKnowledgeChunk.findMany({
         where: {
           document: {
-            ...(options.projectId ? { projectId: options.projectId } : {}),
+            projectId: options.projectId,
             ...(options.locale ? { locale: options.locale } : {}),
           },
         },
@@ -589,11 +598,7 @@ export class KnowledgeBaseService {
         INNER JOIN "AiKnowledgeDocument"
           ON "AiKnowledgeDocument"."id" = "AiKnowledgeChunk"."documentId"
         WHERE 1 = 1
-          ${
-            options.projectId
-              ? Prisma.sql`AND "AiKnowledgeDocument"."projectId" = ${options.projectId}`
-              : Prisma.empty
-          }
+          ${Prisma.sql`AND "AiKnowledgeDocument"."projectId" = ${options.projectId}`}
           ${
             options.locale
               ? Prisma.sql`AND "AiKnowledgeDocument"."locale" = ${options.locale}`
@@ -615,7 +620,7 @@ export class KnowledgeBaseService {
     const fallbackRows = await prismaBase.aiKnowledgeChunk.findMany({
       where: {
         document: {
-          ...(options.projectId ? { projectId: options.projectId } : {}),
+          projectId: options.projectId,
           ...(options.locale ? { locale: options.locale } : {}),
         },
       },
@@ -637,16 +642,16 @@ export class KnowledgeBaseService {
    * Runs embeddings-backed semantic retrieval against the persisted knowledge base.
    *
    * @param query Search query.
-   * @param options Optional project scope, locale, and limit overrides.
+   * @param options Project scope, locale, and limit overrides.
    * @returns Ranked retrieval matches.
    */
   async search(
     query: string,
     options: {
-      readonly projectId?: string;
+      readonly projectId: string;
       readonly locale?: string;
       readonly limit?: number;
-    } = {},
+    },
   ): Promise<readonly KnowledgeSearchMatch[]> {
     const trimmedQuery = query.trim();
     if (trimmedQuery.length === 0) {
@@ -676,14 +681,10 @@ export class KnowledgeBaseService {
     const rows = await prismaBase.aiKnowledgeChunk.findMany({
       where: {
         id: { in: [...candidateIds] },
-        ...(options.projectId || targetLocale
-          ? {
-              document: {
-                ...(options.projectId ? { projectId: options.projectId } : {}),
-                ...(targetLocale ? { locale: targetLocale } : {}),
-              },
-            }
-          : {}),
+        document: {
+          projectId: options.projectId,
+          ...(targetLocale ? { locale: targetLocale } : {}),
+        },
       },
       include: { document: true },
     });
@@ -761,16 +762,16 @@ export class KnowledgeBaseService {
    * Generates a retrieval-augmented response grounded in the persisted knowledge base.
    *
    * @param prompt User prompt.
-   * @param options Optional project scope, locale, and retrieval limit overrides.
+   * @param options Project scope, locale, and retrieval limit overrides.
    * @returns Retrieval context plus generated answer or error details.
    */
   async assist(
     prompt: string,
     options: {
-      readonly projectId?: string;
+      readonly projectId: string;
       readonly locale?: string;
       readonly limit?: number;
-    } = {},
+    },
   ): Promise<RetrievalAssistResult> {
     const matches = await this.search(prompt, options);
     const registry = await ProviderRegistry.getInstance();

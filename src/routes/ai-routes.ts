@@ -806,7 +806,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
         });
 
         if (request.headers.get("HX-Request") === "true") {
-          return renderAiProviderSearchPanel(messages, locale, query.projectId ?? "", {
+        return renderAiProviderSearchPanel(messages, locale, query.projectId, {
             settingKey: query.settingKey ?? "",
             provider: result.provider,
             slot: result.slot,
@@ -837,7 +837,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
         };
       } catch (error) {
         if (request.headers.get("HX-Request") === "true") {
-          return renderAiProviderSearchPanel(messages, locale, query.projectId ?? "", {
+          return renderAiProviderSearchPanel(messages, locale, query.projectId, {
             settingKey: query.settingKey ?? "",
             provider,
             slot: query.slot,
@@ -858,7 +858,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
         author: t.Optional(t.String()),
         cursor: t.Optional(t.String()),
         limit: t.Optional(t.Number({ minimum: 1, maximum: 25 })),
-        projectId: t.Optional(t.String()),
+        projectId: t.String(),
         locale: t.Optional(t.String()),
         settingKey: t.Optional(t.String()),
       }),
@@ -883,7 +883,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
         return renderAiModelSettingsWorkspace(
           getMessages(locale),
           locale,
-          query.projectId ?? "",
+          query.projectId,
           await getAiRuntimeProfile(),
         );
       }
@@ -891,7 +891,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
     },
     {
       query: t.Object({
-        projectId: t.Optional(t.String()),
+        projectId: t.String(),
         locale: t.Optional(t.String()),
       }),
       body: t.Union([
@@ -938,7 +938,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
         return renderAiModelSettingsWorkspace(
           getMessages(locale),
           locale,
-          query.projectId ?? "",
+          query.projectId,
           await getAiRuntimeProfile(),
           {
             settingKey: "OLLAMA_CHAT_MODEL",
@@ -976,7 +976,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
     },
     {
       query: t.Object({
-        projectId: t.Optional(t.String()),
+        projectId: t.String(),
         locale: t.Optional(t.String()),
       }),
       body: t.Object({
@@ -1013,7 +1013,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
     },
     {
       query: t.Object({
-        projectId: t.Optional(t.String()),
+        projectId: t.String(),
       }),
       detail: {
         tags: ["ai"],
@@ -1045,7 +1045,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
     },
     {
       body: t.Object({
-        projectId: t.Optional(t.String()),
+        projectId: t.String(),
         title: t.String({ minLength: 1 }),
         source: t.String({ minLength: 1 }),
         text: t.String({ minLength: 1 }),
@@ -1073,7 +1073,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
         documentId: t.String({ minLength: 1 }),
       }),
       query: t.Object({
-        projectId: t.Optional(t.String()),
+        projectId: t.String(),
       }),
       detail: {
         tags: ["ai"],
@@ -1105,7 +1105,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
     {
       body: t.Object({
         query: t.String({ minLength: 1 }),
-        projectId: t.Optional(t.String()),
+        projectId: t.String(),
         locale: t.Optional(t.String()),
         limit: t.Optional(t.Number({ minimum: 1, maximum: 20 })),
       }),
@@ -1147,7 +1147,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
     {
       body: t.Object({
         prompt: t.String({ minLength: 1 }),
-        projectId: t.Optional(t.String()),
+        projectId: t.String(),
         locale: t.Optional(t.String()),
         limit: t.Optional(t.Number({ minimum: 1, maximum: 20 })),
       }),
@@ -1203,7 +1203,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
           }),
           target: {
             type: "ai-planner",
-            id: body.projectId ?? "global",
+            id: body.projectId,
           },
           metadata: {
             reason: result.error,
@@ -1231,7 +1231,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
         }),
         target: {
           type: "ai-planner",
-          id: body.projectId ?? "global",
+            id: body.projectId,
         },
         metadata: {
           stepCount: result.steps.length,
@@ -1248,7 +1248,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
     {
       body: t.Object({
         goal: t.String({ minLength: 1 }),
-        projectId: t.Optional(t.String()),
+        projectId: t.String(),
         sensitiveContext: t.Optional(t.Boolean()),
         requireExplicitApproval: t.Optional(t.Boolean()),
         approvalGranted: t.Optional(t.Boolean()),
@@ -1373,6 +1373,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
     {
       body: t.Object({
         npcId: t.String(),
+        projectId: t.String(),
         playerMessage: t.Optional(t.String()),
         sceneId: t.Optional(t.String()),
         locale: t.Optional(t.String()),
@@ -1516,6 +1517,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
     {
       body: t.Object({
         sceneId: t.String(),
+        projectId: t.String(),
         locale: t.Optional(t.String()),
       }),
       detail: {
@@ -1627,6 +1629,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
       });
     },
     {
+      params: t.Object({ projectId: t.String() }),
       body: t.Object({
         audioBase64: t.String(),
         mimeType: t.Optional(t.String()),
@@ -1671,6 +1674,7 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
       });
     },
     {
+      params: t.Object({ projectId: t.String() }),
       body: t.Object({
         text: t.String({ minLength: 1 }),
         voice: t.Optional(t.String()),

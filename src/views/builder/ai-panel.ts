@@ -15,12 +15,22 @@ import type { ProviderModelCatalogEntry } from "../../domain/ai/provider-model-c
 import type { AiToolPlanSuccess } from "../../domain/ai/providers/provider-types.ts";
 import type { BuilderPlatformReadiness } from "../../domain/builder/platform-readiness.ts";
 import type { AvailableAiFeatures } from "../../domain/game/ai/game-ai-service.ts";
+import {
+  projectBodyFontLabels,
+  projectHeadingFontLabels,
+  projectMonoFontLabels,
+  resolveProjectBrandingStyleVariables,
+  supportedProjectBodyFonts,
+  supportedProjectHeadingFonts,
+  supportedProjectMonoFonts,
+  type ProjectBranding,
+} from "../../shared/branding/project-branding.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
-import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
+import { appRoutes, withLocaleQuery, withQueryParameters } from "../../shared/constants/routes.ts";
 import type { CapabilityState, FeatureCapability } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
-import { cardClasses, renderBuilderHiddenFields, spinnerClasses } from "../shared/ui-components.ts";
+import { cardClasses, spinnerClasses } from "../shared/ui-components.ts";
 import {
   getCapabilityStatusBadgeClass,
   getCapabilityStatusLabel,
@@ -280,7 +290,9 @@ const renderWorkbenchJumpLinks = (
     ${links
       .map(
         (link) =>
-          `<a class="btn btn-${escapeHtml(link.tone ?? "ghost")} btn-sm" href="${escapeHtml(link.href)}">${escapeHtml(link.label)}</a>`,
+          `<a class="btn btn-${escapeHtml(link.tone ?? "ghost")} btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
+            link.href,
+          )}" aria-label="${escapeHtml(link.label)}">${escapeHtml(link.label)}</a>`,
       )
       .join("")}
   </div>
@@ -300,12 +312,226 @@ const renderWorkbenchSummaryCard = (
       ${actions
         .map(
           (action) =>
-            `<a class="btn btn-${escapeHtml(action.tone ?? "ghost")} btn-sm" href="${escapeHtml(action.href)}">${escapeHtml(action.label)}</a>`,
+            `<a class="btn btn-${escapeHtml(action.tone ?? "ghost")} btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
+              action.href,
+            )}" aria-label="${escapeHtml(action.label)}">${escapeHtml(action.label)}</a>`,
         )
         .join("")}
     </div>
   </div>
 </article>`;
+
+const renderBrandMark = (branding: ProjectBranding): string =>
+  branding.logoImagePath.length > 0
+    ? `<span class="inline-flex size-14 items-center justify-center overflow-hidden rounded-[1.25rem] border border-base-300 bg-base-100 shadow-sm">
+        <img src="${escapeHtml(branding.logoImagePath)}" alt="${escapeHtml(branding.appName)}" class="size-full object-cover" />
+      </span>`
+    : `<span class="inline-flex size-14 items-center justify-center rounded-[1.25rem] bg-primary text-lg font-semibold text-primary-content shadow-sm">${escapeHtml(branding.logoMark)}</span>`;
+
+const renderBrandFontOptions = <T extends string>(
+  values: readonly T[],
+  labels: Readonly<Record<T, string>>,
+  selectedValue: T,
+): string =>
+  values
+    .map(
+      (value) =>
+        `<option value="${escapeHtml(value)}"${value === selectedValue ? " selected" : ""}>${escapeHtml(labels[value])}</option>`,
+    )
+    .join("");
+
+const renderBrandControlPlane = (
+  messages: Messages,
+  locale: LocaleCode,
+  projectId: string,
+  branding: ProjectBranding,
+): string => {
+  const brandingAction = interpolateRoutePath(appRoutes.builderApiProjectBranding, { projectId });
+  const builderHref = withQueryParameters(interpolateRoutePath(appRoutes.builderStart, { projectId }), {
+    lang: locale,
+  });
+  const playtestHref = withQueryParameters(interpolateRoutePath(appRoutes.game, { projectId }), {
+    lang: locale,
+  });
+  const previewStyle = resolveProjectBrandingStyleVariables(branding);
+  const themeOptions = [
+    { value: "tea-dark", label: messages.common.themeTeaDark },
+    { value: "tea-light", label: messages.common.themeTeaLight },
+  ] as const;
+
+  return `<section id="builder-brand-control-plane">
+    <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100" open>
+      <summary class="collapse-title font-semibold" aria-label="${escapeHtml(messages.builder.brandControlPlaneTitle)}">${escapeHtml(messages.builder.brandControlPlaneTitle)}</summary>
+      <div class="collapse-content space-y-4">
+        <div class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+          <form
+            hx-patch="${escapeHtml(brandingAction)}"
+            hx-target="#builder-content"
+            hx-swap="innerHTML"
+            hx-indicator="#brand-control-plane-spinner"
+            hx-disabled-elt="button, input, select, textarea"
+            class="space-y-4"
+          >
+            <div class="${cardClasses.bordered}">
+              <div class="card-body gap-4">
+                <div class="space-y-2">
+                  <h3 class="card-title text-base">${escapeHtml(messages.builder.brandIdentityTitle)}</h3>
+                  <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.brandIdentityDescription)}</p>
+                </div>
+                <div class="grid gap-3 md:grid-cols-2">
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.brandAppNameLabel)}</legend>
+                    <input name="appName" type="text" class="input w-full" value="${escapeHtml(branding.appName)}" aria-label="${escapeHtml(messages.builder.brandAppNameLabel)}" />
+                  </fieldset>
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.brandLogoMarkLabel)}</legend>
+                    <input name="logoMark" type="text" class="input w-full" value="${escapeHtml(branding.logoMark)}" aria-label="${escapeHtml(messages.builder.brandLogoMarkLabel)}" />
+                  </fieldset>
+                </div>
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">${escapeHtml(messages.builder.brandAppSubtitleLabel)}</legend>
+                  <textarea name="appSubtitle" class="textarea w-full min-h-24" aria-label="${escapeHtml(messages.builder.brandAppSubtitleLabel)}">${escapeHtml(branding.appSubtitle)}</textarea>
+                </fieldset>
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">${escapeHtml(messages.builder.brandLogoImagePathLabel)}</legend>
+                  <input name="logoImagePath" type="text" class="input w-full" value="${escapeHtml(branding.logoImagePath)}" aria-label="${escapeHtml(messages.builder.brandLogoImagePathLabel)}" />
+                </fieldset>
+              </div>
+            </div>
+
+            <div class="${cardClasses.bordered}">
+              <div class="card-body gap-4">
+                <div class="space-y-2">
+                  <h3 class="card-title text-base">${escapeHtml(messages.builder.brandVisualSystemTitle)}</h3>
+                  <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.brandVisualSystemDescription)}</p>
+                </div>
+                <div class="grid gap-3 md:grid-cols-2">
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.brandSurfaceThemeLabel)}</legend>
+                    <select name="surfaceTheme" class="select w-full" aria-label="${escapeHtml(messages.builder.brandSurfaceThemeLabel)}">
+                      ${themeOptions
+                        .map(
+                          (option) =>
+                            `<option value="${escapeHtml(option.value)}"${option.value === branding.surfaceTheme ? " selected" : ""}>${escapeHtml(option.label)}</option>`,
+                        )
+                        .join("")}
+                    </select>
+                  </fieldset>
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.brandHeadingFontLabel)}</legend>
+                    <select name="headingFont" class="select w-full" aria-label="${escapeHtml(messages.builder.brandHeadingFontLabel)}">
+                      ${renderBrandFontOptions(supportedProjectHeadingFonts, projectHeadingFontLabels, branding.headingFont)}
+                    </select>
+                  </fieldset>
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.brandBodyFontLabel)}</legend>
+                    <select name="bodyFont" class="select w-full" aria-label="${escapeHtml(messages.builder.brandBodyFontLabel)}">
+                      ${renderBrandFontOptions(supportedProjectBodyFonts, projectBodyFontLabels, branding.bodyFont)}
+                    </select>
+                  </fieldset>
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.brandMonoFontLabel)}</legend>
+                    <select name="monoFont" class="select w-full" aria-label="${escapeHtml(messages.builder.brandMonoFontLabel)}">
+                      ${renderBrandFontOptions(supportedProjectMonoFonts, projectMonoFontLabels, branding.monoFont)}
+                    </select>
+                  </fieldset>
+                </div>
+                <div class="grid gap-3 md:grid-cols-2">
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.brandPrimaryColorLabel)}</legend>
+                    <input name="primaryColor" type="color" class="input h-12 w-full p-1" value="${escapeHtml(branding.primaryColor)}" aria-label="${escapeHtml(messages.builder.brandPrimaryColorLabel)}" />
+                  </fieldset>
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.brandSecondaryColorLabel)}</legend>
+                    <input name="secondaryColor" type="color" class="input h-12 w-full p-1" value="${escapeHtml(branding.secondaryColor)}" aria-label="${escapeHtml(messages.builder.brandSecondaryColorLabel)}" />
+                  </fieldset>
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.brandAccentColorLabel)}</legend>
+                    <input name="accentColor" type="color" class="input h-12 w-full p-1" value="${escapeHtml(branding.accentColor)}" aria-label="${escapeHtml(messages.builder.brandAccentColorLabel)}" />
+                  </fieldset>
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.brandNeutralColorLabel)}</legend>
+                    <input name="neutralColor" type="color" class="input h-12 w-full p-1" value="${escapeHtml(branding.neutralColor)}" aria-label="${escapeHtml(messages.builder.brandNeutralColorLabel)}" />
+                  </fieldset>
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.brandBaseColorLabel)}</legend>
+                    <input name="base100Color" type="color" class="input h-12 w-full p-1" value="${escapeHtml(branding.base100Color)}" aria-label="${escapeHtml(messages.builder.brandBaseColorLabel)}" />
+                  </fieldset>
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.brandBaseContentColorLabel)}</legend>
+                    <input name="baseContentColor" type="color" class="input h-12 w-full p-1" value="${escapeHtml(branding.baseContentColor)}" aria-label="${escapeHtml(messages.builder.brandBaseContentColorLabel)}" />
+                  </fieldset>
+                </div>
+              </div>
+            </div>
+
+            <div class="${cardClasses.bordered}">
+              <div class="card-body gap-4">
+                <div class="space-y-2">
+                  <h3 class="card-title text-base">${escapeHtml(messages.builder.brandExperienceCopyTitle)}</h3>
+                  <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.brandExperienceCopyDescription)}</p>
+                </div>
+                <div class="grid gap-3 md:grid-cols-2">
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.brandBuilderShellNameLabel)}</legend>
+                    <input name="builderShellName" type="text" class="input w-full" value="${escapeHtml(branding.builderShellName)}" aria-label="${escapeHtml(messages.builder.brandBuilderShellNameLabel)}" />
+                  </fieldset>
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">${escapeHtml(messages.builder.brandPlayerShellNameLabel)}</legend>
+                    <input name="playerShellName" type="text" class="input w-full" value="${escapeHtml(branding.playerShellName)}" aria-label="${escapeHtml(messages.builder.brandPlayerShellNameLabel)}" />
+                  </fieldset>
+                </div>
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">${escapeHtml(messages.builder.brandBuilderShellDescriptionLabel)}</legend>
+                  <textarea name="builderShellDescription" class="textarea w-full min-h-24" aria-label="${escapeHtml(messages.builder.brandBuilderShellDescriptionLabel)}">${escapeHtml(branding.builderShellDescription)}</textarea>
+                </fieldset>
+                <div class="flex items-center gap-2">
+                  <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.saveBrandControlPlane)}">${escapeHtml(messages.builder.saveBrandControlPlane)}</button>
+                  <span id="brand-control-plane-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
+                </div>
+              </div>
+            </div>
+          </form>
+
+          <div class="space-y-4">
+            <div class="${cardClasses.bordered}" style="${escapeHtml(previewStyle)}">
+              <div class="card-body gap-4">
+                <div class="space-y-2">
+                  <h3 class="card-title text-base">${escapeHtml(messages.builder.brandPreviewTitle)}</h3>
+                  <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.brandPreviewDescription)}</p>
+                </div>
+                <div class="rounded-[1.5rem] border border-base-300 bg-base-100 p-4 shadow-sm">
+                  <div class="flex items-center gap-3">
+                    ${renderBrandMark(branding)}
+                    <div class="min-w-0">
+                      <div class="truncate text-lg font-semibold">${escapeHtml(branding.appName)}</div>
+                      <div class="text-sm text-base-content/70">${escapeHtml(branding.appSubtitle)}</div>
+                    </div>
+                  </div>
+                  <div class="mt-4 grid gap-3">
+                    <div class="rounded-[1.25rem] border border-base-300 bg-base-200/60 p-4">
+                      <div class="text-xs font-semibold uppercase tracking-[0.22em] text-primary/80">${escapeHtml(branding.builderShellName)}</div>
+                      <div class="mt-2 text-sm text-base-content/72">${escapeHtml(branding.builderShellDescription)}</div>
+                      <div class="mt-3 flex flex-wrap gap-2">
+                        <a class="btn btn-primary btn-sm" href="${escapeHtml(builderHref)}">${escapeHtml(branding.builderShellName)}</a>
+                        <a class="btn btn-outline btn-sm" href="${escapeHtml(playtestHref)}">${escapeHtml(branding.playerShellName)}</a>
+                      </div>
+                    </div>
+                    <div class="rounded-[1.25rem] border border-base-300 bg-base-100 p-4">
+                      <div class="text-xs font-semibold uppercase tracking-[0.22em] text-base-content/55">${escapeHtml(messages.builder.brandPlayerShellNameLabel)}</div>
+                      <div class="mt-2 text-heading-2 font-semibold">${escapeHtml(branding.playerShellName)}</div>
+                      <div class="mt-2 inline-flex items-center rounded-full border border-base-300 bg-base-200 px-3 py-1 text-xs font-medium">${escapeHtml(messages.builder.playtest)}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </details>
+  </section>`;
+};
 
 /**
  * Renders the AI capability feature matrix table.
@@ -532,8 +758,18 @@ const renderAiSettingsForm = (
       value="${escapeHtml(String(setting.value))}"
       aria-label="${escapeHtml(setting.label)}"
     />
-    <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(submitLabel)}</button>
-    <button type="submit" name="reset" value="true" class="btn btn-ghost btn-sm">${escapeHtml(
+    <button
+      type="submit"
+      class="btn btn-primary btn-sm transition hover:-translate-y-0.5 hover:shadow-sm"
+      aria-label="${escapeHtml(submitLabel)}"
+    >${escapeHtml(submitLabel)}</button>
+    <button
+      type="submit"
+      name="reset"
+      value="true"
+      class="btn btn-ghost btn-sm transition hover:-translate-y-0.5 hover:shadow-sm"
+      aria-label="${escapeHtml(messages.builder.aiModelCatalogResetSubmit)}"
+    >${escapeHtml(
       messages.builder.aiModelCatalogResetSubmit,
     )}</button>
   </form>`;
@@ -586,9 +822,9 @@ export const renderAiProviderSearchPanel = (
                 >
                   <input type="hidden" name="key" value="${escapeHtml(searchState.settingKey)}" />
                   <input type="hidden" name="value" value="${escapeHtml(item.model)}" />
-                  <button type="submit" class="btn btn-primary btn-xs">${escapeHtml(
+                  <button type="submit" class="btn btn-primary btn-xs transition hover:-translate-y-0.5 hover:shadow-sm" aria-label="${escapeHtml(
                     messages.builder.save,
-                  )}</button>
+                  )}">${escapeHtml(messages.builder.save)}</button>
                 </form>
               </td>
             </tr>`,
@@ -681,9 +917,9 @@ export const renderAiModelSettingsWorkspace = (
                 placeholder="${escapeHtml(messages.builder.aiModelCatalogPullPlaceholder)}"
                 aria-label="${escapeHtml(messages.builder.aiModelCatalogPullPlaceholder)}"
               />
-              <button type="submit" class="btn btn-secondary btn-sm">${escapeHtml(
+              <button type="submit" class="btn btn-secondary btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" aria-label="${escapeHtml(
                 messages.builder.aiModelCatalogPullSubmit,
-              )}</button>
+              )}">${escapeHtml(messages.builder.aiModelCatalogPullSubmit)}</button>
             </form>`
           : "";
       const settingRows = laneSettings
@@ -727,12 +963,13 @@ export const renderAiModelSettingsWorkspace = (
                     <input type="text" name="author" class="input input-sm w-full md:w-40" placeholder="${escapeHtml(
                       messages.builder.aiModelCatalogAuthorPlaceholder,
                     )}" aria-label="${escapeHtml(messages.builder.aiModelCatalogAuthorPlaceholder)}" />
-                    <button type="submit" class="btn btn-outline btn-sm">${escapeHtml(
+                    <button type="submit" class="btn btn-outline btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" aria-label="${escapeHtml(
                       messages.builder.aiModelCatalogSearchSubmit,
-                    )}</button>
+                    )}">${escapeHtml(messages.builder.aiModelCatalogSearchSubmit)}</button>
                     <button
                       type="button"
-                      class="btn btn-ghost btn-sm"
+                      class="btn btn-ghost btn-sm transition hover:-translate-y-0.5 hover:shadow-sm"
+                      aria-label="${escapeHtml(messages.builder.aiModelCatalogResetSubmit)}"
                       hx-patch="${escapeHtml(
                         withQueryParameters(appRoutes.aiSettings, { projectId, locale }),
                       )}"
@@ -819,7 +1056,9 @@ const renderAiAssistForm = (
   projectId: string,
   state: CapabilityState,
 ): string => {
-  const aiAssistHref = withQueryParameters(appRoutes.aiBuilderAssist, { projectId });
+  const aiAssistHref = interpolateRoutePath(appRoutes.aiBuilderAssist, {
+    projectId,
+  });
 
   return `<div class="${cardClasses.bordered}">
     <div class="card-body">
@@ -831,9 +1070,7 @@ const renderAiAssistForm = (
         state,
         messages.ai.designAssistUnavailable,
       )}
-      ${
-        isCapabilityUsable(state)
-          ? `<form
+            ${isCapabilityUsable(state) ? `<form
               hx-post="${escapeHtml(aiAssistHref)}"
               hx-target="#ai-assist-result"
               hx-swap="innerHTML"
@@ -841,13 +1078,12 @@ const renderAiAssistForm = (
               hx-disabled-elt="button, input, select, textarea"
               class="space-y-3"
             >
-              ${renderBuilderHiddenFields(projectId, locale)}
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.promptLabel)}</legend>
                 <textarea id="ai-assist-prompt" name="prompt" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.assistPromptPlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.promptLabel)}"></textarea>
               </fieldset>
               <div class="flex items-center gap-2">
-                <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.designAssist)}">
+                <button type="submit" class="btn btn-primary btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" aria-label="${escapeHtml(messages.builder.designAssist)}">
                   ${escapeHtml(messages.builder.designAssist)}
                 </button>
                 <span id="ai-assist-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
@@ -874,7 +1110,9 @@ const renderAiTestForm = (
   projectId: string,
   state: CapabilityState,
 ): string => {
-  const aiTestHref = withQueryParameters(appRoutes.aiBuilderTest, { projectId });
+  const aiTestHref = interpolateRoutePath(appRoutes.aiBuilderTest, {
+    projectId,
+  });
 
   return `<div class="${cardClasses.bordered}">
     <div class="card-body">
@@ -895,7 +1133,6 @@ const renderAiTestForm = (
               hx-disabled-elt="button, input, select, textarea"
               class="space-y-3"
             >
-              ${renderBuilderHiddenFields(projectId, locale)}
               <fieldset class="fieldset">
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.npcIdLabel)}</legend>
                 <input id="ai-test-npc" name="npcId" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.testNpcPlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.npcIdLabel)}" />
@@ -905,7 +1142,7 @@ const renderAiTestForm = (
                 <textarea id="ai-test-message" name="message" class="textarea w-full" rows="2" placeholder="${escapeHtml(messages.builder.testMessagePlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.messageLabel)}"></textarea>
               </fieldset>
               <div class="flex items-center gap-2">
-                <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.testDialogue)}">
+                <button type="submit" class="btn btn-primary btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" aria-label="${escapeHtml(messages.builder.testDialogue)}">
                   ${escapeHtml(messages.builder.testDialogue)}
                 </button>
                 <span id="ai-test-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
@@ -933,10 +1170,14 @@ const renderAiKnowledgeWorkspace = (
   projectId: string,
   documents: readonly KnowledgeDocumentRecord[],
 ): string => {
-  const aiKnowledgeIngestHref = withQueryParameters(appRoutes.aiBuilderKnowledgeDocuments, {
-    projectId,
-    locale,
-  });
+  const aiKnowledgeIngestHref = withQueryParameters(
+    interpolateRoutePath(appRoutes.aiBuilderKnowledgeDocuments, {
+      projectId,
+    }),
+    {
+      lang: locale,
+    },
+  );
 
   return `<div class="${cardClasses.bordered}">
     <div class="card-body">
@@ -963,7 +1204,7 @@ const renderAiKnowledgeWorkspace = (
           <textarea id="knowledge-text" name="text" class="textarea w-full min-h-36" required aria-required="true" aria-label="${escapeHtml(messages.builder.knowledgeTextLabel)}"></textarea>
         </fieldset>
         <div class="flex items-center gap-2">
-          <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.ingestKnowledgeDocument)}">
+          <button type="submit" class="btn btn-primary btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" aria-label="${escapeHtml(messages.builder.ingestKnowledgeDocument)}">
             ${escapeHtml(messages.builder.ingestKnowledgeDocument)}
             <span id="ai-ingest-spinner" class="${spinnerClasses.xs}" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </button>
@@ -990,14 +1231,18 @@ const renderAiRetrievalAndToolPlan = (
   projectId: string,
   toolPlanState: CapabilityState,
 ): string => {
-  const aiKnowledgeSearchHref = withQueryParameters(appRoutes.aiBuilderKnowledgeSearch, {
-    projectId,
-    locale,
-  });
-  const aiToolPlanHref = withQueryParameters(appRoutes.aiBuilderToolPlan, {
-    projectId,
-    locale,
-  });
+  const aiKnowledgeSearchHref = withQueryParameters(
+    interpolateRoutePath(appRoutes.aiBuilderKnowledgeSearch, { projectId }),
+    {
+      lang: locale,
+    },
+  );
+  const aiToolPlanHref = withQueryParameters(
+    interpolateRoutePath(appRoutes.aiBuilderToolPlan, { projectId }),
+    {
+      lang: locale,
+    },
+  );
 
   return `<div class="space-y-4">
     <div class="${cardClasses.bordered}">
@@ -1016,7 +1261,7 @@ const renderAiRetrievalAndToolPlan = (
             <legend class="fieldset-legend">${escapeHtml(messages.builder.promptLabel)}</legend>
             <textarea id="retrieval-prompt" name="prompt" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.retrievalPromptPlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.runRetrievalAssist)}"></textarea>
           </fieldset>
-          <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.runRetrievalAssist)}">
+            <button type="submit" class="btn btn-primary btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" aria-label="${escapeHtml(messages.builder.runRetrievalAssist)}">
             ${escapeHtml(messages.builder.runRetrievalAssist)}
             <span id="ai-retrieval-spinner" class="${spinnerClasses.xs}" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </button>
@@ -1049,7 +1294,7 @@ const renderAiRetrievalAndToolPlan = (
                   <legend class="fieldset-legend">${escapeHtml(messages.builder.automationGoalLabel)}</legend>
                   <textarea id="tool-plan-goal" name="goal" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.toolPlanGoalPlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.automationGoalLabel)}"></textarea>
                 </fieldset>
-                <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.previewToolPlan)}">
+                <button type="submit" class="btn btn-outline btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" aria-label="${escapeHtml(messages.builder.previewToolPlan)}">
                   ${escapeHtml(messages.builder.previewToolPlan)}
                   <span id="ai-plan-spinner" class="${spinnerClasses.xs}" aria-label="${escapeHtml(messages.common.loading)}"></span>
                 </button>
@@ -1075,10 +1320,12 @@ const renderAiFineTuneWorkspace = (
   locale: LocaleCode,
   projectId: string,
 ): string => {
-  const submitHref = withQueryParameters(appRoutes.aiBuilderHfTraining, {
-    projectId,
-    locale,
-  });
+  const submitHref = withQueryParameters(
+    interpolateRoutePath(appRoutes.aiBuilderHfTraining, { projectId }),
+    {
+      lang: locale,
+    },
+  );
   return `<div class="${cardClasses.bordered}">
     <div class="card-body">
       <h2 class="card-title">${escapeHtml(messages.builder.fineTuneWorkspaceTitle)}</h2>
@@ -1091,7 +1338,6 @@ const renderAiFineTuneWorkspace = (
         hx-disabled-elt="button, input, select, textarea"
         class="space-y-3"
       >
-        ${renderBuilderHiddenFields(projectId, locale)}
         <fieldset class="fieldset">
           <legend class="fieldset-legend">${escapeHtml(messages.builder.hfTrainingDatasetLabel)}</legend>
           <input
@@ -1186,7 +1432,7 @@ const renderAiFineTuneWorkspace = (
           </fieldset>
         </div>
         <div class="flex items-center gap-2">
-          <button type="submit" class="btn btn-secondary btn-sm" aria-label="${escapeHtml(messages.builder.hfTrainingSubmit)}">
+          <button type="submit" class="btn btn-secondary btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" aria-label="${escapeHtml(messages.builder.hfTrainingSubmit)}">
             ${escapeHtml(messages.builder.hfTrainingSubmit)}
           </button>
           <span id="ai-hf-training-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
@@ -1210,10 +1456,12 @@ const renderAiPatchAndApiSurface = (
   locale: LocaleCode,
   projectId: string,
 ): string => {
-  const aiPreviewHref = withQueryParameters(appRoutes.aiBuilderPatchPreviewForm, {
-    projectId,
-    locale,
-  });
+  const aiPreviewHref = withQueryParameters(
+    interpolateRoutePath(appRoutes.aiBuilderPatchPreviewForm, { projectId }),
+    {
+      lang: locale,
+    },
+  );
 
   const endpointRows = [
     appRoutes.aiStatus,
@@ -1240,13 +1488,12 @@ const renderAiPatchAndApiSurface = (
           hx-disabled-elt="button, input, select, textarea"
           class="space-y-3"
         >
-          ${renderBuilderHiddenFields(projectId, locale)}
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.operationsJsonLabel)}</legend>
             <textarea id="operations-json" name="operationsJson" class="textarea w-full min-h-28" placeholder="${escapeHtml(messages.builder.operationsJsonPlaceholder)}" aria-label="${escapeHtml(messages.builder.operationsJsonLabel)}"></textarea>
           </fieldset>
           <div class="flex items-center gap-2">
-            <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.previewChanges)}">${escapeHtml(messages.builder.previewChanges)}</button>
+            <button type="submit" class="btn btn-outline btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" aria-label="${escapeHtml(messages.builder.previewChanges)}">${escapeHtml(messages.builder.previewChanges)}</button>
             <span id="ai-patch-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
         </form>
@@ -1275,38 +1522,33 @@ export const renderAiPanel = (
   runtimeProfile: AiRuntimeProfile,
   locale: LocaleCode,
   projectId: string,
+  branding: ProjectBranding,
   readiness: BuilderPlatformReadiness,
   documents: readonly KnowledgeDocumentRecord[],
 ): string => {
   const capabilityCount = countAvailableCapabilities(features);
-  const reviewQueueHref = withQueryParameters(
+  const settingsHref = withLocaleQuery(
+    interpolateRoutePath(appRoutes.builderAi, { projectId }),
+    locale,
+  );
+  const operationsHref = withLocaleQuery(
     interpolateRoutePath(appRoutes.builderAutomation, { projectId }),
-    { lang: locale },
+    locale,
   );
-  const playtestHref = withQueryParameters(interpolateRoutePath(appRoutes.game, { projectId }), {
-    lang: locale,
-  });
-  const providerHref = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderAi, { projectId }) + "#builder-provider-workbench",
-    { lang: locale },
+  const playtestHref = withLocaleQuery(
+    interpolateRoutePath(appRoutes.game, { projectId }),
+    locale,
   );
-  const assistantReviewHref = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderAi, { projectId }) + "#builder-assistant-review",
-    { lang: locale },
-  );
-  const knowledgeHref = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderAi, { projectId }) + "#builder-knowledge-workspace",
-    { lang: locale },
-  );
-  const modelCatalogHref = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderAi, { projectId }) + "#builder-model-catalog",
-    { lang: locale },
-  );
-  const patchPreviewHref = withQueryParameters(
-    interpolateRoutePath(appRoutes.builderAi, { projectId }) + "#builder-patch-preview",
-    { lang: locale },
-  );
+  const settingsSectionHref = (sectionId: string): string => `${settingsHref}#${sectionId}`;
+  const reviewQueueHref = operationsHref;
+  const providerHref = settingsSectionHref("builder-provider-workbench");
+  const brandingHref = settingsSectionHref("builder-brand-control-plane");
+  const assistantReviewHref = settingsSectionHref("builder-assistant-review");
+  const knowledgeHref = settingsSectionHref("builder-knowledge-workspace");
+  const modelCatalogHref = settingsSectionHref("builder-model-catalog");
+  const patchPreviewHref = settingsSectionHref("builder-patch-preview");
   const jumpLinks = renderWorkbenchJumpLinks(messages.builder.projectSettings, [
+    { label: messages.builder.brandControlPlaneTitle, href: brandingHref, tone: "primary" },
     { label: messages.builder.providerStatus, href: providerHref, tone: "primary" },
     { label: messages.builder.assistantReviewTitle, href: assistantReviewHref },
     { label: messages.builder.knowledgeWorkspaceTitle, href: knowledgeHref },
@@ -1315,6 +1557,14 @@ export const renderAiPanel = (
     { label: messages.builder.operations, href: reviewQueueHref, tone: "outline" },
   ]);
   const workbenchCards = [
+    renderWorkbenchSummaryCard(
+      messages.builder.brandControlPlaneTitle,
+      messages.builder.brandControlPlaneDescription,
+      [
+        { label: messages.builder.brandControlPlaneTitle, href: brandingHref, tone: "primary" },
+        { label: messages.builder.playtest, href: playtestHref, tone: "outline" },
+      ],
+    ),
     renderWorkbenchSummaryCard(
       messages.builder.providerStatus,
       messages.builder.advancedSettingsDescription,
@@ -1370,10 +1620,19 @@ export const renderAiPanel = (
           },
         ],
         actions: `
-          <a class="btn btn-outline btn-sm" href="${escapeHtml(knowledgeHref)}" aria-label="${escapeHtml(messages.builder.knowledgeWorkspaceTitle)}">
+          <a class="btn btn-outline btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
+            brandingHref,
+          )}" aria-label="${escapeHtml(messages.builder.brandControlPlaneTitle)}">
+            ${escapeHtml(messages.builder.brandControlPlaneTitle)}
+          </a>
+          <a class="btn btn-outline btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
+            knowledgeHref,
+          )}" aria-label="${escapeHtml(messages.builder.knowledgeWorkspaceTitle)}">
             ${escapeHtml(messages.builder.knowledgeWorkspaceTitle)}
           </a>
-          <a class="btn btn-primary btn-sm" href="${escapeHtml(reviewQueueHref)}" aria-label="${escapeHtml(messages.builder.operations)}">
+          <a class="btn btn-primary btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
+            reviewQueueHref,
+          )}" aria-label="${escapeHtml(messages.builder.operations)}">
             ${escapeHtml(messages.builder.operations)}
           </a>
         `,
@@ -1381,7 +1640,7 @@ export const renderAiPanel = (
       ${renderWorkspaceFrame({
         navigatorTitle: messages.builder.projectSettings,
         navigatorDescription: messages.builder.advancedSettingsDescription,
-        navigatorBody: `<div id="builder-provider-workbench" role="alert" class="alert alert-warning alert-soft">
+        navigatorBody: `<div role="alert" class="alert alert-warning alert-soft">
             <span>${escapeHtml(messages.builder.creatorSafeAiDescription)}</span>
           </div>
           <div class="rounded-[1.25rem] border border-base-300 bg-base-100 p-4 shadow-sm">
@@ -1400,11 +1659,13 @@ export const renderAiPanel = (
                 <h2 class="text-xl font-semibold tracking-tight">${escapeHtml(messages.builder.projectSettings)}</h2>
                 <p class="text-sm leading-6 text-base-content/72">${escapeHtml(messages.builder.advancedSettingsDescription)}</p>
               </div>
-              <div class="grid gap-4 xl:grid-cols-3">
+              <div class="grid gap-4 xl:grid-cols-4">
                 ${workbenchCards}
               </div>
             </div>
           </section>
+
+          ${renderBrandControlPlane(messages, locale, projectId, branding)}
 
           <section id="builder-provider-workbench">
             <details class="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box" open>
@@ -1485,7 +1746,7 @@ export const renderAiPanel = (
                   <div class="card-body">
                     <h2 class="card-title">${escapeHtml(messages.builder.speechSynthesisLabel)}</h2>
                     <form
-                      hx-post="${escapeHtml(withQueryParameters(appRoutes.aiSynthesize, { projectId, locale }))}"
+                      hx-post="${escapeHtml(interpolateRoutePath(appRoutes.aiSynthesize, { projectId }))}"
                       hx-target="#voice-synthesize-result"
                       hx-swap="innerHTML"
                       hx-indicator="#voice-synthesize-spinner"
@@ -1497,7 +1758,9 @@ export const renderAiPanel = (
                         <textarea id="voice-synthesize-text" name="text" class="textarea w-full" rows="4" placeholder="${escapeHtml(messages.builder.synthesizeTextPlaceholder)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.promptLabel)}"></textarea>
                       </fieldset>
                       <div class="flex items-center gap-2">
-                        <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.synthesizeSubmit)}">
+              <button type="submit" class="btn btn-primary btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" aria-label="${escapeHtml(
+                messages.builder.synthesizeSubmit,
+              )}">
                           ${escapeHtml(messages.builder.synthesizeSubmit)}
                         </button>
                         <span id="voice-synthesize-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
@@ -1510,7 +1773,7 @@ export const renderAiPanel = (
                   <div class="card-body">
                     <h2 class="card-title">${escapeHtml(messages.builder.speechToTextLabel)}</h2>
                     <form
-                      hx-post="${escapeHtml(withQueryParameters(appRoutes.aiTranscribe, { projectId, locale }))}"
+                      hx-post="${escapeHtml(interpolateRoutePath(appRoutes.aiTranscribe, { projectId }))}"
                       hx-target="#voice-transcribe-result"
                       hx-swap="innerHTML"
                       hx-indicator="#voice-transcribe-spinner"
@@ -1523,7 +1786,7 @@ export const renderAiPanel = (
                         <input id="voice-transcribe-file" name="file" type="file" class="file-input file-input-sm w-full" accept="audio/*" required aria-required="true" aria-label="${escapeHtml(messages.builder.transcribeFileLabel)}" />
                       </fieldset>
                       <div class="flex items-center gap-2">
-                        <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.transcribeSubmit)}">
+                        <button type="submit" class="btn btn-outline btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" aria-label="${escapeHtml(messages.builder.transcribeSubmit)}">
                           ${escapeHtml(messages.builder.transcribeSubmit)}
                         </button>
                         <span id="voice-transcribe-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>

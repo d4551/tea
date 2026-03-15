@@ -10,3 +10,6 @@ export const BUILDER_QUERY_PARAM_SCENE_ID = "sceneId";
 
 /** Query parameter used to keep the active asset in URL state. */
 export const BUILDER_QUERY_PARAM_ASSET_ID = "assetId";
+
+/** Query parameter used to preselect a starter template in the project picker. */
+export const BUILDER_QUERY_PARAM_TEMPLATE_ID = "templateId";

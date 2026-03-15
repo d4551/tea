@@ -1,9 +1,10 @@
 import type { LocaleCode } from "../../config/environment.ts";
 import { appRoutes } from "../../shared/constants/routes.ts";
+import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import type { CreatorAssistContext } from "../../shared/contracts/game.ts";
 import type { Messages } from "../../shared/i18n/messages.ts";
 import { escapeHtml } from "../layout.ts";
-import { renderBuilderHiddenFields, spinnerClasses } from "../shared/ui-components.ts";
+import { cardClasses, spinnerClasses } from "../shared/ui-components.ts";
 
 const buildAssistSpinnerId = (entityId: string, actionKey: string): string =>
   `creator-assist-${entityId}-${actionKey}`.replace(/[^a-zA-Z0-9_-]/g, "-");
@@ -26,20 +27,24 @@ export const renderCreatorAssistPanel = (
   projectId: string,
   context: CreatorAssistContext,
 ): string => {
-  const createJobAction = appRoutes.builderApiGenerationJobsCreateForm;
+  const createJobAction = interpolateRoutePath(appRoutes.builderApiGenerationJobsCreateForm, {
+    projectId,
+  });
 
   return `<div id="creator-ai-actions" class="grid gap-3">
     ${context.actions
       .map((action) => {
         if (action.kind === "dialogue") {
-          return `<article class="rounded-[1.25rem] border border-base-300 bg-base-100 shadow-sm">
+          return `<article class="${cardClasses.bordered} transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
             <div class="space-y-3 p-4">
               <div class="space-y-2">
                 <h3 class="text-base font-semibold">${escapeHtml(action.label)}</h3>
                 <p class="text-sm leading-6 text-base-content/72">${escapeHtml(action.description)}</p>
               </div>
               <div class="flex justify-start">
-                <a class="btn btn-primary btn-sm" href="${escapeHtml(action.href)}" aria-label="${escapeHtml(action.label)}">
+                <a class="btn btn-primary btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" href="${escapeHtml(
+                  action.href,
+                )}" aria-label="${escapeHtml(action.label)}">
                   ${escapeHtml(action.label)}
                 </a>
               </div>
@@ -48,16 +53,19 @@ export const renderCreatorAssistPanel = (
         }
 
         const spinnerId = buildAssistSpinnerId(context.entityId, action.key);
-        return `<article class="rounded-[1.25rem] border border-base-300 bg-base-100 shadow-sm">
+        const safeActionKey = action.key.replace(/[^a-zA-Z0-9_-]/g, "-");
+        const promptFieldId = `${context.entityId}-${safeActionKey}-prompt`;
+        const promptHelpId = `${context.entityId}-${safeActionKey}-prompt-help`;
+        return `<article class="${cardClasses.bordered} transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
           <form
             class="space-y-3 p-4"
+            aria-label="${escapeHtml(action.label)}"
             hx-post="${escapeHtml(createJobAction)}"
             hx-target="#builder-content"
             hx-swap="innerHTML"
             hx-indicator="#${spinnerId}"
             hx-disabled-elt="button, input, textarea"
           >
-            ${renderBuilderHiddenFields(projectId, locale)}
             <input type="hidden" name="kind" value="${escapeHtml(action.kind)}" />
             <input type="hidden" name="targetId" value="${escapeHtml(context.targetId ?? context.entityId)}" />
             <div class="space-y-2">
@@ -65,22 +73,26 @@ export const renderCreatorAssistPanel = (
                 <h3 class="text-base font-semibold">${escapeHtml(action.label)}</h3>
                 <span class="badge badge-outline badge-sm">${escapeHtml(context.title)}</span>
               </div>
-              <p class="text-sm leading-6 text-base-content/72">${escapeHtml(action.description)}</p>
+              <p class="text-sm leading-6 text-base-content/72" id="${escapeHtml(`${promptHelpId}-description`)}">
+                ${escapeHtml(action.description)}
+              </p>
             </div>
             <fieldset class="fieldset">
               <legend class="fieldset-legend">${escapeHtml(messages.builder.generationPromptLabel)}</legend>
               <textarea
+                id="${escapeHtml(promptFieldId)}"
                 name="prompt"
                 class="textarea w-full"
                 rows="3"
                 placeholder="${escapeHtml(messages.builder.generationPromptPlaceholder)}"
                 aria-required="true"
+                aria-describedby="${escapeHtml(`${promptHelpId}-description`)}"
                 required
                 aria-label="${escapeHtml(messages.builder.generationPromptLabel)}"
               ></textarea>
             </fieldset>
             <div class="flex items-center gap-2">
-              <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(action.label)}">
+              <button type="submit" class="btn btn-primary btn-sm transition hover:-translate-y-0.5 hover:shadow-sm" aria-label="${escapeHtml(action.label)}">
                 ${escapeHtml(action.label)}
               </button>
               <span id="${spinnerId}" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
