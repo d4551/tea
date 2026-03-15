@@ -54,9 +54,9 @@ export const renderAssetsEditor = (
   page = 1,
   selectedAssetId = "",
 ): string => {
-  const createAssetAction = `${appRoutes.builderApiAssets}/create/form`;
+  const createAssetAction = appRoutes.builderApiAssetsCreateForm;
   const uploadAssetAction = appRoutes.builderApiAssetsUpload;
-  const createClipAction = `${appRoutes.builderApiAnimationClips}/create/form`;
+  const createClipAction = appRoutes.builderApiAnimationClipsCreateForm;
   const assetKindOptions: readonly BuilderAssetKind[] = [
     "portrait",
     "sprite-sheet",

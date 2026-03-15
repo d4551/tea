@@ -307,7 +307,7 @@ export const renderBuilderProjectShell = (
       : null;
   const publishAction =
     project !== null
-      ? `${appRoutes.builderApiProjects}/${encodeURIComponent(project.id)}/publish`
+      ? interpolateRoutePath(appRoutes.builderApiProjectPublish, { projectId: project.id })
       : null;
   const statusLabel =
     project?.publishedReleaseVersion !== null

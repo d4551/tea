@@ -32,7 +32,9 @@ export const renderAutomationPanel = (
   runs: readonly AutomationRun[],
   artifacts: readonly GenerationArtifact[],
 ): string => {
-  const createRunAction = `${appRoutes.builderApiAutomationRuns}/create/form`;
+  const createRunAction = interpolateRoutePath(appRoutes.builderApiAutomationRunsCreateForm, {
+    projectId,
+  });
   const settingsHref = withQueryParameters(
     interpolateRoutePath(appRoutes.builderAi, { projectId }),
     {
@@ -48,10 +50,12 @@ export const renderAutomationPanel = (
   const runCards = runs
     .map((run) => {
       const reviewAction = withQueryParameters(
-        `${appRoutes.builderApiAutomationRuns}/${encodeURIComponent(run.id)}/approve`,
+        interpolateRoutePath(appRoutes.builderApiAutomationRunApprove, {
+          projectId,
+          runId: run.id,
+        }),
         {
           locale,
-          projectId,
         },
       );
       const runSpinnerId = `automation-run-${run.id.replace(/[^a-zA-Z0-9_.-]/g, "-")}-spinner`;

@@ -1,4 +1,5 @@
 import type { LocaleCode } from "../../config/environment.ts";
+import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type {
   DialogueGraph,
@@ -13,8 +14,6 @@ import { buildBuilderJourneyConfig } from "./builder-journey.ts";
 import { getTriggerEventLabel } from "./view-labels.ts";
 import { renderWorkspaceFrame, renderWorkspaceShell } from "./workspace-shell.ts";
 
-const questFormAction = (base: string, id: string) => `${base}/${encodeURIComponent(id)}/form`;
-const questDeleteAction = (base: string, id: string) => `${base}/${encodeURIComponent(id)}`;
 const renderTriggerEventOptions = (
   messages: Messages,
   selectedEvent?: TriggerDefinition["event"],
@@ -42,15 +41,16 @@ export const renderQuestEditForm = (
   projectId: string,
   quest: QuestDefinition,
 ): string => {
-  const formAction = withQueryParameters(questFormAction(appRoutes.builderApiQuests, quest.id), {
-    locale,
-    projectId,
-  });
-  const deleteAction = withQueryParameters(
-    questDeleteAction(appRoutes.builderApiQuests, quest.id),
+  const formAction = withQueryParameters(
+    interpolateRoutePath(appRoutes.builderApiQuestForm, { projectId, questId: quest.id }),
     {
       locale,
-      projectId,
+    },
+  );
+  const deleteAction = withQueryParameters(
+    interpolateRoutePath(appRoutes.builderApiQuestDetail, { projectId, questId: quest.id }),
+    {
+      locale,
     },
   );
   const firstStep = quest.steps[0];
@@ -96,17 +96,15 @@ export const renderTriggerEditForm = (
   trigger: TriggerDefinition,
 ): string => {
   const formAction = withQueryParameters(
-    questFormAction(appRoutes.builderApiTriggers, trigger.id),
+    interpolateRoutePath(appRoutes.builderApiTriggerForm, { projectId, triggerId: trigger.id }),
     {
       locale,
-      projectId,
     },
   );
   const deleteAction = withQueryParameters(
-    questDeleteAction(appRoutes.builderApiTriggers, trigger.id),
+    interpolateRoutePath(appRoutes.builderApiTriggerDetail, { projectId, triggerId: trigger.id }),
     {
       locale,
-      projectId,
     },
   );
   return `<div class="${cardClasses.bordered}">
@@ -155,17 +153,15 @@ export const renderDialogueGraphEditForm = (
   graph: DialogueGraph,
 ): string => {
   const formAction = withQueryParameters(
-    questFormAction(appRoutes.builderApiDialogueGraphs, graph.id),
+    interpolateRoutePath(appRoutes.builderApiDialogueGraphForm, { projectId, graphId: graph.id }),
     {
       locale,
-      projectId,
     },
   );
   const deleteAction = withQueryParameters(
-    questDeleteAction(appRoutes.builderApiDialogueGraphs, graph.id),
+    interpolateRoutePath(appRoutes.builderApiDialogueGraphDetail, { projectId, graphId: graph.id }),
     {
       locale,
-      projectId,
     },
   );
   const rootNode =
@@ -225,14 +221,20 @@ export const renderMechanicsEditor = (
   flags: readonly GameFlagDefinition[],
 ): string => {
   const creatorJourney = buildBuilderJourneyConfig(messages, locale, projectId, "rules");
-  const createQuestAction = `${appRoutes.builderApiQuests}/create/form`;
-  const createTriggerAction = `${appRoutes.builderApiTriggers}/create/form`;
-  const createGraphAction = `${appRoutes.builderApiDialogueGraphs}/create/form`;
+  const createQuestAction = interpolateRoutePath(appRoutes.builderApiQuestsCreateForm, {
+    projectId,
+  });
+  const createTriggerAction = interpolateRoutePath(appRoutes.builderApiTriggersCreateForm, {
+    projectId,
+  });
+  const createGraphAction = interpolateRoutePath(appRoutes.builderApiDialogueGraphsCreateForm, {
+    projectId,
+  });
   const questEditHref = (id: string) =>
-    withQueryParameters(`${appRoutes.builderApiQuests}/${encodeURIComponent(id)}`, {
-      locale,
-      projectId,
-    });
+    withQueryParameters(
+      interpolateRoutePath(appRoutes.builderApiQuestDetail, { projectId, questId: id }),
+      { locale },
+    );
   const questCards = quests
     .map(
       (quest) => `<article class="${cardClasses.bordered}">
@@ -260,10 +262,10 @@ export const renderMechanicsEditor = (
     .join("");
 
   const triggerEditHref = (id: string) =>
-    withQueryParameters(`${appRoutes.builderApiTriggers}/${encodeURIComponent(id)}`, {
-      locale,
-      projectId,
-    });
+    withQueryParameters(
+      interpolateRoutePath(appRoutes.builderApiTriggerDetail, { projectId, triggerId: id }),
+      { locale },
+    );
   const triggerCards = triggers
     .map(
       (trigger) => `<article class="${cardClasses.bordered}">
@@ -289,10 +291,10 @@ export const renderMechanicsEditor = (
     .join("");
 
   const graphEditHref = (id: string) =>
-    withQueryParameters(`${appRoutes.builderApiDialogueGraphs}/${encodeURIComponent(id)}`, {
-      locale,
-      projectId,
-    });
+    withQueryParameters(
+      interpolateRoutePath(appRoutes.builderApiDialogueGraphDetail, { projectId, graphId: id }),
+      { locale },
+    );
   const graphCards = dialogueGraphs
     .map(
       (graph) => `<article class="${cardClasses.bordered}">

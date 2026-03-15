@@ -26,7 +26,7 @@ export const renderCreatorAssistPanel = (
   projectId: string,
   context: CreatorAssistContext,
 ): string => {
-  const createJobAction = `${appRoutes.builderApiGenerationJobs}/create/form`;
+  const createJobAction = appRoutes.builderApiGenerationJobsCreateForm;
 
   return `<div id="creator-ai-actions" class="grid gap-3">
     ${context.actions

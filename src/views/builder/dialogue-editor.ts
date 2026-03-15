@@ -57,7 +57,7 @@ export const renderDialogueEditor = (
   const searchAction = withQueryParameters(dialoguePath, {
     lang: locale,
   });
-  const createAction = `${appRoutes.builderApiDialogue}/create/form`;
+  const createAction = appRoutes.builderApiDialogueCreateForm;
   const generateHref = appRoutes.builderApiDialogueGenerate;
   const creatorJourney = buildBuilderJourneyConfig(messages, locale, projectId, "story");
   const totalLines = Array.from(npcGroups.values()).reduce(

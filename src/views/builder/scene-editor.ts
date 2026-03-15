@@ -182,12 +182,16 @@ const renderNodeForm = (
   node: SceneNodeDefinition,
 ): string => {
   const formAction = withQueryParameters(
-    appRoutes.builderApiSceneNodes.replace(":sceneId", encodeURIComponent(sceneId)),
-    { locale, projectId },
+    interpolateRoutePath(appRoutes.builderApiSceneNodes, { projectId, sceneId }),
+    { locale },
   );
   const deleteAction = withQueryParameters(
-    `${appRoutes.builderApiSceneNodes.replace(":sceneId", encodeURIComponent(sceneId))}/${encodeURIComponent(node.id)}`,
-    { locale, projectId },
+    interpolateRoutePath(appRoutes.builderApiSceneNodeDelete, {
+      projectId,
+      sceneId,
+      nodeId: node.id,
+    }),
+    { locale },
   );
 
   const nodeSpinnerId = `scene-node-${node.id.replace(/[^a-zA-Z0-9_.-]/g, "-")}-spinner`;
@@ -440,7 +444,7 @@ export const renderSceneEditor = (
     })
     .join("");
 
-  const createAction = `${appRoutes.builderApiScenes}/create/form`;
+  const createAction = interpolateRoutePath(appRoutes.builderApiScenesCreateForm, { projectId });
 
   return `
     <section class="space-y-6 animate-fade-in-up">
@@ -646,18 +650,12 @@ export const renderSceneDetail = (
   assets: readonly BuilderAsset[] = [],
 ): string => {
   const formAction = withQueryParameters(
-    `${appRoutes.builderApiScenes}/${encodeURIComponent(scene.id)}/form`,
-    {
-      locale,
-      projectId,
-    },
+    interpolateRoutePath(appRoutes.builderApiSceneForm, { projectId, sceneId: scene.id }),
+    { locale },
   );
   const deleteAction = withQueryParameters(
-    `${appRoutes.builderApiScenes}/${encodeURIComponent(scene.id)}`,
-    {
-      locale,
-      projectId,
-    },
+    interpolateRoutePath(appRoutes.builderApiSceneDetail, { projectId, sceneId: scene.id }),
+    { locale },
   );
   const npcBadges = scene.npcs
     .map(
@@ -672,11 +670,8 @@ export const renderSceneDetail = (
     )
     .join("");
   const createNodeAction = withQueryParameters(
-    appRoutes.builderApiSceneNodes.replace(":sceneId", encodeURIComponent(scene.id)),
-    {
-      locale,
-      projectId,
-    },
+    interpolateRoutePath(appRoutes.builderApiSceneNodes, { projectId, sceneId: scene.id }),
+    { locale },
   );
   const nodeCards = (scene.nodes ?? [])
     .map((node) => renderNodeForm(messages, locale, projectId, scene.id, node))

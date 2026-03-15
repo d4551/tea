@@ -1320,19 +1320,24 @@ describe("API contracts", () => {
     });
 
     const response = await app.handle(
-      new Request(toUrl(interpolateRoutePath(appRoutes.builderApiSceneNodes, { projectId, sceneId: teaHouse.id })), {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
+      new Request(
+        toUrl(
+          interpolateRoutePath(appRoutes.builderApiSceneNodes, { projectId, sceneId: teaHouse.id }),
+        ),
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            projectId,
+            locale: "en-US",
+            id: "hero-marker",
+            positionX: "44",
+            positionY: "55",
+          }),
         },
-        body: JSON.stringify({
-          projectId,
-          locale: "en-US",
-          id: "hero-marker",
-          positionX: "44",
-          positionY: "55",
-        }),
-      }),
+      ),
     );
     const updatedScene = await builderService.getScene(projectId, teaHouse.id);
     const updatedNode = updatedScene?.nodes?.find((node) => node.id === "hero-marker");
@@ -1381,18 +1386,23 @@ describe("API contracts", () => {
     });
 
     const response = await app.handle(
-      new Request(toUrl(interpolateRoutePath(appRoutes.builderApiSceneForm, { projectId, sceneId: teaHouse.id })), {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
+      new Request(
+        toUrl(
+          interpolateRoutePath(appRoutes.builderApiSceneForm, { projectId, sceneId: teaHouse.id }),
+        ),
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            projectId,
+            locale: "en-US",
+            displayTitle: "Yangtze Tea House",
+            geometryWidth: "800",
+          }),
         },
-        body: JSON.stringify({
-          projectId,
-          locale: "en-US",
-          displayTitle: "Yangtze Tea House",
-          geometryWidth: "800",
-        }),
-      }),
+      ),
     );
 
     const updatedScene = await builderService.getScene(projectId, teaHouse.id);
@@ -1553,18 +1563,21 @@ describe("API contracts", () => {
     });
 
     const response = await app.handle(
-      new Request(toUrl(interpolateRoutePath(appRoutes.builderApiNpcForm, { projectId, npcId: "guide" })), {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
+      new Request(
+        toUrl(interpolateRoutePath(appRoutes.builderApiNpcForm, { projectId, npcId: "guide" })),
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            projectId,
+            locale: "en-US",
+            sceneId: teaHouse.id,
+            x: "77",
+          }),
         },
-        body: JSON.stringify({
-          projectId,
-          locale: "en-US",
-          sceneId: teaHouse.id,
-          x: "77",
-        }),
-      }),
+      ),
     );
 
     const updatedNpc = await builderService.findNpc(projectId, "guide");
@@ -1616,20 +1629,28 @@ describe("API contracts", () => {
     });
 
     const response = await app.handle(
-      new Request(toUrl(interpolateRoutePath(appRoutes.builderApiQuestForm, { projectId, questId: "quest.branching" })), {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
+      new Request(
+        toUrl(
+          interpolateRoutePath(appRoutes.builderApiQuestForm, {
+            projectId,
+            questId: "quest.branching",
+          }),
+        ),
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            projectId,
+            locale: "en-US",
+            id: "quest.branching",
+            title: "Updated title",
+            description: "Updated description",
+            triggerId: "trigger.updated",
+          }),
         },
-        body: JSON.stringify({
-          projectId,
-          locale: "en-US",
-          id: "quest.branching",
-          title: "Updated title",
-          description: "Updated description",
-          triggerId: "trigger.updated",
-        }),
-      }),
+      ),
     );
 
     const updatedQuest = (await builderService.listQuests(projectId)).find(
@@ -3041,24 +3062,27 @@ describe("HTMX partial rendering", () => {
     const dialogueKey = `npc.${npcId}.intro`;
 
     const sceneResponse = await app.handle(
-      new Request(toUrl(interpolateRoutePath(appRoutes.builderApiScenesCreateForm, { projectId })), {
-        method: "POST",
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          accept: "text/html",
+      new Request(
+        toUrl(interpolateRoutePath(appRoutes.builderApiScenesCreateForm, { projectId })),
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            accept: "text/html",
+          },
+          body: new URLSearchParams({
+            projectId,
+            locale: "en-US",
+            id: sceneId,
+            displayTitle: "Harbor Tea House",
+            background: gameAssetUrls.teaHouseBackground,
+            geometryWidth: "640",
+            geometryHeight: "360",
+            spawnX: "320",
+            spawnY: "180",
+          }).toString(),
         },
-        body: new URLSearchParams({
-          projectId,
-          locale: "en-US",
-          id: sceneId,
-          displayTitle: "Harbor Tea House",
-          background: gameAssetUrls.teaHouseBackground,
-          geometryWidth: "640",
-          geometryHeight: "360",
-          spawnX: "320",
-          spawnY: "180",
-        }).toString(),
-      }),
+      ),
     );
     const sceneHtml = await sceneResponse.text();
 
@@ -3298,22 +3322,25 @@ describe("HTMX partial rendering", () => {
 
     const triggerId = `trigger-${crypto.randomUUID().slice(0, 8)}`;
     const triggerResponse = await app.handle(
-      new Request(toUrl(interpolateRoutePath(appRoutes.builderApiTriggersCreateForm, { projectId })), {
-        method: "POST",
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          accept: "text/html",
+      new Request(
+        toUrl(interpolateRoutePath(appRoutes.builderApiTriggersCreateForm, { projectId })),
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            accept: "text/html",
+          },
+          body: new URLSearchParams({
+            projectId,
+            locale: "en-US",
+            id: triggerId,
+            label: "Meet the builder guide",
+            event: "npc-interact",
+            sceneId: "teaHouse",
+            npcId: "teaMonk",
+          }).toString(),
         },
-        body: new URLSearchParams({
-          projectId,
-          locale: "en-US",
-          id: triggerId,
-          label: "Meet the builder guide",
-          event: "npc-interact",
-          sceneId: "teaHouse",
-          npcId: "teaMonk",
-        }).toString(),
-      }),
+      ),
     );
     const triggerHtml = await triggerResponse.text();
     expect(triggerResponse.status).toBe(httpStatus.ok);
@@ -3331,21 +3358,24 @@ describe("HTMX partial rendering", () => {
 
     const questId = `quest-${crypto.randomUUID().slice(0, 8)}`;
     const questResponse = await app.handle(
-      new Request(toUrl(interpolateRoutePath(appRoutes.builderApiQuestsCreateForm, { projectId })), {
-        method: "POST",
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          accept: "text/html",
+      new Request(
+        toUrl(interpolateRoutePath(appRoutes.builderApiQuestsCreateForm, { projectId })),
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            accept: "text/html",
+          },
+          body: new URLSearchParams({
+            projectId,
+            locale: "en-US",
+            id: questId,
+            title: "Builder intro",
+            description: "Walk through the first authored mechanic.",
+            triggerId,
+          }).toString(),
         },
-        body: new URLSearchParams({
-          projectId,
-          locale: "en-US",
-          id: questId,
-          title: "Builder intro",
-          description: "Walk through the first authored mechanic.",
-          triggerId,
-        }).toString(),
-      }),
+      ),
     );
     const questHtml = await questResponse.text();
     expect(questResponse.status).toBe(httpStatus.ok);
@@ -3369,21 +3399,24 @@ describe("HTMX partial rendering", () => {
 
     const graphId = `graph-${crypto.randomUUID().slice(0, 8)}`;
     const graphResponse = await app.handle(
-      new Request(toUrl(interpolateRoutePath(appRoutes.builderApiDialogueGraphsCreateForm, { projectId })), {
-        method: "POST",
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          accept: "text/html",
+      new Request(
+        toUrl(interpolateRoutePath(appRoutes.builderApiDialogueGraphsCreateForm, { projectId })),
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            accept: "text/html",
+          },
+          body: new URLSearchParams({
+            projectId,
+            locale: "en-US",
+            id: graphId,
+            title: "Guide intro graph",
+            npcId: "teaMonk",
+            line: "npc.teaMonk.greet",
+          }).toString(),
         },
-        body: new URLSearchParams({
-          projectId,
-          locale: "en-US",
-          id: graphId,
-          title: "Guide intro graph",
-          npcId: "teaMonk",
-          line: "npc.teaMonk.greet",
-        }).toString(),
-      }),
+      ),
     );
     const graphHtml = await graphResponse.text();
     expect(graphResponse.status).toBe(httpStatus.ok);
@@ -3404,18 +3437,21 @@ describe("HTMX partial rendering", () => {
     ]);
 
     const automationResponse = await app.handle(
-      new Request(toUrl(interpolateRoutePath(appRoutes.builderApiAutomationRunsCreateForm, { projectId })), {
-        method: "POST",
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          accept: "text/html",
+      new Request(
+        toUrl(interpolateRoutePath(appRoutes.builderApiAutomationRunsCreateForm, { projectId })),
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            accept: "text/html",
+          },
+          body: new URLSearchParams({
+            projectId,
+            locale: "en-US",
+            goal: "Collect builder review evidence for the new quest flow.",
+          }).toString(),
         },
-        body: new URLSearchParams({
-          projectId,
-          locale: "en-US",
-          goal: "Collect builder review evidence for the new quest flow.",
-        }).toString(),
-      }),
+      ),
     );
     const automationHtml = await automationResponse.text();
     expect(automationResponse.status).toBe(httpStatus.ok);

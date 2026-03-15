@@ -87,7 +87,12 @@ import { renderAssetsEditor } from "../views/builder/assets-editor.ts";
 import { renderAutomationPanel } from "../views/builder/automation-panel.ts";
 import { renderBuilderProjectShell } from "../views/builder/builder-layout.ts";
 import { renderDialogueDetail, renderDialogueEditor } from "../views/builder/dialogue-editor.ts";
-import { renderMechanicsEditor, renderQuestEditForm } from "../views/builder/mechanics-editor.ts";
+import {
+  renderDialogueGraphEditForm,
+  renderMechanicsEditor,
+  renderQuestEditForm,
+  renderTriggerEditForm,
+} from "../views/builder/mechanics-editor.ts";
 import { renderNpcDetail, renderNpcEditor } from "../views/builder/npc-editor.ts";
 import { renderSceneDetail, renderSceneEditor } from "../views/builder/scene-editor.ts";
 import { escapeHtml } from "../views/layout.ts";
@@ -4163,6 +4168,165 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       },
     },
   )
+  .get(
+    route(appRoutes.builderApiTriggerDetail),
+    async ({
+      params,
+      query,
+      request,
+      set,
+      status,
+      builderLocale,
+      builderProjectId,
+      builderCurrentPath,
+    }) => {
+      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+        { builderLocale, builderProjectId, builderCurrentPath },
+        { query, params },
+      );
+      const triggers = await builderService.listTriggers(projectId);
+      const trigger = triggers.find((tr) => tr.id === decodePathValue(params.triggerId));
+      if (!trigger) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+      return renderTriggerEditForm(getMessages(locale), locale, projectId, trigger);
+    },
+    {
+      params: t.Object({ projectId: t.String(), triggerId: t.String() }),
+      query: t.Object({
+        locale: t.Optional(t.String()),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .post(
+    route(appRoutes.builderApiTriggerForm),
+    async ({
+      params,
+      body,
+      request,
+      set,
+      status,
+      builderLocale,
+      builderProjectId,
+      builderCurrentPath,
+    }) => {
+      const actionContext = readBuilderScopedContext(
+        { builderLocale, builderProjectId, builderCurrentPath },
+        { body, params },
+      );
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
+      const triggerId = decodePathValue(params.triggerId);
+      const existing = (await builderService.listTriggers(projectId)).find(
+        (tr) => tr.id === triggerId,
+      );
+      if (!existing) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+      const mutation = await builderService.saveTrigger(
+        projectId,
+        {
+          id: triggerId,
+          trigger: {
+            ...existing,
+            label: body.label,
+            event: body.event,
+            sceneId: body.sceneId,
+            npcId: body.npcId,
+          },
+        },
+        actionUpdatedBy,
+      );
+      if (!mutation) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderMechanics,
+        await renderMechanicsWorkspace(locale, projectId),
+      );
+    },
+    {
+      params: t.Object({ projectId: t.String(), triggerId: t.String() }),
+      body: t.Object({
+        locale: t.Optional(t.String()),
+        id: t.String(),
+        label: t.String(),
+        event: t.Union([
+          t.Literal("scene-enter"),
+          t.Literal("npc-interact"),
+          t.Literal("chat"),
+          t.Literal("dialogue-confirmed"),
+          t.Literal("combat-victory"),
+          t.Literal("item-acquired"),
+        ]),
+        sceneId: t.Optional(t.String()),
+        npcId: t.Optional(t.String()),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .delete(
+    route(appRoutes.builderApiTriggerDetail),
+    async ({
+      params,
+      query,
+      request,
+      set,
+      status,
+      builderLocale,
+      builderProjectId,
+      builderCurrentPath,
+    }) => {
+      const actionContext = readBuilderScopedContext(
+        { builderLocale, builderProjectId, builderCurrentPath },
+        { query, params },
+      );
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
+      const triggerId = decodePathValue(params.triggerId);
+      const removed = await builderService.removeTrigger(projectId, triggerId, actionUpdatedBy);
+      if (!removed) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderMechanics,
+        await renderMechanicsWorkspace(locale, projectId),
+      );
+    },
+    {
+      params: t.Object({ projectId: t.String(), triggerId: t.String() }),
+      query: t.Object({
+        locale: t.Optional(t.String()),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
   .post(
     route(appRoutes.builderApiDialogueGraphsCreateForm),
     async ({
@@ -4206,6 +4370,163 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         title: t.String(),
         npcId: t.Optional(t.String()),
         line: t.String(),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .get(
+    route(appRoutes.builderApiDialogueGraphDetail),
+    async ({
+      params,
+      query,
+      request,
+      set,
+      status,
+      builderLocale,
+      builderProjectId,
+      builderCurrentPath,
+    }) => {
+      const { builderLocale: locale, builderProjectId: projectId } = readBuilderScopedContext(
+        { builderLocale, builderProjectId, builderCurrentPath },
+        { query, params },
+      );
+      const graphs = await builderService.listDialogueGraphs(projectId);
+      const graph = graphs.find((g) => g.id === decodePathValue(params.graphId));
+      if (!graph) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+      return renderDialogueGraphEditForm(getMessages(locale), locale, projectId, graph);
+    },
+    {
+      params: t.Object({ projectId: t.String(), graphId: t.String() }),
+      query: t.Object({
+        locale: t.Optional(t.String()),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .post(
+    route(appRoutes.builderApiDialogueGraphForm),
+    async ({
+      params,
+      body,
+      request,
+      set,
+      status,
+      builderLocale,
+      builderProjectId,
+      builderCurrentPath,
+    }) => {
+      const actionContext = readBuilderScopedContext(
+        { builderLocale, builderProjectId, builderCurrentPath },
+        { body, params },
+      );
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
+      const graphId = decodePathValue(params.graphId);
+      const existing = (await builderService.listDialogueGraphs(projectId)).find(
+        (g) => g.id === graphId,
+      );
+      if (!existing) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+      const rootNodeId = existing.rootNodeId;
+      const updatedNodes = existing.nodes.map((node) => {
+        if (node.id === rootNodeId || node.id === "root") {
+          return { ...node, line: body.line };
+        }
+        return node;
+      });
+      const mutation = await builderService.saveDialogueGraph(
+        projectId,
+        {
+          id: graphId,
+          graph: {
+            ...existing,
+            title: body.title,
+            npcId: body.npcId,
+            nodes: updatedNodes,
+          },
+        },
+        actionUpdatedBy,
+      );
+      if (!mutation) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderMechanics,
+        await renderMechanicsWorkspace(locale, projectId),
+      );
+    },
+    {
+      params: t.Object({ projectId: t.String(), graphId: t.String() }),
+      body: t.Object({
+        locale: t.Optional(t.String()),
+        id: t.String(),
+        title: t.String(),
+        npcId: t.Optional(t.String()),
+        line: t.String(),
+      }),
+      response: {
+        [httpStatus.ok]: t.String(),
+        [httpStatus.notFound]: builderErrorResponse,
+      },
+    },
+  )
+  .delete(
+    route(appRoutes.builderApiDialogueGraphDetail),
+    async ({
+      params,
+      query,
+      request,
+      set,
+      status,
+      builderLocale,
+      builderProjectId,
+      builderCurrentPath,
+    }) => {
+      const actionContext = readBuilderScopedContext(
+        { builderLocale, builderProjectId, builderCurrentPath },
+        { query, params },
+      );
+      const { builderLocale: locale, builderProjectId: projectId } = actionContext;
+      const actionUpdatedBy = resolveBuilderUpdatedByFromContext(actionContext);
+      const graphId = decodePathValue(params.graphId);
+      const removed = await builderService.removeDialogueGraph(projectId, graphId, actionUpdatedBy);
+      if (!removed) {
+        return status(
+          httpStatus.notFound,
+          buildBuilderNotFoundError(request, set.headers, locale, "projectNotFound"),
+        );
+      }
+      return withProjectChromeRefresh(
+        locale,
+        projectId,
+        appRoutes.builderMechanics,
+        await renderMechanicsWorkspace(locale, projectId),
+      );
+    },
+    {
+      params: t.Object({ projectId: t.String(), graphId: t.String() }),
+      query: t.Object({
+        locale: t.Optional(t.String()),
       }),
       response: {
         [httpStatus.ok]: t.String(),

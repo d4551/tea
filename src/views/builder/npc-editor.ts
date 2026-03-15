@@ -6,6 +6,7 @@
 import type { LocaleCode } from "../../config/environment.ts";
 import { resolveCreatorFacingText } from "../../domain/builder/builder-display.ts";
 import { resolveGameText } from "../../domain/game/data/game-text.ts";
+import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes, withQueryParameters } from "../../shared/constants/routes.ts";
 import type {
   SceneDefinition,
@@ -63,7 +64,7 @@ export const renderNpcEditor = (
   }
 
   const selectedNpc = allNpcs[0] ?? null;
-  const createAction = `${appRoutes.builderApiNpcs}/create/form`;
+  const createAction = interpolateRoutePath(appRoutes.builderApiNpcsCreateForm, { projectId });
   const sceneCount = Object.keys(scenes).length;
   const manifestCount = Object.keys(manifests).length;
   const creatorJourney = buildBuilderJourneyConfig(messages, locale, projectId, "characters");
@@ -80,10 +81,9 @@ export const renderNpcEditor = (
       const scene = scenes[sceneId];
       const sceneDisplayName = scene ? resolveSceneDisplayName(locale, scene) : sceneId;
       const detailHref = withQueryParameters(
-        `${appRoutes.builderApiNpcs}/${encodeURIComponent(npc.characterKey)}`,
+        interpolateRoutePath(appRoutes.builderApiNpcDetail, { projectId, npcId: npc.characterKey }),
         {
           locale,
-          projectId,
           sceneId,
         },
       );
@@ -263,18 +263,16 @@ export const renderNpcDetail = (
   manifest: SpriteManifest | null,
 ): string => {
   const formAction = withQueryParameters(
-    `${appRoutes.builderApiNpcs}/${encodeURIComponent(npc.characterKey)}/form`,
+    interpolateRoutePath(appRoutes.builderApiNpcForm, { projectId, npcId: npc.characterKey }),
     {
       locale,
-      projectId,
       sceneId,
     },
   );
   const deleteAction = withQueryParameters(
-    `${appRoutes.builderApiNpcs}/${encodeURIComponent(npc.characterKey)}`,
+    interpolateRoutePath(appRoutes.builderApiNpcDetail, { projectId, npcId: npc.characterKey }),
     {
       locale,
-      projectId,
     },
   );
   const dialogueKeys = npc.dialogueKeys.join(", ");

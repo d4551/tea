@@ -88,12 +88,16 @@ type AppRouteMap = {
   readonly builderApiAnimationClipsCreateForm: string;
   readonly builderApiDialogueGraphs: string;
   readonly builderApiDialogueGraphsCreateForm: string;
+  readonly builderApiDialogueGraphDetail: string;
+  readonly builderApiDialogueGraphForm: string;
   readonly builderApiQuests: string;
   readonly builderApiQuestsCreateForm: string;
   readonly builderApiQuestDetail: string;
   readonly builderApiQuestForm: string;
   readonly builderApiTriggers: string;
   readonly builderApiTriggersCreateForm: string;
+  readonly builderApiTriggerDetail: string;
+  readonly builderApiTriggerForm: string;
   readonly builderApiGenerationJobs: string;
   readonly builderApiGenerationJobsCreateForm: string;
   readonly builderApiGenerationJobApprove: string;
@@ -196,12 +200,16 @@ export const appRoutes: AppRouteMap = {
   builderApiAnimationClipsCreateForm: "/api/builder/animation-clips/create/form",
   builderApiDialogueGraphs: "/api/builder/:projectId/dialogue-graphs",
   builderApiDialogueGraphsCreateForm: "/api/builder/:projectId/dialogue-graphs/create/form",
+  builderApiDialogueGraphDetail: "/api/builder/:projectId/dialogue-graphs/:graphId",
+  builderApiDialogueGraphForm: "/api/builder/:projectId/dialogue-graphs/:graphId/form",
   builderApiQuests: "/api/builder/:projectId/quests",
   builderApiQuestsCreateForm: "/api/builder/:projectId/quests/create/form",
   builderApiQuestDetail: "/api/builder/:projectId/quests/:questId",
   builderApiQuestForm: "/api/builder/:projectId/quests/:questId/form",
   builderApiTriggers: "/api/builder/:projectId/triggers",
   builderApiTriggersCreateForm: "/api/builder/:projectId/triggers/create/form",
+  builderApiTriggerDetail: "/api/builder/:projectId/triggers/:triggerId",
+  builderApiTriggerForm: "/api/builder/:projectId/triggers/:triggerId/form",
   builderApiGenerationJobs: "/api/builder/generation-jobs",
   builderApiGenerationJobsCreateForm: "/api/builder/generation-jobs/create/form",
   builderApiGenerationJobApprove: "/api/builder/generation-jobs/:jobId/approve",
