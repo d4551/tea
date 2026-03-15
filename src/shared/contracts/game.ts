@@ -831,6 +831,12 @@ export interface AutomationRunStep {
   readonly spec?: AutomationStepSpec;
   /** Optional evidence URL produced by the step. */
   readonly evidenceSource?: string;
+  /** Whether a failed step can be retried without side effects. */
+  readonly retryable?: boolean;
+  /** Machine-readable failure reason code when status is "failed". */
+  readonly failureReason?: string;
+  /** Human-readable remediation guidance when status is "failed". */
+  readonly remediationHint?: string;
 }
 
 /**
@@ -2519,6 +2525,8 @@ export interface FeatureCapability {
   readonly toolLikeSuggestions: CapabilityState;
   /** Provider supports token streaming. */
   readonly streaming: CapabilityState;
+  /** Knowledge retrieval support, including vector and lexical fallback mode. */
+  readonly knowledgeRetrieval: CapabilityState;
   /** Non-network fallback mode remains available. */
   readonly offlineFallback: CapabilityState;
 }
@@ -2799,7 +2807,8 @@ export type CreatorCapabilityKey =
   | "speech"
   | "automation-review"
   | "import-3d"
-  | "animation-assist";
+  | "animation-assist"
+  | "knowledge-retrieval";
 
 /**
  * Creator capability row in public surface.

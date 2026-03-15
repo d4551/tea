@@ -8,6 +8,7 @@
 import { Elysia } from "elysia";
 import { appConfig } from "../config/environment.ts";
 import { deriveFeatureCapability } from "../domain/ai/capability-snapshot.ts";
+import { vectorStore } from "../domain/ai/vector-store.ts";
 import { knowledgeBaseService } from "../domain/ai/knowledge-base-service.ts";
 import { getAiRuntimeProfile } from "../domain/ai/local-runtime-profile.ts";
 import { ProviderRegistry } from "../domain/ai/providers/provider-registry.ts";
@@ -379,7 +380,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         latestReleaseVersion: project.latestReleaseVersion,
         publishedReleaseVersion: project.publishedReleaseVersion,
         published: project.published,
-        creatorCapabilities: deriveCreatorCapabilities(messages, registryStatus, readiness),
+        creatorCapabilities: deriveCreatorCapabilities(messages, registryStatus, readiness, vectorStore.available),
       };
       const body = renderBuilderDashboard(
         messages,
@@ -728,7 +729,7 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
       const body = renderAiPanel(
         messages,
         features,
-        deriveFeatureCapability(registryStatus),
+        deriveFeatureCapability(registryStatus, vectorStore.available),
         await getAiRuntimeProfile(),
         builderLocale,
         projectId,

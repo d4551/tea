@@ -672,6 +672,14 @@ export const renderSceneDetail = (
   );
   const scenePayload = escapeHtml(JSON.stringify({ scene }));
   const sceneTitle = resolveSceneTitle(locale, scene);
+  const sceneNodes = scene.nodes ?? [];
+  const sceneLinkedAssetCount = sceneNodes.filter((node) => Boolean(node.assetId))
+    .length;
+  const sceneAssetStateLabel =
+    sceneLinkedAssetCount > 0
+      ? messages.builder.previewReady
+      : messages.builder.assetsWorkspaceDescription;
+  const sceneAssetStateClass = sceneLinkedAssetCount > 0 ? "badge-success" : "badge-warning";
 
   return `
     <div class="${cardClasses.bordered}">
@@ -702,7 +710,8 @@ export const renderSceneDetail = (
           <article class="${cardClasses.bordered}">
             <div class="card-body gap-3">
               <h3 class="card-title text-base">${escapeHtml(messages.builder.assets)}</h3>
-              <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.assetPlaceholder)}</p>
+              <span class="badge ${sceneAssetStateClass}">${escapeHtml(sceneAssetStateLabel)}</span>
+              <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.assetsWorkspaceDescription)}</p>
               <div class="flex flex-wrap gap-2">
                 ${renderScenePaletteBadges(messages, scene.sceneMode)}
               </div>

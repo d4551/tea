@@ -136,21 +136,59 @@ const toSpeechCapabilityState = (
 };
 
 /**
+ * Derives the retrieval capability state from embedding provider and vector store readiness.
+ *
+ * @param status Registry status snapshot.
+ * @param vectorStoreAvailable Whether the sqlite-vec backed vector store is operational.
+ * @returns Retrieval capability state distinguishing vector-enabled from lexical-only.
+ */
+const toRetrievalCapabilityState = (
+  status: AiSystemStatus,
+  vectorStoreAvailable: boolean,
+): CapabilityState => {
+  const embeddingState = toProviderCapabilityState(status, "embeddings");
+  if (embeddingState.status === "ready" && vectorStoreAvailable) {
+    return readyState("provider");
+  }
+  if (!vectorStoreAvailable) {
+    return degradedState("fallback", "vector-store-unavailable");
+  }
+  if (embeddingState.status === "degraded") {
+    return degradedState("provider", "embedding-provider-degraded");
+  }
+  if (embeddingState.status === "unavailable") {
+    return degradedState("provider", "embedding-provider-missing");
+  }
+  return degradedState("provider", "vector-store-degraded");
+};
+
+/**
  * Derives the public builder/API feature capability matrix from provider discovery.
  *
  * @param status Registry status snapshot.
+ * @param vectorStoreAvailable Whether the sqlite-vec backed vector store is operational.
  * @returns Truthful feature capability state.
  */
-export const deriveFeatureCapability = (status: AiSystemStatus): FeatureCapability => {
+export const deriveFeatureCapability = (
+  status: AiSystemStatus,
+  vectorStoreAvailable: boolean,
+): FeatureCapability => {
   const assist = toProviderCapabilityState(status, "chat");
   const toolLikeSuggestions = toProviderCapabilityState(status, "structured-planning");
+  const embeddingState = toProviderCapabilityState(status, "embeddings");
+
+  const offlineFallback: CapabilityState =
+    embeddingState.status !== "unavailable" && vectorStoreAvailable
+      ? readyState("fallback")
+      : unavailableState("fallback-disabled");
 
   return {
     assist,
     test: assist,
     toolLikeSuggestions,
     streaming: toStreamingCapabilityState(status),
-    offlineFallback: unavailableState("fallback-disabled"),
+    offlineFallback,
+    knowledgeRetrieval: toRetrievalCapabilityState(status, vectorStoreAvailable),
   };
 };
 
@@ -172,20 +210,23 @@ const buildCreatorCapability = (
  * @param messages Locale-resolved labels.
  * @param status Registry status snapshot.
  * @param readiness Builder platform readiness summary.
+ * @param vectorStoreAvailable Whether the sqlite-vec backed vector store is operational.
  * @returns Creator-facing capability state.
  */
 export const deriveCreatorCapabilities = (
   messages: Messages,
   status: AiSystemStatus,
   readiness: BuilderPlatformReadiness,
+  vectorStoreAvailable: boolean,
 ): CreatorCapabilities => {
-  const featureCapabilities = deriveFeatureCapability(status);
+  const featureCapabilities = deriveFeatureCapability(status, vectorStoreAvailable);
   const dialogueGeneration = toProviderCapabilityState(status, "chat");
   const speechToText = toProviderCapabilityState(status, "speech-to-text");
   const speechSynthesis = toProviderCapabilityState(status, "text-to-speech");
   const imageGeneration = toProviderCapabilityState(status, "image-generation");
   const runtime3dReady = hasSurface(readiness, "runtime3d");
   const animationSurfaceReady = hasSurface(readiness, "animationPipeline");
+  const retrievalState = toRetrievalCapabilityState(status, vectorStoreAvailable);
 
   return {
     items: [
@@ -218,6 +259,11 @@ export const deriveCreatorCapabilities = (
         "animation-assist",
         messages.builder.creatorCapabilityAnimationAssist,
         combineSurfaceAndProviderState(dialogueGeneration, animationSurfaceReady),
+      ),
+      buildCreatorCapability(
+        "knowledge-retrieval",
+        messages.builder.creatorCapabilityKnowledgeRetrieval,
+        retrievalState,
       ),
     ],
   };

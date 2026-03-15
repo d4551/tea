@@ -6,6 +6,7 @@
 import { Elysia, t } from "elysia";
 import { appConfig, type LocaleCode, normalizeLocale } from "../config/environment.ts";
 import { deriveFeatureCapability } from "../domain/ai/capability-snapshot.ts";
+import { vectorStore } from "../domain/ai/vector-store.ts";
 import { knowledgeBaseService } from "../domain/ai/knowledge-base-service.ts";
 import { ProviderRegistry } from "../domain/ai/providers/provider-registry.ts";
 import { auditService } from "../domain/audit/audit-service.ts";
@@ -386,6 +387,11 @@ const builderFeatureCapabilitySchema = t.Object({
       t.Literal("surface"),
       t.Literal("none"),
     ]),
+    reasonCode: t.Optional(t.String()),
+  }),
+  knowledgeRetrieval: t.Object({
+    status: t.Union([t.Literal("ready"), t.Literal("degraded"), t.Literal("unavailable")]),
+    mode: t.Union([t.Literal("provider"), t.Literal("fallback"), t.Literal("surface"), t.Literal("none")]),
     reasonCode: t.Optional(t.String()),
   }),
   offlineFallback: t.Object({
@@ -1202,6 +1208,8 @@ const renderPatchPreviewHtml = (
   operations: readonly BuilderPatchPreviewOperation[],
 ) => {
   const messages = getMessages(locale);
+  const builderMessages = getBuilderMessages(locale);
+  const hasInvalidOperations = operations.some((operation) => !operation.valid);
   const serializedOperations = escapeHtml(
     serializeOperations(
       operations.map((operation) => ({
@@ -1235,20 +1243,66 @@ const renderPatchPreviewHtml = (
         <h3 class="card-title">${escapeHtml(messages.builder.previewReady)}</h3>
         <p class="text-sm text-base-content/70">${escapeHtml(messages.builder.patchOperations)}</p>
       </div>
+      ${
+        hasInvalidOperations
+          ? `<div role="alert" class="alert alert-error alert-soft">
+              <span>${escapeHtml(builderMessages.invalidPatchPlan)}</span>
+            </div>`
+          : ""
+      }
       <ul class="space-y-3">${rows}</ul>
-      <form
-        hx-post="${escapeHtml(appRoutes.aiBuilderPatchApplyForm)}"
-        hx-target="#ai-patch-result"
-        hx-swap="innerHTML"
-        class="flex flex-wrap gap-2"
-      >
-        ${renderBuilderHiddenFields(projectId, locale)}
-        <input type="hidden" name="expectedVersion" value="${escapeHtml(String(version))}" />
-        <textarea name="operationsJson" class="hidden">${serializedOperations}</textarea>
-        <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.applyChanges)}">${escapeHtml(messages.builder.applyChanges)}</button>
-      </form>
+      ${
+        hasInvalidOperations
+          ? ""
+          : `<form
+              hx-post="${escapeHtml(appRoutes.aiBuilderPatchApplyForm)}"
+              hx-target="#ai-patch-result"
+              hx-swap="innerHTML"
+              class="flex flex-wrap gap-2"
+            >
+              ${renderBuilderHiddenFields(projectId, locale)}
+              <input type="hidden" name="expectedVersion" value="${escapeHtml(String(version))}" />
+              <textarea name="operationsJson" class="hidden">${serializedOperations}</textarea>
+              <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.applyChanges)}">${escapeHtml(messages.builder.applyChanges)}</button>
+            </form>`
+      }
     </div>
   </article>`;
+};
+
+const renderPatchApplyBlockedHtml = async (
+  locale: LocaleCode,
+  projectId: string,
+  operations: readonly BuilderPatchPreviewOperation[],
+): Promise<string> => {
+  const messages = getMessages(locale);
+  const builderMessages = getBuilderMessages(locale);
+  const rows = operations
+    .map(
+      (operation) =>
+        `<li class="rounded-box border border-base-300 bg-base-200/60 p-3">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="badge ${operation.valid ? "badge-success" : "badge-error"} badge-soft">${escapeHtml(operation.valid ? messages.builder.previewReady : messages.api.frameworkErrors.validation)}</span>
+            <code>${escapeHtml(operation.operation.op)} ${escapeHtml(operation.operation.path)}</code>
+          </div>
+          <p class="mt-2 text-sm">${escapeHtml(operation.message)}</p>
+        </li>`,
+    )
+    .join("");
+
+  return withProjectChromeRefresh(
+    locale,
+    projectId,
+    appRoutes.builderAi,
+    `<article class="${cardClasses.bordered}">
+      <div class="card-body gap-4">
+        <div role="alert" class="alert alert-error alert-soft">
+          <span>${escapeHtml(builderMessages.invalidPatchPlan)}</span>
+        </div>
+        <ul class="space-y-3">${rows}</ul>
+      </div>
+    </article>`,
+  );
 };
 
 export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/builder" })
@@ -1424,13 +1478,16 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         onnxDevice: appConfig.ai.onnxDevice,
         audit: readinessAudit,
       });
-      const creatorCapabilities = toCreatorCapabilities(messages, registryStatus, readiness);
-      const features: FeatureCapability = deriveFeatureCapability(registryStatus);
+      const creatorCapabilities = toCreatorCapabilities(messages, registryStatus, readiness, vectorStore.available);
+      const features: FeatureCapability = deriveFeatureCapability(registryStatus, vectorStore.available);
 
       return status(
         httpStatus.ok,
         successEnvelope({
           features,
+          vectorStore: {
+            available: vectorStore.available,
+          },
           creatorCapabilities: {
             items: [...creatorCapabilities.items],
           },
@@ -1444,6 +1501,9 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
           ok: t.Literal(true),
           data: t.Object({
             features: builderFeatureCapabilitySchema,
+            vectorStore: t.Object({
+              available: t.Boolean(),
+            }),
             creatorCapabilities: t.Object({
               items: t.Array(
                 t.Object({
@@ -2006,6 +2066,13 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         );
       }
 
+      if (applied.rejected) {
+        return status(
+          httpStatus.conflict,
+          await renderPatchApplyBlockedHtml(actionLocale, actionProjectId, applied.operations),
+        );
+      }
+
       const messages = getMessages(actionLocale);
       const rows = applied.operations
         .map(
@@ -2037,6 +2104,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
       }),
       response: {
         [httpStatus.ok]: t.String(),
+        [httpStatus.conflict]: t.String(),
         [httpStatus.badRequest]: builderErrorResponse,
         [httpStatus.notFound]: builderErrorResponse,
         [httpStatus.forbidden]: builderErrorResponse,
@@ -2168,7 +2236,7 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         );
       }
 
-      if (applied.operations.some((operation) => !operation.valid)) {
+      if (applied.rejected) {
         return status(
           httpStatus.conflict,
           buildError(

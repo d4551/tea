@@ -26,6 +26,7 @@ const featureCapabilities: FeatureCapability = {
   test: { status: "ready", mode: "provider" },
   toolLikeSuggestions: { status: "ready", mode: "provider" },
   streaming: { status: "ready", mode: "provider" },
+  knowledgeRetrieval: { status: "ready", mode: "provider" },
   offlineFallback: { status: "degraded", mode: "fallback" },
 };
 
@@ -82,8 +83,8 @@ const readiness: BuilderPlatformReadiness = {
   partialCount: 2,
   missingCount: 0,
   capabilities: [
-    { key: "aiAuthoring", status: "implemented" },
-    { key: "automation", status: "partial" },
+    { key: "aiAuthoring", status: "implemented", inventoryPresent: true, workflowVerified: true },
+    { key: "automation", status: "partial", inventoryPresent: true, workflowVerified: false },
   ],
 };
 

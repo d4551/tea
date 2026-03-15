@@ -2184,12 +2184,18 @@ describe("API contracts", () => {
     expect(payload.ok).toBe(true);
     expect(typeof payload.data?.features?.assist.status).toBe("string");
     expect(typeof payload.data?.features?.assist.mode).toBe("string");
-    expect(payload.data?.features?.toolLikeSuggestions.status).toBe("unavailable");
-    expect(payload.data?.features?.offlineFallback.status).toBe("unavailable");
+    expect(typeof payload.data?.features?.toolLikeSuggestions.status).toBe("string");
+    expect(typeof payload.data?.features?.offlineFallback.status).toBe("string");
+    expect(typeof payload.data?.features?.offlineFallback.mode).toBe("string");
     expect(typeof payload.data?.providerCount).toBe("number");
     expect(Array.isArray(payload.data?.creatorCapabilities?.items)).toBe(true);
     expect(typeof payload.data?.creatorCapabilities?.items?.[0]?.status).toBe("string");
     expect(typeof payload.data?.creatorCapabilities?.items?.[0]?.mode).toBe("string");
+    expect(
+      payload.data?.creatorCapabilities?.items?.some(
+        (capability) => capability.key === "knowledge-retrieval",
+      ),
+    ).toBe(true);
   });
 
   test("builder platform readiness endpoint exposes partial and missing capability states", async () => {
@@ -2206,6 +2212,8 @@ describe("API contracts", () => {
         readonly capabilities: ReadonlyArray<{
           readonly key: string;
           readonly status: string;
+          readonly inventoryPresent?: boolean;
+          readonly workflowVerified?: boolean;
         }>;
       };
     }>(response);
@@ -2216,7 +2224,7 @@ describe("API contracts", () => {
     expect(payload.data?.missingCount).toBeGreaterThan(0);
     expect(
       payload.data?.capabilities.some(
-        (capability) => capability.key === "automation" && capability.status === "partial",
+        (capability) => capability.key === "automation" && capability.status === "missing",
       ),
     ).toBe(true);
     expect(
@@ -2234,6 +2242,14 @@ describe("API contracts", () => {
         (capability) => capability.key === "runtime3d" && capability.status === "partial",
       ),
     ).toBe(true);
+    expect(
+      payload.data?.capabilities.every(
+        (capability) => typeof capability.inventoryPresent === "boolean" && typeof capability.workflowVerified === "boolean",
+      ),
+    ).toBe(true);
+    const automationCapability = payload.data?.capabilities.find((capability) => capability.key === "automation");
+    expect(automationCapability?.status === "partial" || automationCapability?.status === "missing").toBe(true);
+    expect(automationCapability?.workflowVerified).toBe(false);
   });
 
   test("AI status endpoint exposes local runtime and speech capabilities", async () => {
@@ -4076,6 +4092,59 @@ describe("HTMX partial rendering", () => {
     expect(applyResponse.status).toBe(httpStatus.ok);
     expect(applyHtml.includes('hx-swap-oob="outerHTML"')).toBe(true);
     expect(applyHtml.includes('id="builder-project-shell"')).toBe(true);
+  });
+
+  test("AI patch preview form blocks apply controls for invalid plans and apply form returns conflict", async () => {
+    const projectId = `patch-invalid-${crypto.randomUUID()}`;
+    await createBuilderProject(projectId);
+    const operationsJson = JSON.stringify([
+      {
+        op: "replace",
+        path: "/unsupported/path",
+        value: "Invalid patch line.",
+      },
+    ]);
+
+    const previewResponse = await app.handle(
+      new Request(toUrl(appRoutes.aiBuilderPatchPreviewForm), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+        },
+        body: new URLSearchParams({
+          projectId,
+          locale: "en-US",
+          operationsJson,
+        }).toString(),
+      }),
+    );
+    const previewHtml = await previewResponse.text();
+
+    expect(previewResponse.status).toBe(httpStatus.ok);
+    expect(previewHtml.includes("Patch plan contains invalid operations")).toBe(true);
+    expect(previewHtml.includes(appRoutes.aiBuilderPatchApplyForm)).toBe(false);
+
+    const applyResponse = await app.handle(
+      new Request(toUrl(appRoutes.aiBuilderPatchApplyForm), {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "text/html",
+        },
+        body: new URLSearchParams({
+          projectId,
+          locale: "en-US",
+          expectedVersion: "1",
+          operationsJson,
+        }).toString(),
+      }),
+    );
+    const applyHtml = await applyResponse.text();
+
+    expect(applyResponse.status).toBe(httpStatus.conflict);
+    expect(applyHtml.includes("Patch plan contains invalid operations")).toBe(true);
+    expect(applyHtml.includes("alert-success")).toBe(false);
   });
 
   test("game route renders explicit missing and unpublished project states", async () => {

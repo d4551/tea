@@ -173,6 +173,10 @@ export const renderNpcEditor = (
   const selectedNpcManifest =
     selectedNpc === null ? null : (manifests[selectedNpc.npc.characterKey] ?? null);
   const selectedNpcScene = selectedNpc === null ? null : (scenes[selectedNpc.sceneId] ?? null);
+  const selectedNpcPreviewStateLabel = selectedNpcManifest
+    ? messages.builder.previewReady
+    : messages.builder.npcPreviewUnavailable;
+  const selectedNpcPreviewStateClass = selectedNpcManifest ? "badge-success" : "badge-warning";
 
   return `
     <section class="space-y-6 animate-fade-in-up">
@@ -211,14 +215,8 @@ export const renderNpcEditor = (
                 <legend class="fieldset-legend">${escapeHtml(messages.builder.npcName)}</legend>
                 <input name="displayName" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.npcCreateLabelPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.npcName)}" />
               </fieldset>
-              <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
-                <summary class="collapse-title text-sm font-semibold" aria-label="${escapeHtml(messages.builder.advancedTools)}">${escapeHtml(messages.builder.advancedTools)}</summary>
-                <div class="collapse-content pt-2">
-                  <div class="rounded-box border border-dashed border-base-300 bg-base-200/45 p-3 text-sm text-base-content/70">
-                    ${escapeHtml(messages.builder.advancedTools)}
-                  </div>
-                </div>
-              </details>
+
+
               <div class="flex items-center gap-2">
                 <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.addNpc)}">${escapeHtml(messages.builder.addNpc)}</button>
                 <span id="npc-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
@@ -263,8 +261,9 @@ export const renderNpcEditor = (
                         <img src="${escapeHtml(selectedNpcManifest.sheet)}" alt="${escapeHtml(resolveNpcDisplayName(locale, selectedNpc.npc))}" loading="lazy" />
                       </div>
                     </div>`
-                    : `<div class="flex h-32 items-center justify-center rounded-box border border-dashed border-base-300 bg-base-200/45 text-sm text-base-content/60">${escapeHtml(messages.builder.assetPlaceholder)}</div>`
+                    : `<div class="flex h-32 items-center justify-center rounded-box border border-dashed border-base-300 bg-base-200/45 px-4 text-center text-sm text-base-content/60">${escapeHtml(messages.builder.npcPreviewUnavailable)}</div>`
                 }
+                  <span class="badge ${selectedNpcPreviewStateClass}">${escapeHtml(selectedNpcPreviewStateLabel)}</span>
                   <div class="flex flex-wrap gap-2">
                     <span class="badge badge-outline">${escapeHtml(selectedNpcScene ? resolveSceneDisplayName(locale, selectedNpcScene) : selectedNpc.sceneId)}</span>
                     <span class="badge badge-soft">${escapeHtml(getBooleanLabel(messages, selectedNpc.npc.ai.greetOnApproach))}</span>
@@ -360,21 +359,10 @@ export const renderNpcDetail = (
             <legend class="fieldset-legend">${escapeHtml(messages.builder.npcName)}</legend>
             <input id="npc-display-name" name="displayName" type="text" class="input w-full" value="${escapeHtml(npcDisplayName)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.npcName)}" />
           </fieldset>
-
-          <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100 lg:col-span-2">
-            <summary class="collapse-title text-sm font-semibold" aria-label="${escapeHtml(messages.builder.advancedTools)}">${escapeHtml(messages.builder.advancedTools)}</summary>
-            <div class="collapse-content grid gap-4 pt-2 lg:grid-cols-2">
-              <input type="hidden" name="labelKey" value="${escapeHtml(npc.labelKey)}" />
-              <fieldset class="fieldset">
-                <legend class="fieldset-legend">${escapeHtml(messages.builder.idLabel)}</legend>
-                <input id="npc-stable-id" type="text" class="input w-full builder-mono" value="${escapeHtml(npc.characterKey)}" readonly aria-label="${escapeHtml(messages.builder.idLabel)}" />
-              </fieldset>
-              <fieldset class="fieldset">
-                <legend class="fieldset-legend">${escapeHtml(messages.builder.idLabel)}</legend>
-                <input id="npc-label-key" type="text" class="input w-full builder-mono" value="${escapeHtml(npc.labelKey)}" readonly aria-label="${escapeHtml(messages.builder.idLabel)}" />
-              </fieldset>
-            </div>
-          </details>
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">${escapeHtml(messages.builder.labelField)}</legend>
+            <input id="npc-label-key" name="labelKey" type="text" class="input w-full" value="${escapeHtml(npc.labelKey)}" required aria-required="true" aria-label="${escapeHtml(messages.builder.labelField)}" />
+          </fieldset>
 
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.npcPosition)} · ${escapeHtml(messages.builder.xLabel)}</legend>

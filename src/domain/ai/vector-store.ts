@@ -77,6 +77,24 @@ const loadSqliteVecModule = (): SqliteVecModule | null => {
   return loadedModule;
 };
 
+const configureCustomSqliteLibrary = (): boolean => {
+  const customLibraryPath = appConfig.database.customSqliteLibraryPath;
+  if (!customLibraryPath) {
+    return false;
+  }
+
+  Database.setCustomSQLite(customLibraryPath);
+  return true;
+};
+
+const hasExtensionCapableSqlite = (): boolean => {
+  if (process.platform !== "darwin") {
+    return true;
+  }
+
+  return configureCustomSqliteLibrary();
+};
+
 /**
  * Single KNN search result from the vector index.
  */
@@ -134,17 +152,31 @@ class VectorStore {
       return;
     }
 
+    if (!hasExtensionCapableSqlite()) {
+      logger.warn("vector-store.disabled", {
+        reason: "custom sqlite library required for extension loading on darwin",
+      });
+      return;
+    }
+
     const dbPath = resolveVectorDbPath();
     const db = new Database(dbPath);
+    try {
+      sqliteVec.load(db);
 
-    sqliteVec.load(db);
-
-    db.run(`
-      CREATE VIRTUAL TABLE IF NOT EXISTS vec_knowledge_chunks USING vec0(
-        chunk_id TEXT PRIMARY KEY,
-        embedding FLOAT[${EMBEDDING_DIMENSION}]
-      )
-    `);
+      db.run(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS vec_knowledge_chunks USING vec0(
+          chunk_id TEXT PRIMARY KEY,
+          embedding FLOAT[${EMBEDDING_DIMENSION}]
+        )
+      `);
+    } catch (error) {
+      logger.warn("vector-store.disabled", {
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      db.close();
+      return;
+    }
 
     this.db = db;
     this._available = true;

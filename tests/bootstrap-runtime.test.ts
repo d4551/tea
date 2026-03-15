@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { runDoctorWorkflow, runSetupWorkflow } from "../scripts/runtime-bootstrap.ts";
 import { collectRuntimeReadinessReport } from "../src/bootstrap/runtime-readiness.ts";
 
@@ -25,6 +25,54 @@ describe("runtime bootstrap", () => {
     expect(report.checks.some((check) => check.key === "ai:routing")).toBe(true);
   });
 
+  test("runtime readiness optional workflow checks can be toggled", async () => {
+    const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
+      (async (target) => {
+        const resolved = String(target);
+        if (resolved.endsWith("/api/builder/platform/readiness")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {},
+            }),
+            {
+              status: 200,
+              headers: {
+                "content-type": "application/json",
+              },
+            },
+          );
+        }
+
+        return new Response(
+          "<!doctype html><html><body><div id=\"builder-project-shell\"></div></body></html>",
+          {
+            status: 200,
+            headers: {
+              "content-type": "text/html",
+            },
+          },
+        );
+      }) as typeof fetch,
+    );
+
+    try {
+      fetchSpy.mockClear();
+      const withoutWorkflow = await collectRuntimeReadinessReport({ includeWorkflowChecks: false });
+      expect(withoutWorkflow.checks.some((check) => check.key === "builder:automation-workflow")).toBe(false);
+      const withoutWorkflowCallCount = fetchSpy.mock.calls.length;
+
+      fetchSpy.mockClear();
+      const withWorkflow = await collectRuntimeReadinessReport({ includeWorkflowChecks: true });
+      expect(withWorkflow.checks.some((check) => check.key === "builder:automation-workflow")).toBe(true);
+      expect(withoutWorkflowCallCount).toBeGreaterThan(0);
+      expect(fetchSpy.mock.calls.length).toBeGreaterThan(withoutWorkflowCallCount);
+      expect(withWorkflow.checks.find((check) => check.key === "builder:automation-workflow")?.ok).toBe(true);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   test("runtime readiness report includes writable directories and built assets", async () => {
     const report = await collectRuntimeReadinessReport();
 
@@ -33,6 +81,16 @@ describe("runtime bootstrap", () => {
     expect(
       report.checks.filter((check) => check.key === "directory:./.cache/hf-models").length,
     ).toBe(1);
+  });
+
+  test("runtime readiness probing leaves no writable-directory artifacts", async () => {
+    const report = await collectRuntimeReadinessReport();
+    const directoryChecks = report.checks.filter((check) => check.key.startsWith("directory:"));
+    for (const directoryCheck of directoryChecks) {
+      const directoryPath = directoryCheck.key.replace("directory:", "");
+      const probeFile = Bun.file(`${directoryPath}/.bun-probe`);
+      expect(await probeFile.exists()).toBe(false);
+    }
   });
 
   test("cross-platform installer entrypoints exist", async () => {

@@ -20,6 +20,8 @@ English and Chinese versions are available for all canonical documents.
 | [Builder domain (Chinese)](notes/doc-archive/docs__builder-domain.zh-CN.txt) | 草稿、发布、发布物和运行时注入规则 |
 | [Platform gap audit](notes/doc-archive/docs__platform-gap-audit.txt) | Scope audit and web-native benchmark for platform IA, editor layout, and AI gaps |
 | [Platform gap audit (Chinese)](notes/doc-archive/docs__platform-gap-audit.zh-CN.txt) | 平台作用域审计与 Web 原生引擎对标 |
+| [Full gap inventory audit](./full-gap-inventory-audit.md) | Comprehensive findings on dead-end UI, masked no-ops, optimistic checks, and partial contracts |
+| [Full gap remediation batches](./full-gap-remediation-batches.md) | Batch implementation plan to close those gap findings by risk and dependency order |
 
 ## Runtime docs
 
@@ -55,5 +57,6 @@ English and Chinese versions are available for all canonical documents.
 3. Read [Architecture](notes/doc-archive/ARCHITECTURE.txt) or [Architecture (Chinese)](notes/doc-archive/ARCHITECTURE.zh-CN.txt) for system boundaries.
 4. Review [API and transport contracts](notes/doc-archive/docs__api-contracts.txt) and [Builder domain](notes/doc-archive/docs__builder-domain.txt) before touching route or publish behavior.
 5. Read [Platform gap audit](notes/doc-archive/docs__platform-gap-audit.txt) when changing ownership scope, workspace IA, shared assets, or AI governance.
-6. Use runbook docs before routine operations and troubleshooting.
-7. Use runtime-specific docs when changing HTMX, playable, AI, or companion pack behavior.
+6. Review [Full gap inventory audit](./full-gap-inventory-audit.md) and [Full gap remediation batches](./full-gap-remediation-batches.md) before extending builder authoring controls, automation review, or new AI patches.
+7. Use runbook docs before routine operations and troubleshooting.
+8. Use runtime-specific docs when changing HTMX, playable, AI, or companion pack behavior.

@@ -257,17 +257,17 @@ const renderBrandControlPlane = (messages: Messages, branding: ProjectBranding):
               </div>
             </div>
             <div class="grid grid-cols-3 gap-3">
-              <div class="rounded-box border border-base-300 p-3" style="background:${escapeHtml(branding.primaryColor)};">
-                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-white/80">${escapeHtml(messages.builder.brandPrimaryColorLabel)}</p>
-                <p class="mt-6 text-xs font-medium text-white">${escapeHtml(branding.primaryColor)}</p>
+              <div class="rounded-box border border-base-300 bg-base-200/60 p-3">
+                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-base-content/55">${escapeHtml(messages.builder.brandPrimaryColorLabel)}</p>
+                <p class="mt-3 text-sm font-medium">${escapeHtml(branding.primaryColor)}</p>
               </div>
-              <div class="rounded-box border border-base-300 p-3" style="background:${escapeHtml(branding.secondaryColor)};">
-                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-white/80">${escapeHtml(messages.builder.brandSecondaryColorLabel)}</p>
-                <p class="mt-6 text-xs font-medium text-white">${escapeHtml(branding.secondaryColor)}</p>
+              <div class="rounded-box border border-base-300 bg-base-200/60 p-3">
+                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-base-content/55">${escapeHtml(messages.builder.brandSecondaryColorLabel)}</p>
+                <p class="mt-3 text-sm font-medium">${escapeHtml(branding.secondaryColor)}</p>
               </div>
-              <div class="rounded-box border border-base-300 p-3" style="background:${escapeHtml(branding.accentColor)};">
-                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-white/80">${escapeHtml(messages.builder.brandAccentColorLabel)}</p>
-                <p class="mt-6 text-xs font-medium text-white">${escapeHtml(branding.accentColor)}</p>
+              <div class="rounded-box border border-base-300 bg-base-200/60 p-3">
+                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-base-content/55">${escapeHtml(messages.builder.brandAccentColorLabel)}</p>
+                <p class="mt-3 text-sm font-medium">${escapeHtml(branding.accentColor)}</p>
               </div>
             </div>
           </div>
@@ -452,9 +452,13 @@ const renderAiCapabilityStatusCards = (
       label: messages.builder.toolPlanWorkspaceTitle,
       state: featureCapabilities.toolLikeSuggestions,
     },
+    {
+      label: messages.builder.creatorCapabilityKnowledgeRetrieval,
+      state: featureCapabilities.knowledgeRetrieval,
+    },
   ];
 
-  return `<div class="grid gap-4 xl:grid-cols-3">${cards
+  return `<div class="grid gap-4 xl:grid-cols-4">${cards
     .map(
       (card) => `<article class="${cardClasses.bordered}">
         <div class="card-body gap-3">

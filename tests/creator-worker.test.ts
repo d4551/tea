@@ -3,8 +3,10 @@ import { ProviderRegistry } from "../src/domain/ai/providers/provider-registry.t
 import {
   executeAutomationRun,
   executeGenerationJob,
+  probeAutomationOrigin,
 } from "../src/domain/builder/creator-worker.ts";
 import type { AutomationRun, GenerationJob } from "../src/shared/contracts/game.ts";
+import { httpStatus, contentType } from "../src/shared/constants/http.ts";
 
 const withMockedRegistry = async <T>(
   registry: Partial<ProviderRegistry>,
@@ -20,6 +22,18 @@ const withMockedRegistry = async <T>(
     spy.mockRestore();
   }
 };
+
+const createMockFetchResponse = (
+  status: number,
+  body: string,
+  contentTypeValue: string = contentType.htmlUtf8,
+): Response =>
+  new Response(body, {
+    status,
+    headers: {
+      "content-type": contentTypeValue,
+    },
+  });
 
 describe("creator worker execution", () => {
   test("generation jobs persist reviewable builder artifacts", async () => {
@@ -254,6 +268,143 @@ describe("creator worker execution", () => {
     }
 
     expect(result.error).toBe("automation-origin-unreachable");
+  });
+
+  test("automation origin probe classifies unreachable origin", async () => {
+    const originProbe = await probeAutomationOrigin(new URL("http://127.0.0.1:0"));
+    expect(originProbe.ok).toBe(false);
+    expect(originProbe.state).toBe("unreachable");
+  });
+
+  test("automation origin probe classifies unauthorized response as auth required", async () => {
+    const fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
+      createMockFetchResponse(
+        httpStatus.unauthorized,
+        "<html><body>unauthorized</body></html>",
+        contentType.htmlUtf8,
+      ),
+    );
+    try {
+      const originProbe = await probeAutomationOrigin(new URL("http://example.com"));
+      expect(originProbe.ok).toBe(false);
+      expect(originProbe.state).toBe("auth-required");
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  test("automation origin probe classifies non-HTML response as misconfigured", async () => {
+    const fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
+      createMockFetchResponse(
+        httpStatus.ok,
+        '{"ok":true}',
+        "application/json",
+      ),
+    );
+    try {
+      const originProbe = await probeAutomationOrigin(new URL("http://example.com"));
+      expect(originProbe.ok).toBe(false);
+      expect(originProbe.state).toBe("misconfigured");
+      expect(originProbe.detail).toContain("automation-origin-no-html-content");
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  test("automation origin probe classifies valid shell response as healthy", async () => {
+    const fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
+      createMockFetchResponse(
+        httpStatus.ok,
+        "<!doctype html><html><body><div id=\"builder-project-shell\"></div></body></html>",
+      ),
+    );
+    try {
+      const originProbe = await probeAutomationOrigin(new URL("http://example.com"));
+      expect(originProbe.ok).toBe(true);
+      expect(originProbe.state).toBe("ok");
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  test("automation runs return auth-required when automation shell responds 401", async () => {
+    const now = Date.now();
+    const projectId = `worker-auth-${crypto.randomUUID()}`;
+    const run: AutomationRun = {
+      id: `run-${crypto.randomUUID()}`,
+      status: "queued",
+      goal: "Run builder automation when auth is required",
+      steps: [
+        {
+          id: "step.open-builder",
+          action: "browser",
+          summary: "automation.step.browser.goto",
+          status: "pending",
+          spec: {
+            kind: "goto",
+            path: `/projects/${projectId}/start`,
+          },
+        },
+      ],
+      artifactIds: [],
+      statusMessage: "queued",
+      createdAtMs: now,
+      updatedAtMs: now,
+    };
+
+    const fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
+      createMockFetchResponse(httpStatus.unauthorized, "<html><body>locked</body></html>"),
+    );
+    try {
+      const result = await executeAutomationRun(projectId, run);
+      expect(result.ok).toBe(false);
+      if (result.ok) {
+        return;
+      }
+      expect(result.error).toBe("automation-origin-auth-required");
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  test("automation runs return misconfigured when automation shell responds without HTML contract", async () => {
+    const now = Date.now();
+    const projectId = `worker-misconfigured-${crypto.randomUUID()}`;
+    const run: AutomationRun = {
+      id: `run-${crypto.randomUUID()}`,
+      status: "queued",
+      goal: "Run builder automation with invalid origin contract",
+      steps: [
+        {
+          id: "step.open-builder",
+          action: "browser",
+          summary: "automation.step.browser.goto",
+          status: "pending",
+          spec: {
+            kind: "goto",
+            path: `/projects/${projectId}/start`,
+          },
+        },
+      ],
+      artifactIds: [],
+      statusMessage: "queued",
+      createdAtMs: now,
+      updatedAtMs: now,
+    };
+
+    const fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
+      createMockFetchResponse(httpStatus.ok, '{"ok":true}', "application/json"),
+    );
+    try {
+      const result = await executeAutomationRun(projectId, run);
+      expect(result.ok).toBe(false);
+      if (result.ok) {
+        return;
+      }
+      expect(result.error).toBe("automation-origin-misconfigured");
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   test("automation runs reject invalid plan signatures", async () => {

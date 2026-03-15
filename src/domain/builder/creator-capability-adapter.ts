@@ -13,14 +13,16 @@ import type { BuilderPlatformReadiness } from "./platform-readiness.ts";
  * @param messages Locale-resolved strings.
  * @param status Registry status snapshot.
  * @param readiness Platform readiness summary.
+ * @param vectorStoreAvailable Whether the sqlite-vec backed vector store is operational.
  * @returns Creator-facing capability set.
  */
 export const toCreatorCapabilities = (
   messages: Messages,
   status: AiSystemStatus,
   readiness: BuilderPlatformReadiness,
+  vectorStoreAvailable: boolean,
 ): CreatorCapabilities => {
-  return deriveCapabilitySnapshotCreatorCapabilities(messages, status, readiness);
+  return deriveCapabilitySnapshotCreatorCapabilities(messages, status, readiness, vectorStoreAvailable);
 };
 
 /**

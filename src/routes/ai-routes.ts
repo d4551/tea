@@ -12,6 +12,7 @@ import {
   aiRuntimeSettingsService,
 } from "../domain/ai/ai-runtime-settings-service.ts";
 import { deriveFeatureCapability } from "../domain/ai/capability-snapshot.ts";
+import { vectorStore } from "../domain/ai/vector-store.ts";
 import {
   type KnowledgeSearchMatch,
   knowledgeBaseService,
@@ -300,10 +301,14 @@ const aiCapabilitiesResponseSchema = t.Object({
       test: capabilityStateSchema,
       toolLikeSuggestions: capabilityStateSchema,
       streaming: capabilityStateSchema,
+      knowledgeRetrieval: capabilityStateSchema,
       offlineFallback: capabilityStateSchema,
     }),
     models: t.Array(capabilityModelSchema),
     localRuntime: localRuntimeSchema,
+    vectorStore: t.Object({
+      available: t.Boolean(),
+    }),
   }),
 });
 
@@ -430,7 +435,7 @@ const asKnowledgeSearchMatchRecord = (match: KnowledgeSearchMatch) => ({
 });
 
 const createFeatureCapability = (status: RegistryStatus): FeatureCapability =>
-  deriveFeatureCapability(status);
+  deriveFeatureCapability(status, vectorStore.available);
 
 const createAiFailureEnvelope = (
   correlationId: string,
@@ -772,6 +777,9 @@ export const aiRoutes = new Elysia({ name: "ai-routes" })
         features: createFeatureCapability(status),
         models: status.capabilities.map(asCapabilityRecord),
         localRuntime: await toAiRuntimeRecord(),
+        vectorStore: {
+          available: vectorStore.available,
+        },
       });
     },
     {

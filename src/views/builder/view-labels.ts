@@ -379,6 +379,8 @@ export const getAutomationStatusMessageLabel = (
     case "automation-plan-ready-for-review":
       return messages.builder.automationStatusPlanReadyForReview;
     case "automation-origin-unreachable":
+    case "automation-origin-auth-required":
+    case "automation-origin-misconfigured":
       return messages.builder.automationStatusOriginUnavailable;
     case "automation.capturing-fallback-review-evidence":
     case "capturing-fallback-review-evidence":

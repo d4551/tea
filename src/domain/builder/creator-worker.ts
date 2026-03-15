@@ -2,7 +2,7 @@ import { chromium } from "playwright";
 import { appConfig } from "../../config/environment.ts";
 import { createLogger } from "../../lib/logger.ts";
 import { AUTOMATION_STEP_KIND_UNSUPPORTED_ERROR } from "../../shared/constants/builder-defaults.ts";
-import { httpStatus } from "../../shared/constants/http.ts";
+import { contentType, httpStatus } from "../../shared/constants/http.ts";
 import { interpolateRoutePath } from "../../shared/constants/route-patterns.ts";
 import { appRoutes } from "../../shared/constants/routes.ts";
 import type {
@@ -38,6 +38,14 @@ const assertUnreachable = (_value: never): never => {
 };
 
 const workerLogger = createLogger("builder.creator-worker");
+
+type AutomationOriginProbeState = "ok" | "unreachable" | "auth-required" | "misconfigured";
+
+interface AutomationOriginProbeResult {
+  readonly ok: boolean;
+  readonly state: AutomationOriginProbeState;
+  readonly detail: string;
+}
 
 /**
  * Output payload returned by generation-job workers.
@@ -193,17 +201,56 @@ const enrichPromptWithDataset = async (prompt: string): Promise<string> => {
   return `${prompt.trim()}\n\nReference corpus excerpts:\n${context}`;
 };
 
-const probeAutomationOrigin = async (targetUrl: URL): Promise<boolean> => {
+export const probeAutomationOrigin = async (
+  targetUrl: URL,
+): Promise<AutomationOriginProbeResult> => {
   const probeResult = await runWorkerStep(async () => {
     const response = await fetch(targetUrl, {
       signal: AbortSignal.timeout(appConfig.builder.automationProbeTimeoutMs),
+      headers: { accept: contentType.htmlUtf8 },
     });
 
     if (response.status >= httpStatus.badRequest) {
-      throw new Error(`automation-origin-unreachable:${response.status}`);
+      if (response.status === httpStatus.unauthorized || response.status === httpStatus.forbidden) {
+        return {
+          ok: false,
+          state: "auth-required",
+          detail: `auth-required:${String(response.status)}`,
+        } as const;
+      }
+
+      return {
+        ok: false,
+        state: "unreachable",
+        detail: `http-error:${String(response.status)}`,
+      } as const;
     }
 
-    return true;
+    const body = await response.text();
+    const hasHtmlContent =
+      body.includes("<!") || body.includes("<html") || body.includes("<body") || body.includes("builder-project-shell");
+    if (!hasHtmlContent) {
+      return {
+        ok: false,
+        state: "misconfigured",
+        detail: "automation-origin-no-html-content",
+      } as const;
+    }
+
+    const responseType = response.headers.get("content-type") ?? "";
+    if (!responseType.includes("text/html") && !responseType.includes("text/plain")) {
+      return {
+        ok: false,
+        state: "misconfigured",
+        detail: `automation-origin-content-type:${responseType || "missing"}`,
+      } as const;
+    }
+
+    return {
+      ok: true,
+      state: "ok",
+      detail: "reachable",
+    } as const;
   });
 
   if (!probeResult.ok) {
@@ -211,11 +258,18 @@ const probeAutomationOrigin = async (targetUrl: URL): Promise<boolean> => {
       reason: probeResult.error,
       targetUrl: targetUrl.toString(),
     });
-    return false;
+    return {
+      ok: false,
+      state: "unreachable",
+      detail: probeResult.error,
+    };
   }
 
   return probeResult.data;
 };
+
+const probeErrorCode = (state: AutomationOriginProbeState): string =>
+  state === "auth-required" ? "auth-required" : state === "unreachable" ? "unreachable" : "misconfigured";
 
 const buildGenerationArtifact = async (
   projectId: string,
@@ -946,11 +1000,11 @@ export const executeAutomationRun = async (
     const targetUrl = buildAutomationUrl(
       interpolateRoutePath(appRoutes.builderStart, { projectId }),
     );
-    const originReachable = await probeAutomationOrigin(targetUrl);
-    if (!originReachable) {
+    const originProbe = await probeAutomationOrigin(targetUrl);
+    if (!originProbe.ok) {
       return {
         ok: false,
-        error: "automation-origin-unreachable",
+        error: `automation-origin-${probeErrorCode(originProbe.state)}`,
       };
     }
   }

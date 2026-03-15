@@ -99,6 +99,7 @@ export interface AppConfig {
   readonly database: {
     readonly url: string;
     readonly localDirectory: string | null;
+    readonly customSqliteLibraryPath: string | null;
   };
   readonly paths: {
     readonly builderUploadsDirectory: string;
@@ -1078,6 +1079,7 @@ export const appConfig: MutableAppConfig = {
   database: {
     url: resolvedDatabaseUrl,
     localDirectory: resolveLocalDatabaseDirectory(resolvedDatabaseUrl),
+    customSqliteLibraryPath: parseOptionalString(Bun.env.CUSTOM_SQLITE_LIBRARY_PATH) ?? null,
   },
   paths: {
     builderUploadsDirectory: Bun.env.BUILDER_UPLOADS_DIRECTORY ?? DEFAULT_BUILDER_UPLOADS_DIRECTORY,

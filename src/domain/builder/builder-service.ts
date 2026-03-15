@@ -143,6 +143,10 @@ export interface BuilderPatchApplyResult {
   readonly checksum: string;
   /** Number of operations applied. */
   readonly applied: number;
+  /** Whether the plan was rejected because it contained invalid operations. */
+  readonly rejected: boolean;
+  /** Machine-readable reason code when the plan is rejected. */
+  readonly rejectedReason?: "invalid-operations" | "version-conflict";
   /** Operation execution report. */
   readonly operations: readonly BuilderPatchPreviewOperation[];
 }
@@ -3166,6 +3170,17 @@ class PrismaBuilderService implements BuilderService {
             steps: runningRun.steps.map((step, index) => ({
               ...step,
               status: index === 0 ? "failed" : "pending",
+              ...(index === 0
+                ? {
+                    failureReason: result.error,
+                    retryable: result.error.includes("unreachable") || result.error.includes("timeout"),
+                    remediationHint: result.error.includes("unreachable")
+                      ? "Verify the automation origin is running and accessible."
+                      : result.error.includes("timeout")
+                        ? "The operation timed out. Check server load and retry."
+                        : "Review the error details and correct the automation plan.",
+                  }
+                : {}),
             })),
             updatedAtMs: Date.now(),
           };
@@ -3305,6 +3320,8 @@ class PrismaBuilderService implements BuilderService {
         version: entry.row.version,
         checksum: entry.row.checksum,
         applied: 0,
+        rejected: true,
+        rejectedReason: "invalid-operations",
         operations: preview.operations,
       };
     }
@@ -3363,6 +3380,7 @@ class PrismaBuilderService implements BuilderService {
       version: mutation.entry.row.version,
       checksum: mutation.entry.row.checksum,
       applied: mutation.payload,
+      rejected: false,
       operations: preview.operations,
     };
   }

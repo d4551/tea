@@ -168,12 +168,8 @@ export const renderPlatformReadinessSection = (options: RenderPlatformReadinessO
 
     <div class="stats stats-vertical border border-base-300 bg-base-100 lg:stats-horizontal" role="group" aria-label="${escapeHtml(messages.builder.platformReadinessTitle)}">
       <div class="stat">
-        <div class="stat-title">${escapeHtml(messages.builder.sceneBaselineCountLabel)}</div>
-        <div class="stat-value text-lg" aria-live="polite">${readiness.sceneCount}</div>
-      </div>
-      <div class="stat">
-        <div class="stat-title">${escapeHtml(messages.builder.spriteManifestCountLabel)}</div>
-        <div class="stat-value text-lg" aria-live="polite">${readiness.spriteManifestCount}</div>
+        <div class="stat-title">${escapeHtml(messages.builder.implementedCountLabel)}</div>
+        <div class="stat-value text-success text-lg" aria-live="polite">${readiness.implementedCount}</div>
       </div>
       <div class="stat">
         <div class="stat-title">${escapeHtml(messages.builder.partialCountLabel)}</div>
@@ -182,6 +178,10 @@ export const renderPlatformReadinessSection = (options: RenderPlatformReadinessO
       <div class="stat">
         <div class="stat-title">${escapeHtml(messages.builder.missingCountLabel)}</div>
         <div class="stat-value text-error text-lg" aria-live="polite">${readiness.missingCount}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-title">${escapeHtml(messages.builder.providerStatus)}</div>
+        <div class="stat-value text-lg" aria-live="polite">${readiness.aiProviderCount}</div>
       </div>
     </div>
 

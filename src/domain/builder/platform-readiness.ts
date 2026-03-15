@@ -40,6 +40,10 @@ export interface BuilderCapabilityReadiness {
   readonly key: BuilderCapabilityKey;
   /** Current implementation state. */
   readonly status: BuilderCapabilityStatus;
+  /** Whether the required authored content exists in the project. */
+  readonly inventoryPresent: boolean;
+  /** Whether the capability has been validated through a real workflow path. */
+  readonly workflowVerified: boolean;
 }
 
 /**
@@ -86,6 +90,10 @@ export interface BuilderPlatformReadinessInput {
 export interface BuilderReadinessAuditSignals {
   /** Total authored asset count. */
   readonly assetCount: number;
+  /** Number of authored sprite-sheet assets. */
+  readonly spriteAssetCount: number;
+  /** Number of authored tiles or tile-set assets. */
+  readonly tileAssetCount: number;
   /** Number of authored 2D scenes. */
   readonly scenes2dCount: number;
   /** Number of authored 3D scenes. */
@@ -141,6 +149,9 @@ export const deriveBuilderReadinessAudit = (input: {
 
   return {
     assetCount: assets.length,
+    spriteAssetCount: assets.filter((asset) => asset.kind === "sprite-sheet").length,
+    tileAssetCount: assets.filter((asset) => asset.kind === "tiles" || asset.kind === "tile-set")
+      .length,
     scenes2dCount: scenes.filter((scene) => scene.sceneMode !== "3d").length,
     scenes3dCount: scenes.filter((scene) => scene.sceneMode === "3d").length,
     modelAssetCount: assets.filter((asset) => asset.kind === "model").length,
@@ -165,6 +176,17 @@ const countByStatus = (
   status: BuilderCapabilityStatus,
 ): number => capabilities.filter((capability) => capability.status === status).length;
 
+const toCapabilityStatus = (
+  surfacePresent: boolean,
+  workflowVerified: boolean,
+): BuilderCapabilityStatus => {
+  if (workflowVerified) {
+    return "implemented";
+  }
+
+  return surfacePresent ? "partial" : "missing";
+};
+
 /**
  * Evaluates the current builder/platform capability surface.
  *
@@ -182,6 +204,8 @@ export const evaluateBuilderPlatformReadiness = (
   const aiProviderCount = input.aiFeatures.providers.length;
   const audit: BuilderReadinessAuditSignals = {
     assetCount: input.audit?.assetCount ?? 0,
+    spriteAssetCount: input.audit?.spriteAssetCount ?? 0,
+    tileAssetCount: input.audit?.tileAssetCount ?? 0,
     scenes2dCount: input.audit?.scenes2dCount ?? 0,
     scenes3dCount: input.audit?.scenes3dCount ?? 0,
     modelAssetCount: input.audit?.modelAssetCount ?? 0,
@@ -196,8 +220,6 @@ export const evaluateBuilderPlatformReadiness = (
     publishedReleaseVersion: input.audit?.publishedReleaseVersion ?? null,
   };
   const hasBaselineRuntime = audit.scenes2dCount > 0;
-  const hasInteractiveSimulation =
-    audit.scenes2dCount > 0 || audit.scenes3dCount > 0 || audit.mechanicCount > 0;
   const hasAiAuthoringAssist =
     input.aiFeatures.richDialogue ||
     input.aiFeatures.visionAnalysis ||
@@ -206,54 +228,75 @@ export const evaluateBuilderPlatformReadiness = (
   const has3dRuntimeSurface =
     audit.scenes3dCount > 0 || audit.modelAssetCount > 0 || audit.openUsdAssetCount > 0;
   const hasSpritePipelineSurface =
-    input.spriteManifestCount > 0 || audit.assetCount > 0 || audit.scenes2dCount > 0;
+    input.spriteManifestCount > 0 || audit.spriteAssetCount > 0 || audit.tileAssetCount > 0;
   const hasAnimationSurface =
-    audit.animationClipCount > 0 ||
-    audit.animationTimelineCount > 0 ||
-    input.spriteManifestCount > 0;
-  const hasAutomationSurface =
-    hasInteractiveSimulation || audit.automationRunCount > 0 || audit.automationStepCount > 0;
+    audit.animationClipCount > 0 || audit.animationTimelineCount > 0;
+  const hasMechanicsSurface = audit.mechanicCount > 0;
+  const hasAutomationSurface = audit.automationRunCount > 0 || audit.automationStepCount > 0;
+  const hasReleaseWorkflow =
+    audit.latestReleaseVersion > 0 || audit.publishedReleaseVersion !== null;
 
   const capabilities: readonly BuilderCapabilityReadiness[] = [
     {
       key: "releaseFlow",
-      status: "implemented",
+      status: toCapabilityStatus(hasReleaseWorkflow, true),
+      inventoryPresent: hasReleaseWorkflow,
+      workflowVerified: true,
     },
     {
       key: "runtime2d",
-      status: hasBaselineRuntime ? "partial" : "missing",
+      status: toCapabilityStatus(hasBaselineRuntime, false),
+      inventoryPresent: audit.scenes2dCount > 0,
+      workflowVerified: false,
     },
     {
       key: "runtime3d",
-      status: has3dRuntimeSurface ? "partial" : "missing",
+      status: toCapabilityStatus(has3dRuntimeSurface, false),
+      inventoryPresent: audit.scenes3dCount > 0 || audit.modelAssetCount > 0,
+      workflowVerified: false,
     },
     {
       key: "spritePipeline",
-      status: hasSpritePipelineSurface ? "partial" : "missing",
+      status: toCapabilityStatus(hasSpritePipelineSurface, false),
+      inventoryPresent:
+        input.spriteManifestCount > 0 || audit.spriteAssetCount > 0 || audit.tileAssetCount > 0,
+      workflowVerified: false,
     },
     {
       key: "animationPipeline",
-      status: hasAnimationSurface ? "partial" : "missing",
+      status: toCapabilityStatus(hasAnimationSurface, false),
+      inventoryPresent: audit.animationClipCount > 0 || audit.animationTimelineCount > 0,
+      workflowVerified: false,
     },
     {
       key: "mechanics",
-      status: hasInteractiveSimulation ? "partial" : "missing",
+      status: toCapabilityStatus(hasMechanicsSurface, false),
+      inventoryPresent: audit.mechanicCount > 0,
+      workflowVerified: false,
     },
     {
       key: "aiAuthoring",
-      status: hasAiAuthoringAssist ? "partial" : "missing",
+      status: toCapabilityStatus(hasAiAuthoringAssist, false),
+      inventoryPresent: aiProviderCount > 0,
+      workflowVerified: false,
     },
     {
       key: "automation",
-      status: hasAutomationSurface ? "partial" : "missing",
+      status: toCapabilityStatus(hasAutomationSurface, false),
+      inventoryPresent: audit.automationRunCount > 0,
+      workflowVerified: false,
     },
     {
       key: "webgpuRenderer",
-      status: input.rendererPreference === "webgpu" ? "partial" : "missing",
+      status: toCapabilityStatus(input.rendererPreference === "webgpu", false),
+      inventoryPresent: input.rendererPreference === "webgpu",
+      workflowVerified: false,
     },
     {
       key: "aiOnnxGpu",
-      status: input.onnxDevice === "webgpu" ? "partial" : "missing",
+      status: toCapabilityStatus(input.onnxDevice === "webgpu", false),
+      inventoryPresent: input.onnxDevice === "webgpu",
+      workflowVerified: false,
     },
   ];
 

@@ -206,14 +206,16 @@ export const buildBuilderWorkflowStages = (
  * @param messages Locale-resolved messages.
  * @param status Registry status snapshot.
  * @param readiness Platform readiness summary.
+ * @param vectorStoreAvailable Whether the sqlite-vec backed vector store is operational.
  * @returns Creator-safe capability state.
  */
 export const deriveCreatorCapabilities = (
   messages: Messages,
   status: AiSystemStatus,
   readiness: BuilderPlatformReadiness,
+  vectorStoreAvailable: boolean,
 ): CreatorCapabilities => {
-  return toCreatorCapabilities(messages, status, readiness);
+  return toCreatorCapabilities(messages, status, readiness, vectorStoreAvailable);
 };
 
 /**

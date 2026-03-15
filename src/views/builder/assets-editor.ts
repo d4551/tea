@@ -27,6 +27,9 @@ import {
   renderWorkspaceShell,
 } from "./workspace-shell.ts";
 
+const renderPreviewNotice = (message: string): string =>
+  `<div class="rounded-box border border-dashed border-base-300 bg-base-200/40 p-4 text-sm text-base-content/60">${escapeHtml(message)}</div>`;
+
 /**
  * Renders the authored asset, clip, and contextual draft workspace.
  *
@@ -220,17 +223,42 @@ export const renderAssetsEditor = (
 
   const emptyAssetAlert = renderEmptyStateCompact(
     messages.builder.noAssets,
-    messages.builder.assetPlaceholder,
+    messages.builder.assetsWorkspaceDescription,
   );
   const assets2d = assets.filter((asset) => asset.sceneMode !== "3d").length;
   const assets3d = assets.filter((asset) => asset.sceneMode === "3d").length;
+  const selectedAssetIsPreviewable =
+    selectedAsset !== null &&
+    (/\.(png|jpg|jpeg|gif|webp|svg)$/i.test(selectedAsset.source) ||
+      ["portrait", "sprite-sheet", "background"].includes(selectedAsset.kind));
+  const selectedAssetStateLabel = selectedAsset === null
+    ? messages.builder.assetSelectionRequired
+    : selectedAssetIsPreviewable
+      ? messages.builder.previewReady
+      : messages.builder.assetPreviewUnavailable;
+  const selectedAssetStateClass = selectedAsset === null
+    ? "badge-soft"
+    : selectedAssetIsPreviewable
+      ? "badge-success"
+      : "badge-warning";
   const selectedAssetPreview =
     selectedAsset === null
-      ? ""
-      : /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(selectedAsset.source) ||
-          ["portrait", "sprite-sheet", "background"].includes(selectedAsset.kind)
-        ? `<img src="${escapeHtml(selectedAsset.source)}" alt="${escapeHtml(selectedAsset.id)}" class="aspect-video w-full rounded-box border border-base-300 bg-base-200 object-cover" loading="lazy" />`
-        : `<div class="flex aspect-video items-center justify-center rounded-box border border-base-300 bg-base-200 text-sm text-base-content/60">${escapeHtml(getAssetKindLabel(messages, selectedAsset.kind))}</div>`;
+      ? `<div class="space-y-2">
+          <span class="badge ${selectedAssetStateClass}">${escapeHtml(selectedAssetStateLabel)}</span>
+          ${renderPreviewNotice(messages.builder.assetSelectionRequired)}
+        </div>`
+      : selectedAssetIsPreviewable
+        ? `<div class="space-y-2">
+            <span class="badge ${selectedAssetStateClass}">${escapeHtml(selectedAssetStateLabel)}</span>
+            <img src="${escapeHtml(selectedAsset.source)}" alt="${escapeHtml(selectedAsset.id)}" class="aspect-video w-full rounded-box border border-base-300 bg-base-200 object-cover" loading="lazy" />
+          </div>`
+        : `<div class="space-y-2">
+            <span class="badge ${selectedAssetStateClass}">${escapeHtml(selectedAssetStateLabel)}</span>
+            <div class="flex aspect-video flex-col items-center justify-center gap-2 rounded-box border border-base-300 bg-base-200 px-4 text-center text-sm text-base-content/60">
+              <span class="badge badge-outline">${escapeHtml(getAssetKindLabel(messages, selectedAsset.kind))}</span>
+              <p>${escapeHtml(messages.builder.assetPreviewUnavailable)}</p>
+            </div>
+          </div>`;
   const creatorAssist = buildCreatorAssistContext(messages, locale, projectId, {
     entityType:
       selectedAsset?.kind === "portrait" || selectedAsset?.kind === "sprite-sheet"
@@ -323,14 +351,7 @@ export const renderAssetsEditor = (
                   <legend class="fieldset-legend">${escapeHtml(messages.builder.uploadAsset)}</legend>
                   <input name="file" type="file" class="file-input file-input-sm w-full" accept="image/*,audio/*,.glb,.gltf,.usd,.usda,.usdc,.usdz,.json" aria-required="true" required aria-label="${escapeHtml(messages.builder.assetSourceLabel)}" />
                 </fieldset>
-                <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
-                  <summary class="collapse-title text-sm font-semibold" aria-label="${escapeHtml(messages.builder.advancedTools)}">${escapeHtml(messages.builder.advancedTools)}</summary>
-                  <div class="collapse-content pt-2">
-                  <div class="rounded-box border border-base-300 bg-base-200/45 p-3 text-sm text-base-content/70">
-                    ${escapeHtml(messages.builder.advancedTools)}
-                  </div>
-                  </div>
-                </details>
+
                 <div class="flex items-center gap-2">
                   <button type="submit" class="btn btn-primary btn-sm" aria-label="${escapeHtml(messages.builder.addAssetFile)}">${escapeHtml(messages.builder.addAssetFile)}</button>
                   <span id="asset-upload-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
@@ -361,14 +382,7 @@ export const renderAssetsEditor = (
                   <legend class="fieldset-legend">${escapeHtml(messages.builder.assetSourceLabel)}</legend>
                   <input name="source" type="text" class="input w-full" placeholder="${escapeHtml(messages.builder.sourcePathPlaceholder)}" aria-required="true" required aria-label="${escapeHtml(messages.builder.assetSourceLabel)}" />
                 </fieldset>
-                <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
-                  <summary class="collapse-title text-sm font-semibold" aria-label="${escapeHtml(messages.builder.advancedTools)}">${escapeHtml(messages.builder.advancedTools)}</summary>
-                  <div class="collapse-content pt-2">
-                    <div class="rounded-box border border-base-300 bg-base-200/45 p-3 text-sm text-base-content/70">
-                      ${escapeHtml(messages.builder.advancedTools)}
-                    </div>
-                  </div>
-                </details>
+
                 <div class="flex items-center gap-2">
                   <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.addAssetPath)}">${escapeHtml(messages.builder.addAssetPath)}</button>
                   <span id="asset-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
@@ -416,7 +430,7 @@ export const renderAssetsEditor = (
             <input name="assetId" type="hidden" value="${escapeHtml(selectedAsset?.id ?? "")}" />
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.clipAssetLabel)}</legend>
-              <div class="px-3 py-2 rounded-box border border-base-300 bg-base-200/50 text-sm">${escapeHtml(selectedAsset?.label ?? messages.builder.assetPlaceholder)}</div>
+              <div class="px-3 py-2 rounded-box border border-base-300 bg-base-200/50 text-sm">${escapeHtml(selectedAsset?.label ?? messages.builder.assetSelectionRequired)}</div>
           </fieldset>
           <fieldset class="fieldset">
             <legend class="fieldset-legend">${escapeHtml(messages.builder.clipStateTagLabel)}</legend>
@@ -430,18 +444,15 @@ export const renderAssetsEditor = (
             <legend class="fieldset-legend">${escapeHtml(messages.builder.clipPlaybackLabel)}</legend>
             <input name="playbackFps" type="number" class="input w-full" value="${DEFAULT_ANIMATION_PLAYBACK_FPS}" min="1" aria-label="${escapeHtml(messages.builder.clipPlaybackLabel)}" />
           </fieldset>
-                <details class="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
-                  <summary class="collapse-title text-sm font-semibold" aria-label="${escapeHtml(messages.builder.advancedTools)}">${escapeHtml(messages.builder.advancedTools)}</summary>
-                  <div class="collapse-content pt-2">
-                    <div class="rounded-box border border-base-300 bg-base-200/45 p-3 text-sm text-base-content/70">
-                      ${escapeHtml(messages.builder.advancedTools)}
-                    </div>
-                  </div>
-                </details>
           <div class="flex items-center gap-2">
-            <button type="submit" class="btn btn-outline btn-sm" aria-label="${escapeHtml(messages.builder.createAnimationClip)}">${escapeHtml(messages.builder.createAnimationClip)}</button>
+            <button type="submit" class="btn btn-outline btn-sm" ${selectedAsset === null ? "disabled aria-disabled=\"true\"" : ""} aria-label="${escapeHtml(messages.builder.createAnimationClip)}">${escapeHtml(messages.builder.createAnimationClip)}</button>
             <span id="clip-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
+          ${
+            selectedAsset === null
+              ? `<p class="text-sm text-base-content/70">${escapeHtml(messages.builder.assetSelectionRequired)}</p>`
+              : ""
+          }
           ${
             animationContext
               ? `<div class="rounded-box border border-base-300 bg-base-200/50 p-3 text-sm leading-6 text-base-content/72">
@@ -470,17 +481,17 @@ export const renderAssetsEditor = (
             <h2 class="text-2xl font-semibold">${escapeHtml(messages.builder.animationClipsTitle)}</h2>
             <span class="badge badge-outline">${clips.length}</span>
           </div>
-          <div class="grid gap-4 xl:grid-cols-2">${clips.length === 0 ? renderEmptyStateCompact(messages.builder.noAnimationClips, messages.builder.assetPlaceholder) : clipCards}</div>
+          <div class="grid gap-4 xl:grid-cols-2">${clips.length === 0 ? renderEmptyStateCompact(messages.builder.noAnimationClips, messages.builder.animationAuthoringDescription) : clipCards}</div>
         </section>
       </div>`,
       sideSections: [
         {
           title: messages.builder.preview,
           description:
-            selectedAsset?.label ?? selectedAsset?.id ?? messages.builder.assetPlaceholder,
+            selectedAsset?.label ?? selectedAsset?.id ?? messages.builder.assetSelectionRequired,
           body:
             selectedAsset === null
-              ? `<div class="rounded-box border border-dashed border-base-300 bg-base-200/40 p-4 text-sm text-base-content/60">${escapeHtml(messages.builder.assetPlaceholder)}</div>`
+              ? renderPreviewNotice(messages.builder.assetSelectionRequired)
               : `${selectedAssetPreview}
                 <div class="flex flex-wrap gap-2">
                   <span class="badge badge-outline">${escapeHtml(getAssetKindLabel(messages, selectedAsset.kind))}</span>

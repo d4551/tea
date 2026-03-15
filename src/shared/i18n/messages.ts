@@ -706,6 +706,9 @@ export interface Messages {
     readonly sceneWidthDesc: string;
     readonly sceneHeightDesc: string;
     readonly assetPlaceholder: string;
+    readonly assetSelectionRequired: string;
+    readonly assetPreviewUnavailable: string;
+    readonly npcPreviewUnavailable: string;
     readonly testNpcPlaceholder: string;
     readonly testMessagePlaceholder: string;
     readonly assistPromptPlaceholder: string;
@@ -814,6 +817,7 @@ export interface Messages {
     readonly creatorCapabilityAutomationReview: string;
     readonly creatorCapability3dImport: string;
     readonly creatorCapabilityAnimationAssist: string;
+    readonly creatorCapabilityKnowledgeRetrieval: string;
     readonly creatorSupportTitle: string;
     readonly creatorSupportDescription: string;
     readonly creatorAssistTitle: string;
@@ -1864,6 +1868,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       sceneWidthDesc: "Scene width in pixels",
       sceneHeightDesc: "Scene height in pixels",
       assetPlaceholder: "Your asset inventory for scenes and characters.",
+      assetSelectionRequired: "Select an asset to inspect its preview and author animation clips.",
+      assetPreviewUnavailable: "Preview is not available for this asset type yet.",
+      npcPreviewUnavailable: "Add a sprite manifest to preview this NPC in the builder.",
       testNpcPlaceholder: "forestGuide",
       testMessagePlaceholder: "Tell me about the ancient ruins...",
       assistPromptPlaceholder: "How should I balance the quest guide NPC dialogue...",
@@ -2005,6 +2012,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       creatorCapabilityAutomationReview: "Review automation",
       creatorCapability3dImport: "3D import",
       creatorCapabilityAnimationAssist: "Animation assist",
+      creatorCapabilityKnowledgeRetrieval: "Knowledge retrieval",
       creatorSupportTitle: "Creator support",
       creatorSupportDescription:
         "Stay in the main authoring flow while these guides show what assistance is ready for the selected scene, character, or asset.",
@@ -2961,6 +2969,9 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       sceneWidthDesc: "场景宽度（像素）",
       sceneHeightDesc: "场景高度（像素）",
       assetPlaceholder: "场景与角色的资源清单。",
+      assetSelectionRequired: "请选择一个资源以查看预览并编排动画片段。",
+      assetPreviewUnavailable: "当前资源类型暂不提供预览。",
+      npcPreviewUnavailable: "请先添加精灵清单，才能在构建器中预览此 NPC。",
       testNpcPlaceholder: "forestGuide",
       testMessagePlaceholder: "请告诉我关于古代遗迹的事情...",
       assistPromptPlaceholder: "如何平衡任务向导 NPC 的对话...",
@@ -3083,6 +3094,7 @@ export const messagesByLocale: Record<LocaleCode, Messages> = {
       creatorCapabilityAutomationReview: "自动化审核",
       creatorCapability3dImport: "3D 导入",
       creatorCapabilityAnimationAssist: "动画辅助",
+      creatorCapabilityKnowledgeRetrieval: "知识检索",
       creatorSupportTitle: "创作支持",
       creatorSupportDescription:
         "保持在主要创作流程中，同时通过这些提示了解当前场景、角色或资源可用的辅助能力。",
