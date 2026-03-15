@@ -5,8 +5,8 @@ import {
   executeGenerationJob,
   probeAutomationOrigin,
 } from "../src/domain/builder/creator-worker.ts";
+import { contentType, httpStatus } from "../src/shared/constants/http.ts";
 import type { AutomationRun, GenerationJob } from "../src/shared/contracts/game.ts";
-import { httpStatus, contentType } from "../src/shared/constants/http.ts";
 
 const withMockedRegistry = async <T>(
   registry: Partial<ProviderRegistry>,
@@ -295,11 +295,7 @@ describe("creator worker execution", () => {
 
   test("automation origin probe classifies non-HTML response as misconfigured", async () => {
     const fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
-      createMockFetchResponse(
-        httpStatus.ok,
-        '{"ok":true}',
-        "application/json",
-      ),
+      createMockFetchResponse(httpStatus.ok, '{"ok":true}', "application/json"),
     );
     try {
       const originProbe = await probeAutomationOrigin(new URL("http://example.com"));
@@ -315,7 +311,7 @@ describe("creator worker execution", () => {
     const fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
       createMockFetchResponse(
         httpStatus.ok,
-        "<!doctype html><html><body><div id=\"builder-project-shell\"></div></body></html>",
+        '<!doctype html><html><body><div id="builder-project-shell"></div></body></html>',
       ),
     );
     try {

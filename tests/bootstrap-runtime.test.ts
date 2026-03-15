@@ -26,48 +26,52 @@ describe("runtime bootstrap", () => {
   });
 
   test("runtime readiness optional workflow checks can be toggled", async () => {
-    const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-      (async (target) => {
-        const resolved = String(target);
-        if (resolved.endsWith("/api/builder/platform/readiness")) {
-          return new Response(
-            JSON.stringify({
-              ok: true,
-              data: {},
-            }),
-            {
-              status: 200,
-              headers: {
-                "content-type": "application/json",
-              },
-            },
-          );
-        }
-
+    const fetchSpy = spyOn(globalThis, "fetch").mockImplementation((async (target) => {
+      const resolved = String(target);
+      if (resolved.endsWith("/api/builder/platform/readiness")) {
         return new Response(
-          "<!doctype html><html><body><div id=\"builder-project-shell\"></div></body></html>",
+          JSON.stringify({
+            ok: true,
+            data: {},
+          }),
           {
             status: 200,
             headers: {
-              "content-type": "text/html",
+              "content-type": "application/json",
             },
           },
         );
-      }) as typeof fetch,
-    );
+      }
+
+      return new Response(
+        '<!doctype html><html><body><div id="builder-project-shell"></div></body></html>',
+        {
+          status: 200,
+          headers: {
+            "content-type": "text/html",
+          },
+        },
+      );
+    }) as typeof fetch);
 
     try {
       fetchSpy.mockClear();
       const withoutWorkflow = await collectRuntimeReadinessReport({ includeWorkflowChecks: false });
-      expect(withoutWorkflow.checks.some((check) => check.key === "builder:automation-workflow")).toBe(false);
+      expect(
+        withoutWorkflow.checks.some((check) => check.key === "builder:automation-workflow"),
+      ).toBe(false);
       const withoutWorkflowCallCount = fetchSpy.mock.calls.length;
 
       fetchSpy.mockClear();
       const withWorkflow = await collectRuntimeReadinessReport({ includeWorkflowChecks: true });
-      expect(withWorkflow.checks.some((check) => check.key === "builder:automation-workflow")).toBe(true);
+      expect(withWorkflow.checks.some((check) => check.key === "builder:automation-workflow")).toBe(
+        true,
+      );
       expect(withoutWorkflowCallCount).toBeGreaterThan(0);
       expect(fetchSpy.mock.calls.length).toBeGreaterThan(withoutWorkflowCallCount);
-      expect(withWorkflow.checks.find((check) => check.key === "builder:automation-workflow")?.ok).toBe(true);
+      expect(
+        withWorkflow.checks.find((check) => check.key === "builder:automation-workflow")?.ok,
+      ).toBe(true);
     } finally {
       fetchSpy.mockRestore();
     }

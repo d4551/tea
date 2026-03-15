@@ -22,7 +22,12 @@ export const toCreatorCapabilities = (
   readiness: BuilderPlatformReadiness,
   vectorStoreAvailable: boolean,
 ): CreatorCapabilities => {
-  return deriveCapabilitySnapshotCreatorCapabilities(messages, status, readiness, vectorStoreAvailable);
+  return deriveCapabilitySnapshotCreatorCapabilities(
+    messages,
+    status,
+    readiness,
+    vectorStoreAvailable,
+  );
 };
 
 /**

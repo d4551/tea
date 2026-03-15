@@ -8,10 +8,10 @@
 import { Elysia } from "elysia";
 import { appConfig } from "../config/environment.ts";
 import { deriveFeatureCapability } from "../domain/ai/capability-snapshot.ts";
-import { vectorStore } from "../domain/ai/vector-store.ts";
 import { knowledgeBaseService } from "../domain/ai/knowledge-base-service.ts";
 import { getAiRuntimeProfile } from "../domain/ai/local-runtime-profile.ts";
 import { ProviderRegistry } from "../domain/ai/providers/provider-registry.ts";
+import { vectorStore } from "../domain/ai/vector-store.ts";
 import { builderService } from "../domain/builder/builder-service.ts";
 import {
   deriveBuilderReadinessAudit,
@@ -380,7 +380,12 @@ export const builderRoutes = new Elysia({ prefix: "/projects" })
         latestReleaseVersion: project.latestReleaseVersion,
         publishedReleaseVersion: project.publishedReleaseVersion,
         published: project.published,
-        creatorCapabilities: deriveCreatorCapabilities(messages, registryStatus, readiness, vectorStore.available),
+        creatorCapabilities: deriveCreatorCapabilities(
+          messages,
+          registryStatus,
+          readiness,
+          vectorStore.available,
+        ),
       };
       const body = renderBuilderDashboard(
         messages,

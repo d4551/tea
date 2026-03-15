@@ -6,9 +6,9 @@
 import { Elysia, t } from "elysia";
 import { appConfig, type LocaleCode, normalizeLocale } from "../config/environment.ts";
 import { deriveFeatureCapability } from "../domain/ai/capability-snapshot.ts";
-import { vectorStore } from "../domain/ai/vector-store.ts";
 import { knowledgeBaseService } from "../domain/ai/knowledge-base-service.ts";
 import { ProviderRegistry } from "../domain/ai/providers/provider-registry.ts";
+import { vectorStore } from "../domain/ai/vector-store.ts";
 import { auditService } from "../domain/audit/audit-service.ts";
 import {
   canPerformBuilderAction,
@@ -391,7 +391,12 @@ const builderFeatureCapabilitySchema = t.Object({
   }),
   knowledgeRetrieval: t.Object({
     status: t.Union([t.Literal("ready"), t.Literal("degraded"), t.Literal("unavailable")]),
-    mode: t.Union([t.Literal("provider"), t.Literal("fallback"), t.Literal("surface"), t.Literal("none")]),
+    mode: t.Union([
+      t.Literal("provider"),
+      t.Literal("fallback"),
+      t.Literal("surface"),
+      t.Literal("none"),
+    ]),
     reasonCode: t.Optional(t.String()),
   }),
   offlineFallback: t.Object({
@@ -1478,8 +1483,16 @@ export const builderApiRoutes = new Elysia({ name: "builder-api", prefix: "/api/
         onnxDevice: appConfig.ai.onnxDevice,
         audit: readinessAudit,
       });
-      const creatorCapabilities = toCreatorCapabilities(messages, registryStatus, readiness, vectorStore.available);
-      const features: FeatureCapability = deriveFeatureCapability(registryStatus, vectorStore.available);
+      const creatorCapabilities = toCreatorCapabilities(
+        messages,
+        registryStatus,
+        readiness,
+        vectorStore.available,
+      );
+      const features: FeatureCapability = deriveFeatureCapability(
+        registryStatus,
+        vectorStore.available,
+      );
 
       return status(
         httpStatus.ok,

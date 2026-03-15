@@ -228,7 +228,10 @@ export const probeAutomationOrigin = async (
 
     const body = await response.text();
     const hasHtmlContent =
-      body.includes("<!") || body.includes("<html") || body.includes("<body") || body.includes("builder-project-shell");
+      body.includes("<!") ||
+      body.includes("<html") ||
+      body.includes("<body") ||
+      body.includes("builder-project-shell");
     if (!hasHtmlContent) {
       return {
         ok: false,
@@ -269,7 +272,11 @@ export const probeAutomationOrigin = async (
 };
 
 const probeErrorCode = (state: AutomationOriginProbeState): string =>
-  state === "auth-required" ? "auth-required" : state === "unreachable" ? "unreachable" : "misconfigured";
+  state === "auth-required"
+    ? "auth-required"
+    : state === "unreachable"
+      ? "unreachable"
+      : "misconfigured";
 
 const buildGenerationArtifact = async (
   projectId: string,

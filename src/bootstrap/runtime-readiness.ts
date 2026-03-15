@@ -1,7 +1,7 @@
 import { appConfig } from "../config/environment.ts";
 import { createLogger } from "../lib/logger.ts";
 import { assetRelativePaths, joinLocalPath } from "../shared/constants/assets.ts";
-import { httpStatus, contentType } from "../shared/constants/http.ts";
+import { contentType, httpStatus } from "../shared/constants/http.ts";
 import { prisma } from "../shared/services/db.ts";
 import { settleAsync } from "../shared/utils/async-result.ts";
 
@@ -359,8 +359,7 @@ const verifyDatabaseSchema = async (): Promise<RuntimeReadinessCheck> => {
 
 const verifyAiRouting = async (): Promise<RuntimeReadinessCheck> => {
   const hasConfiguredProvider =
-    appConfig.ai.preferredProvider.length > 0 &&
-    appConfig.ai.routing.defaultPolicy.length > 0;
+    appConfig.ai.preferredProvider.length > 0 && appConfig.ai.routing.defaultPolicy.length > 0;
   return {
     key: "ai:routing",
     label: "AI routing configured",

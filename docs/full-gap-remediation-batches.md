@@ -128,7 +128,7 @@ Readiness, setup, doctor, and automation health checks represent what they actua
 
 ### Implementation notes
 
-- `verifyWritableDirectory` now cleans up `.bun-probe` files after writing, using `Bun.file().exists()` + `node:fs/promises.unlink` with `settleAsync` to tolerate cleanup failures.
+- `verifyWritableDirectory` now cleans up `.bun-probe` files after writing with `Bun.file(probePath).delete()` wrapped in `settleAsync`, keeping the probe path Bun-native end to end.
 - `verifyAiRouting` no longer returns `ok: true` unconditionally — it checks that `preferredProvider` and `defaultPolicy` are non-empty strings.
 - Replaced the static `automationOriginCheck` (URL-syntax-only) with `verifyAutomationOrigin`: an async function that probes the origin URL, validates HTTP status, and checks for HTML content markers (`<!`, `<html`, `<body`).
 - `probeAutomationOrigin` in `creator-worker.ts` now reads the response body and verifies HTML content markers, rejecting endpoints that return non-HTML (e.g. JSON health endpoints, misconfigured reverse proxies).

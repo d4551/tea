@@ -2244,11 +2244,17 @@ describe("API contracts", () => {
     ).toBe(true);
     expect(
       payload.data?.capabilities.every(
-        (capability) => typeof capability.inventoryPresent === "boolean" && typeof capability.workflowVerified === "boolean",
+        (capability) =>
+          typeof capability.inventoryPresent === "boolean" &&
+          typeof capability.workflowVerified === "boolean",
       ),
     ).toBe(true);
-    const automationCapability = payload.data?.capabilities.find((capability) => capability.key === "automation");
-    expect(automationCapability?.status === "partial" || automationCapability?.status === "missing").toBe(true);
+    const automationCapability = payload.data?.capabilities.find(
+      (capability) => capability.key === "automation",
+    );
+    expect(
+      automationCapability?.status === "partial" || automationCapability?.status === "missing",
+    ).toBe(true);
     expect(automationCapability?.workflowVerified).toBe(false);
   });
 

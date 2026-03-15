@@ -3173,7 +3173,8 @@ class PrismaBuilderService implements BuilderService {
               ...(index === 0
                 ? {
                     failureReason: result.error,
-                    retryable: result.error.includes("unreachable") || result.error.includes("timeout"),
+                    retryable:
+                      result.error.includes("unreachable") || result.error.includes("timeout"),
                     remediationHint: result.error.includes("unreachable")
                       ? "Verify the automation origin is running and accessible."
                       : result.error.includes("timeout")

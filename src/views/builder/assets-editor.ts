@@ -231,16 +231,18 @@ export const renderAssetsEditor = (
     selectedAsset !== null &&
     (/\.(png|jpg|jpeg|gif|webp|svg)$/i.test(selectedAsset.source) ||
       ["portrait", "sprite-sheet", "background"].includes(selectedAsset.kind));
-  const selectedAssetStateLabel = selectedAsset === null
-    ? messages.builder.assetSelectionRequired
-    : selectedAssetIsPreviewable
-      ? messages.builder.previewReady
-      : messages.builder.assetPreviewUnavailable;
-  const selectedAssetStateClass = selectedAsset === null
-    ? "badge-soft"
-    : selectedAssetIsPreviewable
-      ? "badge-success"
-      : "badge-warning";
+  const selectedAssetStateLabel =
+    selectedAsset === null
+      ? messages.builder.assetSelectionRequired
+      : selectedAssetIsPreviewable
+        ? messages.builder.previewReady
+        : messages.builder.assetPreviewUnavailable;
+  const selectedAssetStateClass =
+    selectedAsset === null
+      ? "badge-soft"
+      : selectedAssetIsPreviewable
+        ? "badge-success"
+        : "badge-warning";
   const selectedAssetPreview =
     selectedAsset === null
       ? `<div class="space-y-2">
@@ -445,7 +447,7 @@ export const renderAssetsEditor = (
             <input name="playbackFps" type="number" class="input w-full" value="${DEFAULT_ANIMATION_PLAYBACK_FPS}" min="1" aria-label="${escapeHtml(messages.builder.clipPlaybackLabel)}" />
           </fieldset>
           <div class="flex items-center gap-2">
-            <button type="submit" class="btn btn-outline btn-sm" ${selectedAsset === null ? "disabled aria-disabled=\"true\"" : ""} aria-label="${escapeHtml(messages.builder.createAnimationClip)}">${escapeHtml(messages.builder.createAnimationClip)}</button>
+            <button type="submit" class="btn btn-outline btn-sm" ${selectedAsset === null ? 'disabled aria-disabled="true"' : ""} aria-label="${escapeHtml(messages.builder.createAnimationClip)}">${escapeHtml(messages.builder.createAnimationClip)}</button>
             <span id="clip-create-spinner" class="${spinnerClasses.sm}" aria-label="${escapeHtml(messages.common.loading)}"></span>
           </div>
           ${

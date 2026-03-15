@@ -673,8 +673,7 @@ export const renderSceneDetail = (
   const scenePayload = escapeHtml(JSON.stringify({ scene }));
   const sceneTitle = resolveSceneTitle(locale, scene);
   const sceneNodes = scene.nodes ?? [];
-  const sceneLinkedAssetCount = sceneNodes.filter((node) => Boolean(node.assetId))
-    .length;
+  const sceneLinkedAssetCount = sceneNodes.filter((node) => Boolean(node.assetId)).length;
   const sceneAssetStateLabel =
     sceneLinkedAssetCount > 0
       ? messages.builder.previewReady

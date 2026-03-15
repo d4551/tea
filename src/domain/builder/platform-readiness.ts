@@ -229,8 +229,7 @@ export const evaluateBuilderPlatformReadiness = (
     audit.scenes3dCount > 0 || audit.modelAssetCount > 0 || audit.openUsdAssetCount > 0;
   const hasSpritePipelineSurface =
     input.spriteManifestCount > 0 || audit.spriteAssetCount > 0 || audit.tileAssetCount > 0;
-  const hasAnimationSurface =
-    audit.animationClipCount > 0 || audit.animationTimelineCount > 0;
+  const hasAnimationSurface = audit.animationClipCount > 0 || audit.animationTimelineCount > 0;
   const hasMechanicsSurface = audit.mechanicCount > 0;
   const hasAutomationSurface = audit.automationRunCount > 0 || audit.automationStepCount > 0;
   const hasReleaseWorkflow =

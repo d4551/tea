@@ -12,7 +12,6 @@ import {
   aiRuntimeSettingsService,
 } from "../domain/ai/ai-runtime-settings-service.ts";
 import { deriveFeatureCapability } from "../domain/ai/capability-snapshot.ts";
-import { vectorStore } from "../domain/ai/vector-store.ts";
 import {
   type KnowledgeSearchMatch,
   knowledgeBaseService,
@@ -20,6 +19,7 @@ import {
 import { getAiRuntimeProfile } from "../domain/ai/local-runtime-profile.ts";
 import { pullOllamaModel, searchProviderModels } from "../domain/ai/provider-model-catalog.ts";
 import { ProviderRegistry } from "../domain/ai/providers/provider-registry.ts";
+import { vectorStore } from "../domain/ai/vector-store.ts";
 import { auditService } from "../domain/audit/audit-service.ts";
 import {
   detectAvailableFeatures,

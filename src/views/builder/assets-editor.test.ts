@@ -27,17 +27,23 @@ describe("renderAssetsEditor", () => {
 
   test("renders a clear unavailable preview state for non-visual asset kinds", () => {
     const messages = getMessages("en-US");
-    const html = renderAssetsEditor(messages, "en-US", "default", [
-      {
-        ...baseAsset,
-        id: "asset.audio.wind",
-        kind: "audio",
-        label: "Wind Loop",
-        source: "/public/uploads/wind.wav",
-        sourceFormat: "wav",
-        sourceMimeType: "audio/wav",
-      },
-    ], []);
+    const html = renderAssetsEditor(
+      messages,
+      "en-US",
+      "default",
+      [
+        {
+          ...baseAsset,
+          id: "asset.audio.wind",
+          kind: "audio",
+          label: "Wind Loop",
+          source: "/public/uploads/wind.wav",
+          sourceFormat: "wav",
+          sourceMimeType: "audio/wav",
+        },
+      ],
+      [],
+    );
 
     expect(html).toContain(messages.builder.assetPreviewUnavailable);
   });
